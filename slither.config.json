@@ -1,0 +1,4 @@
+{
+  "filter_paths": "src/interfaces,src/mock,src/test,src/vendor,test,script,lib",
+  "compile_force_framework": "foundry"
+}

@@ -1,0 +1,42 @@
+node_modules
+.env
+coverage
+coverage.json
+typechain
+typechain-types
+
+# Hardhat files
+cache
+artifacts
+
+# Foundry files
+cache_forge
+out
+broadcast
+cache_hardhat
+artifacts
+exports/abis/local.json
+exports/addresses/local.json
+
+# misc
+.vscode
+.idea
+.DS_Store
+_playground/*.json
+.env_mainnet
+.env_testnet
+venv
+test/tools/__pycache__/
+script/utilization/distributions.json
+script/utilization/merkletree.json
+slither-report.txt
+slither-raw.txt
+slither-output.json
+test-summary.md
+flattened
+mythril_reports
+private
+claude.md
+
+# docs
+docs/
