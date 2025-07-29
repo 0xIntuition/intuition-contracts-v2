@@ -43,7 +43,9 @@ contract AtomWardenTest is MultiVaultBase {
 
         string memory atomUriString = _toLowerCaseAddress(address(alice));
 
-        bytes32 atomId = multiVault.createAtom(abi.encodePacked(atomUriString), atomCost);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = abi.encodePacked(atomUriString);
+        bytes32 atomId = multiVault.createAtoms(atomDataArray, atomCost)[0];
 
         atomWalletFactory.deployAtomWallet(atomId);
 
@@ -69,7 +71,9 @@ contract AtomWardenTest is MultiVaultBase {
         uint256 atomCost = multiVault.getAtomCost();
         string memory atomUriString = _toLowerCaseAddress(address(alice));
 
-        bytes32 atomId = multiVault.createAtom(abi.encodePacked(atomUriString), atomCost);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = abi.encodePacked(atomUriString);
+        bytes32 atomId = multiVault.createAtoms(atomDataArray, atomCost)[0];
 
         vm.expectRevert(abi.encodeWithSelector(Errors.AtomWarden_AtomWalletNotDeployed.selector));
         atomWarden.claimOwnershipOverAddressAtom(atomId);
@@ -84,7 +88,9 @@ contract AtomWardenTest is MultiVaultBase {
 
         string memory atomUriString = _toLowerCaseAddress(address(bob));
 
-        bytes32 atomId = multiVault.createAtom(abi.encodePacked(atomUriString), atomCost);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = abi.encodePacked(atomUriString);
+        bytes32 atomId = multiVault.createAtoms(atomDataArray, atomCost)[0];
 
         atomWalletFactory.deployAtomWallet(atomId);
 
@@ -120,7 +126,9 @@ contract AtomWardenTest is MultiVaultBase {
         uint256 atomCost = multiVault.getAtomCost();
         string memory atomUriString = "atom1";
 
-        bytes32 atomId = multiVault.createAtom(abi.encodePacked(atomUriString), atomCost);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = abi.encodePacked(atomUriString);
+        bytes32 atomId = multiVault.createAtoms(atomDataArray, atomCost)[0];
 
         atomWalletFactory.deployAtomWallet(atomId);
 
@@ -177,7 +185,9 @@ contract AtomWardenTest is MultiVaultBase {
         uint256 atomCost = multiVault.getAtomCost();
         string memory atomUriString = "atom1";
 
-        bytes32 atomId = multiVault.createAtom(abi.encodePacked(atomUriString), atomCost);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = abi.encodePacked(atomUriString);
+        bytes32 atomId = multiVault.createAtoms(atomDataArray, atomCost)[0];
 
         atomWalletFactory.deployAtomWallet(atomId);
 
@@ -195,7 +205,9 @@ contract AtomWardenTest is MultiVaultBase {
         vm.startPrank(alice);
         uint256 atomCost = multiVault.getAtomCost();
         string memory atomUriString = _toLowerCaseAddress(address(alice));
-        bytes32 atomId = multiVault.createAtom(abi.encodePacked(atomUriString), atomCost);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = abi.encodePacked(atomUriString);
+        bytes32 atomId = multiVault.createAtoms(atomDataArray, atomCost)[0];
         vm.stopPrank();
 
         vm.startPrank(admin);

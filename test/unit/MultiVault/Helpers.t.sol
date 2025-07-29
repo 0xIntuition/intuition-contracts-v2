@@ -37,13 +37,21 @@ contract HelpersTest is MultiVaultBase {
         // create atom
         uint256 val = multiVault.getAtomCost() + 1 ether;
         trustToken.approve(address(multiVault), val);
-        bytes32 atomId = multiVault.createAtom("Test", val);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = "Test";
+        bytes32 atomId = multiVault.createAtoms(atomDataArray, val)[0];
 
         // create triple
         (bytes32 s, bytes32 p, bytes32 o) = (atomId, atomId, atomId); // duplicates ok for this test
         uint256 tripleVal = multiVault.getTripleCost() + 1 ether;
         trustToken.approve(address(multiVault), tripleVal);
-        bytes32 tripleId = multiVault.createTriple(s, p, o, tripleVal);
+        bytes32[] memory subjectIds = new bytes32[](1);
+        bytes32[] memory predicateIds = new bytes32[](1);
+        bytes32[] memory objectIds = new bytes32[](1);
+        subjectIds[0] = s;
+        predicateIds[0] = p;
+        objectIds[0] = o;
+        bytes32 tripleId = multiVault.createTriples(subjectIds, predicateIds, objectIds, tripleVal)[0];
 
         uint256 amt = 5 ether;
         assertEq(multiVault.atomDepositFractionAmount(amt, atomId), 0);
@@ -53,12 +61,20 @@ contract HelpersTest is MultiVaultBase {
     function test_atomWalletFeeOnlyForAtoms() external {
         uint256 val = multiVault.getAtomCost() + 1 ether;
         trustToken.approve(address(multiVault), val);
-        bytes32 atomId = multiVault.createAtom("AWF", val);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = "AWF";
+        bytes32 atomId = multiVault.createAtoms(atomDataArray, val)[0];
 
         (bytes32 s, bytes32 p, bytes32 o) = (atomId, atomId, atomId);
         uint256 tVal = multiVault.getTripleCost() + 1 ether;
         trustToken.approve(address(multiVault), tVal);
-        bytes32 tripleId = multiVault.createTriple(s, p, o, tVal);
+        bytes32[] memory subjectIds = new bytes32[](1);
+        bytes32[] memory predicateIds = new bytes32[](1);
+        bytes32[] memory objectIds = new bytes32[](1);
+        subjectIds[0] = s;
+        predicateIds[0] = p;
+        objectIds[0] = o;
+        bytes32 tripleId = multiVault.createTriples(subjectIds, predicateIds, objectIds, tVal)[0];
 
         uint256 amt = 3 ether;
         assertEq(multiVault.atomWalletDepositFeeAmount(amt, tripleId), 0);
@@ -98,7 +114,13 @@ contract HelpersTest is MultiVaultBase {
         (bytes32 a, bytes32 b, bytes32 c) = _createBasicAtoms();
         uint256 tVal = multiVault.getTripleCost() + 1 ether;
         trustToken.approve(address(multiVault), tVal);
-        bytes32 t = multiVault.createTriple(a, b, c, tVal);
+        bytes32[] memory subjectIds = new bytes32[](1);
+        bytes32[] memory predicateIds = new bytes32[](1);
+        bytes32[] memory objectIds = new bytes32[](1);
+        subjectIds[0] = a;
+        predicateIds[0] = b;
+        objectIds[0] = c;
+        bytes32 t = multiVault.createTriples(subjectIds, predicateIds, objectIds, tVal)[0];
 
         bytes32 ct = multiVault.getCounterIdFromTriple(t);
         assertTrue(multiVault.isTripleId(t));
@@ -428,9 +450,11 @@ contract HelpersTest is MultiVaultBase {
     function _createBasicAtoms() internal returns (bytes32, bytes32, bytes32) {
         uint256 cost = multiVault.getAtomCost() + 1 ether;
         trustToken.approve(address(multiVault), cost * 3);
-        bytes32 a = multiVault.createAtom("X", cost);
-        bytes32 b = multiVault.createAtom("Y", cost);
-        bytes32 c = multiVault.createAtom("Z", cost);
-        return (a, b, c);
+        bytes[] memory atomDataArray = new bytes[](3);
+        atomDataArray[0] = "X";
+        atomDataArray[1] = "Y";
+        atomDataArray[2] = "Z";
+        bytes32[] memory atomIds = multiVault.createAtoms(atomDataArray, cost * 3);
+        return (atomIds[0], atomIds[1], atomIds[2]);
     }
 }

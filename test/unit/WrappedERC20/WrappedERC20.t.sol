@@ -39,7 +39,9 @@ contract WrappedERC20Test is MultiVaultBase {
         uint256 atomCost = multiVault.getAtomCost();
         trustToken.mint(alice, atomCost);
         trustToken.approve(address(multiVault), atomCost);
-        multiVault.createAtom(TEST_ATOM_DATA, atomCost);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = TEST_ATOM_DATA;
+        multiVault.createAtoms(atomDataArray, atomCost);
         vm.stopPrank();
 
         (, address existingFactory) = multiVault.wrapperConfig();
@@ -320,7 +322,9 @@ contract WrappedERC20Test is MultiVaultBase {
         uint256 atomCost = multiVault.getAtomCost();
         trustToken.mint(alice, atomCost);
         trustToken.approve(address(multiVault), atomCost);
-        multiVault.createAtom("New test atom", atomCost);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = "New test atom";
+        multiVault.createAtoms(atomDataArray, atomCost);
         vm.stopPrank();
 
         vm.prank(admin);
@@ -377,7 +381,9 @@ contract WrappedERC20Test is MultiVaultBase {
         uint256 atomCost = multiVault.getAtomCost();
         trustToken.mint(alice, atomCost);
         trustToken.approve(address(multiVault), atomCost);
-        multiVault.createAtom("New test atom", atomCost);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = "New test atom";
+        multiVault.createAtoms(atomDataArray, atomCost);
         vm.stopPrank();
 
         vm.prank(admin);
@@ -444,7 +450,9 @@ contract WrappedERC20Test is MultiVaultBase {
         uint256 atomCost = multiVault.getAtomCost();
         trustToken.mint(alice, atomCost + TEST_DEPOSIT_AMOUNT);
         trustToken.approve(address(multiVault), atomCost + TEST_DEPOSIT_AMOUNT);
-        multiVault.createAtom("New test atom", atomCost);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = "New test atom";
+        multiVault.createAtoms(atomDataArray, atomCost);
         multiVault.deposit(alice, newAtomId, TEST_BONDING_CURVE_ID, TEST_DEPOSIT_AMOUNT, 0);
         vm.stopPrank();
 
@@ -605,7 +613,9 @@ contract WrappedERC20Test is MultiVaultBase {
         uint256 atomCost = multiVault.getAtomCost();
         trustToken.mint(alice, atomCost);
         trustToken.approve(address(multiVault), atomCost);
-        multiVault.createAtom("New test atom", atomCost);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = "New test atom";
+        multiVault.createAtoms(atomDataArray, atomCost);
         vm.stopPrank();
 
         string memory longName = "Very Long Token Name That Should Still Work";
@@ -626,7 +636,9 @@ contract WrappedERC20Test is MultiVaultBase {
         vm.startPrank(alice);
         uint256 atomCost = multiVault.getAtomCost();
         trustToken.approve(address(multiVault), atomCost);
-        multiVault.createAtom("New test atom", atomCost);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = "New test atom";
+        multiVault.createAtoms(atomDataArray, atomCost);
         vm.stopPrank();
 
         vm.prank(admin);
@@ -716,7 +728,9 @@ contract WrappedERC20Test is MultiVaultBase {
         uint256 atomCost = multiVault.getAtomCost();
         trustToken.mint(alice, atomCost);
         trustToken.approve(address(multiVault), atomCost);
-        multiVault.createAtom("Unique test atom", atomCost);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = "Unique test atom";
+        multiVault.createAtoms(atomDataArray, atomCost);
         vm.stopPrank();
 
         vm.prank(admin);

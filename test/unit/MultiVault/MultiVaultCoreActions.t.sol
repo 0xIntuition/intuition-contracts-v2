@@ -51,7 +51,9 @@ contract MultiVaultCoreActionsTest is MultiVaultBase {
 
         // ------------------------  ACTION 1  – create atom  -------------------------------------
         bytes memory ipfsData = bytes("ipfs://QmDefaultCurveAtom");
-        bytes32 newlyCreatedAtomId = multiVault.createAtom(ipfsData, costToCreateAtom);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = ipfsData;
+        bytes32 newlyCreatedAtomId = multiVault.createAtoms(atomDataArray, costToCreateAtom)[0];
 
         // Test atom creation assertions in a separate function to avoid stack too deep
         _assertAtomCreation(newlyCreatedAtomId, costToCreateAtom);
@@ -202,7 +204,9 @@ contract MultiVaultCoreActionsTest is MultiVaultBase {
         trustToken.approve(address(multiVault), type(uint256).max);
 
         // ------------------ Create atom on default curve --------------------
-        bytes32 newAtomId = multiVault.createAtom(bytes("ipfs://QmAltCurveAtom"), multiVault.getAtomCost());
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = bytes("ipfs://QmAltCurveAtom");
+        bytes32 newAtomId = multiVault.createAtoms(atomDataArray, multiVault.getAtomCost())[0];
 
         // ------------------ Initialise alt-curve vault (first deposit) ------
         uint256 altCurveInitialDeposit = oneToken; // 1 TRUST
@@ -262,13 +266,25 @@ contract MultiVaultCoreActionsTest is MultiVaultBase {
         vm.startPrank(alice);
         trustToken.approve(address(multiVault), type(uint256).max);
 
-        bytes32 atomA = multiVault.createAtom(bytes("A"), multiVault.getAtomCost());
-        bytes32 atomB = multiVault.createAtom(bytes("B"), multiVault.getAtomCost());
-        bytes32 atomC = multiVault.createAtom(bytes("C"), multiVault.getAtomCost());
+        bytes[] memory atomDataArray = new bytes[](3);
+        atomDataArray[0] = bytes("A");
+        atomDataArray[1] = bytes("B");
+        atomDataArray[2] = bytes("C");
+        uint256 totalAtomCost = multiVault.getAtomCost() * 3;
+        bytes32[] memory atomIds = multiVault.createAtoms(atomDataArray, totalAtomCost);
+        bytes32 atomA = atomIds[0];
+        bytes32 atomB = atomIds[1];
+        bytes32 atomC = atomIds[2];
 
         // ------------------ create triple on default curve ------------------
         uint256 tripleCost = multiVault.getTripleCost();
-        bytes32 tripleId = multiVault.createTriple(atomA, atomB, atomC, tripleCost);
+        bytes32[] memory subjectIds = new bytes32[](1);
+        bytes32[] memory predicateIds = new bytes32[](1);
+        bytes32[] memory objectIds = new bytes32[](1);
+        subjectIds[0] = atomA;
+        predicateIds[0] = atomB;
+        objectIds[0] = atomC;
+        bytes32 tripleId = multiVault.createTriples(subjectIds, predicateIds, objectIds, tripleCost)[0];
 
         bytes32 counterTripleId = multiVault.getCounterIdFromTriple(tripleId);
 
@@ -318,12 +334,24 @@ contract MultiVaultCoreActionsTest is MultiVaultBase {
         trustToken.approve(address(multiVault), type(uint256).max);
 
         // ------------- produce three new atoms ---------------------------------
-        bytes32 subj = multiVault.createAtom(bytes("subj"), multiVault.getAtomCost());
-        bytes32 pred = multiVault.createAtom(bytes("pred"), multiVault.getAtomCost());
-        bytes32 obj = multiVault.createAtom(bytes("obj"), multiVault.getAtomCost());
+        bytes[] memory atomDataArray = new bytes[](3);
+        atomDataArray[0] = bytes("subj");
+        atomDataArray[1] = bytes("pred");
+        atomDataArray[2] = bytes("obj");
+        uint256 totalAtomCost = multiVault.getAtomCost() * 3;
+        bytes32[] memory atomIds = multiVault.createAtoms(atomDataArray, totalAtomCost);
+        bytes32 subj = atomIds[0];
+        bytes32 pred = atomIds[1];
+        bytes32 obj = atomIds[2];
 
         // ------------- create triple on default curve --------------------------
-        bytes32 tripleId = multiVault.createTriple(subj, pred, obj, multiVault.getTripleCost());
+        bytes32[] memory subjectIds = new bytes32[](1);
+        bytes32[] memory predicateIds = new bytes32[](1);
+        bytes32[] memory objectIds = new bytes32[](1);
+        subjectIds[0] = subj;
+        predicateIds[0] = pred;
+        objectIds[0] = obj;
+        bytes32 tripleId = multiVault.createTriples(subjectIds, predicateIds, objectIds, multiVault.getTripleCost())[0];
 
         // ------------- initialise alt-curve vault for the triple ---------------
         uint256 initDepositAltCurve = oneToken * 2; // 2 TRUST

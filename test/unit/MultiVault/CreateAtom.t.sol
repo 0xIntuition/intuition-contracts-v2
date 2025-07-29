@@ -32,7 +32,9 @@ contract CreateAtomTest is MultiVaultBase {
         uint256 value = _atomCost() + 1 ether;
         _approveTrust(value);
 
-        bytes32 id = multiVault.createAtom(data, value);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = data;
+        bytes32 id = multiVault.createAtoms(atomDataArray, value)[0];
 
         // basic invariants
         assertEq(id, multiVault.getAtomIdFromData(data));
@@ -64,7 +66,9 @@ contract CreateAtomTest is MultiVaultBase {
         _approveTrust(val);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.MultiVault_AtomDataTooLong.selector));
-        multiVault.createAtom(longData, val);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = longData;
+        multiVault.createAtoms(atomDataArray, val);
     }
 
     function test_createAtom_revertIfDuplicate() external {
@@ -72,10 +76,12 @@ contract CreateAtomTest is MultiVaultBase {
         uint256 val = _atomCost() + 1 ether;
         _approveTrust(val * 2);
 
-        multiVault.createAtom(data, val);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = data;
+        multiVault.createAtoms(atomDataArray, val);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.MultiVault_AtomExists.selector, data));
-        multiVault.createAtom(data, val);
+        multiVault.createAtoms(atomDataArray, val);
     }
 
     function test_createAtom_revertIfPaused() external {
@@ -90,7 +96,9 @@ contract CreateAtomTest is MultiVaultBase {
         _approveTrust(val);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.MultiVault_ContractPaused.selector));
-        multiVault.createAtom(data, val);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = data;
+        multiVault.createAtoms(atomDataArray, val);
     }
 
     function test_createAtom_revertIfInsufficientBalance() external {
@@ -98,7 +106,9 @@ contract CreateAtomTest is MultiVaultBase {
         _approveTrust(shortVal);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.MultiVault_InsufficientBalance.selector));
-        multiVault.createAtom("x", shortVal);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = "x";
+        multiVault.createAtoms(atomDataArray, shortVal);
     }
 
     /*──────────────────────────────────────────────────────────────────────────

@@ -18,13 +18,17 @@ contract RedeemTest is MultiVaultBase {
     function _createNewAtom() internal returns (bytes32) {
         uint256 val = multiVault.getAtomCost() + 2 ether;
         trustToken.approve(address(multiVault), val);
-        return multiVault.createAtom("new atom", val);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = "new atom";
+        return multiVault.createAtoms(atomDataArray, val)[0];
     }
 
     function _createAnotherNewAtom() internal returns (bytes32) {
         uint256 val = multiVault.getAtomCost() + 2 ether;
         trustToken.approve(address(multiVault), val);
-        return multiVault.createAtom("another new atom", val);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = "another new atom";
+        return multiVault.createAtoms(atomDataArray, val)[0];
     }
 
     function _depositFor(address user, bytes32 atomId, uint256 value) internal returns (uint256 shares) {
