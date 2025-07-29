@@ -68,6 +68,7 @@ library Errors {
     error MultiVault_InvalidReceiver();
     error MultiVault_NoAtomDataProvided();
     error MultiVault_NoTriplesProvided();
+    error MultiVault_NoSharesToMigrate();
     error MultiVault_OnlyAssociatedAtomWallet();
     error MultiVault_OnlyAssociatedWrappedERC20();
     error MultiVault_OnlyWrappedERC20Factory();
@@ -81,6 +82,7 @@ library Errors {
     error MultiVault_TermNotTriple();
     error MultiVault_TransferToNonERC1155Receiver();
     error MultiVault_WrappedERC20AlreadySet();
+    error MultiVault_WalletsAreTheSame();
     error MultiVault_ZeroAddress();
     error MultiVault_ZeroValue();
 

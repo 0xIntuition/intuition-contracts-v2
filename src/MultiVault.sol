@@ -126,6 +126,9 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
     /// @notice Mapping of the associated wrapped ERC20 token for each term ID and bonding curve ID
     mapping(bytes32 termId => mapping(uint256 curveId => address wrappedERC20)) public wrappedERC20Tokens;
 
+    /// @notice Mapping of the approved accounts to pull shares from another account.
+    mapping(address accountFrom => mapping(address accountTo => bool)) public approvedToPullShares;
+
     /// @dev Gap for upgrade safety
     uint256[50] private __gap;
 
@@ -1425,6 +1428,94 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
         // set user’s lastActiveEpoch to the currentEpochLocal
         lastActiveEpoch[user] = currentEpochLocal;
     }
+
+    /* =================================================== */
+    /*                 Shares Migrations                   */
+    /* =================================================== */
+
+
+    function isApprovedToPullShares(address accountFrom, address accountTo) internal view returns (bool) {
+        return approvedToPullShares[accountFrom][accountTo];
+    }
+
+    function approvePullShares(address account) external {
+        approvedToPullShares[msg.sender][account] = true;
+    }
+
+    function revokePullShares(address account) external {
+        approvedToPullShares[msg.sender][account] = false;
+    }
+
+    function pullShares(
+        address accountFrom,
+        bytes32[] calldata termId,
+        uint256[] calldata bondingCurveId
+    ) external nonReentrant {
+        if (!isApprovedToPullShares(accountFrom, msg.sender)) {
+            revert Errors.MultiVault_SenderNotApproved();
+        }
+
+        if (termId.length == 0 || bondingCurveId.length == 0) {
+            revert Errors.MultiVault_EmptyArray();
+        }
+
+        if (termId.length != bondingCurveId.length) {
+            revert Errors.MultiVault_ArraysNotSameLength();
+        }
+
+        for (uint256 i = 0; i < termId.length; i++) {
+            _pullShares(accountFrom, msg.sender, termId[i], bondingCurveId[i]);
+        }
+    }
+
+
+    function _pullShares(
+        address accountFrom,
+        address accountTo,
+        bytes32 termId,
+        uint256 bondingCurveId
+    ) internal {
+        if (accountFrom == address(0) || accountTo == address(0)) {
+            revert Errors.MultiVault_ZeroAddress();
+        }
+
+        if (accountFrom == accountTo) {
+            revert Errors.MultiVault_WalletsAreTheSame();
+        }
+
+        uint256 shares = vaults[termId][bondingCurveId].balanceOf[accountFrom];
+        if (shares == 0) {
+            revert Errors.MultiVault_NoSharesToMigrate();
+        }
+
+        // Burn shares from the old wallet
+        _burn(accountFrom, termId, bondingCurveId, shares);
+        _removeUtilization(accountFrom, int256(shares));
+        emit Redeemed(
+            termId,
+            bondingCurveId,
+            accountFrom,
+            accountTo,
+            shares,
+            0 // No assets are transferred out.
+        );
+
+        // Mint shares to the new wallet
+        _mint(accountTo, termId, bondingCurveId, shares);
+        _addUtilization(accountTo, int256(shares));
+        emit Deposited(
+            termId,
+            bondingCurveId,
+            accountFrom,
+            accountTo,
+            0, // assetsIn: No assets are transferred in.
+            0, // assetsAfterTotalFees: No assets are transferred in.
+            shares
+        );
+
+        emit WalletMigrated(termId, bondingCurveId, accountFrom, accountTo, shares);
+    }
+
 
     /* =================================================== */
     /*                    VIEW FUNCTIONS                   */

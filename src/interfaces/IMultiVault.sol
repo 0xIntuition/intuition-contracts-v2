@@ -267,6 +267,21 @@ interface IMultiVault {
         bytes32 indexed tripleId, address indexed creator, bytes32 subjectId, bytes32 predicateId, bytes32 objectId
     );
 
+    /// @notice Migrate shares from an old wallet to a new wallet for a specific term and bonding curve
+    /// @param oldWallet The address of the old wallet
+    /// @param newWallet The address of the new wallet
+    /// @param termId The ID of the atom or triple (term)
+    /// @param bondingCurveId The ID of the bonding curve to use
+    /// @dev This function burns shares from the old wallet and mints them to the new wallet.
+    /// @dev Emits a WalletMigrated event on successful migration.
+    event WalletMigrated(
+        bytes32 indexed termId,
+        uint256 indexed bondingCurveId,
+        address indexed oldWallet,
+        address newWallet,
+        uint256 sharesMigrated
+    );
+
     /* =================================================== */
     /*                    INITIALIZER                      */
     /* =================================================== */
