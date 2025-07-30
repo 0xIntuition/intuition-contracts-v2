@@ -63,9 +63,11 @@ interface ITrustBonding {
                                  FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    function initialize(address _owner, address _trustToken, uint256 _epochLength, uint256 _startTimestamp) external;
-
-    function reinitialize(
+    function initialize(
+        address _owner,
+        address _trustToken,
+        uint256 _epochLength,
+        uint256 _startTimestamp,
         address _multiVault,
         uint256 _systemUtilizationLowerBound,
         uint256 _personalUtilizationLowerBound

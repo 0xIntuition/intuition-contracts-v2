@@ -137,9 +137,6 @@ contract DeployV2ToTestnet is Script {
         trustBonding = TrustBonding(address(trustBondingProxy));
         console.log("TrustBonding proxy address: ", address(trustBondingProxy));
 
-        // initialize the TrustBonding contract
-        trustBonding.initialize(admin, address(trustToken), epochLength, block.timestamp + 10 minutes);
-
         // define the config structs
         generalConfig = GeneralConfig({
             admin: admin,
@@ -223,8 +220,16 @@ contract DeployV2ToTestnet is Script {
         // initialize the WrappedERC20Factory contract
         wrappedERC20Factory.initialize(address(multiVault));
 
-        // reinitialize the TrustBonding contract to V2
-        trustBonding.reinitialize(address(multiVault), systemUtilizationLowerBound, personalUtilizationLowerBound);
+        // initialize the TrustBonding contract
+        trustBonding.initialize(
+            admin,
+            address(trustToken),
+            epochLength,
+            block.timestamp + 10 minutes,
+            address(multiVault),
+            systemUtilizationLowerBound,
+            personalUtilizationLowerBound
+        );
 
         // deploy the TrustVestedMerkleDistributor implementation contract
         trustVestedMerkleDistributor = new TrustVestedMerkleDistributor();

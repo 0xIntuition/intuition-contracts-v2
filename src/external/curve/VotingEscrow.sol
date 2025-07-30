@@ -57,7 +57,8 @@ abstract contract VotingEscrow is
         DEPOSIT_FOR_TYPE,
         CREATE_LOCK_TYPE,
         INCREASE_LOCK_AMOUNT,
-        INCREASE_UNLOCK_TIME
+        INCREASE_UNLOCK_TIME,
+        INCREASE_AMOUNT_AND_TIME_FOR
     }
 
     event Deposit(
@@ -486,6 +487,65 @@ abstract contract VotingEscrow is
         } else {
             _increase_unlock_time(_unlock_time);
         }
+    }
+
+    /**
+     * @notice (Whitelisted) Extend _addr’s lock and/or add _value more TRUST.
+     *         Works even if the lock has expired.
+     * @dev    Mimics increase_amount_and_time() but operates on the supplied address.
+     *         Designed for helper contracts (e.g. vesting distributors) - EOAs must
+     *         stick with the standard functions.
+     *
+     * @param _addr User whose lock is being modified
+     * @param _value Additional TRUST to lock (can be 0)
+     * @param _unlock_time New unlock timestamp (can be 0)
+     */
+    function increase_amount_and_time_for(address _addr, uint256 _value, uint256 _unlock_time)
+        external
+        nonReentrant
+        onlyWhitelist
+        notUnlocked
+    {
+        require(_addr != address(0), "zero address");
+        require(_value > 0 || _unlock_time > 0, "Value and Unlock cannot both be 0");
+
+        LockedBalance memory _locked = locked[_addr];
+
+        if (_value > 0) {
+            // If the old lock is expired we still allow top‑ups – the new end
+            // will be set further below.
+            require(_locked.amount > 0, "no existing lock");
+        }
+
+        uint256 unlockRounded = (_unlock_time / WEEK) * WEEK; // round down to weeks
+
+        if (_unlock_time > 0) {
+            require(unlockRounded > block.timestamp, "unlock in past");
+            require(unlockRounded <= block.timestamp + MAXTIME, "Voting lock can be 2 years max");
+        }
+
+        // work out the new lock state
+        LockedBalance memory newLocked = _locked;
+
+        if (_value > 0) newLocked.amount += int128(int256(_value));
+
+        // If the old lock is expired, any non‑zero _unlock_time is accepted
+        // (because newLocked.end may be in the past).
+        if (_unlock_time > 0) {
+            require(unlockRounded >= block.timestamp + MINTIME, "must satisfy MINTIME");
+            if (unlockRounded > newLocked.end) {
+                newLocked.end = unlockRounded;
+            }
+        }
+
+        // write state & checkpoint
+        _deposit_for(
+            _addr,
+            _value,
+            newLocked.end, // 0 → unchanged
+            _locked,
+            DepositType.INCREASE_AMOUNT_AND_TIME_FOR
+        );
     }
 
     /// @notice Withdraw all tokens for `msg.sender`

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
+import {AccessControlUpgradeable} from "@openzeppelin-contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import {Errors} from "src/libraries/Errors.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IMultiVault} from "src/interfaces/IMultiVault.sol";
@@ -38,7 +39,7 @@ import {VotingEscrow} from "src/external/curve/VotingEscrow.sol";
  *         contract (originally written in Vyper), as used by the Stargate Finance protocol:
  *         https://github.com/stargate-protocol/stargate-dao/blob/main/contracts/VotingEscrow.sol
  */
-contract TrustBonding is ITrustBonding, VotingEscrow {
+contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
     using SafeERC20 for IERC20;
 
     /*//////////////////////////////////////////////////////////////
@@ -51,8 +52,11 @@ contract TrustBonding is ITrustBonding, VotingEscrow {
     /// @notice Basis points divisor used for calculations within the contract
     uint256 public constant BASIS_POINTS_DIVISOR = 10_000;
 
-    /// @notice One percent in basis points
-    uint256 public constant ONE_PERCENT_IN_BASIS_POINTS = 100;
+    /// @notice Role used for pausing the contract
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+
+    /// @notice Role used for the timelocked operations
+    bytes32 public constant TIMELOCK_ROLE = keccak256("TIMELOCK_ROLE");
 
     /*//////////////////////////////////////////////////////////////
                                  STATE
@@ -99,20 +103,30 @@ contract TrustBonding is ITrustBonding, VotingEscrow {
     }
 
     /*//////////////////////////////////////////////////////////////
-                             REINITIALIZER
+                             INITIALIZER
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @notice Reinitializes the TrustBonding contract with the MultiVault address and utilization bounds
-     * @param _multiVault The address of the MultiVault contract
-     * @param _systemUtilizationLowerBound The lower bound for the system utilization ratio
-     * @param _personalUtilizationLowerBound The lower bound for the personal utilization ratio
+     * @notice Initializes the TrustBonding contract
+     * @param _owner The owner of the contract
+     * @param _trustToken The address of the TRUST token
+     * @param _epochLength The length of an epoch in seconds
+     * @param _startTimestamp The starting timestamp of the first epoch
      */
-    function reinitialize(
+    function initialize(
+        address _owner,
+        address _trustToken,
+        uint256 _epochLength,
+        uint256 _startTimestamp,
         address _multiVault,
         uint256 _systemUtilizationLowerBound,
         uint256 _personalUtilizationLowerBound
-    ) external reinitializer(2) onlyOwner {
+    ) external initializer {
+        // Ensure the start timestamp is in the future
+        if (_startTimestamp < block.timestamp) {
+            revert Errors.TrustBonding_InvalidStartTimestamp();
+        }
+
         if (_multiVault == address(0)) {
             revert Errors.TrustBonding_ZeroAddress();
         }
@@ -125,34 +139,16 @@ contract TrustBonding is ITrustBonding, VotingEscrow {
             revert Errors.TrustBonding_InvalidUtilizationLowerBound();
         }
 
+        __AccessControl_init();
+        __VotingEscrow_init(_owner, _trustToken, _epochLength);
+
+        _grantRole(DEFAULT_ADMIN_ROLE, _owner);
+        _grantRole(PAUSER_ROLE, _owner);
+
+        startTimestamp = _startTimestamp;
         multiVault = IMultiVault(_multiVault);
         systemUtilizationLowerBound = _systemUtilizationLowerBound;
         personalUtilizationLowerBound = _personalUtilizationLowerBound;
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                             INITIALIZER
-    //////////////////////////////////////////////////////////////*/
-
-    /**
-     * @notice Initializes the TrustBonding contract
-     * @param _owner The owner of the contract
-     * @param _trustToken The address of the TRUST token
-     * @param _epochLength The length of an epoch in seconds
-     * @param _startTimestamp The starting timestamp of the first epoch
-     */
-    function initialize(address _owner, address _trustToken, uint256 _epochLength, uint256 _startTimestamp)
-        external
-        initializer
-    {
-        // Ensure the start timestamp is in the future
-        if (_startTimestamp < block.timestamp) {
-            revert Errors.TrustBonding_InvalidStartTimestamp();
-        }
-
-        __VotingEscrow_init(_owner, _trustToken, _epochLength);
-
-        startTimestamp = _startTimestamp;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -341,29 +337,7 @@ contract TrustBonding is ITrustBonding, VotingEscrow {
             return 0;
         }
 
-        uint256 maxAnnualEmission = ITrust(token).maxAnnualEmission();
-        uint256 actualAnnualEmission;
-
-        // If locked percentage <= 1% (100 basis points), set to max 1,000% APR scenario
-        if (lockedTrustPct <= ONE_PERCENT_IN_BASIS_POINTS) {
-            // 1,000% APR means 10x totalLocked as annual emission
-            uint256 totalLockedAmount = totalLocked();
-
-            // TrustBonding always uses the current maxAnnualEmission as the upper bound
-            actualAnnualEmission =
-                totalLockedAmount * 10 > maxAnnualEmission ? maxAnnualEmission : totalLockedAmount * 10;
-        } else {
-            // We're emitting a certain amount of tokens per epoch, and that is to be divided between the bonded
-            // balances of all users. Since bonded balances change over time, we look at the locked Trust percentage.
-            // Example: TRUST token has a 10% annual emission rate (when the epoch 0 in the TrustBonding begins)
-            // Case 1: 100% of tokens are locked --> 10% APR (e.g. we distribute 100m tokens to 1b locked tokens)
-            // Case 2: 50% of tokens are locked --> 20% APR (e.g. we distribute 100m tokens to 500m locked tokens)
-            // Case 3: 10% of tokens are locked --> 100% APR (e.g. we distribute 100m tokens to 100m locked tokens)
-            // Case 4: 1% of tokens are locked --> 1000% APR (e.g. we distribute 100m tokens to 10m locked tokens)
-            actualAnnualEmission = maxAnnualEmission;
-        }
-
-        uint256 maxEmissionPerEpoch = actualAnnualEmission / epochsPerYear();
+        uint256 maxEmissionPerEpoch = ITrust(token).maxAnnualEmission() / epochsPerYear();
 
         if (_epoch < 2) {
             return maxEmissionPerEpoch;
@@ -598,14 +572,14 @@ contract TrustBonding is ITrustBonding, VotingEscrow {
     /**
      * @notice Pauses the contract
      */
-    function pause() external onlyOwner {
+    function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
     }
 
     /**
      * @notice Unpauses the contract
      */
-    function unpause() external onlyOwner {
+    function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
         _unpause();
     }
 
@@ -613,7 +587,7 @@ contract TrustBonding is ITrustBonding, VotingEscrow {
      * @notice Sets the MultiVault contract address
      * @param _multiVault The address of the MultiVault contract
      */
-    function setMultiVault(address _multiVault) external onlyOwner {
+    function setMultiVault(address _multiVault) external onlyRole(TIMELOCK_ROLE) {
         if (_multiVault == address(0)) {
             revert Errors.TrustBonding_ZeroAddress();
         }
@@ -627,7 +601,7 @@ contract TrustBonding is ITrustBonding, VotingEscrow {
      * @notice Updates the lower bound for the system utilization ratio
      * @param newLowerBound The new lower bound for the system utilization ratio
      */
-    function updateSystemUtilizationLowerBound(uint256 newLowerBound) external onlyOwner {
+    function updateSystemUtilizationLowerBound(uint256 newLowerBound) external onlyRole(TIMELOCK_ROLE) {
         if (newLowerBound > BASIS_POINTS_DIVISOR) {
             revert Errors.TrustBonding_InvalidUtilizationLowerBound();
         }
@@ -641,7 +615,7 @@ contract TrustBonding is ITrustBonding, VotingEscrow {
      * @notice Updates the lower bound for the personal utilization ratio
      * @param newLowerBound The new lower bound for the personal utilization ratio
      */
-    function updatePersonalUtilizationLowerBound(uint256 newLowerBound) external onlyOwner {
+    function updatePersonalUtilizationLowerBound(uint256 newLowerBound) external onlyRole(TIMELOCK_ROLE) {
         if (newLowerBound > BASIS_POINTS_DIVISOR) {
             revert Errors.TrustBonding_InvalidUtilizationLowerBound();
         }
@@ -688,7 +662,7 @@ contract TrustBonding is ITrustBonding, VotingEscrow {
      *      that can still be claimed for the previous epoch, whose claim period is still open.
      * @param recipient The address to which the unclaimed protocol fees will be sent
      */
-    function withdrawUnclaimedProtocolFees(address recipient) external onlyOwner {
+    function withdrawUnclaimedProtocolFees(address recipient) external nonReentrant onlyRole(DEFAULT_ADMIN_ROLE) {
         if (recipient == address(0)) {
             revert Errors.TrustBonding_ZeroAddress();
         }

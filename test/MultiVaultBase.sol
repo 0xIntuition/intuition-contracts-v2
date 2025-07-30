@@ -134,9 +134,6 @@ contract MultiVaultBase is Test {
             new TransparentUpgradeableProxy(address(trustBonding), admin, "");
         trustBonding = TrustBonding(address(trustBondingProxy));
 
-        // initialize the TrustBonding contract
-        trustBonding.initialize(admin, address(trustToken), epochLength, block.timestamp + 1);
-
         // define the config structs
         generalConfig = GeneralConfig({
             admin: admin,
@@ -213,9 +210,16 @@ contract MultiVaultBase is Test {
         // initialize the WrappedERC20Factory contract
         wrappedERC20Factory.initialize(address(multiVault));
 
-        // reinitialize the TrustBonding contract to V2 to enable utilization-based reward distribution
-        vm.prank(admin);
-        trustBonding.reinitialize(address(multiVault), systemUtilizationLowerBound, personalUtilizationLowerBound);
+        // initialize the TrustBonding contract
+        trustBonding.initialize(
+            admin,
+            address(trustToken),
+            epochLength,
+            block.timestamp + 1,
+            address(multiVault),
+            systemUtilizationLowerBound,
+            personalUtilizationLowerBound
+        );
 
         // deploy the AtomWarden contract
         atomWarden = new AtomWarden();
