@@ -1438,12 +1438,12 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
         return approvedToPullShares[accountFrom][accountTo];
     }
 
-    function approvePullShares(address account) external {
-        approvedToPullShares[msg.sender][account] = true;
-    }
-
-    function revokePullShares(address account) external {
-        approvedToPullShares[msg.sender][account] = false;
+    function approvePullShares(address account, bool status) external {
+        if (account == address(0)) {
+            revert Errors.MultiVault_ZeroAddress();
+        }
+        approvedToPullShares[msg.sender][account] = status;
+        emit SharesPullApproval(msg.sender, account, status);
     }
 
     function pullShares(

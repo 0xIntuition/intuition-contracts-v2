@@ -282,6 +282,15 @@ interface IMultiVault {
         uint256 sharesMigrated
     );
 
+    /// @notice emitted when a user approves another user to pull shares from their account
+    /// @param accountFrom address of the account that is approving
+    /// @param accountTo address of the account that is being approved
+    /// @param status true if the approval is granted, false if revoked
+    /// @dev This event is emitted when a user approves another user to pull shares
+    ///      from their account. It is used to track the approvals for pulling shares.
+    /// @dev The `status` parameter indicates whether the approval is granted (true) or revoked (false).
+    event SharesPullApproval(address indexed accountFrom, address indexed accountTo, bool status);
+
     /* =================================================== */
     /*                    INITIALIZER                      */
     /* =================================================== */
