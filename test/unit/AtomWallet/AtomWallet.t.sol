@@ -832,10 +832,14 @@ contract AtomWalletTest is MultiVaultBase {
         vm.assume(target.code.length == 0);
         value = bound(value, 0, address(atomWallet).balance);
 
+        // Store the target's balance before the call
+        uint256 targetBalanceBefore = target.balance;
+
         vm.prank(address(atomWarden));
         atomWallet.execute(target, value, data);
 
-        assertEq(target.balance, value);
+        // Assert that the target's balance increased by the sent value
+        assertEq(target.balance, targetBalanceBefore + value);
     }
 
     function testFuzz_addDeposit_validAmounts(uint256 amount) external {
