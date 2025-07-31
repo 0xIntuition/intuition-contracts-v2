@@ -24,7 +24,7 @@ import {MockTrust} from "test/mocks/MockTrust.t.sol";
 
 contract DeployV2ToTestnet is Script {
     /// @notice Constants
-    address public constant admin = 0xB8e3452E62B45e654a300a296061597E3Cf3e039; // Admin address
+    address public constant admin = 0x07baA707F61c89F6eB33c8Cb948c483c9b387084; // Admin address
     address public constant protocolMultisig = admin;
     address public constant atomWarden = admin;
     address public constant migrator = admin;
