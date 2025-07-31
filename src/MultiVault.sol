@@ -51,7 +51,7 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
     uint256 public constant ONE_SHARE = 1e18;
 
     /// @notice Constant representing the burn address, which receives the "ghost shares"
-    address public constant BURN_ADDRESS = address(1);
+    address public constant BURN_ADDRESS = address(0x000000000000000000000000000000000000dEaD);
 
     /* =================================================== */
     /*                  STATE VARIABLES                    */
@@ -700,7 +700,7 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
         uint256 bondingCurveId,
         uint256 value,
         uint256 minSharesToReceive
-    ) external whenNotPaused nonReentrant returns (uint256) {
+    ) external nonReentrant whenNotPaused returns (uint256) {
         if (!isApprovedToDeposit(msg.sender, receiver)) {
             revert Errors.MultiVault_SenderNotApproved();
         }
@@ -952,7 +952,7 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
         bytes32 termId,
         uint256 bondingCurveId,
         uint256 minAssetsToReceive
-    ) external whenNotPaused nonReentrant returns (uint256) {
+    ) external nonReentrant whenNotPaused returns (uint256) {
         if (!isApprovedToRedeem(msg.sender, receiver)) {
             revert Errors.MultiVault_RedeemerNotApproved();
         }
