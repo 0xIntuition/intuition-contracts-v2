@@ -1396,7 +1396,6 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
     /*                 Shares Migrations                   */
     /* =================================================== */
 
-
     function isApprovedToPullShares(address accountFrom, address accountTo) internal view returns (bool) {
         return approvedToPullShares[accountFrom][accountTo];
     }
@@ -1409,11 +1408,10 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
         emit SharesPullApproval(msg.sender, account, status);
     }
 
-    function pullShares(
-        address accountFrom,
-        bytes32[] calldata termId,
-        uint256[] calldata bondingCurveId
-    ) external nonReentrant {
+    function pullShares(address accountFrom, bytes32[] calldata termId, uint256[] calldata bondingCurveId)
+        external
+        nonReentrant
+    {
         if (!isApprovedToPullShares(accountFrom, msg.sender)) {
             revert Errors.MultiVault_SenderNotApproved();
         }
@@ -1431,13 +1429,7 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
         }
     }
 
-
-    function _pullShares(
-        address accountFrom,
-        address accountTo,
-        bytes32 termId,
-        uint256 bondingCurveId
-    ) internal {
+    function _pullShares(address accountFrom, address accountTo, bytes32 termId, uint256 bondingCurveId) internal {
         if (accountFrom == address(0) || accountTo == address(0)) {
             revert Errors.MultiVault_ZeroAddress();
         }
@@ -1478,7 +1470,6 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
 
         emit WalletMigrated(termId, bondingCurveId, accountFrom, accountTo, shares);
     }
-
 
     /* =================================================== */
     /*                    VIEW FUNCTIONS                   */

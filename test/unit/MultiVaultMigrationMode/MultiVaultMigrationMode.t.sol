@@ -281,7 +281,8 @@ contract MultiVaultMigrationModeTest is MultiVaultBase {
         vm.prank(migrator);
         migrationVault.batchSetTripleData(tripleAtomIds);
 
-        bytes32 tripleId = migrationVault.tripleIdFromAtomIds(bytes32(uint256(1)), bytes32(uint256(2)), bytes32(uint256(3)));
+        bytes32 tripleId =
+            migrationVault.tripleIdFromAtomIds(bytes32(uint256(1)), bytes32(uint256(2)), bytes32(uint256(3)));
         (bytes32 subjectId, bytes32 predicateId, bytes32 objectId) = migrationVault.getTripleAtoms(tripleId);
 
         assertEq(subjectId, bytes32(uint256(1)));
@@ -313,11 +314,14 @@ contract MultiVaultMigrationModeTest is MultiVaultBase {
 
         tripleAtomIds[0] = [bytes32(uint256(10)), bytes32(uint256(20)), bytes32(uint256(30))];
 
-        bytes32 expectedTripleId = migrationVault.tripleIdFromAtomIds(bytes32(uint256(10)), bytes32(uint256(20)), bytes32(uint256(30)));
+        bytes32 expectedTripleId =
+            migrationVault.tripleIdFromAtomIds(bytes32(uint256(10)), bytes32(uint256(20)), bytes32(uint256(30)));
 
         vm.prank(migrator);
         vm.expectEmit(true, true, true, true);
-        emit MultiVaultMigrationMode.TripleDataSet(expectedTripleId, bytes32(uint256(10)), bytes32(uint256(20)), bytes32(uint256(30)));
+        emit MultiVaultMigrationMode.TripleDataSet(
+            expectedTripleId, bytes32(uint256(10)), bytes32(uint256(20)), bytes32(uint256(30))
+        );
         migrationVault.batchSetTripleData(tripleAtomIds);
     }
 
@@ -332,7 +336,8 @@ contract MultiVaultMigrationModeTest is MultiVaultBase {
         migrationVault.batchSetTripleData(tripleAtomIds);
 
         for (uint256 i = 0; i < 3; i++) {
-            bytes32 tripleId = migrationVault.tripleIdFromAtomIds(tripleAtomIds[i][0], tripleAtomIds[i][1], tripleAtomIds[i][2]);
+            bytes32 tripleId =
+                migrationVault.tripleIdFromAtomIds(tripleAtomIds[i][0], tripleAtomIds[i][1], tripleAtomIds[i][2]);
             (bytes32 s, bytes32 p, bytes32 o) = migrationVault.getTripleAtoms(tripleId);
             assertEq(s, tripleAtomIds[i][0]);
             assertEq(p, tripleAtomIds[i][1]);
@@ -447,7 +452,8 @@ contract MultiVaultMigrationModeTest is MultiVaultBase {
         migrationVault.batchSetTripleData(tripleAtomIds);
 
         for (uint256 i = 0; i < numberOfTriples; i++) {
-            bytes32 tripleId = migrationVault.tripleIdFromAtomIds(tripleAtomIds[i][0], tripleAtomIds[i][1], tripleAtomIds[i][2]);
+            bytes32 tripleId =
+                migrationVault.tripleIdFromAtomIds(tripleAtomIds[i][0], tripleAtomIds[i][1], tripleAtomIds[i][2]);
             (bytes32 s, bytes32 p, bytes32 o) = migrationVault.getTripleAtoms(tripleId);
             assertEq(s, bytes32(subjectId + i));
             assertEq(p, bytes32(predicateId + i));
@@ -521,7 +527,8 @@ contract MultiVaultMigrationModeTest is MultiVaultBase {
         }
 
         for (uint256 i = 0; i < numberOfTriples; i++) {
-            bytes32 tripleId = migrationVault.tripleIdFromAtomIds(tripleAtomIds[i][0], tripleAtomIds[i][1], tripleAtomIds[i][2]);
+            bytes32 tripleId =
+                migrationVault.tripleIdFromAtomIds(tripleAtomIds[i][0], tripleAtomIds[i][1], tripleAtomIds[i][2]);
             assertTrue(migrationVault.isTripleId(tripleId));
         }
     }

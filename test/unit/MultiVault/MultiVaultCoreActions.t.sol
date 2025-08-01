@@ -40,8 +40,6 @@ contract MultiVaultCoreActionsTest is MultiVaultBase {
     ///      – deposit another 1 TRUST
     ///      – redeem exactly 1 share
     function testDefaultCurveAtomFlow() external {
-        vm.skip(true); // TODO: remove this line once the test is fixed
-
         // -------- actor preparation -------------------------------------------------------------
         vm.startPrank(alice);
         uint256 costToCreateAtom = multiVault.getAtomCost();
@@ -131,7 +129,7 @@ contract MultiVaultCoreActionsTest is MultiVaultBase {
         assertEq(
             totalAssetsAfterDeposit,
             totalAssetsBeforeDeposit + _depositAmount - multiVault.protocolFeeAmount(_depositAmount)
-                - multiVault.entryFeeAmount(_depositAmount) - multiVault.atomWalletDepositFeeAmount(_depositAmount, atomId),
+                - multiVault.atomWalletDepositFeeAmount(_depositAmount, atomId),
             "Deposit-1: unexpected totalAssets"
         );
 
@@ -165,6 +163,8 @@ contract MultiVaultCoreActionsTest is MultiVaultBase {
 
         uint256 sharesToRedeem = multiVault.ONE_SHARE(); // 1e18
         uint256 previewAssetsForRedeem = multiVault.previewRedeem(sharesToRedeem, atomId, DEFAULT_BONDING_CURVE_ID);
+        uint256 grossValueOfSharesToRedeem =
+            multiVault.convertToAssets(sharesToRedeem, atomId, DEFAULT_BONDING_CURVE_ID);
 
         uint256 assetsReceived = multiVault.redeem(
             sharesToRedeem,
@@ -183,11 +183,9 @@ contract MultiVaultCoreActionsTest is MultiVaultBase {
         // Verify total assets accounting
         (, uint256 totalAssetsAfterRedeem) = multiVault.getVaultTotals(atomId, DEFAULT_BONDING_CURVE_ID);
 
-        // Calculate expected assets after second deposit
-        uint256 secondDepositNet = oneToken - multiVault.protocolFeeAmount(oneToken)
-            - multiVault.entryFeeAmount(oneToken) - multiVault.atomWalletDepositFeeAmount(oneToken, atomId);
-
-        uint256 expectedTotalAssets = totalAssetsBeforeRedeem + secondDepositNet - assetsReceived;
+        // Calculate expected total assets after redemption
+        uint256 expectedTotalAssets =
+            totalAssetsBeforeRedeem + multiVault.exitFeeAmount(grossValueOfSharesToRedeem) - assetsReceived;
 
         assertEq(totalAssetsAfterRedeem, expectedTotalAssets, "Redeem: totalAssets mismatch after redemption");
     }
@@ -354,6 +352,10 @@ contract MultiVaultCoreActionsTest is MultiVaultBase {
         vm.stopPrank();
         emit log(StdStyle.green("--- Flow-4 (alternative-curve triple) passed ---"));
     }
+
+    /*//////////////////////////////////////////////////////////////
+                          HELPER FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
 
     /// @dev creates three simple atoms and returns their ids (subject, predicate, object)
     function _createBasicAtoms() internal returns (bytes32, bytes32, bytes32) {

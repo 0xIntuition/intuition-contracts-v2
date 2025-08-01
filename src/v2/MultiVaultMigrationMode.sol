@@ -169,10 +169,7 @@ contract MultiVaultMigrationMode is MultiVault {
      * @notice Sets the atom mappings data
      * @param atomDataArray The atom data array
      */
-    function batchSetAtomData(bytes[] calldata atomDataArray)
-        external
-        onlyRole(MIGRATOR_ROLE)
-    {
+    function batchSetAtomData(bytes[] calldata atomDataArray) external onlyRole(MIGRATOR_ROLE) {
         if (atomDataArray.length == 0) {
             revert Errors.MultiVault_EmptyArray();
         }
@@ -188,10 +185,7 @@ contract MultiVaultMigrationMode is MultiVault {
      * @notice Sets the triple mappings data
      * @param tripleAtomIds The atom IDs for each triple (array of arrays)
      */
-    function batchSetTripleData(bytes32[3][] calldata tripleAtomIds)
-        external
-        onlyRole(MIGRATOR_ROLE)
-    {
+    function batchSetTripleData(bytes32[3][] calldata tripleAtomIds) external onlyRole(MIGRATOR_ROLE) {
         if (tripleAtomIds.length == 0) {
             revert Errors.MultiVault_EmptyArray();
         }

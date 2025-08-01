@@ -39,10 +39,7 @@ contract MockMultiVault {
         accumulatedProtocolFees[_epoch] = _amount;
     }
 
-    function createAtoms(bytes[] calldata atomDataArray, uint256 value)
-        external
-        returns (bytes32[] memory atomIds)
-    {
+    function createAtoms(bytes[] calldata atomDataArray, uint256 value) external returns (bytes32[] memory atomIds) {
         atomIds = new bytes32[](atomDataArray.length);
         for (uint256 i = 0; i < atomDataArray.length; i++) {
             atomIds[i] = keccak256(abi.encodePacked("atom", atomIdCounter++));
