@@ -11,8 +11,11 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 
 /// @notice Minimal interface for the bonding contract (ve‑style lock)
 interface TrustBonding {
+    function MINTIME() external view returns (uint256);
+    function MAXTIME() external view returns (uint256);
     function create_lock_for(address _addr, uint256 _value, uint256 _unlock_time) external;
     function deposit_for(address _addr, uint256 _value) external;
+    function increase_amount_and_time_for(address _addr, uint256 _value, uint256 _unlock_time) external;
     function locked(address _addr) external view returns (int128 amount, uint256 end);
 }
 
@@ -240,6 +243,52 @@ contract TrustVestedMerkleDistributor is
         net = value - fee;
     }
 
+    /**
+     * @dev    Bonds the specified `amount` for `user` with an unlock time of `unlockTime`.
+     *         If the user has an existing bond, it will be extended or revived as needed.
+     */
+    function _bondTrustForUser(address user, uint256 amount, uint256 unlockTime) internal {
+        if (user == address(0)) revert ZeroAddress();
+        if (amount == 0) revert ZeroValueProvided();
+        if (unlockTime > block.timestamp + trustBonding.MAXTIME()) revert InvalidUnlockTime();
+        if (unlockTime < block.timestamp + trustBonding.MINTIME()) revert InvalidUnlockTime();
+
+        (int128 bondedAmount, uint256 endTime) = trustBonding.locked(user);
+
+        if (bondedAmount > 0) {
+            if (endTime > block.timestamp) {
+                // Bond is still active
+                if (unlockTime > endTime) {
+                    // User wants to extend both amount and time
+                    _validateUnlockTime(unlockTime);
+                    trustBonding.increase_amount_and_time_for(user, amount, unlockTime);
+                } else {
+                    // User's desired unlock is before/at current end, just add amount (no need to validate unlockTime)
+                    trustBonding.deposit_for(user, amount);
+                }
+            } else {
+                // Bond has expired, use increase_amount_and_time_for to revive it
+                _validateUnlockTime(unlockTime);
+                trustBonding.increase_amount_and_time_for(user, amount, unlockTime);
+            }
+        } else {
+            // No existing bond, create new
+            _validateUnlockTime(unlockTime);
+            trustBonding.create_lock_for(user, amount, unlockTime);
+        }
+    }
+
+    /**
+     * @dev    Validates the unlock time for a bond.  It must be in the future, and within the
+     *         allowed range defined by the bonding contract's MINTIME and MAXTIME.
+     */
+    function _validateUnlockTime(uint256 unlockTime) internal view {
+        uint256 roundedUnlockTime = (unlockTime / 1 weeks) * 1 weeks;
+        if (roundedUnlockTime <= block.timestamp) revert InvalidUnlockTime();
+        if (roundedUnlockTime < block.timestamp + trustBonding.MINTIME()) revert InvalidUnlockTime();
+        if (roundedUnlockTime > block.timestamp + trustBonding.MAXTIME()) revert InvalidUnlockTime();
+    }
+
     /*//////////////////////////////////////////////////////////////
                                USER ACTIONS
     //////////////////////////////////////////////////////////////*/
@@ -293,15 +342,7 @@ contract TrustVestedMerkleDistributor is
         if (fee > 0) trust.safeTransfer(protocolTreasury, fee);
 
         // --- bond --- //
-        (int128 bondedAmount,) = trustBonding.locked(user);
-
-        if (bondedAmount > 0) {
-            // if user already has a bond, deposit the newly claimed amount into it
-            trustBonding.deposit_for(user, net);
-        } else {
-            // if user does not have a bond, create a new bond for them
-            trustBonding.create_lock_for(user, net, unlockTime);
-        }
+        _bondTrustForUser(user, net, unlockTime);
 
         emit ClaimedAndBonded(user, net, fee, unlockTime);
     }
@@ -364,15 +405,7 @@ contract TrustVestedMerkleDistributor is
         if (forfeited > 0) trust.safeTransfer(protocolTreasury, forfeited); // full forfeited share
 
         // --- bond --- //
-        (int128 bondedAmount,) = trustBonding.locked(user);
-
-        if (bondedAmount > 0) {
-            // if user already has a bond, deposit the newly claimed amount into it
-            trustBonding.deposit_for(user, net);
-        } else {
-            // if user does not have a bond, create a new bond for them
-            trustBonding.create_lock_for(user, net, unlockTime);
-        }
+        _bondTrustForUser(user, net, unlockTime);
 
         emit RageQuitAndBonded(user, net, forfeited, fee, unlockTime);
     }
@@ -389,6 +422,10 @@ contract TrustVestedMerkleDistributor is
                              ADMINISTRATIVE
     //////////////////////////////////////////////////////////////*/
 
+    /**
+     * @notice Sets the trust bonding contract address.
+     * @param _trustBonding The address of the TrustBonding contract.
+     */
     function setTrustBonding(address _trustBonding) external onlyOwner {
         if (_trustBonding == address(0)) revert ZeroAddress();
         address old = address(trustBonding);
@@ -398,12 +435,20 @@ contract TrustVestedMerkleDistributor is
         emit TrustBondingUpdated(_trustBonding);
     }
 
+    /**
+     * @notice Sets the protocol treasury address.
+     * @param _treasury The address of the protocol treasury.
+     */
     function setProtocolTreasury(address _treasury) external onlyOwner {
         if (_treasury == address(0)) revert ZeroAddress();
         protocolTreasury = _treasury;
         emit ProtocolTreasuryUpdated(_treasury);
     }
 
+    /**
+     * @notice Sets the fee in BPS charged on every claim.
+     * @param _feeInBPS The new fee in BPS (max 1000 = 10%).
+     */
     function setFeeInBPS(uint256 _feeInBPS) external onlyOwner {
         if (_feeInBPS > MAX_FEE_IN_BPS) revert InvalidFeeInBPS();
         feeInBPS = _feeInBPS;
@@ -412,6 +457,8 @@ contract TrustVestedMerkleDistributor is
 
     /**
      * @notice Start timestamp may be pushed **forward** until vesting actually begins.
+     * @dev    Cannot be set to 0, must be in the future, and cannot be set after vesting starts.
+     * @param _newStart The new vesting start timestamp.
      */
     function setVestingStartTimestamp(uint256 _newStart) external onlyOwner {
         if (_newStart == 0) revert ZeroValueProvided();
@@ -421,6 +468,12 @@ contract TrustVestedMerkleDistributor is
         emit VestingStartTimestampSet(_newStart);
     }
 
+    /**
+     * @notice Sets the claim end timestamp.
+     * @dev    Cannot be set to a time before vesting ends, must be in the future, and cannot be shortened
+     *         if the vesting has already started.
+     * @param _newEnd The new claim end timestamp.
+     */
     function setClaimEndTimestamp(uint256 _newEnd) external onlyOwner {
         uint256 minEnd = vestingStartTimestamp + vestingDuration;
         if (_newEnd <= minEnd) revert InvalidClaimEnd();
@@ -434,6 +487,10 @@ contract TrustVestedMerkleDistributor is
 
     /**
      * @notice Rescue tokens mistakenly sent / withdraw undistributed tokens.
+     * @dev    Can be used to withdraw any ERC20 token, but TRUST withdrawals are not allowed during the claim period.
+     * @param _token The address of the token to withdraw.
+     * @param _amount The amount of tokens to withdraw.
+     * @param _recipient The address to send the withdrawn tokens to.
      */
     function withdrawTokens(address _token, uint256 _amount, address _recipient) external onlyOwner {
         if (_token == address(0)) revert ZeroAddress();
@@ -447,10 +504,12 @@ contract TrustVestedMerkleDistributor is
                                  PAUSING
     //////////////////////////////////////////////////////////////*/
 
+    /// @notice Pauses the contract, preventing any claims or rage‑quits.
     function pause() external onlyOwner {
         _pause();
     }
 
+    /// @notice Unpauses the contract, allowing claims and rage‑quits to resume.
     function unpause() external onlyOwner {
         _unpause();
     }

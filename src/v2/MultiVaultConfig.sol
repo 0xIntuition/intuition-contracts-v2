@@ -117,11 +117,15 @@ contract MultiVaultConfig is IMultiVaultConfig, Initializable, AccessControlUpgr
     /// @dev pauses the pausable contract methods
     function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
+
+        multiVault.syncConfig();
     }
 
     /// @dev unpauses the pausable contract methods
     function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
         _unpause();
+
+        multiVault.syncConfig();
     }
 
     /// @dev set the address of the MultiVault contract

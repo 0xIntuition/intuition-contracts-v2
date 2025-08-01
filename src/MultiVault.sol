@@ -50,6 +50,9 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
     /// @notice Constant representing 1 share in the vault (1e18)
     uint256 public constant ONE_SHARE = 1e18;
 
+    /// @notice Constant representing the burn address, which receives the "ghost shares"
+    address public constant BURN_ADDRESS = address(0x000000000000000000000000000000000000dEaD);
+
     /* =================================================== */
     /*                  STATE VARIABLES                    */
     /* =================================================== */
@@ -697,7 +700,7 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
         uint256 bondingCurveId,
         uint256 value,
         uint256 minSharesToReceive
-    ) external whenNotPaused nonReentrant returns (uint256) {
+    ) external nonReentrant whenNotPaused returns (uint256) {
         if (!isApprovedToDeposit(msg.sender, receiver)) {
             revert Errors.MultiVault_SenderNotApproved();
         }
@@ -882,7 +885,7 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
                 vaults[termId][bondingCurveId].totalShares + sharesForReceiver + minShare
             );
 
-            _mint(generalConfig.admin, termId, bondingCurveId, minShare);
+            _mint(BURN_ADDRESS, termId, bondingCurveId, minShare);
             _mint(receiver, termId, bondingCurveId, sharesForReceiver);
 
             if (isTripleVault) {
@@ -893,7 +896,7 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
                     vaults[counterTripleId][bondingCurveId].totalAssets + minShare,
                     vaults[counterTripleId][bondingCurveId].totalShares + minShare
                 );
-                _mint(generalConfig.admin, counterTripleId, bondingCurveId, minShare);
+                _mint(BURN_ADDRESS, counterTripleId, bondingCurveId, minShare);
             }
         } else {
             // If not creation, just update the vault totals and mint shares for the user
@@ -949,7 +952,7 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
         bytes32 termId,
         uint256 bondingCurveId,
         uint256 minAssetsToReceive
-    ) external nonReentrant returns (uint256) {
+    ) external nonReentrant whenNotPaused returns (uint256) {
         if (!isApprovedToRedeem(msg.sender, receiver)) {
             revert Errors.MultiVault_RedeemerNotApproved();
         }
@@ -1255,7 +1258,7 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
         _mint(receiver, termId, defaultBondingCurveId, sharesForReceiver);
 
         // Mint ghost shares to admin
-        _mint(generalConfig.admin, termId, defaultBondingCurveId, generalConfig.minShare);
+        _mint(BURN_ADDRESS, termId, defaultBondingCurveId, generalConfig.minShare);
 
         // Initialize the counter triple vault if it's a triple creation flow
         if (isTripleId(termId)) {
@@ -1281,7 +1284,7 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
         );
 
         // Mint ghost shares to admin for the counter vault
-        _mint(generalConfig.admin, counterTripleId, defaultBondingCurveId, generalConfig.minShare);
+        _mint(BURN_ADDRESS, counterTripleId, defaultBondingCurveId, generalConfig.minShare);
     }
 
     /// @dev mint vault shares to address `to`

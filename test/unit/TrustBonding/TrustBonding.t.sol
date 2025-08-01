@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
+import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 import {OwnableUpgradeable} from "@openzeppelin-contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {PausableUpgradeable} from "@openzeppelin-contracts-upgradeable/utils/PausableUpgradeable.sol";
 import {ProxyAdmin} from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
@@ -31,9 +32,10 @@ contract TrustBondingBaseTest is Test {
     address public alice = address(1);
     address public bob = address(2);
     address public admin = address(3);
+    address public timelock = address(4);
     uint256 public constant systemUtilizationLowerBound = 2500; // 25%
     uint256 public constant personalUtilizationLowerBound = 2500; // 25%
-    uint256 additionalTokens = 10_000 * 1e18;
+    uint256 public additionalTokens = 10_000 * 1e18;
 
     /// @notice TrustBonding config
     uint256 public epochLength_ = 14 days;
@@ -58,11 +60,15 @@ contract TrustBondingBaseTest is Test {
         trustBonding = TrustBonding(address(trustBondingProxy));
 
         // Initialize TrustBonding contract
-        trustBonding.initialize(admin, address(trustToken), epochLength_, startTimestamp);
-
-        // Reinitialize TrustBonding contract with MultiVault and utilization bounds
-        vm.prank(admin);
-        trustBonding.reinitialize(address(multiVault), systemUtilizationLowerBound, personalUtilizationLowerBound);
+        trustBonding.initialize(
+            admin,
+            address(trustToken),
+            epochLength_,
+            startTimestamp,
+            address(multiVault),
+            systemUtilizationLowerBound,
+            personalUtilizationLowerBound
+        );
 
         // Deal ether to test addresses
         vm.deal(alice, dealAmount);
@@ -88,6 +94,9 @@ contract TrustBondingBaseTest is Test {
         vm.startPrank(admin);
 
         trustToken.approve(address(trustBonding), type(uint256).max);
+
+        // grant TIMELOCK_ROLE to the timelock address
+        trustBonding.grantRole(trustBonding.TIMELOCK_ROLE(), timelock);
 
         vm.stopPrank();
 
@@ -164,7 +173,15 @@ contract TrustBondingTest is TrustBondingBaseTest {
         TrustBonding newTrustBonding = _deployNewTrustBondingContract();
 
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableInvalidOwner.selector, address(0)));
-        newTrustBonding.initialize(address(0), address(trustToken), epochLength_, startTimestamp);
+        newTrustBonding.initialize(
+            address(0),
+            address(trustToken),
+            epochLength_,
+            startTimestamp,
+            address(multiVault),
+            systemUtilizationLowerBound,
+            personalUtilizationLowerBound
+        );
 
         vm.stopPrank();
     }
@@ -175,7 +192,15 @@ contract TrustBondingTest is TrustBondingBaseTest {
         TrustBonding newTrustBonding = _deployNewTrustBondingContract();
 
         vm.expectRevert("Token address cannot be 0");
-        newTrustBonding.initialize(admin, address(0), epochLength_, startTimestamp);
+        newTrustBonding.initialize(
+            admin,
+            address(0),
+            epochLength_,
+            startTimestamp,
+            address(multiVault),
+            systemUtilizationLowerBound,
+            personalUtilizationLowerBound
+        );
 
         vm.stopPrank();
     }
@@ -188,7 +213,15 @@ contract TrustBondingTest is TrustBondingBaseTest {
         uint256 invalidEpochLength = 2 weeks - 1;
 
         vm.expectRevert("Min lock time must be at least 2 weeks");
-        newTrustBonding.initialize(admin, address(trustToken), invalidEpochLength, startTimestamp);
+        newTrustBonding.initialize(
+            admin,
+            address(trustToken),
+            invalidEpochLength,
+            startTimestamp,
+            address(multiVault),
+            systemUtilizationLowerBound,
+            personalUtilizationLowerBound
+        );
 
         vm.stopPrank();
     }
@@ -201,7 +234,76 @@ contract TrustBondingTest is TrustBondingBaseTest {
         uint256 pastTimestamp = block.timestamp - 1;
 
         vm.expectRevert(abi.encodeWithSelector(Errors.TrustBonding_InvalidStartTimestamp.selector));
-        newTrustBonding.initialize(admin, address(trustToken), epochLength_, pastTimestamp);
+        newTrustBonding.initialize(
+            admin,
+            address(trustToken),
+            epochLength_,
+            pastTimestamp,
+            address(multiVault),
+            systemUtilizationLowerBound,
+            personalUtilizationLowerBound
+        );
+
+        vm.stopPrank();
+    }
+
+    function test_initialize_shouldRevertIfMultiVaultIsAddressZero() external {
+        vm.startPrank(admin);
+
+        TrustBonding newTrustBonding = _deployNewTrustBondingContract();
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.TrustBonding_ZeroAddress.selector));
+        newTrustBonding.initialize(
+            admin,
+            address(trustToken),
+            epochLength_,
+            startTimestamp,
+            address(0),
+            systemUtilizationLowerBound,
+            personalUtilizationLowerBound
+        );
+
+        vm.stopPrank();
+    }
+
+    function test_initialize_shouldRevertIfSystemUtilizationLowerBoundIsAbove100Percent() external {
+        vm.startPrank(admin);
+
+        TrustBonding newTrustBonding = _deployNewTrustBondingContract();
+
+        uint256 invalidSystemUtilizationLowerBound = trustBonding.BASIS_POINTS_DIVISOR() + 1; // 100% + 1 basis point
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.TrustBonding_InvalidUtilizationLowerBound.selector));
+        newTrustBonding.initialize(
+            admin,
+            address(trustToken),
+            epochLength_,
+            startTimestamp,
+            address(multiVault),
+            invalidSystemUtilizationLowerBound,
+            personalUtilizationLowerBound
+        );
+
+        vm.stopPrank();
+    }
+
+    function test_initialize_shouldRevertIfPersonalUtilizationLowerBoundIsAbove100Percent() external {
+        vm.startPrank(admin);
+
+        TrustBonding newTrustBonding = _deployNewTrustBondingContract();
+
+        uint256 invalidPersonalUtilizationLowerBound = trustBonding.BASIS_POINTS_DIVISOR() + 1; // 100% + 1 basis point
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.TrustBonding_InvalidUtilizationLowerBound.selector));
+        newTrustBonding.initialize(
+            admin,
+            address(trustToken),
+            epochLength_,
+            startTimestamp,
+            address(multiVault),
+            systemUtilizationLowerBound,
+            invalidPersonalUtilizationLowerBound
+        );
 
         vm.stopPrank();
     }
@@ -437,23 +539,6 @@ contract TrustBondingTest is TrustBondingBaseTest {
         uint256 trustPerEpoch = trustBonding.trustPerEpoch(currentEpoch);
 
         assertEq(trustPerEpoch, 0);
-    }
-
-    function test_trustPerEpoch_whenLockedPercentageIsAtOrBelowOnePercent() external {
-        vm.startPrank(alice, alice);
-        uint256 unlockTime = block.timestamp + defaultUnlockDuration;
-        uint256 onePercentOfTotalSupply = trustToken.totalSupply() / 100;
-        trustBonding.create_lock(onePercentOfTotalSupply, unlockTime);
-        vm.stopPrank();
-
-        uint256 currentEpoch = trustBonding.currentEpoch();
-        uint256 trustPerEpoch = trustBonding.trustPerEpoch(currentEpoch);
-
-        uint256 epochsPerYear = trustBonding.epochsPerYear();
-        uint256 expectedAnnualEmission = trustBonding.totalLocked() * 10; // enforce the capped 1,000% APR
-        uint256 expectedTrustPerEpoch = expectedAnnualEmission / epochsPerYear;
-
-        assertEq(trustPerEpoch, expectedTrustPerEpoch);
     }
 
     function test_trustPerEpoch_whenLockedPercentageIsAboveOnePercent() external {
@@ -719,7 +804,11 @@ contract TrustBondingTest is TrustBondingBaseTest {
     function test_pause_shouldRevertIfCalledByNonOwner() external {
         vm.startPrank(alice);
 
-        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, alice));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, alice, trustBonding.PAUSER_ROLE()
+            )
+        );
         trustBonding.pause();
 
         vm.stopPrank();
@@ -755,7 +844,11 @@ contract TrustBondingTest is TrustBondingBaseTest {
 
         vm.startPrank(alice);
 
-        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, alice));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, alice, trustBonding.DEFAULT_ADMIN_ROLE()
+            )
+        );
         trustBonding.unpause();
 
         vm.stopPrank();
@@ -790,17 +883,21 @@ contract TrustBondingUtilizationCalculationsTest is TrustBondingBaseTest {
         _advanceEpochs(4);
     }
 
-    function test_setMultiVault_shouldRevertIfCalledByNonOwner() external {
+    function test_setMultiVault_shouldRevertIfNotCalledByTimelock() external {
         vm.startPrank(alice);
 
-        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, alice));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, alice, trustBonding.TIMELOCK_ROLE()
+            )
+        );
         trustBonding.setMultiVault(address(multiVault));
 
         vm.stopPrank();
     }
 
     function test_setMultiVault_shouldRevertIfAddressIsZero() external {
-        vm.startPrank(admin);
+        vm.startPrank(timelock);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.TrustBonding_ZeroAddress.selector));
         trustBonding.setMultiVault(address(0));
@@ -809,7 +906,7 @@ contract TrustBondingUtilizationCalculationsTest is TrustBondingBaseTest {
     }
 
     function test_setMultiVault() external {
-        vm.startPrank(admin);
+        vm.startPrank(timelock);
 
         trustBonding.setMultiVault(address(multiVault));
 

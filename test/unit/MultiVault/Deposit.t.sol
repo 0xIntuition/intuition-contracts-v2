@@ -75,7 +75,7 @@ contract DepositTest is MultiVaultBase {
         uint256 minShare = getGeneralConfig().minShare;
         (uint256 totalShares,) = multiVault.getVaultTotals(atomId, curve);
         assertEq(totalShares, minted + minShare);
-        assertEq(multiVault.balanceOf(getGeneralConfig().admin, atomId, curve), minShare);
+        assertEq(multiVault.balanceOf(multiVault.BURN_ADDRESS(), atomId, curve), minShare);
     }
 
     /// deposit into triple vault (no counter-stake)
