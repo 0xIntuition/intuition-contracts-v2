@@ -27,6 +27,9 @@ contract TrustUnlockFactory is Ownable2Step, ReentrancyGuard {
     /// @notice The address of the TrustBonding contract
     address public immutable trustBonding;
 
+    /// @notice The address of the MultiVault contract
+    address public immutable multiVault;
+
     /*//////////////////////////////////////////////////////////////
                                  STATE
     //////////////////////////////////////////////////////////////*/
@@ -69,13 +72,14 @@ contract TrustUnlockFactory is Ownable2Step, ReentrancyGuard {
      * @param _trustToken The address of the TRUST token contract
      * @param _admin Address of the admin who can create TrustUnlock contracts
      */
-    constructor(address _trustToken, address _admin, address _trustBonding) Ownable(_admin) {
-        if (_trustToken == address(0) || _trustBonding == address(0)) {
+    constructor(address _trustToken, address _admin, address _trustBonding, address _multiVault) Ownable(_admin) {
+        if (_trustToken == address(0) || _trustBonding == address(0) || _multiVault == address(0)) {
             revert Errors.Unlock_ZeroAddress();
         }
 
         trustToken = IERC20(_trustToken);
         trustBonding = _trustBonding;
+        multiVault = _multiVault;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -192,6 +196,7 @@ contract TrustUnlockFactory is Ownable2Step, ReentrancyGuard {
             trustToken: address(trustToken),
             recipient: recipient,
             trustBonding: trustBonding,
+            multiVault: multiVault,
             unlockAmount: unlockAmount,
             unlockBegin: unlockBegin,
             unlockCliff: unlockCliff,

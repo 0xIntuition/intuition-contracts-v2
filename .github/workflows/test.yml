@@ -17,8 +17,8 @@ concurrency:
 
 env:
   FOUNDRY_PROFILE: 'ci'
-  SEPOLIA_RPC_URL: 'https://sepolia.base.org' # TODO: Throw this in repo env once permissioned to do so
-  BASE_RPC_URL: 'https://mainnet.base.org' # TODO: Throw this in repo env once permissioned to do so
+  SEPOLIA_RPC_URL: 'https://sepolia.base.org'
+  BASE_RPC_URL: 'https://mainnet.base.org'
 
 jobs:
   lint:
@@ -90,13 +90,6 @@ jobs:
         run: |
           mkdir -p artifacts/forge-test-results
           forge test -vvv 2>&1 | tee artifacts/forge-test-results/forge-test-results.txt
-          exit ${PIPESTATUS[0]}
-
-      # NEW STEP: Capture contract sizes
-      - name: Run Forge build with contract sizes
-        id: forge-build-sizes
-        run: |
-          forge build --sizes 2>&1 | tee artifacts/forge-test-results/forge-build-sizes.txt
           exit ${PIPESTATUS[0]}
 
       - name: Upload test results

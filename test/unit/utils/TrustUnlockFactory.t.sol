@@ -18,6 +18,7 @@ import {TrustBonding} from "src/v2/TrustBonding.sol";
 import {TrustUnlockFactory} from "src/v2/TrustUnlockFactory.sol";
 import {TrustUnlock} from "src/v2/TrustUnlock.sol";
 
+import {MockMultiVault} from "test/mocks/MockMultiVault.sol";
 import {MockTrust} from "test/mocks/MockTrust.t.sol";
 
 /*//////////////////////////////////////////////////////////////
@@ -87,7 +88,7 @@ contract TrustUnlockFactoryTest is Test {
         );
 
         // 3. Deploy factory, fund it with tokens
-        factory = new TrustUnlockFactory(address(trustToken), owner, address(trustBonding));
+        factory = new TrustUnlockFactory(address(trustToken), owner, address(trustBonding), address(multiVault));
         trustToken.transfer(address(factory), UNLOCK_AMOUNT * 3);
 
         // 4. Common schedule example

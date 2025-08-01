@@ -11,6 +11,7 @@ import {
 
 import {Errors} from "src/libraries/Errors.sol";
 import {ITrustBonding} from "src/interfaces/ITrustBonding.sol";
+import {IUnlock} from "src/interfaces/IUnlock.sol";
 import {TrustBonding} from "src/v2/TrustBonding.sol";
 import {TrustUnlock} from "src/v2/TrustUnlock.sol";
 
@@ -87,6 +88,7 @@ contract TrustUnlockTest is Test {
             trustToken: address(trustToken),
             recipient: recipient,
             trustBonding: address(trustBonding),
+            multiVault: address(multiVault),
             unlockAmount: unlockAmount,
             unlockBegin: unlockBegin,
             unlockCliff: unlockCliff,
@@ -128,6 +130,7 @@ contract TrustUnlockTest is Test {
             trustToken: address(0),
             recipient: recipient,
             trustBonding: address(trustBonding),
+            multiVault: address(multiVault),
             unlockAmount: unlockAmount,
             unlockBegin: unlockBegin,
             unlockCliff: unlockCliff,
@@ -144,6 +147,7 @@ contract TrustUnlockTest is Test {
             trustToken: address(trustToken),
             recipient: address(0),
             trustBonding: address(trustBonding),
+            multiVault: address(multiVault),
             unlockAmount: unlockAmount,
             unlockBegin: unlockBegin,
             unlockCliff: unlockCliff,
@@ -160,6 +164,24 @@ contract TrustUnlockTest is Test {
             trustToken: address(trustToken),
             recipient: recipient,
             trustBonding: address(0),
+            multiVault: address(multiVault),
+            unlockAmount: unlockAmount,
+            unlockBegin: unlockBegin,
+            unlockCliff: unlockCliff,
+            unlockEnd: unlockEnd,
+            cliffPercentage: cliffPercentage
+        });
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.Unlock_ZeroAddress.selector));
+        new TrustUnlock(unlockParams);
+    }
+
+    function test_constructor_shouldRevertIfMultiVaultIsZeroAddress() external {
+        TrustUnlock.UnlockParams memory unlockParams = TrustUnlock.UnlockParams({
+            trustToken: address(trustToken),
+            recipient: recipient,
+            trustBonding: address(trustBonding),
+            multiVault: address(0),
             unlockAmount: unlockAmount,
             unlockBegin: unlockBegin,
             unlockCliff: unlockCliff,
@@ -176,6 +198,7 @@ contract TrustUnlockTest is Test {
             trustToken: address(trustToken),
             recipient: recipient,
             trustBonding: address(trustBonding),
+            multiVault: address(multiVault),
             unlockAmount: 0,
             unlockBegin: unlockBegin,
             unlockCliff: unlockCliff,
@@ -192,6 +215,7 @@ contract TrustUnlockTest is Test {
             trustToken: address(trustToken),
             recipient: recipient,
             trustBonding: address(trustBonding),
+            multiVault: address(multiVault),
             unlockAmount: unlockAmount,
             unlockBegin: block.timestamp - 1,
             unlockCliff: unlockCliff,
@@ -208,6 +232,7 @@ contract TrustUnlockTest is Test {
             trustToken: address(trustToken),
             recipient: recipient,
             trustBonding: address(trustBonding),
+            multiVault: address(multiVault),
             unlockAmount: unlockAmount,
             unlockBegin: unlockBegin,
             unlockCliff: unlockBegin - 1,
@@ -224,6 +249,7 @@ contract TrustUnlockTest is Test {
             trustToken: address(trustToken),
             recipient: recipient,
             trustBonding: address(trustBonding),
+            multiVault: address(multiVault),
             unlockAmount: unlockAmount,
             unlockBegin: unlockBegin,
             unlockCliff: unlockCliff,
@@ -240,6 +266,7 @@ contract TrustUnlockTest is Test {
             trustToken: address(trustToken),
             recipient: recipient,
             trustBonding: address(trustBonding),
+            multiVault: address(multiVault),
             unlockAmount: unlockAmount,
             unlockBegin: unlockBegin,
             unlockCliff: unlockCliff,
@@ -382,27 +409,6 @@ contract TrustUnlockTest is Test {
         vm.stopPrank();
     }
 
-    function test_revokeTtrustBondingApproval_doesNothingIfNotApproved() external {
-        vm.startPrank(recipient);
-        uint256 allowanceBefore = IERC20(trustToken).allowance(address(trustUnlock), address(trustBonding));
-        assertEq(allowanceBefore, 0);
-        trustUnlock.revokeTrustBondingApproval();
-        uint256 allowanceAfter = IERC20(trustToken).allowance(address(trustUnlock), address(trustBonding));
-        assertEq(allowanceAfter, 0);
-        vm.stopPrank();
-    }
-
-    function test_revokeTrustBondingApproval() external {
-        vm.startPrank(recipient);
-        trustUnlock.approveTrustBonding(unlockAmount);
-        uint256 allowance = IERC20(trustToken).allowance(address(trustUnlock), address(trustBonding));
-        assertEq(allowance, unlockAmount);
-        trustUnlock.revokeTrustBondingApproval();
-        allowance = IERC20(trustToken).allowance(address(trustUnlock), address(trustBonding));
-        assertEq(allowance, 0);
-        vm.stopPrank();
-    }
-
     function test_completeBondingFlowIntegration() external {
         vm.startPrank(recipient);
         vm.warp(block.timestamp + 365 days);
@@ -492,6 +498,384 @@ contract TrustUnlockTest is Test {
         assertEq(bondedBalance, 0);
         assertEq(unlockAmount, IERC20(trustToken).balanceOf(address(trustUnlock)));
 
+        vm.stopPrank();
+    }
+
+    function test_approveMultiVault_shouldRevertIfCallerIsNotRecipient() external {
+        vm.expectRevert(abi.encodeWithSelector(Errors.Unlock_OnlyRecipient.selector));
+        trustUnlock.approveMultiVault(unlockAmount);
+    }
+
+    function test_approveMultiVault() external {
+        vm.startPrank(recipient);
+        trustUnlock.approveMultiVault(unlockAmount);
+        uint256 allowance = IERC20(trustToken).allowance(address(trustUnlock), address(multiVault));
+        assertEq(allowance, unlockAmount);
+        vm.stopPrank();
+    }
+
+    function test_createAtoms_shouldRevertIfCallerIsNotRecipient() external {
+        bytes[] memory atomDataArray = new bytes[](2);
+        atomDataArray[0] = "atom1";
+        atomDataArray[1] = "atom2";
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.Unlock_OnlyRecipient.selector));
+        trustUnlock.createAtoms(atomDataArray, 1000);
+    }
+
+    function test_createAtoms() external {
+        vm.warp(unlockCliff);
+        vm.startPrank(recipient);
+
+        trustUnlock.claim();
+        trustUnlock.approveMultiVault(unlockAmount);
+
+        bytes[] memory atomDataArray = new bytes[](2);
+        atomDataArray[0] = "atom1";
+        atomDataArray[1] = "atom2";
+
+        bytes32[] memory atomIds = trustUnlock.createAtoms(atomDataArray, 1000);
+
+        assertEq(atomIds.length, 2);
+        assertTrue(atomIds[0] != bytes32(0));
+        assertTrue(atomIds[1] != bytes32(0));
+        vm.stopPrank();
+    }
+
+    function test_createTriples_shouldRevertIfCallerIsNotRecipient() external {
+        bytes32[] memory subjectIds = new bytes32[](2);
+        bytes32[] memory predicateIds = new bytes32[](2);
+        bytes32[] memory objectIds = new bytes32[](2);
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.Unlock_OnlyRecipient.selector));
+        trustUnlock.createTriples(subjectIds, predicateIds, objectIds, 1000);
+    }
+
+    function test_createTriples() external {
+        vm.warp(unlockCliff);
+        vm.startPrank(recipient);
+
+        trustUnlock.claim();
+        trustUnlock.approveMultiVault(unlockAmount);
+
+        bytes32[] memory subjectIds = new bytes32[](2);
+        bytes32[] memory predicateIds = new bytes32[](2);
+        bytes32[] memory objectIds = new bytes32[](2);
+        subjectIds[0] = keccak256("subject1");
+        subjectIds[1] = keccak256("subject2");
+        predicateIds[0] = keccak256("predicate1");
+        predicateIds[1] = keccak256("predicate2");
+        objectIds[0] = keccak256("object1");
+        objectIds[1] = keccak256("object2");
+
+        bytes32[] memory tripleIds = trustUnlock.createTriples(subjectIds, predicateIds, objectIds, 1000);
+
+        assertEq(tripleIds.length, 2);
+        assertTrue(tripleIds[0] != bytes32(0));
+        assertTrue(tripleIds[1] != bytes32(0));
+        vm.stopPrank();
+    }
+
+    function test_depositIntoMultiVault_shouldRevertIfCallerIsNotRecipient() external {
+        vm.expectRevert(abi.encodeWithSelector(Errors.Unlock_OnlyRecipient.selector));
+        trustUnlock.depositIntoMultiVault(keccak256("term"), 1, 1000, 900);
+    }
+
+    function test_depositIntoMultiVault() external {
+        vm.warp(unlockCliff);
+        vm.startPrank(recipient);
+
+        trustUnlock.claim();
+        trustUnlock.approveMultiVault(unlockAmount);
+
+        bytes32 termId = keccak256("term");
+        uint256 bondingCurveId = 1;
+        uint256 value = 1000;
+        uint256 minSharesToReceive = 900;
+
+        uint256 shares = trustUnlock.depositIntoMultiVault(termId, bondingCurveId, value, minSharesToReceive);
+
+        assertEq(shares, value);
+        vm.stopPrank();
+    }
+
+    function test_batchDepositIntoMultiVault_shouldRevertIfCallerIsNotRecipient() external {
+        bytes32[] memory termIds = new bytes32[](2);
+        uint256[] memory bondingCurveIds = new uint256[](2);
+        uint256[] memory amounts = new uint256[](2);
+        uint256[] memory minSharesToReceive = new uint256[](2);
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.Unlock_OnlyRecipient.selector));
+        trustUnlock.batchDepositIntoMultiVault(termIds, bondingCurveIds, amounts, minSharesToReceive);
+    }
+
+    function test_batchDepositIntoMultiVault() external {
+        vm.warp(unlockCliff);
+        vm.startPrank(recipient);
+
+        trustUnlock.claim();
+        trustUnlock.approveMultiVault(unlockAmount);
+
+        bytes32[] memory termIds = new bytes32[](2);
+        uint256[] memory bondingCurveIds = new uint256[](2);
+        uint256[] memory amounts = new uint256[](2);
+        uint256[] memory minSharesToReceive = new uint256[](2);
+
+        termIds[0] = keccak256("term1");
+        termIds[1] = keccak256("term2");
+        bondingCurveIds[0] = 1;
+        bondingCurveIds[1] = 2;
+        amounts[0] = 1000;
+        amounts[1] = 2000;
+        minSharesToReceive[0] = 900;
+        minSharesToReceive[1] = 1800;
+
+        uint256[] memory shares =
+            trustUnlock.batchDepositIntoMultiVault(termIds, bondingCurveIds, amounts, minSharesToReceive);
+
+        assertEq(shares.length, 2);
+        assertEq(shares[0], amounts[0]);
+        assertEq(shares[1], amounts[1]);
+        vm.stopPrank();
+    }
+
+    function test_redeemFromMultiVault_shouldRevertIfCallerIsNotRecipient() external {
+        vm.expectRevert(abi.encodeWithSelector(Errors.Unlock_OnlyRecipient.selector));
+        trustUnlock.redeemFromMultiVault(1000, keccak256("term"), 1, 900);
+    }
+
+    function test_redeemFromMultiVault() external {
+        vm.warp(unlockCliff);
+        vm.startPrank(recipient);
+
+        trustUnlock.claim();
+        trustUnlock.approveMultiVault(unlockAmount);
+
+        uint256 shares = 1000;
+        bytes32 termId = keccak256("term");
+        uint256 bondingCurveId = 1;
+        uint256 minAssetsToReceive = 900;
+
+        uint256 assets = trustUnlock.redeemFromMultiVault(shares, termId, bondingCurveId, minAssetsToReceive);
+
+        assertEq(assets, shares);
+        vm.stopPrank();
+    }
+
+    function test_batchRedeemFromMultiVault_shouldRevertIfCallerIsNotRecipient() external {
+        uint256[] memory shares = new uint256[](2);
+        bytes32[] memory termIds = new bytes32[](2);
+        uint256[] memory bondingCurveIds = new uint256[](2);
+        uint256[] memory minAssetsToReceive = new uint256[](2);
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.Unlock_OnlyRecipient.selector));
+        trustUnlock.batchRedeemFromMultiVault(shares, termIds, bondingCurveIds, minAssetsToReceive);
+    }
+
+    function test_batchRedeemFromMultiVault() external {
+        vm.warp(unlockCliff);
+        vm.startPrank(recipient);
+
+        trustUnlock.claim();
+        trustUnlock.approveMultiVault(unlockAmount);
+
+        uint256[] memory shares = new uint256[](2);
+        bytes32[] memory termIds = new bytes32[](2);
+        uint256[] memory bondingCurveIds = new uint256[](2);
+        uint256[] memory minAssetsToReceive = new uint256[](2);
+
+        shares[0] = 1000;
+        shares[1] = 2000;
+        termIds[0] = keccak256("term1");
+        termIds[1] = keccak256("term2");
+        bondingCurveIds[0] = 1;
+        bondingCurveIds[1] = 2;
+        minAssetsToReceive[0] = 900;
+        minAssetsToReceive[1] = 1800;
+
+        uint256[] memory assets =
+            trustUnlock.batchRedeemFromMultiVault(shares, termIds, bondingCurveIds, minAssetsToReceive);
+
+        assertEq(assets.length, 2);
+        assertEq(assets[0], shares[0]);
+        assertEq(assets[1], shares[1]);
+        vm.stopPrank();
+    }
+
+    function testFuzz_approveMultiVault(uint256 amount) external {
+        amount = bound(amount, 0, type(uint128).max);
+
+        vm.startPrank(recipient);
+        trustUnlock.approveMultiVault(amount);
+        uint256 allowance = IERC20(trustToken).allowance(address(trustUnlock), address(multiVault));
+        assertEq(allowance, amount);
+        vm.stopPrank();
+    }
+
+    function testFuzz_depositIntoMultiVault(uint256 value, uint256 minSharesToReceive) external {
+        value = bound(value, 1, type(uint128).max);
+        minSharesToReceive = bound(minSharesToReceive, 0, value);
+
+        vm.warp(unlockCliff);
+        vm.startPrank(recipient);
+
+        trustUnlock.claim();
+        trustUnlock.approveMultiVault(unlockAmount);
+
+        bytes32 termId = keccak256("term");
+        uint256 bondingCurveId = 1;
+
+        uint256 shares = trustUnlock.depositIntoMultiVault(termId, bondingCurveId, value, minSharesToReceive);
+
+        assertEq(shares, value);
+        assertGe(shares, minSharesToReceive);
+        vm.stopPrank();
+    }
+
+    function testFuzz_redeemFromMultiVault(uint256 shares, uint256 minAssetsToReceive) external {
+        shares = bound(shares, 1, type(uint128).max);
+        minAssetsToReceive = bound(minAssetsToReceive, 0, shares);
+
+        vm.warp(unlockCliff);
+        vm.startPrank(recipient);
+
+        trustUnlock.claim();
+
+        bytes32 termId = keccak256("term");
+        uint256 bondingCurveId = 1;
+
+        uint256 assets = trustUnlock.redeemFromMultiVault(shares, termId, bondingCurveId, minAssetsToReceive);
+
+        assertEq(assets, shares);
+        assertGe(assets, minAssetsToReceive);
+        vm.stopPrank();
+    }
+
+    function test_multiVaultIntegration_fullFlow() external {
+        vm.warp(unlockCliff);
+        vm.startPrank(recipient);
+
+        trustUnlock.claim();
+        uint256 claimedAmount = (unlockAmount * cliffPercentage) / BASIS_POINTS_DIVISOR;
+        assertEq(trustToken.balanceOf(recipient), claimedAmount);
+
+        trustUnlock.approveMultiVault(unlockAmount);
+
+        bytes[] memory atomDataArray = new bytes[](2);
+        atomDataArray[0] = "atom1";
+        atomDataArray[1] = "atom2";
+
+        bytes32[] memory atomIds = trustUnlock.createAtoms(atomDataArray, 1000);
+        assertEq(atomIds.length, 2);
+
+        bytes32[] memory subjectIds = new bytes32[](1);
+        bytes32[] memory predicateIds = new bytes32[](1);
+        bytes32[] memory objectIds = new bytes32[](1);
+        subjectIds[0] = atomIds[0];
+        predicateIds[0] = keccak256("predicate");
+        objectIds[0] = atomIds[1];
+
+        bytes32[] memory tripleIds = trustUnlock.createTriples(subjectIds, predicateIds, objectIds, 2000);
+        assertEq(tripleIds.length, 1);
+
+        bytes32[] memory termIds = new bytes32[](2);
+        uint256[] memory bondingCurveIds = new uint256[](2);
+        uint256[] memory amounts = new uint256[](2);
+        uint256[] memory minSharesToReceive = new uint256[](2);
+
+        termIds[0] = atomIds[0];
+        termIds[1] = tripleIds[0];
+        bondingCurveIds[0] = 1;
+        bondingCurveIds[1] = 1;
+        amounts[0] = 5000;
+        amounts[1] = 10000;
+        minSharesToReceive[0] = 4500;
+        minSharesToReceive[1] = 9000;
+
+        uint256[] memory shares =
+            trustUnlock.batchDepositIntoMultiVault(termIds, bondingCurveIds, amounts, minSharesToReceive);
+        assertEq(shares.length, 2);
+        assertEq(shares[0], amounts[0]);
+        assertEq(shares[1], amounts[1]);
+
+        uint256[] memory minAssetsToReceive = new uint256[](2);
+        minAssetsToReceive[0] = 4000;
+        minAssetsToReceive[1] = 8000;
+
+        uint256[] memory assets =
+            trustUnlock.batchRedeemFromMultiVault(shares, termIds, bondingCurveIds, minAssetsToReceive);
+        assertEq(assets.length, 2);
+        assertEq(assets[0], shares[0]);
+        assertEq(assets[1], shares[1]);
+
+        vm.stopPrank();
+    }
+
+    function test_setRecipient_emitsEvent() external {
+        vm.startPrank(recipient);
+        vm.expectEmit(true, true, true, true);
+        emit IUnlock.RecipientSet(someAddress);
+        trustUnlock.setRecipient(someAddress);
+        vm.stopPrank();
+    }
+
+    function test_claim_emitsEvent() external {
+        vm.startPrank(recipient);
+        vm.warp(unlockCliff);
+
+        uint256 expectedAmount = (unlockAmount * cliffPercentage) / BASIS_POINTS_DIVISOR;
+        vm.expectEmit(true, true, true, true);
+        emit IUnlock.Claimed(recipient, expectedAmount, block.timestamp);
+        trustUnlock.claim();
+        vm.stopPrank();
+    }
+
+    function test_createBond_emitsEvent() external {
+        vm.startPrank(recipient);
+        vm.warp(block.timestamp + 365 days);
+
+        trustUnlock.approveTrustBonding(unlockAmount);
+
+        uint256 amount = (unlockAmount * cliffPercentage) / BASIS_POINTS_DIVISOR;
+        vm.expectEmit(true, true, true, true);
+        emit IUnlock.BondedAmountUpdated(amount);
+        trustUnlock.createBond(amount, defaultUnlockDuration);
+        vm.stopPrank();
+    }
+
+    function test_increaseBondedAmount_emitsEvent() external {
+        vm.startPrank(recipient);
+        vm.warp(block.timestamp + 365 days);
+
+        trustUnlock.approveTrustBonding(unlockAmount);
+
+        uint256 initialAmount = (unlockAmount * cliffPercentage) / BASIS_POINTS_DIVISOR;
+        trustUnlock.createBond(initialAmount, defaultUnlockDuration);
+
+        uint256 additionalAmount = 100 * 1e18;
+        vm.expectEmit(true, true, true, true);
+        emit IUnlock.BondedAmountUpdated(initialAmount + additionalAmount);
+        trustUnlock.increaseBondedAmount(additionalAmount);
+        vm.stopPrank();
+    }
+
+    function test_withdrawFromBonding_emitsEvent() external {
+        vm.startPrank(recipient);
+        vm.warp(block.timestamp + 365 days);
+
+        trustUnlock.approveTrustBonding(unlockAmount);
+
+        uint256 amount = (unlockAmount * cliffPercentage) / BASIS_POINTS_DIVISOR;
+        uint256 rawExpectedLockEndTimestamp = block.timestamp + defaultUnlockDuration;
+        uint256 expectedLockEndTimestamp = (rawExpectedLockEndTimestamp / oneWeek) * oneWeek;
+
+        trustUnlock.createBond(amount, defaultUnlockDuration);
+
+        vm.warp(expectedLockEndTimestamp);
+
+        vm.expectEmit(true, true, true, true);
+        emit IUnlock.BondedAmountUpdated(0);
+        trustUnlock.withdrawFromBonding();
         vm.stopPrank();
     }
 }

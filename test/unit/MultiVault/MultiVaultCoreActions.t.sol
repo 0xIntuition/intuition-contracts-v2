@@ -40,8 +40,6 @@ contract MultiVaultCoreActionsTest is MultiVaultBase {
     ///      – deposit another 1 TRUST
     ///      – redeem exactly 1 share
     function testDefaultCurveAtomFlow() external {
-        vm.skip(true); // TODO: remove this line once the test is fixed
-
         // -------- actor preparation -------------------------------------------------------------
         vm.startPrank(alice);
         uint256 costToCreateAtom = multiVault.getAtomCost();
@@ -131,7 +129,7 @@ contract MultiVaultCoreActionsTest is MultiVaultBase {
         assertEq(
             totalAssetsAfterDeposit,
             totalAssetsBeforeDeposit + _depositAmount - multiVault.protocolFeeAmount(_depositAmount)
-                - multiVault.entryFeeAmount(_depositAmount) - multiVault.atomWalletDepositFeeAmount(_depositAmount, atomId),
+                - multiVault.atomWalletDepositFeeAmount(_depositAmount, atomId),
             "Deposit-1: unexpected totalAssets"
         );
 
@@ -165,6 +163,8 @@ contract MultiVaultCoreActionsTest is MultiVaultBase {
 
         uint256 sharesToRedeem = multiVault.ONE_SHARE(); // 1e18
         uint256 previewAssetsForRedeem = multiVault.previewRedeem(sharesToRedeem, atomId, DEFAULT_BONDING_CURVE_ID);
+        uint256 grossValueOfSharesToRedeem =
+            multiVault.convertToAssets(sharesToRedeem, atomId, DEFAULT_BONDING_CURVE_ID);
 
         uint256 assetsReceived = multiVault.redeem(
             sharesToRedeem,
@@ -183,11 +183,9 @@ contract MultiVaultCoreActionsTest is MultiVaultBase {
         // Verify total assets accounting
         (, uint256 totalAssetsAfterRedeem) = multiVault.getVaultTotals(atomId, DEFAULT_BONDING_CURVE_ID);
 
-        // Calculate expected assets after second deposit
-        uint256 secondDepositNet = oneToken - multiVault.protocolFeeAmount(oneToken)
-            - multiVault.entryFeeAmount(oneToken) - multiVault.atomWalletDepositFeeAmount(oneToken, atomId);
-
-        uint256 expectedTotalAssets = totalAssetsBeforeRedeem + secondDepositNet - assetsReceived;
+        // Calculate expected total assets after redemption
+        uint256 expectedTotalAssets =
+            totalAssetsBeforeRedeem + multiVault.exitFeeAmount(grossValueOfSharesToRedeem) - assetsReceived;
 
         assertEq(totalAssetsAfterRedeem, expectedTotalAssets, "Redeem: totalAssets mismatch after redemption");
     }
@@ -266,25 +264,11 @@ contract MultiVaultCoreActionsTest is MultiVaultBase {
         vm.startPrank(alice);
         trustToken.approve(address(multiVault), type(uint256).max);
 
-        bytes[] memory atomDataArray = new bytes[](3);
-        atomDataArray[0] = bytes("A");
-        atomDataArray[1] = bytes("B");
-        atomDataArray[2] = bytes("C");
-        uint256 totalAtomCost = multiVault.getAtomCost() * 3;
-        bytes32[] memory atomIds = multiVault.createAtoms(atomDataArray, totalAtomCost);
-        bytes32 atomA = atomIds[0];
-        bytes32 atomB = atomIds[1];
-        bytes32 atomC = atomIds[2];
+        // Create three atoms (subject, predicate, object)
+        (bytes32 atomA, bytes32 atomB, bytes32 atomC) = _createBasicAtoms();
 
         // ------------------ create triple on default curve ------------------
-        uint256 tripleCost = multiVault.getTripleCost();
-        bytes32[] memory subjectIds = new bytes32[](1);
-        bytes32[] memory predicateIds = new bytes32[](1);
-        bytes32[] memory objectIds = new bytes32[](1);
-        subjectIds[0] = atomA;
-        predicateIds[0] = atomB;
-        objectIds[0] = atomC;
-        bytes32 tripleId = multiVault.createTriples(subjectIds, predicateIds, objectIds, tripleCost)[0];
+        bytes32 tripleId = _createBasicTriple(atomA, atomB, atomC, multiVault.getTripleCost());
 
         bytes32 counterTripleId = multiVault.getCounterIdFromTriple(tripleId);
 
@@ -334,24 +318,10 @@ contract MultiVaultCoreActionsTest is MultiVaultBase {
         trustToken.approve(address(multiVault), type(uint256).max);
 
         // ------------- produce three new atoms ---------------------------------
-        bytes[] memory atomDataArray = new bytes[](3);
-        atomDataArray[0] = bytes("subj");
-        atomDataArray[1] = bytes("pred");
-        atomDataArray[2] = bytes("obj");
-        uint256 totalAtomCost = multiVault.getAtomCost() * 3;
-        bytes32[] memory atomIds = multiVault.createAtoms(atomDataArray, totalAtomCost);
-        bytes32 subj = atomIds[0];
-        bytes32 pred = atomIds[1];
-        bytes32 obj = atomIds[2];
+        (bytes32 subj, bytes32 pred, bytes32 obj) = _createBasicAtoms();
 
         // ------------- create triple on default curve --------------------------
-        bytes32[] memory subjectIds = new bytes32[](1);
-        bytes32[] memory predicateIds = new bytes32[](1);
-        bytes32[] memory objectIds = new bytes32[](1);
-        subjectIds[0] = subj;
-        predicateIds[0] = pred;
-        objectIds[0] = obj;
-        bytes32 tripleId = multiVault.createTriples(subjectIds, predicateIds, objectIds, multiVault.getTripleCost())[0];
+        bytes32 tripleId = _createBasicTriple(subj, pred, obj, multiVault.getTripleCost());
 
         // ------------- initialise alt-curve vault for the triple ---------------
         uint256 initDepositAltCurve = oneToken * 2; // 2 TRUST
@@ -381,5 +351,36 @@ contract MultiVaultCoreActionsTest is MultiVaultBase {
 
         vm.stopPrank();
         emit log(StdStyle.green("--- Flow-4 (alternative-curve triple) passed ---"));
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                          HELPER FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @dev creates three simple atoms and returns their ids (subject, predicate, object)
+    function _createBasicAtoms() internal returns (bytes32, bytes32, bytes32) {
+        uint256 value = multiVault.getAtomCost() * 3;
+
+        bytes[] memory atomDataArray = new bytes[](3);
+        atomDataArray[0] = "S";
+        atomDataArray[1] = "P";
+        atomDataArray[2] = "O";
+
+        bytes32[] memory atomIds = multiVault.createAtoms(atomDataArray, value);
+        return (atomIds[0], atomIds[1], atomIds[2]);
+    }
+
+    /// @dev creates a basic triple with the given subject, predicate, object and value and returns the triple id
+    function _createBasicTriple(bytes32 s, bytes32 p, bytes32 o, uint256 value) internal returns (bytes32) {
+        bytes32[] memory subjectIds = new bytes32[](1);
+        bytes32[] memory predicateIds = new bytes32[](1);
+        bytes32[] memory objectIds = new bytes32[](1);
+
+        subjectIds[0] = s;
+        predicateIds[0] = p;
+        objectIds[0] = o;
+
+        bytes32 tripleId = multiVault.createTriples(subjectIds, predicateIds, objectIds, value)[0];
+        return tripleId;
     }
 }
