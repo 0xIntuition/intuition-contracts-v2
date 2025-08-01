@@ -338,15 +338,9 @@ interface IMultiVault {
 
     function atomData(bytes32 atomId) external returns (bytes calldata data);
 
-    function createAtom(bytes calldata data, uint256 value) external returns (bytes32);
+    function createAtoms(bytes[] calldata atomDataArray, uint256 value) external returns (bytes32[] memory);
 
-    function batchCreateAtom(bytes[] calldata atomDataArray, uint256 value) external returns (bytes32[] memory);
-
-    function createTriple(bytes32 subjectId, bytes32 predicateId, bytes32 objectId, uint256 value)
-        external
-        returns (bytes32);
-
-    function batchCreateTriple(
+    function createTriples(
         bytes32[] calldata subjectIds,
         bytes32[] calldata predicateIds,
         bytes32[] calldata objectIds,

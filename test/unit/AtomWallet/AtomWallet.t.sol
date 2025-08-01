@@ -78,7 +78,9 @@ contract AtomWalletTest is MultiVaultBase {
         trustToken.mint(alice, atomCost);
         trustToken.approve(address(multiVault), atomCost);
 
-        multiVault.createAtom(atomData, atomCost);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = atomData;
+        multiVault.createAtoms(atomDataArray, atomCost);
         vm.stopPrank();
 
         // Deploy atom wallet through factory
@@ -646,7 +648,9 @@ contract AtomWalletTest is MultiVaultBase {
         trustToken.mint(alice, atomCost);
         trustToken.approve(address(multiVault), atomCost);
 
-        multiVault.createAtom(atomData, atomCost);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = atomData;
+        multiVault.createAtoms(atomDataArray, atomCost);
         vm.stopPrank();
 
         address deployedWallet = atomWalletFactory.deployAtomWallet(atomId);
@@ -682,12 +686,23 @@ contract AtomWalletTest is MultiVaultBase {
         trustToken.mint(alice, atomCost * 3 + multiVault.getTripleCost());
         trustToken.approve(address(multiVault), atomCost * 3 + multiVault.getTripleCost());
 
-        bytes32 subjectId = multiVault.createAtom(atomData, atomCost);
-        bytes32 predicateId = multiVault.createAtom(bytes("predicate"), atomCost);
-        bytes32 objectId = multiVault.createAtom(bytes("object"), atomCost);
+        bytes[] memory atomDataArray = new bytes[](3);
+        atomDataArray[0] = atomData;
+        atomDataArray[1] = bytes("predicate");
+        atomDataArray[2] = bytes("object");
+        bytes32[] memory atomIds = multiVault.createAtoms(atomDataArray, atomCost * 3);
+        bytes32 subjectId = atomIds[0];
+        bytes32 predicateId = atomIds[1];
+        bytes32 objectId = atomIds[2];
 
         uint256 tripleCost = multiVault.getTripleCost();
-        bytes32 tripleId = multiVault.createTriple(subjectId, predicateId, objectId, tripleCost);
+        bytes32[] memory subjectIds = new bytes32[](1);
+        bytes32[] memory predicateIds = new bytes32[](1);
+        bytes32[] memory objectIds = new bytes32[](1);
+        subjectIds[0] = subjectId;
+        predicateIds[0] = predicateId;
+        objectIds[0] = objectId;
+        bytes32 tripleId = multiVault.createTriples(subjectIds, predicateIds, objectIds, tripleCost)[0];
         vm.stopPrank();
 
         vm.expectRevert(abi.encodeWithSelector(Errors.MultiVault_TermNotAtom.selector));
@@ -705,7 +720,9 @@ contract AtomWalletTest is MultiVaultBase {
         trustToken.mint(alice, atomCost);
         trustToken.approve(address(multiVault), atomCost);
 
-        multiVault.createAtom(atomData, atomCost);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = atomData;
+        multiVault.createAtoms(atomDataArray, atomCost);
         vm.stopPrank();
 
         vm.expectEmit(true, true, true, false);
@@ -805,7 +822,9 @@ contract AtomWalletTest is MultiVaultBase {
         trustToken.mint(alice, atomCost);
         trustToken.approve(address(multiVault), atomCost);
 
-        multiVault.createAtom(atomData, atomCost);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = atomData;
+        multiVault.createAtoms(atomDataArray, atomCost);
         vm.stopPrank();
 
         // Deploy wallet

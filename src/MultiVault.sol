@@ -395,21 +395,8 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
     }
 
     /* -------------------------- */
-    /*         Create Atom        */
+    /*         Create Atoms       */
     /* -------------------------- */
-
-    /// @notice Create an atom and return its vault id
-    ///
-    /// @param data atom data to create atom with
-    /// @param value amount of Trust to deposit into the atom
-    ///
-    /// @return id vault id of the atom
-    function createAtom(bytes calldata data, uint256 value) external whenNotPaused nonReentrant returns (bytes32) {
-        bytes[] memory atomDataArray = new bytes[](1);
-        atomDataArray[0] = data;
-        bytes32[] memory ids = _createAtoms(atomDataArray, value);
-        return ids[0];
-    }
 
     /// @notice Batch create atoms and return their vault ids
     ///
@@ -417,7 +404,7 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
     /// @param value amount of Trust to deposit into all atoms combined
     ///
     /// @return ids vault ids array of the atoms
-    function batchCreateAtom(bytes[] calldata atomDataArray, uint256 value)
+    function createAtoms(bytes[] calldata atomDataArray, uint256 value)
         external
         whenNotPaused
         nonReentrant
@@ -511,36 +498,8 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
     }
 
     /* -------------------------- */
-    /*        Create Triple       */
+    /*        Create Triples       */
     /* -------------------------- */
-
-    /// @notice Create a triple and return its vault id
-    ///
-    /// @param subjectId vault id of the subject atom
-    /// @param predicateId vault id of the predicate atom
-    /// @param objectId vault id of the object atom
-    /// @param value amount of Trust to deposit into the triple
-    ///
-    /// @return id vault id of the triple
-    function createTriple(bytes32 subjectId, bytes32 predicateId, bytes32 objectId, uint256 value)
-        external
-        whenNotPaused
-        nonReentrant
-        returns (bytes32)
-    {
-        bytes32[] memory subjectIds = new bytes32[](1);
-        bytes32[] memory predicateIds = new bytes32[](1);
-        bytes32[] memory objectIds = new bytes32[](1);
-
-        subjectIds[0] = subjectId;
-        predicateIds[0] = predicateId;
-        objectIds[0] = objectId;
-
-        bytes32[] memory ids = _createTriples(subjectIds, predicateIds, objectIds, value);
-
-        return ids[0];
-    }
-
     /// @notice Batch create triples and return their ids
     ///
     /// @param subjectIds vault ids array of subject atoms
@@ -549,7 +508,7 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
     /// @param value amount of Trust to deposit into the triples
     ///
     /// @return ids vault ids array of the triples
-    function batchCreateTriple(
+    function createTriples(
         bytes32[] calldata subjectIds,
         bytes32[] calldata predicateIds,
         bytes32[] calldata objectIds,

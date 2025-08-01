@@ -28,10 +28,12 @@ contract CreateTripleTest is MultiVaultBase {
         uint256 val = _atomCost() + 1 ether;
         _approveTrust(val * 3);
 
-        bytes32 sid = multiVault.createAtom("S", val);
-        bytes32 pid = multiVault.createAtom("P", val);
-        bytes32 oid = multiVault.createAtom("O", val);
-        return (sid, pid, oid);
+        bytes[] memory atomDataArray = new bytes[](3);
+        atomDataArray[0] = "S";
+        atomDataArray[1] = "P";
+        atomDataArray[2] = "O";
+        bytes32[] memory atomIds = multiVault.createAtoms(atomDataArray, val * 3);
+        return (atomIds[0], atomIds[1], atomIds[2]);
     }
 
     /// @dev creates another three simple atoms and returns their ids (subject, predicate, object)
@@ -39,10 +41,12 @@ contract CreateTripleTest is MultiVaultBase {
         uint256 val = _atomCost() + 1 ether;
         _approveTrust(val * 3);
 
-        bytes32 sid = multiVault.createAtom("S2", val);
-        bytes32 pid = multiVault.createAtom("P2", val);
-        bytes32 oid = multiVault.createAtom("O2", val);
-        return (sid, pid, oid);
+        bytes[] memory atomDataArray = new bytes[](3);
+        atomDataArray[0] = "S2";
+        atomDataArray[1] = "P2";
+        atomDataArray[2] = "O2";
+        bytes32[] memory atomIds = multiVault.createAtoms(atomDataArray, val * 3);
+        return (atomIds[0], atomIds[1], atomIds[2]);
     }
 
     function _atomCost() internal view returns (uint256) {
@@ -61,7 +65,13 @@ contract CreateTripleTest is MultiVaultBase {
 
         (, uint256 subjectAtomAssetsBefore) = multiVault.getVaultTotals(s, _defaultCurve());
 
-        bytes32 tid = multiVault.createTriple(s, p, o, value);
+        bytes32[] memory subjectIds = new bytes32[](1);
+        bytes32[] memory predicateIds = new bytes32[](1);
+        bytes32[] memory objectIds = new bytes32[](1);
+        subjectIds[0] = s;
+        predicateIds[0] = p;
+        objectIds[0] = o;
+        bytes32 tid = multiVault.createTriples(subjectIds, predicateIds, objectIds, value)[0];
 
         // basic state
         assertEq(tid, multiVault.tripleIdFromAtomIds(s, p, o));
@@ -104,7 +114,13 @@ contract CreateTripleTest is MultiVaultBase {
         _approveTrust(val);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.MultiVault_AtomDoesNotExist.selector, fakeId));
-        multiVault.createTriple(s, fakeId, fakeId, val);
+        bytes32[] memory subjectIds = new bytes32[](1);
+        bytes32[] memory predicateIds = new bytes32[](1);
+        bytes32[] memory objectIds = new bytes32[](1);
+        subjectIds[0] = s;
+        predicateIds[0] = fakeId;
+        objectIds[0] = fakeId;
+        multiVault.createTriples(subjectIds, predicateIds, objectIds, val);
     }
 
     function test_createTriple_revertIfDuplicate() external {
@@ -113,9 +129,15 @@ contract CreateTripleTest is MultiVaultBase {
         uint256 val = _tripleCost() + 1 ether;
         _approveTrust(val * 2);
 
-        multiVault.createTriple(s, p, o, val);
+        bytes32[] memory subjectIds = new bytes32[](1);
+        bytes32[] memory predicateIds = new bytes32[](1);
+        bytes32[] memory objectIds = new bytes32[](1);
+        subjectIds[0] = s;
+        predicateIds[0] = p;
+        objectIds[0] = o;
+        multiVault.createTriples(subjectIds, predicateIds, objectIds, val);
         vm.expectRevert(abi.encodeWithSelector(Errors.MultiVault_TripleExists.selector, s, p, o));
-        multiVault.createTriple(s, p, o, val);
+        multiVault.createTriples(subjectIds, predicateIds, objectIds, val);
     }
 
     function test_createTriple_revertIfPaused() external {
@@ -129,7 +151,13 @@ contract CreateTripleTest is MultiVaultBase {
         _approveTrust(val);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.MultiVault_ContractPaused.selector));
-        multiVault.createTriple(s, p, o, val);
+        bytes32[] memory subjectIds = new bytes32[](1);
+        bytes32[] memory predicateIds = new bytes32[](1);
+        bytes32[] memory objectIds = new bytes32[](1);
+        subjectIds[0] = s;
+        predicateIds[0] = p;
+        objectIds[0] = o;
+        multiVault.createTriples(subjectIds, predicateIds, objectIds, val);
     }
 
     function test_createTriple_revertIfInsufficientBalance() external {
@@ -139,14 +167,20 @@ contract CreateTripleTest is MultiVaultBase {
         _approveTrust(shortVal);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.MultiVault_InsufficientBalance.selector));
-        multiVault.createTriple(s, p, o, shortVal);
+        bytes32[] memory subjectIds = new bytes32[](1);
+        bytes32[] memory predicateIds = new bytes32[](1);
+        bytes32[] memory objectIds = new bytes32[](1);
+        subjectIds[0] = s;
+        predicateIds[0] = p;
+        objectIds[0] = o;
+        multiVault.createTriples(subjectIds, predicateIds, objectIds, shortVal);
     }
 
     /*──────────────────────────────────────────────────────────────────────────
                            3. Happy-path (batch)
     ──────────────────────────────────────────────────────────────────────────*/
 
-    function test_batchCreateTriple_happyPath() external {
+    function test_createTriples_happyPath() external {
         (bytes32 s1, bytes32 p1, bytes32 o1) = _createBasicAtoms();
         (bytes32 s2, bytes32 p2, bytes32 o2) = _createAnotherBasicAtoms(); // new atoms (ids 5-7)
 
@@ -164,7 +198,7 @@ contract CreateTripleTest is MultiVaultBase {
         uint256 totalVal = (_tripleCost() + 4 ether) * 2;
         _approveTrust(totalVal);
 
-        bytes32[] memory tids = multiVault.batchCreateTriple(subs, preds, objs, totalVal);
+        bytes32[] memory tids = multiVault.createTriples(subs, preds, objs, totalVal);
         assertEq(tids.length, 2);
         assertTrue(multiVault.isTripleId(tids[0]) && multiVault.isTripleId(tids[1]));
     }
@@ -173,13 +207,13 @@ contract CreateTripleTest is MultiVaultBase {
                             4. Batch-revert branches
     ──────────────────────────────────────────────────────────────────────────*/
 
-    function test_batchCreateTriple_revertIfEmpty() external {
+    function test_createTriples_revertIfEmpty() external {
         bytes32[] memory emptyIds;
         vm.expectRevert(abi.encodeWithSelector(Errors.MultiVault_NoTriplesProvided.selector));
-        multiVault.batchCreateTriple(emptyIds, emptyIds, emptyIds, 0);
+        multiVault.createTriples(emptyIds, emptyIds, emptyIds, 0);
     }
 
-    function test_batchCreateTriple_revertIfLengthMismatch() external {
+    function test_createTriples_revertIfLengthMismatch() external {
         (bytes32 s,,) = _createBasicAtoms();
         bytes32[] memory subs = new bytes32[](1);
         bytes32[] memory preds = new bytes32[](2);
@@ -190,10 +224,10 @@ contract CreateTripleTest is MultiVaultBase {
         objs[0] = s;
 
         vm.expectRevert(abi.encodeWithSelector(Errors.MultiVault_ArraysNotSameLength.selector));
-        multiVault.batchCreateTriple(subs, preds, objs, 0);
+        multiVault.createTriples(subs, preds, objs, 0);
     }
 
-    function test_batchCreateTriple_revertIfInsufficientBalance() external {
+    function test_createTriples_revertIfInsufficientBalance() external {
         (bytes32 s1, bytes32 p1, bytes32 o1) = _createBasicAtoms();
         bytes32[] memory subs = new bytes32[](1);
         bytes32[] memory preds = new bytes32[](1);
@@ -206,6 +240,6 @@ contract CreateTripleTest is MultiVaultBase {
         _approveTrust(shortVal);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.MultiVault_InsufficientBalance.selector));
-        multiVault.batchCreateTriple(subs, preds, objs, shortVal);
+        multiVault.createTriples(subs, preds, objs, shortVal);
     }
 }

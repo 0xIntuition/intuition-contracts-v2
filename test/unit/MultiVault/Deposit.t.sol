@@ -26,10 +26,12 @@ contract DepositTest is MultiVaultBase {
     function _createAtoms() internal returns (bytes32, bytes32, bytes32) {
         uint256 val = multiVault.getAtomCost() + 1 ether;
         _approveTrust(val * 3);
-        bytes32 a = multiVault.createAtom("A", val);
-        bytes32 b = multiVault.createAtom("B", val);
-        bytes32 c = multiVault.createAtom("C", val);
-        return (a, b, c);
+        bytes[] memory atomDataArray = new bytes[](3);
+        atomDataArray[0] = "A";
+        atomDataArray[1] = "B";
+        atomDataArray[2] = "C";
+        bytes32[] memory atomIds = multiVault.createAtoms(atomDataArray, val * 3);
+        return (atomIds[0], atomIds[1], atomIds[2]);
     }
 
     /*──────────────────────────────────────────────────────────────────────────
@@ -82,7 +84,13 @@ contract DepositTest is MultiVaultBase {
     function test_deposit_tripleHappyPath() external {
         (bytes32 s, bytes32 p, bytes32 o) = _createAtoms();
         _approveTrust(type(uint256).max); // approve max to cover costs
-        bytes32 tId = multiVault.createTriple(s, p, o, multiVault.getTripleCost() + 1 ether);
+        bytes32[] memory subjectIds = new bytes32[](1);
+        bytes32[] memory predicateIds = new bytes32[](1);
+        bytes32[] memory objectIds = new bytes32[](1);
+        subjectIds[0] = s;
+        predicateIds[0] = p;
+        objectIds[0] = o;
+        bytes32 tId = multiVault.createTriples(subjectIds, predicateIds, objectIds, multiVault.getTripleCost() + 1 ether)[0];
 
         uint256 val = 2 ether;
 
@@ -142,7 +150,13 @@ contract DepositTest is MultiVaultBase {
     function test_deposit_revertIfHasCounterStake() external {
         (bytes32 s, bytes32 p, bytes32 o) = _createAtoms();
         _approveTrust(type(uint256).max); // approve max to cover costs
-        bytes32 tId = multiVault.createTriple(s, p, o, multiVault.getTripleCost() + 1 ether);
+        bytes32[] memory subjectIds = new bytes32[](1);
+        bytes32[] memory predicateIds = new bytes32[](1);
+        bytes32[] memory objectIds = new bytes32[](1);
+        subjectIds[0] = s;
+        predicateIds[0] = p;
+        objectIds[0] = o;
+        bytes32 tId = multiVault.createTriples(subjectIds, predicateIds, objectIds, multiVault.getTripleCost() + 1 ether)[0];
         bytes32 ctId = multiVault.getCounterIdFromTriple(tId);
 
         uint256 defaultCurveId = _defCurve();
