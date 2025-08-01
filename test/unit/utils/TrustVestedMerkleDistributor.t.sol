@@ -18,6 +18,9 @@ import {MockTrust} from "test/mocks/MockTrust.t.sol";
 contract MockTrustBonding {
     using SafeERC20 for IERC20;
 
+    uint256 public constant MAXTIME = 2 * 365 * 86400;
+    uint256 public constant MINTIME = 2 weeks;
+
     struct LockedBalance {
         int128 amount;
         uint256 end;

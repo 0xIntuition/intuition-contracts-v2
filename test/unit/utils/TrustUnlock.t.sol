@@ -65,10 +65,15 @@ contract TrustUnlockTest is Test {
         trustBonding = TrustBonding(address(trustBondingProxy));
 
         // Initialize TrustBonding contract
-        trustBonding.initialize(owner, address(trustToken), epochLength_, startTimestamp);
-
-        // Reinitialize TrustBonding contract with MultiVault and utilization bounds
-        trustBonding.reinitialize(address(multiVault), systemUtilizationLowerBound, personalUtilizationLowerBound);
+        trustBonding.initialize(
+            owner,
+            address(trustToken),
+            epochLength_,
+            startTimestamp,
+            address(multiVault),
+            systemUtilizationLowerBound,
+            personalUtilizationLowerBound
+        );
 
         // Mint tokens to the owner
         trustToken.mint(owner, unlockAmount);

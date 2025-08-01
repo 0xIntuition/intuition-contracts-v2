@@ -43,6 +43,7 @@ contract TrustUnlockFactoryTest is Test {
     address public bob = makeAddr("bob");
     address public charlie = makeAddr("charlie");
     address public rescueAcct = makeAddr("rescuer");
+    address public multiVault = makeAddr("multiVault");
 
     /// @notice TrustUnlock config
     uint256 public constant UNLOCK_AMOUNT = 500_000 * 1e18;
@@ -50,6 +51,8 @@ contract TrustUnlockFactoryTest is Test {
     uint256 public constant CLIFF_PCT = 2_500; // 25 %
     uint256 public constant ONE_WEEK = 1 weeks;
     uint256 public constant ONE_YEAR = 365 days;
+    uint256 public constant systemUtilizationLowerBound = 2_500;
+    uint256 public constant personalUtilizationLowerBound = 2_500;
     uint256 public unlockBegin;
     uint256 public unlockCliff;
     uint256 public unlockEnd;
@@ -76,7 +79,17 @@ contract TrustUnlockFactoryTest is Test {
         TrustBonding logic = new TrustBonding();
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(address(logic), owner, "");
         trustBonding = TrustBonding(address(proxy));
-        trustBonding.initialize(owner, address(trustToken), 14 days, block.timestamp + 1 hours);
+
+        // Initialize TrustBonding contract
+        trustBonding.initialize(
+            owner,
+            address(trustToken),
+            epochLength,
+            startTime,
+            address(multiVault),
+            systemUtilizationLowerBound,
+            personalUtilizationLowerBound
+        );
 
         // 3. Deploy factory, fund it with tokens
         factory = new TrustUnlockFactory(address(trustToken), owner, address(trustBonding), address(multiVault));

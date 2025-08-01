@@ -18,13 +18,17 @@ contract RedeemTest is MultiVaultBase {
     function _createNewAtom() internal returns (bytes32) {
         uint256 val = multiVault.getAtomCost() + 2 ether;
         trustToken.approve(address(multiVault), val);
-        return multiVault.createAtom("new atom", val);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = "new atom";
+        return multiVault.createAtoms(atomDataArray, val)[0];
     }
 
     function _createAnotherNewAtom() internal returns (bytes32) {
         uint256 val = multiVault.getAtomCost() + 2 ether;
         trustToken.approve(address(multiVault), val);
-        return multiVault.createAtom("another new atom", val);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = "another new atom";
+        return multiVault.createAtoms(atomDataArray, val)[0];
     }
 
     function _depositFor(address user, bytes32 atomId, uint256 value) internal returns (uint256 shares) {
@@ -63,31 +67,7 @@ contract RedeemTest is MultiVaultBase {
     }
 
     /*──────────────────────────────────────────────────────────────────────────
-                              2. redeem while paused
-    ──────────────────────────────────────────────────────────────────────────*/
-
-    function test_redeem_noFeesWhenPaused() external {
-        bytes32 id = _createNewAtom();
-        uint256 val = 4 ether;
-        uint256 sh = _depositFor(address(this), id, val);
-
-        // pause config & sync
-        vm.prank(admin);
-        multiVaultConfig.pause();
-        multiVault.syncConfig();
-        assertTrue(multiVault.paused());
-
-        uint256 balBefore = trustToken.balanceOf(address(this));
-        uint256 assets = multiVault.redeem(sh, address(this), id, _defCurve(), _minAmount(val, defaultSlippage));
-
-        // received exactly convertToAssets (no fee deductions)
-        uint256 expected = multiVault.convertToAssets(sh, id, _defCurve());
-        assertApproxEqAbs(assets, expected, 1);
-        assertApproxEqAbs(trustToken.balanceOf(address(this)), balBefore + expected, 1);
-    }
-
-    /*──────────────────────────────────────────────────────────────────────────
-                              3. revert branches
+                              2. revert branches
     ──────────────────────────────────────────────────────────────────────────*/
 
     function test_redeem_revertIfRedeemerNotApproved() external {
@@ -136,15 +116,17 @@ contract RedeemTest is MultiVaultBase {
 
         multiVault.redeem(userShares, address(this), id, defaultCurveId, _minAmount(previewAssets, defaultSlippage)); // redeem all user shares so that only minShare remains
 
-        uint256 adminRedeemAmount = 1;
-        uint256 remainingShares = minShare - adminRedeemAmount;
-        previewAssets = multiVault.previewRedeem(adminRedeemAmount, id, defaultCurveId); // previewAssets is the amount of assets we expect to get back
+        uint256 burnAddressRedeemAmount = 1;
+        uint256 remainingShares = minShare - burnAddressRedeemAmount;
+        previewAssets = multiVault.previewRedeem(burnAddressRedeemAmount, id, defaultCurveId); // previewAssets is the amount of assets we expect to get back
 
-        vm.prank(admin);
+        address burnAddress = multiVault.BURN_ADDRESS();
+
+        vm.prank(burnAddress);
         vm.expectRevert(
             abi.encodeWithSelector(Errors.MultiVault_InsufficientRemainingSharesInVault.selector, remainingShares)
         );
-        multiVault.redeem(1, admin, id, defaultCurveId, _minAmount(previewAssets, defaultSlippage));
+        multiVault.redeem(1, burnAddress, id, defaultCurveId, _minAmount(previewAssets, defaultSlippage));
     }
 
     function test_redeem_revertIfTermInvalid() external {
@@ -161,7 +143,7 @@ contract RedeemTest is MultiVaultBase {
     }
 
     /*──────────────────────────────────────────────────────────────────────────
-                                4. batchRedeem
+                                3. batchRedeem
     ──────────────────────────────────────────────────────────────────────────*/
 
     function test_batchRedeem_happyPath() external {

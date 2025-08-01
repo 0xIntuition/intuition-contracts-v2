@@ -53,6 +53,9 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
     /// @notice Constant representing the salt used to compute the counter triple IDs
     bytes32 public constant COUNTER_SALT = keccak256("COUNTER");
 
+    /// @notice Constant representing the burn address, which receives the "ghost shares"
+    address public constant BURN_ADDRESS = address(0x000000000000000000000000000000000000dEaD);
+
     /* =================================================== */
     /*                  STATE VARIABLES                    */
     /* =================================================== */
@@ -126,6 +129,9 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
 
     /// @notice Mapping of the associated wrapped ERC20 token for each term ID and bonding curve ID
     mapping(bytes32 termId => mapping(uint256 curveId => address wrappedERC20)) public wrappedERC20Tokens;
+
+    /// @notice Mapping of the approved accounts to pull shares from another account.
+    mapping(address accountFrom => mapping(address accountTo => bool)) public approvedToPullShares;
 
     /// @dev Gap for upgrade safety
     uint256[50] private __gap;
@@ -390,21 +396,8 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
     }
 
     /* -------------------------- */
-    /*         Create Atom        */
+    /*         Create Atoms       */
     /* -------------------------- */
-
-    /// @notice Create an atom and return its vault id
-    ///
-    /// @param data atom data to create atom with
-    /// @param value amount of Trust to deposit into the atom
-    ///
-    /// @return id vault id of the atom
-    function createAtom(bytes calldata data, uint256 value) external whenNotPaused nonReentrant returns (bytes32) {
-        bytes[] memory atomDataArray = new bytes[](1);
-        atomDataArray[0] = data;
-        bytes32[] memory ids = _createAtoms(atomDataArray, value);
-        return ids[0];
-    }
 
     /// @notice Batch create atoms and return their vault ids
     ///
@@ -412,7 +405,7 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
     /// @param value amount of Trust to deposit into all atoms combined
     ///
     /// @return ids vault ids array of the atoms
-    function batchCreateAtom(bytes[] calldata atomDataArray, uint256 value)
+    function createAtoms(bytes[] calldata atomDataArray, uint256 value)
         external
         whenNotPaused
         nonReentrant
@@ -506,36 +499,8 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
     }
 
     /* -------------------------- */
-    /*        Create Triple       */
+    /*        Create Triples       */
     /* -------------------------- */
-
-    /// @notice Create a triple and return its vault id
-    ///
-    /// @param subjectId vault id of the subject atom
-    /// @param predicateId vault id of the predicate atom
-    /// @param objectId vault id of the object atom
-    /// @param value amount of Trust to deposit into the triple
-    ///
-    /// @return id vault id of the triple
-    function createTriple(bytes32 subjectId, bytes32 predicateId, bytes32 objectId, uint256 value)
-        external
-        whenNotPaused
-        nonReentrant
-        returns (bytes32)
-    {
-        bytes32[] memory subjectIds = new bytes32[](1);
-        bytes32[] memory predicateIds = new bytes32[](1);
-        bytes32[] memory objectIds = new bytes32[](1);
-
-        subjectIds[0] = subjectId;
-        predicateIds[0] = predicateId;
-        objectIds[0] = objectId;
-
-        bytes32[] memory ids = _createTriples(subjectIds, predicateIds, objectIds, value);
-
-        return ids[0];
-    }
-
     /// @notice Batch create triples and return their ids
     ///
     /// @param subjectIds vault ids array of subject atoms
@@ -544,7 +509,7 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
     /// @param value amount of Trust to deposit into the triples
     ///
     /// @return ids vault ids array of the triples
-    function batchCreateTriple(
+    function createTriples(
         bytes32[] calldata subjectIds,
         bytes32[] calldata predicateIds,
         bytes32[] calldata objectIds,
@@ -698,7 +663,7 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
         uint256 bondingCurveId,
         uint256 value,
         uint256 minSharesToReceive
-    ) external whenNotPaused nonReentrant returns (uint256) {
+    ) external nonReentrant whenNotPaused returns (uint256) {
         if (!isApprovedToDeposit(msg.sender, receiver)) {
             revert Errors.MultiVault_SenderNotApproved();
         }
@@ -883,7 +848,7 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
                 vaults[termId][bondingCurveId].totalShares + sharesForReceiver + minShare
             );
 
-            _mint(generalConfig.admin, termId, bondingCurveId, minShare);
+            _mint(BURN_ADDRESS, termId, bondingCurveId, minShare);
             _mint(receiver, termId, bondingCurveId, sharesForReceiver);
 
             if (isTripleVault) {
@@ -894,7 +859,7 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
                     vaults[counterTripleId][bondingCurveId].totalAssets + minShare,
                     vaults[counterTripleId][bondingCurveId].totalShares + minShare
                 );
-                _mint(generalConfig.admin, counterTripleId, bondingCurveId, minShare);
+                _mint(BURN_ADDRESS, counterTripleId, bondingCurveId, minShare);
             }
         } else {
             // If not creation, just update the vault totals and mint shares for the user
@@ -950,7 +915,7 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
         bytes32 termId,
         uint256 bondingCurveId,
         uint256 minAssetsToReceive
-    ) external nonReentrant returns (uint256) {
+    ) external nonReentrant whenNotPaused returns (uint256) {
         if (!isApprovedToRedeem(msg.sender, receiver)) {
             revert Errors.MultiVault_RedeemerNotApproved();
         }
@@ -1256,7 +1221,7 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
         _mint(receiver, termId, defaultBondingCurveId, sharesForReceiver);
 
         // Mint ghost shares to admin
-        _mint(generalConfig.admin, termId, defaultBondingCurveId, generalConfig.minShare);
+        _mint(BURN_ADDRESS, termId, defaultBondingCurveId, generalConfig.minShare);
 
         // Initialize the counter triple vault if it's a triple creation flow
         if (isTripleId(termId)) {
@@ -1282,7 +1247,7 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
         );
 
         // Mint ghost shares to admin for the counter vault
-        _mint(generalConfig.admin, counterTripleId, defaultBondingCurveId, generalConfig.minShare);
+        _mint(BURN_ADDRESS, counterTripleId, defaultBondingCurveId, generalConfig.minShare);
     }
 
     /// @dev mint vault shares to address `to`
@@ -1426,6 +1391,94 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
         // set user’s lastActiveEpoch to the currentEpochLocal
         lastActiveEpoch[user] = currentEpochLocal;
     }
+
+    /* =================================================== */
+    /*                 Shares Migrations                   */
+    /* =================================================== */
+
+
+    function isApprovedToPullShares(address accountFrom, address accountTo) internal view returns (bool) {
+        return approvedToPullShares[accountFrom][accountTo];
+    }
+
+    function approvePullShares(address account, bool status) external {
+        if (account == address(0)) {
+            revert Errors.MultiVault_ZeroAddress();
+        }
+        approvedToPullShares[msg.sender][account] = status;
+        emit SharesPullApproval(msg.sender, account, status);
+    }
+
+    function pullShares(
+        address accountFrom,
+        bytes32[] calldata termId,
+        uint256[] calldata bondingCurveId
+    ) external nonReentrant {
+        if (!isApprovedToPullShares(accountFrom, msg.sender)) {
+            revert Errors.MultiVault_SenderNotApproved();
+        }
+
+        if (termId.length == 0 || bondingCurveId.length == 0) {
+            revert Errors.MultiVault_EmptyArray();
+        }
+
+        if (termId.length != bondingCurveId.length) {
+            revert Errors.MultiVault_ArraysNotSameLength();
+        }
+
+        for (uint256 i = 0; i < termId.length; i++) {
+            _pullShares(accountFrom, msg.sender, termId[i], bondingCurveId[i]);
+        }
+    }
+
+
+    function _pullShares(
+        address accountFrom,
+        address accountTo,
+        bytes32 termId,
+        uint256 bondingCurveId
+    ) internal {
+        if (accountFrom == address(0) || accountTo == address(0)) {
+            revert Errors.MultiVault_ZeroAddress();
+        }
+
+        if (accountFrom == accountTo) {
+            revert Errors.MultiVault_WalletsAreTheSame();
+        }
+
+        uint256 shares = vaults[termId][bondingCurveId].balanceOf[accountFrom];
+        if (shares == 0) {
+            revert Errors.MultiVault_NoSharesToMigrate();
+        }
+
+        // Burn shares from the old wallet
+        _burn(accountFrom, termId, bondingCurveId, shares);
+        _removeUtilization(accountFrom, int256(shares));
+        emit Redeemed(
+            termId,
+            bondingCurveId,
+            accountFrom,
+            accountTo,
+            shares,
+            0 // No assets are transferred out.
+        );
+
+        // Mint shares to the new wallet
+        _mint(accountTo, termId, bondingCurveId, shares);
+        _addUtilization(accountTo, int256(shares));
+        emit Deposited(
+            termId,
+            bondingCurveId,
+            accountFrom,
+            accountTo,
+            0, // assetsIn: No assets are transferred in.
+            0, // assetsAfterTotalFees: No assets are transferred in.
+            shares
+        );
+
+        emit WalletMigrated(termId, bondingCurveId, accountFrom, accountTo, shares);
+    }
+
 
     /* =================================================== */
     /*                    VIEW FUNCTIONS                   */

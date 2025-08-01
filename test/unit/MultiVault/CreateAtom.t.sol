@@ -32,7 +32,9 @@ contract CreateAtomTest is MultiVaultBase {
         uint256 value = _atomCost() + 1 ether;
         _approveTrust(value);
 
-        bytes32 id = multiVault.createAtom(data, value);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = data;
+        bytes32 id = multiVault.createAtoms(atomDataArray, value)[0];
 
         // basic invariants
         assertEq(id, multiVault.getAtomIdFromData(data));
@@ -64,7 +66,9 @@ contract CreateAtomTest is MultiVaultBase {
         _approveTrust(val);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.MultiVault_AtomDataTooLong.selector));
-        multiVault.createAtom(longData, val);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = longData;
+        multiVault.createAtoms(atomDataArray, val);
     }
 
     function test_createAtom_revertIfDuplicate() external {
@@ -72,10 +76,12 @@ contract CreateAtomTest is MultiVaultBase {
         uint256 val = _atomCost() + 1 ether;
         _approveTrust(val * 2);
 
-        multiVault.createAtom(data, val);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = data;
+        multiVault.createAtoms(atomDataArray, val);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.MultiVault_AtomExists.selector, data));
-        multiVault.createAtom(data, val);
+        multiVault.createAtoms(atomDataArray, val);
     }
 
     function test_createAtom_revertIfPaused() external {
@@ -90,7 +96,9 @@ contract CreateAtomTest is MultiVaultBase {
         _approveTrust(val);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.MultiVault_ContractPaused.selector));
-        multiVault.createAtom(data, val);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = data;
+        multiVault.createAtoms(atomDataArray, val);
     }
 
     function test_createAtom_revertIfInsufficientBalance() external {
@@ -98,14 +106,16 @@ contract CreateAtomTest is MultiVaultBase {
         _approveTrust(shortVal);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.MultiVault_InsufficientBalance.selector));
-        multiVault.createAtom("x", shortVal);
+        bytes[] memory atomDataArray = new bytes[](1);
+        atomDataArray[0] = "x";
+        multiVault.createAtoms(atomDataArray, shortVal);
     }
 
     /*──────────────────────────────────────────────────────────────────────────
                            3. Happy-path (batch)
     ──────────────────────────────────────────────────────────────────────────*/
 
-    function test_batchCreateAtom_happyPath() external {
+    function test_createAtoms_happyPath() external {
         bytes[] memory arr = new bytes[](2);
         arr[0] = "A";
         arr[1] = "B";
@@ -113,7 +123,7 @@ contract CreateAtomTest is MultiVaultBase {
         uint256 val = (_atomCost() + 5 ether) * arr.length;
         _approveTrust(val);
 
-        bytes32[] memory ids = multiVault.batchCreateAtom(arr, val);
+        bytes32[] memory ids = multiVault.createAtoms(arr, val);
         assertEq(ids.length, 2);
         assertEq(multiVault.termCount(), 2);
         assertEq(multiVault.atomData(ids[0]), "A");
@@ -124,13 +134,13 @@ contract CreateAtomTest is MultiVaultBase {
                             4. Revert paths (batch)
     ──────────────────────────────────────────────────────────────────────────*/
 
-    function test_batchCreateAtom_revertIfEmptyArray() external {
+    function test_createAtoms_revertIfEmptyArray() external {
         bytes[] memory empty;
         vm.expectRevert(abi.encodeWithSelector(Errors.MultiVault_NoAtomDataProvided.selector));
-        multiVault.batchCreateAtom(empty, 0);
+        multiVault.createAtoms(empty, 0);
     }
 
-    function test_batchCreateAtom_revertIfInsufficientBalance() external {
+    function test_createAtoms_revertIfInsufficientBalance() external {
         bytes[] memory arr = new bytes[](2);
         arr[0] = "a";
         arr[1] = "b";
@@ -139,10 +149,10 @@ contract CreateAtomTest is MultiVaultBase {
         _approveTrust(tooLittle);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.MultiVault_InsufficientBalance.selector));
-        multiVault.batchCreateAtom(arr, tooLittle);
+        multiVault.createAtoms(arr, tooLittle);
     }
 
-    function test_batchCreateAtom_revertIfDuplicateData() external {
+    function test_createAtoms_revertIfDuplicateData() external {
         bytes[] memory arr = new bytes[](2);
         arr[0] = "dup-batch";
         arr[1] = "dup-batch";
@@ -151,6 +161,6 @@ contract CreateAtomTest is MultiVaultBase {
         _approveTrust(val);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.MultiVault_AtomExists.selector, arr[0]));
-        multiVault.batchCreateAtom(arr, val);
+        multiVault.createAtoms(arr, val);
     }
 }

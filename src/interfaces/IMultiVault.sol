@@ -267,6 +267,30 @@ interface IMultiVault {
         bytes32 indexed tripleId, address indexed creator, bytes32 subjectId, bytes32 predicateId, bytes32 objectId
     );
 
+    /// @notice Migrate shares from an old wallet to a new wallet for a specific term and bonding curve
+    /// @param oldWallet The address of the old wallet
+    /// @param newWallet The address of the new wallet
+    /// @param termId The ID of the atom or triple (term)
+    /// @param bondingCurveId The ID of the bonding curve to use
+    /// @dev This function burns shares from the old wallet and mints them to the new wallet.
+    /// @dev Emits a WalletMigrated event on successful migration.
+    event WalletMigrated(
+        bytes32 indexed termId,
+        uint256 indexed bondingCurveId,
+        address indexed oldWallet,
+        address newWallet,
+        uint256 sharesMigrated
+    );
+
+    /// @notice emitted when a user approves another user to pull shares from their account
+    /// @param accountFrom address of the account that is approving
+    /// @param accountTo address of the account that is being approved
+    /// @param status true if the approval is granted, false if revoked
+    /// @dev This event is emitted when a user approves another user to pull shares
+    ///      from their account. It is used to track the approvals for pulling shares.
+    /// @dev The `status` parameter indicates whether the approval is granted (true) or revoked (false).
+    event SharesPullApproval(address indexed accountFrom, address indexed accountTo, bool status);
+
     /* =================================================== */
     /*                    INITIALIZER                      */
     /* =================================================== */
@@ -314,15 +338,9 @@ interface IMultiVault {
 
     function atomData(bytes32 atomId) external returns (bytes calldata data);
 
-    function createAtom(bytes calldata data, uint256 value) external returns (bytes32);
+    function createAtoms(bytes[] calldata atomDataArray, uint256 value) external returns (bytes32[] memory);
 
-    function batchCreateAtom(bytes[] calldata atomDataArray, uint256 value) external returns (bytes32[] memory);
-
-    function createTriple(bytes32 subjectId, bytes32 predicateId, bytes32 objectId, uint256 value)
-        external
-        returns (bytes32);
-
-    function batchCreateTriple(
+    function createTriples(
         bytes32[] calldata subjectIds,
         bytes32[] calldata predicateIds,
         bytes32[] calldata objectIds,
