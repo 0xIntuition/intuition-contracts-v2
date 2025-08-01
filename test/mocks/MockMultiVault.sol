@@ -39,7 +39,7 @@ contract MockMultiVault {
         accumulatedProtocolFees[_epoch] = _amount;
     }
 
-    function batchCreateAtom(bytes[] calldata atomDataArray, uint256 value)
+    function createAtoms(bytes[] calldata atomDataArray, uint256 value)
         external
         returns (bytes32[] memory atomIds)
     {
@@ -50,7 +50,7 @@ contract MockMultiVault {
         return atomIds;
     }
 
-    function batchCreateTriple(
+    function createTriples(
         bytes32[] calldata subjectIds,
         bytes32[] calldata predicateIds,
         bytes32[] calldata objectIds,

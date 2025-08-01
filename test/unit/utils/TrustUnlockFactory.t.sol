@@ -34,7 +34,6 @@ contract TrustUnlockFactoryTest is Test {
     TrustUnlockFactory public factory;
     TrustBonding public trustBonding;
     MockTrust public trustToken;
-    MockMultiVault public multiVault;
 
     /// @notice Addresses
     address public owner = makeAddr("owner");
@@ -67,9 +66,6 @@ contract TrustUnlockFactoryTest is Test {
 
     function setUp() external {
         vm.startPrank(deployer);
-
-        // Deploy MultiVault contract
-        multiVault = new MockMultiVault();
 
         // 1. Deploy mock TRUST
         trustToken = new MockTrust("Intuition", "TRUST", type(uint256).max);

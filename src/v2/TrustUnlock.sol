@@ -285,13 +285,13 @@ contract TrustUnlock is IUnlock, ReentrancyGuard {
      * @param atomDataArray An array of bytes containing the data for each atom to be created
      * @param value The amount of Trust tokens to use for creating each atom
      */
-    function batchCreateAtom(bytes[] calldata atomDataArray, uint256 value)
+    function createAtoms(bytes[] calldata atomDataArray, uint256 value)
         external
         onlyRecipient
         nonReentrant
         returns (bytes32[] memory atomIds)
     {
-        atomIds = multiVault.batchCreateAtom(atomDataArray, value);
+        atomIds = multiVault.createAtoms(atomDataArray, value);
     }
 
     /**
@@ -301,13 +301,13 @@ contract TrustUnlock is IUnlock, ReentrancyGuard {
      * @param objectIds An array of object IDs for the triples
      * @param value The amount of Trust tokens to use for creating each triple
      */
-    function batchCreateTriple(
+    function createTriples(
         bytes32[] calldata subjectIds,
         bytes32[] calldata predicateIds,
         bytes32[] calldata objectIds,
         uint256 value
     ) external onlyRecipient nonReentrant returns (bytes32[] memory tripleIds) {
-        tripleIds = multiVault.batchCreateTriple(subjectIds, predicateIds, objectIds, value);
+        tripleIds = multiVault.createTriples(subjectIds, predicateIds, objectIds, value);
     }
 
     /**

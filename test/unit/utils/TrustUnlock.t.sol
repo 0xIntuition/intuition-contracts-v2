@@ -514,16 +514,16 @@ contract TrustUnlockTest is Test {
         vm.stopPrank();
     }
 
-    function test_batchCreateAtom_shouldRevertIfCallerIsNotRecipient() external {
+    function test_createAtoms_shouldRevertIfCallerIsNotRecipient() external {
         bytes[] memory atomDataArray = new bytes[](2);
         atomDataArray[0] = "atom1";
         atomDataArray[1] = "atom2";
 
         vm.expectRevert(abi.encodeWithSelector(Errors.Unlock_OnlyRecipient.selector));
-        trustUnlock.batchCreateAtom(atomDataArray, 1000);
+        trustUnlock.createAtoms(atomDataArray, 1000);
     }
 
-    function test_batchCreateAtom() external {
+    function test_createAtoms() external {
         vm.warp(unlockCliff);
         vm.startPrank(recipient);
 
@@ -534,7 +534,7 @@ contract TrustUnlockTest is Test {
         atomDataArray[0] = "atom1";
         atomDataArray[1] = "atom2";
 
-        bytes32[] memory atomIds = trustUnlock.batchCreateAtom(atomDataArray, 1000);
+        bytes32[] memory atomIds = trustUnlock.createAtoms(atomDataArray, 1000);
 
         assertEq(atomIds.length, 2);
         assertTrue(atomIds[0] != bytes32(0));
@@ -542,16 +542,16 @@ contract TrustUnlockTest is Test {
         vm.stopPrank();
     }
 
-    function test_batchCreateTriple_shouldRevertIfCallerIsNotRecipient() external {
+    function test_createTriples_shouldRevertIfCallerIsNotRecipient() external {
         bytes32[] memory subjectIds = new bytes32[](2);
         bytes32[] memory predicateIds = new bytes32[](2);
         bytes32[] memory objectIds = new bytes32[](2);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.Unlock_OnlyRecipient.selector));
-        trustUnlock.batchCreateTriple(subjectIds, predicateIds, objectIds, 1000);
+        trustUnlock.createTriples(subjectIds, predicateIds, objectIds, 1000);
     }
 
-    function test_batchCreateTriple() external {
+    function test_createTriples() external {
         vm.warp(unlockCliff);
         vm.startPrank(recipient);
 
@@ -568,7 +568,7 @@ contract TrustUnlockTest is Test {
         objectIds[0] = keccak256("object1");
         objectIds[1] = keccak256("object2");
 
-        bytes32[] memory tripleIds = trustUnlock.batchCreateTriple(subjectIds, predicateIds, objectIds, 1000);
+        bytes32[] memory tripleIds = trustUnlock.createTriples(subjectIds, predicateIds, objectIds, 1000);
 
         assertEq(tripleIds.length, 2);
         assertTrue(tripleIds[0] != bytes32(0));
@@ -765,7 +765,7 @@ contract TrustUnlockTest is Test {
         atomDataArray[0] = "atom1";
         atomDataArray[1] = "atom2";
 
-        bytes32[] memory atomIds = trustUnlock.batchCreateAtom(atomDataArray, 1000);
+        bytes32[] memory atomIds = trustUnlock.createAtoms(atomDataArray, 1000);
         assertEq(atomIds.length, 2);
 
         bytes32[] memory subjectIds = new bytes32[](1);
@@ -775,7 +775,7 @@ contract TrustUnlockTest is Test {
         predicateIds[0] = keccak256("predicate");
         objectIds[0] = atomIds[1];
 
-        bytes32[] memory tripleIds = trustUnlock.batchCreateTriple(subjectIds, predicateIds, objectIds, 2000);
+        bytes32[] memory tripleIds = trustUnlock.createTriples(subjectIds, predicateIds, objectIds, 2000);
         assertEq(tripleIds.length, 1);
 
         bytes32[] memory termIds = new bytes32[](2);

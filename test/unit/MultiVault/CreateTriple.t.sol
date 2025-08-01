@@ -53,6 +53,20 @@ contract CreateTripleTest is MultiVaultBase {
         return multiVault.getAtomCost();
     }
 
+    /// @dev creates a basic triple with the given subject, predicate, object and value and returns the triple id
+    function _createBasicTriple(bytes32 s, bytes32 p, bytes32 o, uint256 value) internal returns (bytes32) {
+        bytes32[] memory subjectIds = new bytes32[](1);
+        bytes32[] memory predicateIds = new bytes32[](1);
+        bytes32[] memory objectIds = new bytes32[](1);
+
+        subjectIds[0] = s;
+        predicateIds[0] = p;
+        objectIds[0] = o;
+
+        bytes32 tripleId = multiVault.createTriples(subjectIds, predicateIds, objectIds, value)[0];
+        return tripleId;
+    }
+
     /*──────────────────────────────────────────────────────────────────────────
                          1. Happy-path (single createTriple)
     ──────────────────────────────────────────────────────────────────────────*/
@@ -65,13 +79,8 @@ contract CreateTripleTest is MultiVaultBase {
 
         (, uint256 subjectAtomAssetsBefore) = multiVault.getVaultTotals(s, _defaultCurve());
 
-        bytes32[] memory subjectIds = new bytes32[](1);
-        bytes32[] memory predicateIds = new bytes32[](1);
-        bytes32[] memory objectIds = new bytes32[](1);
-        subjectIds[0] = s;
-        predicateIds[0] = p;
-        objectIds[0] = o;
-        bytes32 tid = multiVault.createTriples(subjectIds, predicateIds, objectIds, value)[0];
+        // create the triple
+        bytes32 tid = _createBasicTriple(s, p, o, value);
 
         // basic state
         assertEq(tid, multiVault.tripleIdFromAtomIds(s, p, o));
