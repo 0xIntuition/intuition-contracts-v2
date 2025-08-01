@@ -50,6 +50,9 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
     /// @notice Constant representing 1 share in the vault (1e18)
     uint256 public constant ONE_SHARE = 1e18;
 
+    /// @notice Constant representing the salt used to compute the counter triple IDs
+    bytes32 public constant COUNTER_SALT = keccak256("COUNTER");
+
     /* =================================================== */
     /*                  STATE VARIABLES                    */
     /* =================================================== */
@@ -71,8 +74,6 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
 
     /// @notice ID of the last term to be created
     uint256 public termCount;
-
-    bytes32 public constant COUNTER_SALT = keccak256("COUNTER");
 
     /// @notice Mapping of term ID to bonding curve ID to vault state
     // Term ID (atom or triple ID) -> Bonding Curve ID -> Vault State

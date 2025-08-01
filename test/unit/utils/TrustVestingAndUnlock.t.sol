@@ -401,27 +401,6 @@ contract TrustVestingAndUnlockTest is Test {
         vm.stopPrank();
     }
 
-    function test_revokeTtrustBondingApproval_doesNothingIfNotApproved() external {
-        vm.startPrank(recipient);
-        uint256 allowanceBefore = IERC20(trustToken).allowance(address(trustVestingAndUnlock), address(trustBonding));
-        assertEq(allowanceBefore, 0);
-        trustVestingAndUnlock.revokeTrustBondingApproval();
-        uint256 allowanceAfter = IERC20(trustToken).allowance(address(trustVestingAndUnlock), address(trustBonding));
-        assertEq(allowanceAfter, 0);
-        vm.stopPrank();
-    }
-
-    function test_revokeTrustBondingApproval() external {
-        vm.startPrank(recipient);
-        trustVestingAndUnlock.approveTrustBonding(vestingAmount);
-        uint256 allowance = IERC20(trustToken).allowance(address(trustVestingAndUnlock), address(trustBonding));
-        assertEq(allowance, vestingAmount);
-        trustVestingAndUnlock.revokeTrustBondingApproval();
-        allowance = IERC20(trustToken).allowance(address(trustVestingAndUnlock), address(trustBonding));
-        assertEq(allowance, 0);
-        vm.stopPrank();
-    }
-
     function test_createBond_shouldRevertIfTryingToBondBeforeVestingCliff() external {
         vm.startPrank(recipient);
         uint256 amount = 1e18; // user shouldn't be able to bond any amount before the vesting cliff

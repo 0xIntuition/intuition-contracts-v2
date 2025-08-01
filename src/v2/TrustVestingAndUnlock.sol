@@ -7,8 +7,8 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {Errors} from "src/libraries/Errors.sol";
-import {IUnlock} from "src/interfaces/IUnlock.sol";
 import {TrustBonding} from "src/v2/TrustBonding.sol";
+import {IUnlock} from "src/interfaces/IUnlock.sol";
 
 /**
  * @title  TrustVestingAndUnlock
@@ -330,18 +330,7 @@ contract TrustVestingAndUnlock is IUnlock, Ownable2Step, ReentrancyGuard {
      * @param amount The amount of Trust tokens to approve
      */
     function approveTrustBonding(uint256 amount) external onlyRecipient {
-        trustToken.safeIncreaseAllowance(address(trustBonding), amount);
-    }
-
-    /**
-     * @notice Revokes the approval of the TrustBonding contract to spend Trust tokens held by this contract
-     * @dev This function sets the allowance to zero, effectively revoking the approval. If the allowance is already zero,
-     *      the function returns early to avoid wasting gas.
-     */
-    function revokeTrustBondingApproval() external onlyRecipient {
-        uint256 allowance = trustToken.allowance(address(this), address(trustBonding));
-        if (allowance == 0) return;
-        trustToken.safeDecreaseAllowance(address(trustBonding), allowance);
+        trustToken.forceApprove(address(trustBonding), amount);
     }
 
     /**

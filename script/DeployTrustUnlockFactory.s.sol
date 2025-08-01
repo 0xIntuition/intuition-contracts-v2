@@ -14,7 +14,10 @@ contract DeployTrustUnlockFactory is Script {
     address public admin = 0xa28d4AAcA48bE54824dA53a19b05121DE71Ef480;
 
     /// @notice Address of the deployed TrustBonding contract on Base
-    address public trustBondingAddress = address(0); // NOTE: Replace with actual address before deploying
+    address public trustBondingAddress = address(1); // NOTE: Replace with the actual TrustBonding address before deploying
+
+    /// @notice Address of the MultiVault contract to be used with TrustUnlock
+    address public multiVaultAddress = address(2); // NOTE: Replace with the actual MultiVault address before deploying
 
     /// @notice TrustUnlockFactory contract to be deployed
     TrustUnlockFactory public trustUnlockFactory;
@@ -22,7 +25,7 @@ contract DeployTrustUnlockFactory is Script {
     function run() external {
         vm.startBroadcast();
 
-        trustUnlockFactory = new TrustUnlockFactory(trustTokenAddress, admin, trustBondingAddress);
+        trustUnlockFactory = new TrustUnlockFactory(trustTokenAddress, admin, trustBondingAddress, multiVaultAddress);
 
         console.log("TrustUnlock deployed at: ", address(trustUnlockFactory));
 

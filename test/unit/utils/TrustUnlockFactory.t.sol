@@ -18,6 +18,7 @@ import {TrustBonding} from "src/v2/TrustBonding.sol";
 import {TrustUnlockFactory} from "src/v2/TrustUnlockFactory.sol";
 import {TrustUnlock} from "src/v2/TrustUnlock.sol";
 
+import {MockMultiVault} from "test/mocks/MockMultiVault.sol";
 import {MockTrust} from "test/mocks/MockTrust.t.sol";
 
 /*//////////////////////////////////////////////////////////////
@@ -33,6 +34,7 @@ contract TrustUnlockFactoryTest is Test {
     TrustUnlockFactory public factory;
     TrustBonding public trustBonding;
     MockTrust public trustToken;
+    MockMultiVault public multiVault;
 
     /// @notice Addresses
     address public owner = makeAddr("owner");
@@ -63,6 +65,9 @@ contract TrustUnlockFactoryTest is Test {
     function setUp() external {
         vm.startPrank(deployer);
 
+        // Deploy MultiVault contract
+        multiVault = new MockMultiVault();
+
         // 1. Deploy mock TRUST
         trustToken = new MockTrust("Intuition", "TRUST", type(uint256).max);
         trustToken.mint(address(deployer), type(uint96).max); // mint tokens to deployer
@@ -74,7 +79,7 @@ contract TrustUnlockFactoryTest is Test {
         trustBonding.initialize(owner, address(trustToken), 14 days, block.timestamp + 1 hours);
 
         // 3. Deploy factory, fund it with tokens
-        factory = new TrustUnlockFactory(address(trustToken), owner, address(trustBonding));
+        factory = new TrustUnlockFactory(address(trustToken), owner, address(trustBonding), address(multiVault));
         trustToken.transfer(address(factory), UNLOCK_AMOUNT * 3);
 
         // 4. Common schedule example

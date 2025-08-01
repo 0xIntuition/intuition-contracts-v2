@@ -179,4 +179,86 @@ contract CAIP10Test is Test {
         // Reset chainid to original value
         vm.chainId(originalChainId);
     }
+
+    function test_InvalidPrefix() external {
+        // bad prefix: "CAIP10" instead of "caip10"
+        string memory s = "CAIP10:eip155:1:0x1234567890abcdef1234567890abcdef12345678";
+        vm.expectRevert(bytes("CAIP10: Invalid CAIP10 prefix"));
+        helper.getAddressFromCAIP10(s);
+    }
+
+    function test_MissingSeparatorAfterPrefix() external {
+        // missing ':' after 'caip10'
+        string memory s = "caip10eip155:1:0x1234567890abcdef1234567890abcdef12345678";
+        vm.expectRevert(bytes("CAIP10: Invalid separator"));
+        helper.getAddressFromCAIP10(s);
+    }
+
+    function test_MissingSeparatorAfterNamespace() external {
+        // missing ':' after 'eip155'
+        string memory s = "caip10:eip1551:0x1234567890abcdef1234567890abcdef12345678";
+        vm.expectRevert(bytes("CAIP10: Invalid separator"));
+        helper.getAddressFromCAIP10(s);
+    }
+
+    function test_ChainIdContainsNonDigit() external {
+        string memory s = "caip10:eip155:1a:0x1234567890abcdef1234567890abcdef12345678";
+        vm.expectRevert(bytes("CAIP10: Invalid chainid character"));
+        helper.getAddressFromCAIP10(s);
+    }
+
+    function test_MissingChainId() external {
+        // two colons in a row -> empty chain id
+        string memory s = "caip10:eip155::0x1234567890abcdef1234567890abcdef12345678";
+        vm.expectRevert(bytes("CAIP10: Missing chainid"));
+        helper.getAddressFromCAIP10(s);
+    }
+
+    function test_MissingSeparatorAfterChainId() external {
+        string memory s = "caip10:eip155:1-0x1234567890abcdef1234567890abcdef12345678";
+        vm.expectRevert(bytes("CAIP10: Invalid chainid character"));
+        helper.getAddressFromCAIP10(s);
+    }
+
+    function test_InvalidAddressPrefix() external {
+        string memory chain = uint256(block.chainid).toString();
+        // address part must start with "0x", but we use "0X"
+        string memory s =
+            string(abi.encodePacked("caip10:eip155:", chain, ":0X1234567890abcdef1234567890abcdef12345678"));
+        vm.expectRevert(bytes("CAIP10: Invalid address prefix"));
+        helper.getAddressFromCAIP10(s);
+    }
+
+    function test_AddressTooLong() external {
+        string memory chain = uint256(block.chainid).toString();
+        // 42 hex bytes (84 chars) after 0x -> too long by 2 hex chars
+        string memory s =
+            string(abi.encodePacked("caip10:eip155:", chain, ":0x1234567890abcdef1234567890abcdef12345678aa"));
+        vm.expectRevert(bytes("CAIP10: Invalid address length"));
+        helper.getAddressFromCAIP10(s);
+    }
+
+    function test_InvalidHexCharacterInAddress_lowercase() external {
+        string memory chain = uint256(block.chainid).toString();
+        // include 'g' (invalid hex)
+        string memory s =
+            string(abi.encodePacked("caip10:eip155:", chain, ":0x1234567890abcdef1234567890abcdef1234567g"));
+        vm.expectRevert(bytes("CAIP10: Invalid hex character"));
+        helper.getAddressFromCAIP10(s);
+    }
+
+    function test_InvalidHexCharacterInAddress_uppercase() external {
+        string memory chain = uint256(block.chainid).toString();
+        // include 'G' (invalid hex)
+        string memory s =
+            string(abi.encodePacked("caip10:eip155:", chain, ":0x1234567890abcdef1234567890abcdef1234567G"));
+        vm.expectRevert(bytes("CAIP10: Invalid hex character"));
+        helper.getAddressFromCAIP10(s);
+    }
+
+    function testFuzz_RoundTrip(address who) external view {
+        string memory caip = helper.getCAIP10(who);
+        address out = helper.getAddressFromCAIP10(caip);
+        assertEq(out, who, "round-trip mismatch");
+    }
 }
