@@ -28,19 +28,18 @@ import {MultiVault} from "src/MultiVault.sol";
 import {MultiVaultConfig} from "src/v2/MultiVaultConfig.sol";
 import {OffsetProgressiveCurve} from "src/curves/OffsetProgressiveCurve.sol";
 import {TrustBonding} from "src/v2/TrustBonding.sol";
-import {TrustVestedMerkleDistributor} from "src/v2/TrustVestedMerkleDistributor.sol";
 import {WrappedERC20} from "src/v2/WrappedERC20.sol";
 import {WrappedERC20Factory} from "src/v2/WrappedERC20Factory.sol";
 
 import {MockTrust} from "test/mocks/MockTrust.t.sol";
 
-contract DeployV2ToTestnet is Script {
+contract DeployV2 is Script {
     /// @notice Constants
-    address public constant admin = 0xB8e3452E62B45e654a300a296061597E3Cf3e039; // Admin address
-    address public constant protocolMultisig = admin;
-    address public constant atomWarden = admin;
-    address public constant migrator = admin;
-    uint256 public constant initialTrust = 1_000_000_000 * 1e18; // 1 billion TRUST
+    address public admin = vm.envAddress("ADMIN");
+    address public protocolMultisig = vm.envAddress("PROTOCOL_MULTISIG");
+    address public atomWarden = vm.envAddress("ATOM_WARDEN");
+    address public migrator = vm.envAddress("MIGRATOR");
+    uint256 public constant initialTrust = 1_000_000 * 1e18; // 1 million TRUST tokens to mint for testing (testnet-only)
     uint256 public constant maxAnnualEmission = 100_000_000 * 1e18; // 100 million TRUST
     address public constant permit2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3; // Permit2 address
     address public constant entryPoint = 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789; // EntryPoint on Base
@@ -70,7 +69,6 @@ contract DeployV2ToTestnet is Script {
     WrappedERC20 public wrappedERC20;
     UpgradeableBeacon public wrappedERC20Beacon;
     WrappedERC20Factory public wrappedERC20Factory;
-    TrustVestedMerkleDistributor public trustVestedMerkleDistributor;
 
     /// @notice Custom errors
     error UnsupportedChainId();
@@ -231,44 +229,12 @@ contract DeployV2ToTestnet is Script {
             personalUtilizationLowerBound
         );
 
-        // deploy the TrustVestedMerkleDistributor implementation contract
-        trustVestedMerkleDistributor = new TrustVestedMerkleDistributor();
-        console.log("TrustVestedMerkleDistributor implementation address: ", address(trustVestedMerkleDistributor));
-
-        // deploy the TrustVestedMerkleDistributor proxy contract
-        TransparentUpgradeableProxy trustVestedMerkleDistributorProxy =
-            new TransparentUpgradeableProxy(address(trustVestedMerkleDistributor), admin, "");
-
-        trustVestedMerkleDistributor = TrustVestedMerkleDistributor(address(trustVestedMerkleDistributorProxy));
-        console.log("TrustVestedMerkleDistributor proxy address: ", address(trustVestedMerkleDistributorProxy));
-
-        // initialize the TrustVestedMerkleDistributor contract
-        TrustVestedMerkleDistributor.VestingParams memory distributorVestingParams = TrustVestedMerkleDistributor
-            .VestingParams({
-            owner: admin,
-            trust: address(trustToken),
-            trustBonding: address(trustBonding),
-            protocolTreasury: admin,
-            feeInBPS: 0,
-            vestingStartTimestamp: block.timestamp + 5 days,
-            vestingDuration: 7 days,
-            claimEndTimestamp: block.timestamp + 30 days,
-            tgeBPS: 5000,
-            rageQuitBPS: 6500,
-            merkleRoot: merkleRoot
-        });
-
-        trustVestedMerkleDistributor.initialize(distributorVestingParams);
-
-        // add the merkle distributor contract to the whitelist for the TrustBonding contract
-        trustBonding.add_to_whitelist(address(trustVestedMerkleDistributor));
-
         // max approve TRUST to the TrustBonding and MultiVault contracts
         trustToken.approve(address(trustBonding), type(uint256).max);
         trustToken.approve(address(multiVault), type(uint256).max);
 
         // mint TRUST to the merkle distributor contract for testing the airdrop claim
-        trustToken.mint(address(trustVestedMerkleDistributor), 2_000 * 1e18); // 2,000 TRUST
+        // trustToken.mint(address(trustVestedMerkleDistributor), 2_000 * 1e18); // 2,000 TRUST
 
         vm.stopBroadcast();
     }

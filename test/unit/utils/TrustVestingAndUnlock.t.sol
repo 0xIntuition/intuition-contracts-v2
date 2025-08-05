@@ -89,6 +89,7 @@ contract TrustVestingAndUnlockTest is Test {
             recipient: recipient,
             admin: admin,
             trustBonding: address(trustBonding),
+            multiVault: address(multiVault),
             vestingAmount: vestingAmount,
             vestingBegin: vestingBegin,
             vestingCliff: vestingCliff,
@@ -103,7 +104,10 @@ contract TrustVestingAndUnlockTest is Test {
 
         trustVestingAndUnlock.setTGETimestamp(block.timestamp);
 
-        trustToken.mint(address(trustVestingAndUnlock), vestingAmount);
+        trustToken.mint(address(admin), vestingAmount * 2);
+
+        // Transfer half of the vesting amount to the TrustVestingAndUnlock contract
+        trustToken.transfer(address(trustVestingAndUnlock), vestingAmount);
 
         // Smart contracts are not allowed to bond unless they are whitelisted.
         // This is done in order to prevent tokenizing the locked tokens.
@@ -652,5 +656,644 @@ contract TrustVestingAndUnlockTest is Test {
         expectedUnlockedAmount += weeklyUnlocked; // amount unlocked at cliff + new, weekly (linear) unlocked amount
 
         assertEq(unlockedAmount, expectedUnlockedAmount);
+    }
+
+    function test_constructor_shouldRevertIfMultiVaultIsZeroAddress() external {
+        vestingParams.multiVault = address(0);
+
+        vm.expectRevert(Errors.Unlock_ZeroAddress.selector);
+        new TrustVestingAndUnlock(vestingParams);
+    }
+
+    function test_approveMultiVault_shouldRevertIfCallerIsNotRecipient() external {
+        vm.expectRevert(Errors.Unlock_OnlyRecipient.selector);
+        trustVestingAndUnlock.approveMultiVault(vestingAmount);
+    }
+
+    function test_approveMultiVault() external {
+        vm.startPrank(recipient);
+        trustVestingAndUnlock.approveMultiVault(vestingAmount);
+        uint256 allowance = IERC20(trustToken).allowance(address(trustVestingAndUnlock), address(multiVault));
+        assertEq(allowance, vestingAmount);
+        vm.stopPrank();
+    }
+
+    function test_createAtoms_shouldRevertIfCallerIsNotRecipient() external {
+        bytes[] memory atomDataArray = new bytes[](2);
+        atomDataArray[0] = "atom1";
+        atomDataArray[1] = "atom2";
+
+        vm.expectRevert(Errors.Unlock_OnlyRecipient.selector);
+        trustVestingAndUnlock.createAtoms(atomDataArray, 1000);
+    }
+
+    function test_createAtoms_shouldRevertIfAmountExceedsUnlockedAmount() external {
+        vm.warp(vestingCliff + oneMonth);
+        _sendTokensToTrustVestingAndUnlock(1e18);
+
+        vm.startPrank(recipient);
+        trustVestingAndUnlock.approveMultiVault(vestingAmount);
+
+        bytes[] memory atomDataArray = new bytes[](2);
+        atomDataArray[0] = "atom1";
+        atomDataArray[1] = "atom2";
+
+        vm.expectRevert(Errors.Unlock_InsufficientUnlockedTokens.selector);
+        trustVestingAndUnlock.createAtoms(atomDataArray, vestingAmount);
+        vm.stopPrank();
+    }
+
+    function test_createAtoms() external {
+        uint256 unlockCliffTimestamp = trustVestingAndUnlock.tgeTimestamp() + unlockCliff;
+        vm.warp(unlockCliffTimestamp);
+        _sendTokensToTrustVestingAndUnlock(1e18);
+
+        vm.startPrank(recipient);
+        trustVestingAndUnlock.claim();
+        trustVestingAndUnlock.approveMultiVault(vestingAmount);
+
+        bytes[] memory atomDataArray = new bytes[](2);
+        atomDataArray[0] = "atom1";
+        atomDataArray[1] = "atom2";
+
+        bytes32[] memory atomIds = trustVestingAndUnlock.createAtoms(atomDataArray, 1000);
+
+        assertEq(atomIds.length, 2);
+        assertTrue(atomIds[0] != bytes32(0));
+        assertTrue(atomIds[1] != bytes32(0));
+        vm.stopPrank();
+    }
+
+    function test_createTriples_shouldRevertIfCallerIsNotRecipient() external {
+        bytes32[] memory subjectIds = new bytes32[](2);
+        bytes32[] memory predicateIds = new bytes32[](2);
+        bytes32[] memory objectIds = new bytes32[](2);
+
+        TrustVestingAndUnlock.CreateTriplesData memory tripleData = TrustVestingAndUnlock.CreateTriplesData({
+            subjectIds: subjectIds,
+            predicateIds: predicateIds,
+            objectIds: objectIds,
+            value: 1000
+        });
+
+        vm.expectRevert(Errors.Unlock_OnlyRecipient.selector);
+        trustVestingAndUnlock.createTriples(tripleData);
+    }
+
+    function test_createTriples_shouldRevertIfAmountExceedsUnlockedAmount() external {
+        vm.warp(vestingCliff + oneMonth);
+        _sendTokensToTrustVestingAndUnlock(1e18);
+
+        vm.startPrank(recipient);
+        trustVestingAndUnlock.approveMultiVault(vestingAmount);
+
+        bytes32[] memory subjectIds = new bytes32[](2);
+        bytes32[] memory predicateIds = new bytes32[](2);
+        bytes32[] memory objectIds = new bytes32[](2);
+
+        TrustVestingAndUnlock.CreateTriplesData memory tripleData = TrustVestingAndUnlock.CreateTriplesData({
+            subjectIds: subjectIds,
+            predicateIds: predicateIds,
+            objectIds: objectIds,
+            value: vestingAmount
+        });
+
+        vm.expectRevert(Errors.Unlock_InsufficientUnlockedTokens.selector);
+        trustVestingAndUnlock.createTriples(tripleData);
+        vm.stopPrank();
+    }
+
+    function test_createTriples() external {
+        uint256 unlockCliffTimestamp = trustVestingAndUnlock.tgeTimestamp() + unlockCliff;
+        vm.warp(unlockCliffTimestamp);
+        _sendTokensToTrustVestingAndUnlock(1e18);
+
+        vm.startPrank(recipient);
+        trustVestingAndUnlock.claim();
+        trustVestingAndUnlock.approveMultiVault(vestingAmount);
+
+        bytes32[] memory subjectIds = new bytes32[](2);
+        bytes32[] memory predicateIds = new bytes32[](2);
+        bytes32[] memory objectIds = new bytes32[](2);
+        subjectIds[0] = keccak256("subject1");
+        subjectIds[1] = keccak256("subject2");
+        predicateIds[0] = keccak256("predicate1");
+        predicateIds[1] = keccak256("predicate2");
+        objectIds[0] = keccak256("object1");
+        objectIds[1] = keccak256("object2");
+
+        TrustVestingAndUnlock.CreateTriplesData memory tripleData = TrustVestingAndUnlock.CreateTriplesData({
+            subjectIds: subjectIds,
+            predicateIds: predicateIds,
+            objectIds: objectIds,
+            value: 1000
+        });
+
+        bytes32[] memory tripleIds = trustVestingAndUnlock.createTriples(tripleData);
+
+        assertEq(tripleIds.length, 2);
+        assertTrue(tripleIds[0] != bytes32(0));
+        assertTrue(tripleIds[1] != bytes32(0));
+        vm.stopPrank();
+    }
+
+    function test_depositIntoMultiVault_shouldRevertIfCallerIsNotRecipient() external {
+        address receiver = makeAddr("receiver");
+        vm.expectRevert(Errors.Unlock_OnlyRecipient.selector);
+        trustVestingAndUnlock.depositIntoMultiVault(receiver, keccak256("term"), 1, 1000, 900);
+    }
+
+    function test_depositIntoMultiVault_shouldRevertIfAmountExceedsUnlockedAmount() external {
+        address receiver = makeAddr("receiver");
+        vm.warp(vestingCliff + oneMonth);
+        _sendTokensToTrustVestingAndUnlock(1e18);
+
+        vm.startPrank(recipient);
+        trustVestingAndUnlock.approveMultiVault(vestingAmount);
+
+        vm.expectRevert(Errors.Unlock_InsufficientUnlockedTokens.selector);
+        trustVestingAndUnlock.depositIntoMultiVault(receiver, keccak256("term"), 1, vestingAmount, 900);
+        vm.stopPrank();
+    }
+
+    function test_depositIntoMultiVault() external {
+        address receiver = makeAddr("receiver");
+        uint256 unlockCliffTimestamp = trustVestingAndUnlock.tgeTimestamp() + unlockCliff;
+        vm.warp(unlockCliffTimestamp);
+        _sendTokensToTrustVestingAndUnlock(1e18);
+
+        vm.startPrank(recipient);
+        trustVestingAndUnlock.claim();
+        trustVestingAndUnlock.approveMultiVault(vestingAmount);
+
+        bytes32 termId = keccak256("term");
+        uint256 bondingCurveId = 1;
+        uint256 value = 1000;
+        uint256 minSharesToReceive = 900;
+
+        uint256 shares =
+            trustVestingAndUnlock.depositIntoMultiVault(receiver, termId, bondingCurveId, value, minSharesToReceive);
+
+        assertEq(shares, value);
+        vm.stopPrank();
+    }
+
+    function test_batchDepositIntoMultiVault_shouldRevertIfCallerIsNotRecipient() external {
+        address receiver = makeAddr("receiver");
+        bytes32[] memory termIds = new bytes32[](2);
+        uint256[] memory bondingCurveIds = new uint256[](2);
+        uint256[] memory amounts = new uint256[](2);
+        uint256[] memory minSharesToReceive = new uint256[](2);
+
+        TrustVestingAndUnlock.BatchDepositData memory batchDepositData = TrustVestingAndUnlock.BatchDepositData({
+            receiver: receiver,
+            termIds: termIds,
+            bondingCurveIds: bondingCurveIds,
+            amounts: amounts,
+            minSharesToReceive: minSharesToReceive
+        });
+
+        vm.expectRevert(Errors.Unlock_OnlyRecipient.selector);
+        trustVestingAndUnlock.batchDepositIntoMultiVault(batchDepositData);
+    }
+
+    function test_batchDepositIntoMultiVault_shouldRevertIfTotalAmountExceedsUnlockedAmount() external {
+        address receiver = makeAddr("receiver");
+        vm.warp(vestingCliff + oneMonth);
+        _sendTokensToTrustVestingAndUnlock(1e18);
+
+        vm.startPrank(recipient);
+        trustVestingAndUnlock.approveMultiVault(vestingAmount);
+
+        bytes32[] memory termIds = new bytes32[](2);
+        uint256[] memory bondingCurveIds = new uint256[](2);
+        uint256[] memory amounts = new uint256[](2);
+        uint256[] memory minSharesToReceive = new uint256[](2);
+
+        termIds[0] = keccak256("term1");
+        termIds[1] = keccak256("term2");
+        bondingCurveIds[0] = 1;
+        bondingCurveIds[1] = 2;
+        amounts[0] = vestingAmount / 2;
+        amounts[1] = vestingAmount / 2 + 1;
+        minSharesToReceive[0] = 900;
+        minSharesToReceive[1] = 1800;
+
+        TrustVestingAndUnlock.BatchDepositData memory batchDepositData = TrustVestingAndUnlock.BatchDepositData({
+            receiver: receiver,
+            termIds: termIds,
+            bondingCurveIds: bondingCurveIds,
+            amounts: amounts,
+            minSharesToReceive: minSharesToReceive
+        });
+
+        vm.expectRevert(Errors.Unlock_InsufficientUnlockedTokens.selector);
+        trustVestingAndUnlock.batchDepositIntoMultiVault(batchDepositData);
+        vm.stopPrank();
+    }
+
+    function test_batchDepositIntoMultiVault() external {
+        address receiver = makeAddr("receiver");
+        uint256 unlockCliffTimestamp = trustVestingAndUnlock.tgeTimestamp() + unlockCliff;
+        vm.warp(unlockCliffTimestamp);
+        _sendTokensToTrustVestingAndUnlock(1e18);
+
+        vm.startPrank(recipient);
+        trustVestingAndUnlock.claim();
+        trustVestingAndUnlock.approveMultiVault(vestingAmount);
+
+        bytes32[] memory termIds = new bytes32[](2);
+        uint256[] memory bondingCurveIds = new uint256[](2);
+        uint256[] memory amounts = new uint256[](2);
+        uint256[] memory minSharesToReceive = new uint256[](2);
+
+        termIds[0] = keccak256("term1");
+        termIds[1] = keccak256("term2");
+        bondingCurveIds[0] = 1;
+        bondingCurveIds[1] = 2;
+        amounts[0] = 1000;
+        amounts[1] = 2000;
+        minSharesToReceive[0] = 900;
+        minSharesToReceive[1] = 1800;
+
+        TrustVestingAndUnlock.BatchDepositData memory batchDepositData = TrustVestingAndUnlock.BatchDepositData({
+            receiver: receiver,
+            termIds: termIds,
+            bondingCurveIds: bondingCurveIds,
+            amounts: amounts,
+            minSharesToReceive: minSharesToReceive
+        });
+
+        uint256[] memory shares = trustVestingAndUnlock.batchDepositIntoMultiVault(batchDepositData);
+
+        assertEq(shares.length, 2);
+        assertEq(shares[0], amounts[0]);
+        assertEq(shares[1], amounts[1]);
+        vm.stopPrank();
+    }
+
+    function test_redeemFromMultiVault_shouldRevertIfCallerIsNotRecipient() external {
+        address receiver = makeAddr("receiver");
+        vm.expectRevert(Errors.Unlock_OnlyRecipient.selector);
+        trustVestingAndUnlock.redeemFromMultiVault(1000, receiver, keccak256("term"), 1, 900);
+    }
+
+    function test_redeemFromMultiVault() external {
+        address receiver = makeAddr("receiver");
+        uint256 unlockCliffTimestamp = trustVestingAndUnlock.tgeTimestamp() + unlockCliff;
+        vm.warp(unlockCliffTimestamp);
+
+        vm.startPrank(recipient);
+        trustVestingAndUnlock.claim();
+        trustVestingAndUnlock.approveMultiVault(vestingAmount);
+
+        uint256 shares = 1000;
+        bytes32 termId = keccak256("term");
+        uint256 bondingCurveId = 1;
+        uint256 minAssetsToReceive = 900;
+
+        uint256 assets =
+            trustVestingAndUnlock.redeemFromMultiVault(shares, receiver, termId, bondingCurveId, minAssetsToReceive);
+
+        assertEq(assets, shares);
+        vm.stopPrank();
+    }
+
+    function test_batchRedeemFromMultiVault_shouldRevertIfCallerIsNotRecipient() external {
+        address receiver = makeAddr("receiver");
+        uint256[] memory shares = new uint256[](2);
+        bytes32[] memory termIds = new bytes32[](2);
+        uint256[] memory bondingCurveIds = new uint256[](2);
+        uint256[] memory minAssetsToReceive = new uint256[](2);
+
+        vm.expectRevert(Errors.Unlock_OnlyRecipient.selector);
+        trustVestingAndUnlock.batchRedeemFromMultiVault(shares, receiver, termIds, bondingCurveIds, minAssetsToReceive);
+    }
+
+    function test_batchRedeemFromMultiVault() external {
+        address receiver = makeAddr("receiver");
+        uint256 unlockCliffTimestamp = trustVestingAndUnlock.tgeTimestamp() + unlockCliff;
+        vm.warp(unlockCliffTimestamp);
+
+        vm.startPrank(recipient);
+        trustVestingAndUnlock.claim();
+        trustVestingAndUnlock.approveMultiVault(vestingAmount);
+
+        uint256[] memory shares = new uint256[](2);
+        bytes32[] memory termIds = new bytes32[](2);
+        uint256[] memory bondingCurveIds = new uint256[](2);
+        uint256[] memory minAssetsToReceive = new uint256[](2);
+
+        shares[0] = 1000;
+        shares[1] = 2000;
+        termIds[0] = keccak256("term1");
+        termIds[1] = keccak256("term2");
+        bondingCurveIds[0] = 1;
+        bondingCurveIds[1] = 2;
+        minAssetsToReceive[0] = 900;
+        minAssetsToReceive[1] = 1800;
+
+        uint256[] memory assets = trustVestingAndUnlock.batchRedeemFromMultiVault(
+            shares, receiver, termIds, bondingCurveIds, minAssetsToReceive
+        );
+
+        assertEq(assets.length, 2);
+        assertEq(assets[0], shares[0]);
+        assertEq(assets[1], shares[1]);
+        vm.stopPrank();
+    }
+
+    function test_withdrawNonLockedTokens_shouldRevertIfCallerIsNotRecipient() external {
+        address receiver = makeAddr("receiver");
+        vm.expectRevert(Errors.Unlock_OnlyRecipient.selector);
+        trustVestingAndUnlock.withdrawNonLockedTokens(1000, receiver);
+    }
+
+    function test_withdrawNonLockedTokens_shouldRevertIfReceiverIsZeroAddress() external {
+        vm.startPrank(recipient);
+        vm.expectRevert(Errors.Unlock_ZeroAddress.selector);
+        trustVestingAndUnlock.withdrawNonLockedTokens(1000, address(0));
+        vm.stopPrank();
+    }
+
+    function test_withdrawNonLockedTokens_shouldRevertIfAmountIsZero() external {
+        address receiver = makeAddr("receiver");
+        vm.startPrank(recipient);
+        vm.expectRevert(Errors.Unlock_ZeroAmount.selector);
+        trustVestingAndUnlock.withdrawNonLockedTokens(0, receiver);
+        vm.stopPrank();
+    }
+
+    function test_withdrawNonLockedTokens_shouldRevertIfAmountExceedsUnlockedAmount() external {
+        address receiver = makeAddr("receiver");
+        vm.warp(vestingCliff + oneMonth);
+        _sendTokensToTrustVestingAndUnlock(1e18);
+
+        vm.startPrank(recipient);
+        vm.expectRevert(Errors.Unlock_InsufficientUnlockedTokens.selector);
+        trustVestingAndUnlock.withdrawNonLockedTokens(vestingAmount, receiver);
+        vm.stopPrank();
+    }
+
+    function test_withdrawNonLockedTokens() external {
+        address receiver = makeAddr("receiver");
+        uint256 unlockCliffTimestamp = trustVestingAndUnlock.tgeTimestamp() + unlockCliff;
+        vm.warp(unlockCliffTimestamp);
+        uint256 extraTokens = 1e18;
+        _sendTokensToTrustVestingAndUnlock(extraTokens);
+
+        vm.startPrank(recipient);
+        trustVestingAndUnlock.claim();
+
+        uint256 receiverBalanceBefore = trustToken.balanceOf(receiver);
+        uint256 withdrawAmount = extraTokens;
+
+        trustVestingAndUnlock.withdrawNonLockedTokens(withdrawAmount, receiver);
+
+        uint256 receiverBalanceAfter = trustToken.balanceOf(receiver);
+        assertEq(receiverBalanceAfter, receiverBalanceBefore + withdrawAmount);
+        vm.stopPrank();
+    }
+
+    function testFuzz_approveMultiVault(uint256 amount) external {
+        amount = bound(amount, 0, type(uint128).max);
+
+        vm.startPrank(recipient);
+        trustVestingAndUnlock.approveMultiVault(amount);
+        uint256 allowance = IERC20(trustToken).allowance(address(trustVestingAndUnlock), address(multiVault));
+        assertEq(allowance, amount);
+        vm.stopPrank();
+    }
+
+    function testFuzz_depositIntoMultiVault(uint256 value, uint256 minSharesToReceive) external {
+        value = bound(value, 1, vestingAmount / 4);
+        minSharesToReceive = bound(minSharesToReceive, 0, value);
+
+        address receiver = makeAddr("receiver");
+        uint256 unlockCliffTimestamp = trustVestingAndUnlock.tgeTimestamp() + unlockCliff;
+        vm.warp(unlockCliffTimestamp);
+        _sendTokensToTrustVestingAndUnlock(value);
+
+        vm.startPrank(recipient);
+        trustVestingAndUnlock.claim();
+        trustVestingAndUnlock.approveMultiVault(vestingAmount);
+
+        bytes32 termId = keccak256("term");
+        uint256 bondingCurveId = 1;
+
+        uint256 shares =
+            trustVestingAndUnlock.depositIntoMultiVault(receiver, termId, bondingCurveId, value, minSharesToReceive);
+
+        assertEq(shares, value);
+        assertGe(shares, minSharesToReceive);
+        vm.stopPrank();
+    }
+
+    function testFuzz_redeemFromMultiVault(uint256 shares, uint256 minAssetsToReceive) external {
+        shares = bound(shares, 1, type(uint128).max);
+        minAssetsToReceive = bound(minAssetsToReceive, 0, shares);
+
+        address receiver = makeAddr("receiver");
+        uint256 unlockCliffTimestamp = trustVestingAndUnlock.tgeTimestamp() + unlockCliff;
+        vm.warp(unlockCliffTimestamp);
+
+        vm.startPrank(recipient);
+        trustVestingAndUnlock.claim();
+
+        bytes32 termId = keccak256("term");
+        uint256 bondingCurveId = 1;
+
+        uint256 assets =
+            trustVestingAndUnlock.redeemFromMultiVault(shares, receiver, termId, bondingCurveId, minAssetsToReceive);
+
+        assertEq(assets, shares);
+        assertGe(assets, minAssetsToReceive);
+        vm.stopPrank();
+    }
+
+    function testFuzz_withdrawNonLockedTokens(uint256 amount) external {
+        address receiver = makeAddr("receiver");
+        uint256 unlockCliffTimestamp = trustVestingAndUnlock.tgeTimestamp() + unlockCliff;
+        vm.warp(unlockCliffTimestamp);
+
+        amount = bound(amount, 1, 1e18);
+        _sendTokensToTrustVestingAndUnlock(amount);
+
+        vm.startPrank(recipient);
+        trustVestingAndUnlock.claim();
+
+        uint256 receiverBalanceBefore = trustToken.balanceOf(receiver);
+
+        trustVestingAndUnlock.withdrawNonLockedTokens(amount, receiver);
+
+        uint256 receiverBalanceAfter = trustToken.balanceOf(receiver);
+        assertEq(receiverBalanceAfter, receiverBalanceBefore + amount);
+        vm.stopPrank();
+    }
+
+    function test_multiVaultIntegration_fullFlow() external {
+        address receiver = makeAddr("receiver");
+        uint256 unlockCliffTimestamp = trustVestingAndUnlock.tgeTimestamp() + unlockCliff;
+        vm.warp(unlockCliffTimestamp);
+        _sendTokensToTrustVestingAndUnlock(1e18);
+
+        vm.startPrank(recipient);
+
+        // Step 1: Claim and approve
+        _claimAndApprove(unlockCliffTimestamp);
+
+        // Step 2: Create atoms
+        bytes32[] memory atomIds = _createTestAtoms();
+
+        // Step 3: Create triples
+        bytes32[] memory tripleIds = _createTestTriples(atomIds);
+
+        // Step 4: Batch deposit
+        uint256[] memory shares = _performBatchDeposit(receiver, atomIds, tripleIds);
+
+        // Step 5: Batch redeem
+        _performBatchRedeem(receiver, shares, atomIds, tripleIds);
+
+        // Step 6: Withdraw extra tokens
+        uint256 extraTokens = 50000;
+        trustVestingAndUnlock.withdrawNonLockedTokens(extraTokens, receiver);
+
+        vm.stopPrank();
+    }
+
+    function test_requireNonLockedTokens_shouldEnforceUnlockingRules() external {
+        uint256 unlockCliffTimestamp = trustVestingAndUnlock.tgeTimestamp() + unlockCliff;
+        vm.warp(unlockCliffTimestamp + oneWeek);
+        _sendTokensToTrustVestingAndUnlock(1e18);
+
+        vm.startPrank(recipient);
+        trustVestingAndUnlock.claim();
+
+        uint256 vestedTokens = trustVestingAndUnlock.vestedAmount(block.timestamp);
+        uint256 unlockedTokens = trustVestingAndUnlock.unlockedAmount(block.timestamp, vestedTokens);
+        uint256 lockedTokens = vestedTokens - unlockedTokens;
+
+        uint256 contractBalance = trustToken.balanceOf(address(trustVestingAndUnlock));
+        uint256 maxWithdrawable = contractBalance > lockedTokens ? contractBalance - lockedTokens : 0;
+
+        if (maxWithdrawable > 0) {
+            trustVestingAndUnlock.withdrawNonLockedTokens(maxWithdrawable, recipient);
+        }
+
+        if (contractBalance > maxWithdrawable) {
+            vm.expectRevert(Errors.Unlock_InsufficientUnlockedTokens.selector);
+            trustVestingAndUnlock.withdrawNonLockedTokens(maxWithdrawable + 1, recipient);
+        }
+
+        vm.stopPrank();
+    }
+
+    // Internal helper functions
+
+    function _claimAndApprove(uint256 unlockCliffTimestamp) internal {
+        trustVestingAndUnlock.claim();
+        uint256 vestedTokens = trustVestingAndUnlock.vestedAmount(unlockCliffTimestamp);
+        uint256 claimedAmount = (vestedTokens * unlockCliffPercentage) / BASIS_POINTS_DIVISOR;
+        assertEq(trustToken.balanceOf(recipient), claimedAmount);
+
+        trustVestingAndUnlock.approveMultiVault(vestingAmount);
+    }
+
+    function _createTestAtoms() internal returns (bytes32[] memory) {
+        bytes[] memory atomDataArray = new bytes[](2);
+        atomDataArray[0] = "atom1";
+        atomDataArray[1] = "atom2";
+
+        bytes32[] memory atomIds = trustVestingAndUnlock.createAtoms(atomDataArray, 1000);
+        assertEq(atomIds.length, 2);
+        return atomIds;
+    }
+
+    function _createTestTriples(bytes32[] memory atomIds) internal returns (bytes32[] memory) {
+        bytes32[] memory subjectIds = new bytes32[](1);
+        bytes32[] memory predicateIds = new bytes32[](1);
+        bytes32[] memory objectIds = new bytes32[](1);
+        subjectIds[0] = atomIds[0];
+        predicateIds[0] = keccak256("predicate");
+        objectIds[0] = atomIds[1];
+
+        TrustVestingAndUnlock.CreateTriplesData memory tripleData = TrustVestingAndUnlock.CreateTriplesData({
+            subjectIds: subjectIds,
+            predicateIds: predicateIds,
+            objectIds: objectIds,
+            value: 2000
+        });
+
+        bytes32[] memory tripleIds = trustVestingAndUnlock.createTriples(tripleData);
+        assertEq(tripleIds.length, 1);
+        return tripleIds;
+    }
+
+    function _performBatchDeposit(address receiver, bytes32[] memory atomIds, bytes32[] memory tripleIds)
+        internal
+        returns (uint256[] memory)
+    {
+        bytes32[] memory termIds = new bytes32[](2);
+        uint256[] memory bondingCurveIds = new uint256[](2);
+        uint256[] memory amounts = new uint256[](2);
+        uint256[] memory minSharesToReceive = new uint256[](2);
+
+        termIds[0] = atomIds[0];
+        termIds[1] = tripleIds[0];
+        bondingCurveIds[0] = 1;
+        bondingCurveIds[1] = 1;
+        amounts[0] = 5000;
+        amounts[1] = 10000;
+        minSharesToReceive[0] = 4500;
+        minSharesToReceive[1] = 9000;
+
+        TrustVestingAndUnlock.BatchDepositData memory batchDepositData = TrustVestingAndUnlock.BatchDepositData({
+            receiver: receiver,
+            termIds: termIds,
+            bondingCurveIds: bondingCurveIds,
+            amounts: amounts,
+            minSharesToReceive: minSharesToReceive
+        });
+
+        uint256[] memory shares = trustVestingAndUnlock.batchDepositIntoMultiVault(batchDepositData);
+        assertEq(shares.length, 2);
+        assertEq(shares[0], amounts[0]);
+        assertEq(shares[1], amounts[1]);
+        return shares;
+    }
+
+    function _performBatchRedeem(
+        address receiver,
+        uint256[] memory shares,
+        bytes32[] memory atomIds,
+        bytes32[] memory tripleIds
+    ) internal {
+        bytes32[] memory termIds = new bytes32[](2);
+        uint256[] memory bondingCurveIds = new uint256[](2);
+        uint256[] memory minAssetsToReceive = new uint256[](2);
+
+        termIds[0] = atomIds[0];
+        termIds[1] = tripleIds[0];
+        bondingCurveIds[0] = 1;
+        bondingCurveIds[1] = 1;
+        minAssetsToReceive[0] = 4000;
+        minAssetsToReceive[1] = 8000;
+
+        uint256[] memory assets = trustVestingAndUnlock.batchRedeemFromMultiVault(
+            shares, receiver, termIds, bondingCurveIds, minAssetsToReceive
+        );
+
+        assertEq(assets.length, 2);
+        assertEq(assets[0], shares[0]);
+        assertEq(assets[1], shares[1]);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                         HELPER FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    function _sendTokensToTrustVestingAndUnlock(uint256 amount) internal {
+        vm.prank(admin);
+        trustToken.transfer(address(trustVestingAndUnlock), amount);
     }
 }

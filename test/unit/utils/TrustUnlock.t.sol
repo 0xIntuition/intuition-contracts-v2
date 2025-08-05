@@ -34,6 +34,7 @@ contract TrustUnlockTest is Test {
     uint256 public constant unlockAmount = 1_000_000 * 1e18;
     uint256 public constant systemUtilizationLowerBound = 2_500;
     uint256 public constant personalUtilizationLowerBound = 2_500;
+    address public receiver;
 
     /// @notice TrustUnlock config
     uint256 public constant oneWeek = 1 weeks;
@@ -76,7 +77,7 @@ contract TrustUnlockTest is Test {
         );
 
         // Mint tokens to the owner
-        trustToken.mint(owner, unlockAmount);
+        trustToken.mint(owner, unlockAmount * 2);
 
         // Deploy TrustUnlock contract
         unlockBegin = block.timestamp;
@@ -100,6 +101,9 @@ contract TrustUnlockTest is Test {
 
         // Owner funds the TrustUnlock contract with the unlockAmount of tokens
         trustToken.transfer(address(trustUnlock), unlockAmount);
+
+        // Mark the TrustUnlock contract as a receiver for the MultiVaul actions
+        receiver = address(trustUnlock);
 
         vm.stopPrank();
 
@@ -525,6 +529,8 @@ contract TrustUnlockTest is Test {
 
     function test_createAtoms() external {
         vm.warp(unlockCliff);
+        _sendTokensToTrustUnlock(1e18);
+
         vm.startPrank(recipient);
 
         trustUnlock.claim();
@@ -553,6 +559,8 @@ contract TrustUnlockTest is Test {
 
     function test_createTriples() external {
         vm.warp(unlockCliff);
+        _sendTokensToTrustUnlock(1e18);
+
         vm.startPrank(recipient);
 
         trustUnlock.claim();
@@ -578,11 +586,13 @@ contract TrustUnlockTest is Test {
 
     function test_depositIntoMultiVault_shouldRevertIfCallerIsNotRecipient() external {
         vm.expectRevert(abi.encodeWithSelector(Errors.Unlock_OnlyRecipient.selector));
-        trustUnlock.depositIntoMultiVault(keccak256("term"), 1, 1000, 900);
+        trustUnlock.depositIntoMultiVault(receiver, keccak256("term"), 1, 1000, 900);
     }
 
     function test_depositIntoMultiVault() external {
         vm.warp(unlockCliff);
+        _sendTokensToTrustUnlock(1e18);
+
         vm.startPrank(recipient);
 
         trustUnlock.claim();
@@ -593,7 +603,7 @@ contract TrustUnlockTest is Test {
         uint256 value = 1000;
         uint256 minSharesToReceive = 900;
 
-        uint256 shares = trustUnlock.depositIntoMultiVault(termId, bondingCurveId, value, minSharesToReceive);
+        uint256 shares = trustUnlock.depositIntoMultiVault(receiver, termId, bondingCurveId, value, minSharesToReceive);
 
         assertEq(shares, value);
         vm.stopPrank();
@@ -606,11 +616,13 @@ contract TrustUnlockTest is Test {
         uint256[] memory minSharesToReceive = new uint256[](2);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.Unlock_OnlyRecipient.selector));
-        trustUnlock.batchDepositIntoMultiVault(termIds, bondingCurveIds, amounts, minSharesToReceive);
+        trustUnlock.batchDepositIntoMultiVault(receiver, termIds, bondingCurveIds, amounts, minSharesToReceive);
     }
 
     function test_batchDepositIntoMultiVault() external {
         vm.warp(unlockCliff);
+        _sendTokensToTrustUnlock(1e18);
+
         vm.startPrank(recipient);
 
         trustUnlock.claim();
@@ -631,7 +643,7 @@ contract TrustUnlockTest is Test {
         minSharesToReceive[1] = 1800;
 
         uint256[] memory shares =
-            trustUnlock.batchDepositIntoMultiVault(termIds, bondingCurveIds, amounts, minSharesToReceive);
+            trustUnlock.batchDepositIntoMultiVault(receiver, termIds, bondingCurveIds, amounts, minSharesToReceive);
 
         assertEq(shares.length, 2);
         assertEq(shares[0], amounts[0]);
@@ -641,7 +653,7 @@ contract TrustUnlockTest is Test {
 
     function test_redeemFromMultiVault_shouldRevertIfCallerIsNotRecipient() external {
         vm.expectRevert(abi.encodeWithSelector(Errors.Unlock_OnlyRecipient.selector));
-        trustUnlock.redeemFromMultiVault(1000, keccak256("term"), 1, 900);
+        trustUnlock.redeemFromMultiVault(1000, receiver, keccak256("term"), 1, 900);
     }
 
     function test_redeemFromMultiVault() external {
@@ -656,7 +668,7 @@ contract TrustUnlockTest is Test {
         uint256 bondingCurveId = 1;
         uint256 minAssetsToReceive = 900;
 
-        uint256 assets = trustUnlock.redeemFromMultiVault(shares, termId, bondingCurveId, minAssetsToReceive);
+        uint256 assets = trustUnlock.redeemFromMultiVault(shares, receiver, termId, bondingCurveId, minAssetsToReceive);
 
         assertEq(assets, shares);
         vm.stopPrank();
@@ -669,7 +681,7 @@ contract TrustUnlockTest is Test {
         uint256[] memory minAssetsToReceive = new uint256[](2);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.Unlock_OnlyRecipient.selector));
-        trustUnlock.batchRedeemFromMultiVault(shares, termIds, bondingCurveIds, minAssetsToReceive);
+        trustUnlock.batchRedeemFromMultiVault(shares, receiver, termIds, bondingCurveIds, minAssetsToReceive);
     }
 
     function test_batchRedeemFromMultiVault() external {
@@ -694,7 +706,7 @@ contract TrustUnlockTest is Test {
         minAssetsToReceive[1] = 1800;
 
         uint256[] memory assets =
-            trustUnlock.batchRedeemFromMultiVault(shares, termIds, bondingCurveIds, minAssetsToReceive);
+            trustUnlock.batchRedeemFromMultiVault(shares, receiver, termIds, bondingCurveIds, minAssetsToReceive);
 
         assertEq(assets.length, 2);
         assertEq(assets[0], shares[0]);
@@ -713,8 +725,10 @@ contract TrustUnlockTest is Test {
     }
 
     function testFuzz_depositIntoMultiVault(uint256 value, uint256 minSharesToReceive) external {
-        value = bound(value, 1, type(uint128).max);
+        value = bound(value, 1, unlockAmount);
         minSharesToReceive = bound(minSharesToReceive, 0, value);
+
+        _sendTokensToTrustUnlock(value);
 
         vm.warp(unlockCliff);
         vm.startPrank(recipient);
@@ -725,7 +739,7 @@ contract TrustUnlockTest is Test {
         bytes32 termId = keccak256("term");
         uint256 bondingCurveId = 1;
 
-        uint256 shares = trustUnlock.depositIntoMultiVault(termId, bondingCurveId, value, minSharesToReceive);
+        uint256 shares = trustUnlock.depositIntoMultiVault(recipient, termId, bondingCurveId, value, minSharesToReceive);
 
         assertEq(shares, value);
         assertGe(shares, minSharesToReceive);
@@ -744,7 +758,7 @@ contract TrustUnlockTest is Test {
         bytes32 termId = keccak256("term");
         uint256 bondingCurveId = 1;
 
-        uint256 assets = trustUnlock.redeemFromMultiVault(shares, termId, bondingCurveId, minAssetsToReceive);
+        uint256 assets = trustUnlock.redeemFromMultiVault(shares, recipient, termId, bondingCurveId, minAssetsToReceive);
 
         assertEq(assets, shares);
         assertGe(assets, minAssetsToReceive);
@@ -753,6 +767,8 @@ contract TrustUnlockTest is Test {
 
     function test_multiVaultIntegration_fullFlow() external {
         vm.warp(unlockCliff);
+        _sendTokensToTrustUnlock(1e18);
+
         vm.startPrank(recipient);
 
         trustUnlock.claim();
@@ -793,7 +809,7 @@ contract TrustUnlockTest is Test {
         minSharesToReceive[1] = 9000;
 
         uint256[] memory shares =
-            trustUnlock.batchDepositIntoMultiVault(termIds, bondingCurveIds, amounts, minSharesToReceive);
+            trustUnlock.batchDepositIntoMultiVault(receiver, termIds, bondingCurveIds, amounts, minSharesToReceive);
         assertEq(shares.length, 2);
         assertEq(shares[0], amounts[0]);
         assertEq(shares[1], amounts[1]);
@@ -803,7 +819,7 @@ contract TrustUnlockTest is Test {
         minAssetsToReceive[1] = 8000;
 
         uint256[] memory assets =
-            trustUnlock.batchRedeemFromMultiVault(shares, termIds, bondingCurveIds, minAssetsToReceive);
+            trustUnlock.batchRedeemFromMultiVault(shares, receiver, termIds, bondingCurveIds, minAssetsToReceive);
         assertEq(assets.length, 2);
         assertEq(assets[0], shares[0]);
         assertEq(assets[1], shares[1]);
@@ -877,5 +893,16 @@ contract TrustUnlockTest is Test {
         emit IUnlock.BondedAmountUpdated(0);
         trustUnlock.withdrawFromBonding();
         vm.stopPrank();
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                         HELPER FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @dev Helper function to send some TRUST tokens to the TrustUnlock contract so it has the non-locked
+    // portion to use in the MultiVault
+    function _sendTokensToTrustUnlock(uint256 amount) internal {
+        vm.prank(owner);
+        trustToken.transfer(address(trustUnlock), amount);
     }
 }

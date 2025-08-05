@@ -15,6 +15,9 @@ contract DeployTrustVestingAndUnlock is Script {
     /// @notice Deployed TrustBonding contract address on Base
     address public trustBondingAddress;
 
+    /// @notice MultiVault contract address on Base
+    address public multiVaultAddress;
+
     // TrustVestingAndUnlock parameters (specific for each recipient)
     address public recipient;
     uint256 public vestingAmount;
@@ -40,6 +43,7 @@ contract DeployTrustVestingAndUnlock is Script {
             recipient: recipient,
             admin: admin,
             trustBonding: trustBondingAddress,
+            multiVault: multiVaultAddress,
             vestingAmount: vestingAmount,
             vestingBegin: vestingBegin,
             vestingCliff: vestingCliff,

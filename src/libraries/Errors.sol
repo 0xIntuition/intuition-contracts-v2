@@ -134,6 +134,7 @@ library Errors {
     error Unlock_CliffIsTooEarly();
     error Unlock_EndIsTooEarly();
     error Unlock_InsufficientBalance(uint256 balance, uint256 required);
+    error Unlock_InsufficientUnlockedTokens();
     error Unlock_InvalidCliffPercentage();
     error Unlock_InvalidUnlockCliff();
     error Unlock_InvalidUnlockDuration();
