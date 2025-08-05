@@ -69,15 +69,10 @@ contract TrustVestingAndUnlockTest is Test {
         trustBonding = TrustBonding(address(trustBondingProxy));
 
         // Initialize TrustBonding contract
-        trustBonding.initialize(
-            admin,
-            address(trustToken),
-            epochLength_,
-            startTimestamp,
-            address(multiVault),
-            systemUtilizationLowerBound,
-            personalUtilizationLowerBound
-        );
+        trustBonding.initialize(admin, address(trustToken), epochLength_, startTimestamp);
+
+        // Reinitialize TrustBonding contract with MultiVault and utilization bounds
+        trustBonding.reinitialize(address(multiVault), systemUtilizationLowerBound, personalUtilizationLowerBound);
 
         // Deploy TrustVestingAndUnlock contract
         vestingBegin = block.timestamp;

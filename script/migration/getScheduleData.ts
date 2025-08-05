@@ -10,8 +10,8 @@ if (!BASE_RPC_URL) {
 async function main() {
   // Constants for the TimelockController and schedule parameters
   const timelockControllerAddress =
-    "0xE4992f9805D7737b5bDaDBEF5688087CF25D4B89"; // TimelockController contract address on Base mainnet
-  const target = "0xc920E2F5eB6925faE85C69a98a2df6f56a7a245A"; // ProxyAdmin contract address on Base mainnet
+    "0xe6BE2A42cCAeB73909A79CC89299eBDA7bAa7Ea2"; // TimelockController contract address on Base mainnet
+  const target = "0xD4436f981D2dcE0C074Eca869fdA1650227c7Efe"; // ProxyAdmin contract address on Base mainnet
   const value = 0;
   const predecessor =
     "0x0000000000000000000000000000000000000000000000000000000000000000";
@@ -19,17 +19,13 @@ async function main() {
     "0x0000000000000000000000000000000000000000000000000000000000000000";
 
   // Reinitialize calldata (can be left empty if no reinitialization call is needed)
-  const reinitializeCalldata = process.argv[2]
-    ? process.argv[2]
-    : "0x459876120000000000000000000000000bb6f224e6055ca90c2f6fd8693e721a3ade9e700000000000000000000000000000000000000000000000000000000000000001";
+  const reinitializeCalldata = process.argv[2] ? process.argv[2] : "0x";
 
   // To be replaced with actual values as needed
   const proxy = process.argv[3]
     ? process.argv[3]
-    : "0x430BbF52503Bd4801E51182f4cB9f8F534225DE5"; // EthMultiVault proxy contract address on Base mainnet
-  const implementation = process.argv[4]
-    ? process.argv[4]
-    : "0x232a8398b2C29EB6282FD4bbBe3a228B55902515"; // Replace with the actual implementation address you want to upgrade to once it's deployed
+    : "0x1A6950807E33d5bC9975067e6D6b5Ea4cD661665"; // EthMultiVault proxy contract address on Base mainnet
+  const implementation = process.argv[4] ? process.argv[4] : "0xabc"; // Replace with the actual implementation address you want to upgrade to once it's deployed
 
   // Validate proxy and implementation addresses are provided and are valid
   if (!proxy || !implementation) {

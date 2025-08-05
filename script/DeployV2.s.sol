@@ -219,15 +219,10 @@ contract DeployV2 is Script {
         wrappedERC20Factory.initialize(address(multiVault));
 
         // initialize the TrustBonding contract
-        trustBonding.initialize(
-            admin,
-            address(trustToken),
-            epochLength,
-            block.timestamp + 10 minutes,
-            address(multiVault),
-            systemUtilizationLowerBound,
-            personalUtilizationLowerBound
-        );
+        trustBonding.initialize(admin, address(trustToken), epochLength, block.timestamp + 10 minutes);
+
+        // reinitialize the TrustBonding contract with MultiVault and system utilization bounds
+        trustBonding.reinitialize(address(multiVault), systemUtilizationLowerBound, personalUtilizationLowerBound);
 
         // max approve TRUST to the TrustBonding and MultiVault contracts
         trustToken.approve(address(trustBonding), type(uint256).max);

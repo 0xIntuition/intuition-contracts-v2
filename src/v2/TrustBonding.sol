@@ -27,13 +27,13 @@ import {VotingEscrow} from "src/external/curve/VotingEscrow.sol";
  *           of the total TRUST supply has been locked.
  *         - Rewards for epoch `n` become claimable in epoch `n+1` and are forfeited if not claimed
  *           before the next epoch ends (i.e. only the previous epoch's rewards are claimable).
- *         - This version of the TrustBonding contract introducesthe utilization-based rewards model,
+ *         - This version of the TrustBonding contract introduces the utilization-based rewards model,
  *           where the emitted rewards are based on the system utilizationRatio from the MultiVault
  *           contract, whereas the user's rewards are based on their own (personal) utilizationRatio.
  *         - utilizationRatio is defined as percentage of how much did the personal or system utilization
  *           change from epoch to epoch when compared to the target utilization, which represents the
  *           amount of TRUST tokens that were claimed as rewards in the previous epoch (on both the
- *           personal and sthe ystem level).
+ *           personal and the system level).
  *
  * @dev    Extended from the Solidity implementation of the Curve Finance's `VotingEscrow`
  *         contract (originally written in Vyper), as used by the Stargate Finance protocol:
@@ -57,6 +57,12 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
 
     /// @notice Role used for the timelocked operations
     bytes32 public constant TIMELOCK_ROLE = keccak256("TIMELOCK_ROLE");
+
+    /// @notice Initial maximum annual emission of TRUST tokens (75 million TRUST tokens)
+    uint256 public INITIAL_MAX_ANNUAL_EMISSION = 75_000_000 * 1e18;
+
+    /// @notice Annual reduction in basis points (bps) for the maximum annual emission of TRUST tokens
+    uint256 public ANNUAL_REDUCTION_BPS = 1000; // 10% annual reduction
 
     /*//////////////////////////////////////////////////////////////
                                  STATE
@@ -113,20 +119,43 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
      * @param _epochLength The length of an epoch in seconds
      * @param _startTimestamp The starting timestamp of the first epoch
      */
-    function initialize(
-        address _owner,
-        address _trustToken,
-        uint256 _epochLength,
-        uint256 _startTimestamp,
-        address _multiVault,
-        uint256 _systemUtilizationLowerBound,
-        uint256 _personalUtilizationLowerBound
-    ) external initializer {
+    function initialize(address _owner, address _trustToken, uint256 _epochLength, uint256 _startTimestamp)
+        external
+        initializer
+    {
         // Ensure the start timestamp is in the future
         if (_startTimestamp < block.timestamp) {
             revert Errors.TrustBonding_InvalidStartTimestamp();
         }
 
+        __AccessControl_init();
+        __VotingEscrow_init(_owner, _trustToken, _epochLength);
+
+        _grantRole(DEFAULT_ADMIN_ROLE, _owner);
+        _grantRole(PAUSER_ROLE, _owner);
+
+        startTimestamp = _startTimestamp;
+
+        emit StartTimestampSet(_startTimestamp);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            REINITIALIZER
+    //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @notice Reinitializes the TrustBonding contract
+     * @dev This function can only be called once, and it is used to set the MultiVault contract address
+     *      and the system and personal utilization lower bounds, which enable the utilization-based rewards.
+     * @param _multiVault The address of the MultiVault contract
+     * @param _systemUtilizationLowerBound The system utilization lower bound in basis points
+     * @param _personalUtilizationLowerBound The personal utilization lower bound in basis points
+     */
+    function reinitialize(
+        address _multiVault,
+        uint256 _systemUtilizationLowerBound,
+        uint256 _personalUtilizationLowerBound
+    ) external reinitializer(2) onlyRole(DEFAULT_ADMIN_ROLE) {
         if (_multiVault == address(0)) {
             revert Errors.TrustBonding_ZeroAddress();
         }
@@ -139,16 +168,13 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
             revert Errors.TrustBonding_InvalidUtilizationLowerBound();
         }
 
-        __AccessControl_init();
-        __VotingEscrow_init(_owner, _trustToken, _epochLength);
-
-        _grantRole(DEFAULT_ADMIN_ROLE, _owner);
-        _grantRole(PAUSER_ROLE, _owner);
-
-        startTimestamp = _startTimestamp;
         multiVault = IMultiVault(_multiVault);
         systemUtilizationLowerBound = _systemUtilizationLowerBound;
         personalUtilizationLowerBound = _personalUtilizationLowerBound;
+
+        emit MultiVaultSet(_multiVault);
+        emit SystemUtilizationLowerBoundUpdated(_systemUtilizationLowerBound);
+        emit PersonalUtilizationLowerBoundUpdated(_personalUtilizationLowerBound);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -186,6 +212,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
      * @return Epoch at the given timestamp
      */
     function epochAtTimestamp(uint256 timestamp) public view returns (uint256) {
+        if (timestamp <= startTimestamp) return 0;
         return (timestamp - startTimestamp) / epochLength();
     }
 
@@ -294,6 +321,14 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
             revert Errors.TrustBonding_ZeroAddress();
         }
 
+        if (currentEpoch() == 0) {
+            return 0;
+        }
+
+        if (address(multiVault) == address(0)) {
+            return 0;
+        }
+
         uint256 previousEpoch = currentEpoch() - 1;
         uint256 accumulatedProtocolFeesForPreviousEpoch = multiVault.accumulatedProtocolFees(previousEpoch);
 
@@ -381,6 +416,11 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
             return BASIS_POINTS_DIVISOR;
         }
 
+        // If MultiVault is not set, return the maximum system utilization ratio
+        if (address(multiVault) == address(0)) {
+            return BASIS_POINTS_DIVISOR;
+        }
+
         // If the epoch is in the future, return 0 and exit early
         if (_epoch > currentEpoch()) {
             return 0;
@@ -426,8 +466,13 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
             revert Errors.TrustBonding_ZeroAddress();
         }
 
-        // If the epoch is in the future, return 0 and exit early
+        // In epochs 0 and 1, return the maximum personal utilization ratio and exit early
         if (_epoch < 2) {
+            return BASIS_POINTS_DIVISOR;
+        }
+
+        // If MultiVault is not set, return the maximum personal utilization ratio
+        if (address(multiVault) == address(0)) {
             return BASIS_POINTS_DIVISOR;
         }
 
@@ -512,7 +557,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
             revert Errors.TrustBonding_RewardsAlreadyClaimedForEpoch();
         }
 
-        if (multiVault.protocolFeeDistributionEnabledAtEpoch(previousEpoch)) {
+        if (address(multiVault) != address(0) && multiVault.protocolFeeDistributionEnabledAtEpoch(previousEpoch)) {
             uint256 accumulatedProtocolFeesForPreviousEpoch = multiVault.accumulatedProtocolFees(previousEpoch);
             uint256 maxClaimableProtocolFees = maxClaimableProtocolFeesForEpoch[previousEpoch];
 
@@ -532,15 +577,16 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
                         revert Errors.TrustBonding_ProtocolFeesAlreadyClaimedForEpoch();
                     }
 
-                    // Increment the total claimed protocol fees for the previous epoch and set the user's claimed protocol fees
-                    totalClaimedProtocolFeesForEpoch[previousEpoch] += userProtocolFees;
-                    userClaimedProtocolFeesForEpoch[msg.sender][previousEpoch] = userProtocolFees;
-
-                    // At this point, we should be sure that there are enough protocol fees to claim for the user,
-                    // but we're also adding a few sanity checks here that should never fail
-                    if (userProtocolFees + totalClaimedProtocolFeesForEpoch[previousEpoch] > maxClaimableProtocolFees) {
+                    // Check if the user is trying to claim more protocol fees than the maximum claimable for the epoch
+                    uint256 alreadyClaimed = totalClaimedProtocolFeesForEpoch[previousEpoch];
+                    uint256 newTotal = alreadyClaimed + userProtocolFees;
+                    if (newTotal > maxClaimableProtocolFees) {
                         revert Errors.TrustBonding_ProtocolFeesExceedMaxClaimable();
                     }
+
+                    // Set the total claimed protocol fees for the previous epoch and the user's claimed protocol fees
+                    totalClaimedProtocolFeesForEpoch[previousEpoch] = newTotal;
+                    userClaimedProtocolFeesForEpoch[msg.sender][previousEpoch] = userProtocolFees;
 
                     // Also ensure that the user is not trying to claim more protocol fees than the contract has
                     if (userProtocolFees > IERC20(token).balanceOf(address(this))) {
@@ -559,8 +605,8 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         totalClaimedRewardsForEpoch[previousEpoch] += userRewards;
         userClaimedRewardsForEpoch[msg.sender][previousEpoch] = userRewards;
 
-        // Mint the rewards to the recipient address
-        ITrust(token).mint(recipient, userRewards);
+        // Send the rewards to the recipient address
+        IERC20(token).safeTransfer(recipient, userRewards);
 
         emit RewardsClaimed(msg.sender, recipient, userRewards);
     }
@@ -657,36 +703,32 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
     }
 
     /**
-     * @notice Withdraws all of the unclaimed protocol fees from the contract
-     * @dev This function withdraws all unclaimed protocol fees from the contract, except for the ones
-     *      that can still be claimed for the previous epoch, whose claim period is still open.
-     * @param recipient The address to which the unclaimed protocol fees will be sent
+     * @notice Recovers tokens from the TrustBonding contract
+     * @param tokenAddress The address of the token to recover
+     * @param recipient The address to send the recovered tokens to
+     * @param amount The amount of tokens to recover
      */
-    function withdrawUnclaimedProtocolFees(address recipient) external nonReentrant onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (recipient == address(0)) {
+    function recoverTokens(address tokenAddress, address recipient, uint256 amount)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        if (token == address(0) || recipient == address(0)) {
             revert Errors.TrustBonding_ZeroAddress();
         }
 
-        // There cannot be any unclaimed protocol fees during the first epoch as the first epoch is not claimable
-        if (currentEpoch() == 0) {
-            revert Errors.TrustBonding_NoClaimingDuringFirstEpoch();
+        if (amount == 0) {
+            revert Errors.TrustBonding_ZeroAmount();
         }
 
-        uint256 previousEpoch = currentEpoch() - 1;
+        uint256 balance = IERC20(token).balanceOf(address(this));
 
-        // Owner can withdraw all unclaimed protocol fees, except for the ones that can still be claimed for the previous epoch
-        uint256 currentlyClaimableProtocolFees =
-            maxClaimableProtocolFeesForEpoch[previousEpoch] - totalClaimedProtocolFeesForEpoch[previousEpoch];
-
-        // Calculate the withdrawable protocol fees
-        uint256 unclaimedProtocolFees = IERC20(token).balanceOf(address(this)) - currentlyClaimableProtocolFees;
-
-        if (unclaimedProtocolFees > 0) {
-            // Transfer the unclaimed protocol fees to the recipient address specified by the owner
-            IERC20(token).safeTransfer(recipient, unclaimedProtocolFees);
-
-            emit UnclaimedProtocolFeesWithdrawn(recipient, unclaimedProtocolFees);
+        if (amount > balance) {
+            revert Errors.TrustBonding_InsufficientBalance();
         }
+
+        IERC20(token).safeTransfer(recipient, amount);
+
+        emit TokensRecovered(token, recipient, amount);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -708,5 +750,21 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         uint256 ratioRange = BASIS_POINTS_DIVISOR - lowerBound;
         uint256 utilizationRatio = lowerBound + (delta * ratioRange) / target;
         return utilizationRatio;
+    }
+
+    /**
+     * @notice Returns the maximum annual emission of TRUST tokens at a specific timestamp
+     * @param timestamp The timestamp to get the maximum annual emission for
+     * @return The maximum annual emission of TRUST tokens at the given timestamp
+     */
+    function _maxAnnualEmissionAt(uint256 timestamp) internal view returns (uint256) {
+        if (timestamp <= startTimestamp) return INITIAL_MAX_ANNUAL_EMISSION;
+        uint256 yearsElapsed = (timestamp - startTimestamp) / YEAR;
+
+        uint256 emission = INITIAL_MAX_ANNUAL_EMISSION;
+        for (uint256 i; i < yearsElapsed; ++i) {
+            emission -= (emission * ANNUAL_REDUCTION_BPS) / BASIS_POINTS_DIVISOR;
+        }
+        return emission;
     }
 }

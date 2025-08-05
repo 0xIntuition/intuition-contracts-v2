@@ -99,6 +99,7 @@ library Errors {
     ///////// TRUSTBONDING ERRORS ///////////////////////////////////////////////////////////
 
     error TrustBonding_ClaimableProtocolFeesExceedBalance();
+    error TrustBonding_InsufficientBalance();
     error TrustBonding_InvalidEpoch();
     error TrustBonding_InvalidUtilizationLowerBound();
     error TrustBonding_InvalidStartTimestamp();
@@ -111,6 +112,7 @@ library Errors {
     error TrustBonding_ProtocolFeesExceedMaxClaimable();
     error TrustBonding_RewardsAlreadyClaimedForEpoch();
     error TrustBonding_ZeroAddress();
+    error TrustBonding_ZeroAmount();
 
     ///////// BONDINGCURVEREGISTRY ERRORS ///////////////////////////////////////////////////
 
