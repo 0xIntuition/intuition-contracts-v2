@@ -492,7 +492,7 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
         // Get atom wallet address for the corresponding atom
         address atomWallet = computeAtomWalletAddr(atomId);
 
-        emit AtomCreated(atomId, sender, atomWallet);
+        emit AtomCreated(sender, atomId, data, atomWallet);
 
         return atomId;
     }
@@ -638,7 +638,7 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
             }
         }
 
-        emit TripleCreated(tripleId, sender, subjectId, predicateId, objectId);
+        emit TripleCreated(sender, tripleId, subjectId, predicateId, objectId);
 
         return tripleId;
     }
@@ -719,7 +719,7 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
     /// @param receiver The address to receive the shares
     /// @param termId The ID of the atom or triple (term)
     /// @param bondingCurveId The ID of the bonding curve to use
-    /// @param value The amount of Trust to deposit
+    /// @param assets The amount of Trust to deposit
     /// @param minSharesToReceive The minimum amount of shares to receive in return for the deposit
     ///
     /// @return shares The amount of shares minted
@@ -727,18 +727,18 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
         address receiver,
         bytes32 termId,
         uint256 bondingCurveId,
-        uint256 value,
+        uint256 assets,
         uint256 minSharesToReceive
     ) internal returns (uint256) {
-        uint256 grossAssets = value;
         bool isTripleVault = isTripleId(termId);
         bool isCounterTripleVault = isCounterTripleId(termId);
+        VaultType vaultType = isCounterTripleVault ? VaultType.COUNTER_TRIPLE : isTripleVault ? VaultType.TRIPLE : VaultType.ATOM;
 
         if (!isTermIdValid(termId)) {
             revert Errors.MultiVault_TermDoesNotExist();
         }
 
-        if (value < generalConfig.minDeposit) {
+        if (assets < generalConfig.minDeposit) {
             revert Errors.MultiVault_DepositBelowMinimumDeposit();
         }
 
@@ -766,10 +766,10 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
         if (isCreation) {
             uint256 ghostCost = generalConfig.minShare; // first minShare for the atom or positive triple vault
             if (isTripleVault) ghostCost += generalConfig.minShare; // second minShare for counter triple vault
-            if (value < ghostCost) revert Errors.MultiVault_DepositTooSmallToCoverGhostShares(); // sanity check to ensure the user has enough Trust to cover the ghost shares
+            if (assets < ghostCost) revert Errors.MultiVault_DepositTooSmallToCoverGhostShares(); // sanity check to ensure the user has enough Trust to cover the ghost shares
 
             // deduct the ghost shares cost from the user deposit
-            value -= ghostCost;
+            assets -= ghostCost;
 
             // adjust minSharesToReceive to account for the ghost shares and avoid underflow
             minSharesToReceive = minSharesToReceive > ghostCost ? minSharesToReceive - ghostCost : 0;
@@ -779,11 +779,11 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
             }
         }
 
-        _validateDeposit(value, minSharesToReceive, termId, bondingCurveId);
+        _validateDeposit(assets, minSharesToReceive, termId, bondingCurveId);
 
         // compute shares and fees
         FeesAndSharesBreakdown memory feesAndSharesBreakdown =
-            _computeFeesAndShares(value, termId, bondingCurveId, true, false, 0);
+            _computeFeesAndShares(assets, termId, bondingCurveId, true, false, 0);
 
         // process the deposit using pre-calculated shares and net assets (assetsDelta)
         _processDeposit(
@@ -800,16 +800,17 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
         _applyFees(termId, bondingCurveId, feesAndSharesBreakdown, isTripleVault);
 
         // increase user's utilization
-        _addUtilization(receiver, int256(value));
+        _addUtilization(receiver, int256(assets));
 
         emit Deposited(
-            termId,
-            bondingCurveId,
             msg.sender,
             receiver,
-            grossAssets,
+            termId,
+            bondingCurveId,
+            assets,
             feesAndSharesBreakdown.assetsDelta,
-            feesAndSharesBreakdown.sharesForReceiver
+            feesAndSharesBreakdown.sharesForReceiver,
+            vaultType
         );
 
         return feesAndSharesBreakdown.sharesForReceiver;
@@ -1041,7 +1042,17 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
 
         _applyFees(termId, bondingCurveId, feesAndSharesBreakdown, isTripleId(termId));
 
-        emit Redeemed(termId, bondingCurveId, msg.sender, receiver, shares, feesAndSharesBreakdown.assetsForReceiver);
+        VaultType vaultType = isCounterTripleId(termId) ? VaultType.COUNTER_TRIPLE : isTripleId(termId) ? VaultType.TRIPLE : VaultType.ATOM;
+        emit Redeemed(
+            msg.sender, 
+            receiver, 
+            termId, 
+            bondingCurveId, 
+            shares, 
+            feesAndSharesBreakdown.assetsForReceiver,
+            feesAndSharesBreakdown.exitFee + feesAndSharesBreakdown.protocolFee,
+            vaultType
+        );
 
         return feesAndSharesBreakdown.assetsForReceiver;
     }
@@ -1181,13 +1192,14 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
         emit EntryFeeCollected(termId, defaultBondingCurveId, msg.sender, feesAndSharesBreakdown.entryFee);
 
         emit Deposited(
-            termId,
-            defaultBondingCurveId,
             msg.sender,
             receiver,
+            termId,
+            defaultBondingCurveId,
             amount,
             feesAndSharesBreakdown.assetsDelta,
-            feesAndSharesBreakdown.sharesForReceiver
+            feesAndSharesBreakdown.sharesForReceiver,
+            VaultType.ATOM
         );
     }
 
@@ -1223,11 +1235,21 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
         _mint(BURN_ADDRESS, termId, defaultBondingCurveId, generalConfig.minShare);
 
         // Initialize the counter triple vault if it's a triple creation flow
-        if (isTripleId(termId)) {
+        bool isTripleVault = isTripleId(termId);
+        if (isTripleVault) {
             _initializeCounterTripleVault(termId);
         }
 
-        emit Deposited(termId, defaultBondingCurveId, msg.sender, receiver, grossAssets, assets, sharesForReceiver);
+        emit Deposited(
+            msg.sender, 
+            receiver, 
+            termId, 
+            defaultBondingCurveId, 
+            grossAssets, 
+            assets, 
+            sharesForReceiver,
+            isTripleVault ? VaultType.TRIPLE : VaultType.ATOM
+        );
     }
 
     /// @dev Initializes the counter triple vault with ghost shares for the admin
@@ -1301,8 +1323,7 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
             price = IBondingCurveRegistry(bondingCurveConfig.registry).currentPrice(totalShares, bondingCurveId);
         }
 
-        emit VaultTotalsChanged(termId, bondingCurveId, totalAssets, totalShares);
-        emit SharePriceChanged(termId, bondingCurveId, price);
+        emit SharePriceChanged(termId, bondingCurveId, price, totalAssets, totalShares);
     }
 
     /// @dev Adds the new utilization of the system and the user
@@ -1453,27 +1474,10 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
         // Burn shares from the old wallet
         _burn(accountFrom, termId, bondingCurveId, shares);
         _removeUtilization(accountFrom, int256(shares));
-        emit Redeemed(
-            termId,
-            bondingCurveId,
-            accountFrom,
-            accountTo,
-            shares,
-            0 // No assets are transferred out.
-        );
 
         // Mint shares to the new wallet
         _mint(accountTo, termId, bondingCurveId, shares);
         _addUtilization(accountTo, int256(shares));
-        emit Deposited(
-            termId,
-            bondingCurveId,
-            accountFrom,
-            accountTo,
-            0, // assetsIn: No assets are transferred in.
-            0, // assetsAfterTotalFees: No assets are transferred in.
-            shares
-        );
 
         emit WalletMigrated(termId, bondingCurveId, accountFrom, accountTo, shares);
     }
@@ -2069,10 +2073,8 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
         uint256 curveId = bondingCurveConfig.defaultCurveId;
         vaults[termId][curveId].totalAssets += amount;
 
-        emit VaultTotalsChanged(
-            termId, curveId, vaults[termId][curveId].totalAssets, vaults[termId][curveId].totalShares
-        );
-        emit SharePriceChanged(termId, curveId, convertToAssets(ONE_SHARE, termId, curveId));
+        emit SharePriceChanged(termId, curveId, convertToAssets(ONE_SHARE, termId, curveId), vaults[termId][curveId].totalAssets, vaults[termId][curveId].totalShares
+);
     }
 
     /// @dev bumps the total assets for the pro rata vaults of the underlying vaults of a triple vault

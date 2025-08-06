@@ -54,6 +54,12 @@ interface IMultiVault {
         BOTH
     }
 
+    enum VaultType {
+        ATOM,
+        TRIPLE,
+        COUNTER_TRIPLE
+    }
+
     /* =================================================== */
     /*                       EVENTS                        */
     /* =================================================== */
@@ -96,11 +102,11 @@ interface IMultiVault {
 
     /// @notice emitted upon claiming the fees from the atom wallet
     ///
-    /// @param atomId atom id of the atom
+    /// @param termId atom id of the atom
     /// @param atomWalletOwner address of the atom wallet owner
     /// @param feesClaimed amount of fees claimed from the atom wallet
     event AtomWalletDepositFeesClaimed(
-        bytes32 indexed atomId, address indexed atomWalletOwner, uint256 indexed feesClaimed
+        bytes32 indexed termId, address indexed atomWalletOwner, uint256 indexed feesClaimed
     );
 
     /// @notice emitted upon adding the total utilization for the epoch
@@ -137,40 +143,46 @@ interface IMultiVault {
         address indexed user, uint256 indexed epoch, int256 indexed valueRemoved, int256 personalUtilization
     );
 
-    /// @notice emitted upon depositing assets into the vault
+    /// @notice emitted upon depositing assets into a vault
     ///
-    /// @param termId term id of the vault
-    /// @param bondingCurveId bonding curve id of the vault
     /// @param sender address of the sender
     /// @param receiver address of the receiver
-    /// @param assetsIn amount of assets deposited (gross assets deposited by the sender, including atomCost/tripleCost where applicable)
-    /// @param assetsAfterTotalFees amount of assets after all fees for the deposit are deducted
-    /// @param sharesOut amount of shares minted to the receiver
+    /// @param termId term id of the vault
+    /// @param curveId bonding curve id of the vault
+    /// @param assets amount of assets deposited (gross assets deposited by the sender, including atomCost/tripleCost where applicable)
+    /// @param assetsAfterFees amount of assets after all fees for the deposit are deducted
+    /// @param shares amount of shares minted to the receiver
+    /// @param vaultType type of the vault (ATOM, TRIPLE, COUNTER_TRIPLE)
     event Deposited(
-        bytes32 indexed termId,
-        uint256 indexed bondingCurveId,
         address indexed sender,
-        address receiver,
-        uint256 assetsIn,
-        uint256 assetsAfterTotalFees,
-        uint256 sharesOut
+        address indexed receiver,
+        bytes32 indexed termId,
+        uint256 curveId,
+        uint256 assets,
+        uint256 assetsAfterFees,
+        uint256 shares,
+        VaultType vaultType
     );
 
     /// @notice emitted upon redeeming shares from the vault
     ///
     /// @param termId term id of the vault
-    /// @param bondingCurveId bonding curve id of the vault
+    /// @param curveId bonding curve id of the vault
     /// @param sender address of the sender
     /// @param receiver address of the receiver
-    /// @param sharesIn amount of shares redeemed
-    /// @param assetsOut amount of assets withdrawn (net assets received by the receiver)
+    /// @param shares amount of shares redeemed
+    /// @param assets amount of assets withdrawn (net assets received by the receiver)
+    /// @param fees amount of fees charged.
+    /// @param vaultType type of the vault (ATOM, TRIPLE, COUNTER_TRIPLE)
     event Redeemed(
-        bytes32 indexed termId,
-        uint256 indexed bondingCurveId,
         address indexed sender,
-        address receiver,
-        uint256 sharesIn,
-        uint256 assetsOut
+        address indexed receiver,
+        bytes32 indexed termId,
+        uint256 curveId,
+        uint256 shares,
+        uint256 assets,
+        uint256 fees,
+        VaultType vaultType
     );
 
     /// @notice emitted after entry fee is collected
@@ -232,39 +244,31 @@ interface IMultiVault {
     /// @param amount amount of protocol fee transferred
     event ProtocolFeeTransferred(uint256 indexed epoch, address indexed destination, uint256 amount);
 
-    /// @notice emitted when the vault totals are changed
-    ///
-    /// @param termId term id of the vault
-    /// @param bondingCurveId bonding curve id of the vault
-    /// @param totalAssets total assets in the vault
-    /// @param totalShares total shares in the vault
-    event VaultTotalsChanged(
-        bytes32 indexed termId, uint256 indexed bondingCurveId, uint256 totalAssets, uint256 totalShares
-    );
-
     /// @notice emitted when the share price is changed
     ///
     /// @param termId term id of the vault
     /// @param bondingCurveId bonding curve id of the vault
     /// @param sharePrice new share price
-    event SharePriceChanged(bytes32 indexed termId, uint256 indexed bondingCurveId, uint256 sharePrice);
+    /// @param totalAssets total assets in the vault after the change
+    /// @param totalShares total shares in the vault after the change
+    event SharePriceChanged(bytes32 indexed termId, uint256 indexed bondingCurveId, uint256 sharePrice, uint256 totalAssets, uint256 totalShares);
 
     /// @notice emitted when the atom vault is created
     ///
-    /// @param atomId atom id of the atom vault
+    /// @param termId term id of the atom vault
     /// @param creator address of the creator
     /// @param atomWallet address of the atom wallet associated with the atom vault
-    event AtomCreated(bytes32 indexed atomId, address indexed creator, address atomWallet);
+    event AtomCreated(address indexed creator,bytes32 indexed termId, bytes atomData, address atomWallet);
 
     /// @notice emitted when the triple vault is created
     ///
-    /// @param tripleId triple id of the triple vault
     /// @param creator address of the creator
+    /// @param termId term id of the triple vault
     /// @param subjectId atom id of the subject vault
     /// @param predicateId atom id of the predicate vault
     /// @param objectId atom id of the object vault
     event TripleCreated(
-        bytes32 indexed tripleId, address indexed creator, bytes32 subjectId, bytes32 predicateId, bytes32 objectId
+        address indexed creator, bytes32 indexed termId, bytes32 subjectId, bytes32 predicateId, bytes32 objectId
     );
 
     /// @notice Migrate shares from an old wallet to a new wallet for a specific term and bonding curve
