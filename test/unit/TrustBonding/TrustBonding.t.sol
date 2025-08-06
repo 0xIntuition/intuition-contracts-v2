@@ -28,7 +28,7 @@ contract TrustBondingBaseTest is Test {
     uint256 public dealAmount = 100 * 1e18;
     uint256 public initialTokens = 10_000 * 1e18;
     uint256 public defaultUnlockDuration = 2 * 365 days; // 2 years
-    uint256 public constant MAX_POSSIBLE_ANNUAL_EMISSION = 1e8 * 1e18; // 10% of the initial supply
+    uint256 public constant MAX_POSSIBLE_ANNUAL_EMISSION = 0.75e8 * 1e18; // 7.5% of the initial supply
     address public alice = address(1);
     address public bob = address(2);
     address public admin = address(3);
@@ -501,7 +501,7 @@ contract TrustBondingTest is TrustBondingBaseTest {
         uint256 trustPerEpoch = trustBonding.trustPerEpoch(currentEpoch);
 
         uint256 epochsPerYear = trustBonding.epochsPerYear();
-        uint256 expectedAnnualEmission = trustToken.maxAnnualEmission();
+        uint256 expectedAnnualEmission = trustBonding.INITIAL_MAX_ANNUAL_EMISSION();
         uint256 expectedTrustPerEpoch = expectedAnnualEmission / epochsPerYear;
 
         assertEq(trustPerEpoch, expectedTrustPerEpoch);
@@ -879,7 +879,7 @@ contract TrustBondingUtilizationCalculationsTest is TrustBondingBaseTest {
         _bondSomeTokens(alice);
 
         uint256 trustPerEpoch = trustBonding.trustPerEpoch(0);
-        uint256 expectedTrustPerEpoch = MAX_POSSIBLE_ANNUAL_EMISSION / trustBonding.epochsPerYear();
+        uint256 expectedTrustPerEpoch = trustBonding.INITIAL_MAX_ANNUAL_EMISSION() / trustBonding.epochsPerYear();
 
         assertEq(trustPerEpoch, expectedTrustPerEpoch);
 
@@ -890,12 +890,14 @@ contract TrustBondingUtilizationCalculationsTest is TrustBondingBaseTest {
 
     function test_trustPerEpoch_shouldReturnEmissionAmountScaledByTheSystemUtilization() external {
         uint256 currentEpoch = trustBonding.currentEpoch();
-        multiVault.setTotalUtilizationForEpoch(currentEpoch - 1, 1000); // 100% utilizations
+        multiVault.setTotalUtilizationForEpoch(currentEpoch - 1, 1000); // Set utilization to create a scenario
 
-        // lock tokens so emission is non‑zero and verify scaling
+        // lock tokens so emission is non-zero and verify scaling
         _bondSomeTokens(alice);
-        uint256 maxPerEpoch = MAX_POSSIBLE_ANNUAL_EMISSION / trustBonding.epochsPerYear();
+
+        uint256 maxPerEpoch = trustBonding.INITIAL_MAX_ANNUAL_EMISSION() / trustBonding.epochsPerYear();
         uint256 expected = (maxPerEpoch * systemUtilizationLowerBound) / trustBonding.BASIS_POINTS_DIVISOR();
+
         assertEq(trustBonding.trustPerEpoch(trustBonding.currentEpoch()), expected);
     }
 

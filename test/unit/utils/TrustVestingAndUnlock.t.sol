@@ -459,7 +459,7 @@ contract TrustVestingAndUnlockTest is Test {
         // It should succeed if the amount is equal to the cliff amount, which was vested at the time of suspension
         trustVestingAndUnlock.createBond(amount, defaultUnlockDuration);
 
-        assertEq(IERC20(trustToken).balanceOf(address(trustBonding)), amount);
+        assertEq(IERC20(trustToken).balanceOf(address(trustBonding)), (MAX_POSSIBLE_ANNUAL_EMISSION / 2) + amount); // pre-funded balance + newly bonded amount
 
         uint256 bondedBalance = trustVestingAndUnlock.bondingLockedAmount();
         uint256 lockEndTimestamp = trustVestingAndUnlock.bondingLockEndTimestamp();
@@ -487,7 +487,7 @@ contract TrustVestingAndUnlockTest is Test {
 
         trustVestingAndUnlock.createBond(amount, defaultUnlockDuration);
 
-        assertEq(IERC20(trustToken).balanceOf(address(trustBonding)), amount);
+        assertEq(IERC20(trustToken).balanceOf(address(trustBonding)), (MAX_POSSIBLE_ANNUAL_EMISSION / 2) + amount); // pre-funded balance + newly bonded amount
 
         uint256 bondedBalance = trustVestingAndUnlock.bondingLockedAmount();
         uint256 lockEndTimestamp = trustVestingAndUnlock.bondingLockEndTimestamp();
@@ -557,7 +557,10 @@ contract TrustVestingAndUnlockTest is Test {
         lockEndTimestamp = trustVestingAndUnlock.bondingLockEndTimestamp();
         bondedAmount = trustVestingAndUnlock.bondedAmount();
 
-        assertEq(IERC20(trustToken).balanceOf(address(trustBonding)), 0);
+        assertEq(
+            IERC20(trustToken).balanceOf(address(trustBonding)),
+            (MAX_POSSIBLE_ANNUAL_EMISSION / 2) - adjustedRewardsAmount
+        ); // pre-funded balance minus the rewards claimed
         assertEq(lockEndTimestamp, 0);
         assertEq(bondedBalance, 0);
         assertEq(vestingAmount, IERC20(trustToken).balanceOf(address(trustVestingAndUnlock)));

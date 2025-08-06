@@ -411,7 +411,7 @@ contract TrustUnlockTest is Test {
         vm.stopPrank();
     }
 
-    function test_completeBondingFlowIntegration_1() external {
+    function test_completeBondingFlowIntegration() external {
         vm.startPrank(recipient);
         vm.warp(block.timestamp + 365 days);
 
@@ -426,8 +426,6 @@ contract TrustUnlockTest is Test {
 
         trustUnlock.createBond(amount, defaultUnlockDuration);
 
-        assertEq(IERC20(trustToken).balanceOf(address(trustBonding)), amount);
-
         uint256 bondedBalance = trustUnlock.bondingLockedAmount();
         uint256 lockEndTimestamp = trustUnlock.bondingLockEndTimestamp();
         uint256 bondedAmount = trustUnlock.bondedAmount();
@@ -435,7 +433,9 @@ contract TrustUnlockTest is Test {
         assertEq(bondedBalance, amount);
         assertEq(lockEndTimestamp, expectedLockEndTimestamp);
         assertEq(bondedBalance, bondedAmount);
-        assertEq(unlockAmount, bondedAmount + IERC20(trustToken).balanceOf(address(trustUnlock)));
+
+        uint256 expectedBalance = (MAX_POSSIBLE_ANNUAL_EMISSION / 2) + amount; // pre-funded balance + newly bonded amount
+        assertEq(IERC20(trustToken).balanceOf(address(trustBonding)), expectedBalance);
 
         // Step 3: Increase bonded amount
         vm.warp(block.timestamp + oneWeek);
@@ -495,7 +495,10 @@ contract TrustUnlockTest is Test {
         lockEndTimestamp = trustUnlock.bondingLockEndTimestamp();
         bondedAmount = trustUnlock.bondedAmount();
 
-        assertEq(IERC20(trustToken).balanceOf(address(trustBonding)), 0);
+        assertEq(
+            IERC20(trustToken).balanceOf(address(trustBonding)),
+            (MAX_POSSIBLE_ANNUAL_EMISSION / 2) - adjustedRewardsAmount
+        ); // pre-funded balance minus the rewards claimed
         assertEq(lockEndTimestamp, 0);
         assertEq(bondedBalance, 0);
         assertEq(unlockAmount, IERC20(trustToken).balanceOf(address(trustUnlock)));
