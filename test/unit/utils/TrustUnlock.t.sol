@@ -109,6 +109,9 @@ contract TrustUnlockTest is Test {
         trustBonding.add_to_whitelist(address(trustUnlock));
 
         vm.stopPrank();
+
+        // Fund TrustBonding with the sufficient amount of TRUST for rewards
+        trustToken.mint(address(trustBonding), MAX_POSSIBLE_ANNUAL_EMISSION / 2);
     }
 
     function test_verifyTrustUnlockDeploymentParams() external view {
@@ -408,7 +411,7 @@ contract TrustUnlockTest is Test {
         vm.stopPrank();
     }
 
-    function test_completeBondingFlowIntegration() external {
+    function test_completeBondingFlowIntegration_1() external {
         vm.startPrank(recipient);
         vm.warp(block.timestamp + 365 days);
 

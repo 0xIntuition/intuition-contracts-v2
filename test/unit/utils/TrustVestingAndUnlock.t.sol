@@ -109,6 +109,9 @@ contract TrustVestingAndUnlockTest is Test {
         trustBonding.add_to_whitelist(address(trustVestingAndUnlock));
 
         vm.stopPrank();
+
+        // Fund TrustBonding with the sufficient amount of TRUST for rewards
+        trustToken.mint(address(trustBonding), MAX_POSSIBLE_ANNUAL_EMISSION / 2);
     }
 
     function test_constructor_shouldRevertIfTrustTokenIsAddressZero() external {

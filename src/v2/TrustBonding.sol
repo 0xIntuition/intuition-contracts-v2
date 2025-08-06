@@ -5,7 +5,6 @@ import {AccessControlUpgradeable} from "@openzeppelin-contracts-upgradeable/acce
 import {Errors} from "src/libraries/Errors.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IMultiVault} from "src/interfaces/IMultiVault.sol";
-import {ITrust} from "src/interfaces/ITrust.sol";
 import {ITrustBonding} from "src/interfaces/ITrustBonding.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {VotingEscrow} from "src/external/curve/VotingEscrow.sol";
@@ -59,10 +58,10 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
     bytes32 public constant TIMELOCK_ROLE = keccak256("TIMELOCK_ROLE");
 
     /// @notice Initial maximum annual emission of TRUST tokens (75 million TRUST tokens)
-    uint256 public INITIAL_MAX_ANNUAL_EMISSION = 75_000_000 * 1e18;
+    uint256 public constant INITIAL_MAX_ANNUAL_EMISSION = 75_000_000 * 1e18;
 
     /// @notice Annual reduction in basis points (bps) for the maximum annual emission of TRUST tokens
-    uint256 public ANNUAL_REDUCTION_BPS = 1000; // 10% annual reduction
+    uint256 public constant ANNUAL_REDUCTION_BPS = 1000; // 10% annual reduction
 
     /*//////////////////////////////////////////////////////////////
                                  STATE
@@ -237,7 +236,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
      * @return Locked Trust percentage
      */
     function lockedTrustPercentage() public view returns (uint256) {
-        uint256 trustSupply = ITrust(token).totalSupply();
+        uint256 trustSupply = IERC20(token).totalSupply();
 
         if (trustSupply == 0) {
             return 0;
@@ -372,7 +371,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
             return 0;
         }
 
-        uint256 maxEmissionPerEpoch = ITrust(token).maxAnnualEmission() / epochsPerYear();
+        uint256 maxEmissionPerEpoch = _maxAnnualEmissionAt(epochEndTimestamp(_epoch)) / epochsPerYear();
 
         if (_epoch < 2) {
             return maxEmissionPerEpoch;

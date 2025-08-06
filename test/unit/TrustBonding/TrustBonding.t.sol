@@ -96,6 +96,9 @@ contract TrustBondingBaseTest is Test {
 
         vm.stopPrank();
 
+        // Fund TrustBonding with the sufficient amount of TRUST for rewards
+        trustToken.mint(address(trustBonding), MAX_POSSIBLE_ANNUAL_EMISSION / 2);
+
         vm.warp(startTimestamp);
     }
 
