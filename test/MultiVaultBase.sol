@@ -211,15 +211,11 @@ contract MultiVaultBase is Test {
         wrappedERC20Factory.initialize(address(multiVault));
 
         // initialize the TrustBonding contract
-        trustBonding.initialize(
-            admin,
-            address(trustToken),
-            epochLength,
-            block.timestamp + 1,
-            address(multiVault),
-            systemUtilizationLowerBound,
-            personalUtilizationLowerBound
-        );
+        trustBonding.initialize(admin, address(trustToken), epochLength, block.timestamp + 1);
+
+        vm.prank(admin);
+        // reinitialize the TrustBonding contract with MultiVault and system utilization bounds
+        trustBonding.reinitialize(address(multiVault), systemUtilizationLowerBound, personalUtilizationLowerBound);
 
         // deploy the AtomWarden contract
         atomWarden = new AtomWarden();

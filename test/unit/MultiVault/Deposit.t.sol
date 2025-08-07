@@ -90,7 +90,8 @@ contract DepositTest is MultiVaultBase {
         subjectIds[0] = s;
         predicateIds[0] = p;
         objectIds[0] = o;
-        bytes32 tId = multiVault.createTriples(subjectIds, predicateIds, objectIds, multiVault.getTripleCost() + 1 ether)[0];
+        bytes32 tId =
+            multiVault.createTriples(subjectIds, predicateIds, objectIds, multiVault.getTripleCost() + 1 ether)[0];
 
         uint256 val = 2 ether;
 
@@ -156,7 +157,8 @@ contract DepositTest is MultiVaultBase {
         subjectIds[0] = s;
         predicateIds[0] = p;
         objectIds[0] = o;
-        bytes32 tId = multiVault.createTriples(subjectIds, predicateIds, objectIds, multiVault.getTripleCost() + 1 ether)[0];
+        bytes32 tId =
+            multiVault.createTriples(subjectIds, predicateIds, objectIds, multiVault.getTripleCost() + 1 ether)[0];
         bytes32 ctId = multiVault.getCounterIdFromTriple(tId);
 
         uint256 defaultCurveId = _defCurve();

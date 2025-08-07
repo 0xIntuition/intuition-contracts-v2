@@ -6,8 +6,9 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {Errors} from "src/libraries/Errors.sol";
-import {IUnlock} from "src/interfaces/IUnlock.sol";
+import {IMultiVault} from "src/interfaces/IMultiVault.sol";
 import {TrustBonding} from "src/v2/TrustBonding.sol";
+import {IUnlock} from "src/interfaces/IUnlock.sol";
 
 /**
  * @title  TrustUnlock
@@ -28,6 +29,7 @@ contract TrustUnlock is IUnlock, ReentrancyGuard {
      * @param trustToken The address of the Trust token contract
      * @param recipient The address of the recipient
      * @param trustBonding The address of the TrustBonding contract
+     * @param multiVault The address of the MultiVault contract
      * @param unlockAmount The amount of Trust tokens to unlock
      * @param unlockBegin The timestamp at which the unlock begins
      * @param unlockCliff The timestamp at which the unlock cliff ends
@@ -38,6 +40,7 @@ contract TrustUnlock is IUnlock, ReentrancyGuard {
         address trustToken;
         address recipient;
         address trustBonding;
+        address multiVault;
         uint256 unlockAmount;
         uint256 unlockBegin;
         uint256 unlockCliff;
@@ -64,6 +67,9 @@ contract TrustUnlock is IUnlock, ReentrancyGuard {
 
     /// @notice The TrustBonding contract
     TrustBonding public immutable trustBonding;
+
+    /// @notice The MultiVault contract
+    IMultiVault public immutable multiVault;
 
     /// @notice The amount of Trust tokens to unlock
     uint256 public immutable unlockAmount;
@@ -107,6 +113,22 @@ contract TrustUnlock is IUnlock, ReentrancyGuard {
         _;
     }
 
+    /**
+     * @notice Modifier to ensure that the amount of Trust tokens used in a MultiVault action is not the amount that's subject to the unlock
+     * @param amount The amount of Trust tokens to check against the required locked amount
+     */
+    modifier onlyNonLockedTokens(uint256 amount) {
+        uint256 requiredAmountNow = unlockAmount - unlockedAmount(block.timestamp);
+        uint256 balanceBefore = trustToken.balanceOf(address(this)) + bondedAmount;
+        uint256 balanceAfter = balanceBefore > amount ? balanceBefore - amount : 0;
+
+        if (balanceAfter < requiredAmountNow) {
+            revert Errors.Unlock_InsufficientUnlockedTokens();
+        }
+
+        _;
+    }
+
     /*//////////////////////////////////////////////////////////////
                              CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
@@ -118,7 +140,7 @@ contract TrustUnlock is IUnlock, ReentrancyGuard {
     constructor(UnlockParams memory unlockParams) {
         if (
             unlockParams.trustToken == address(0) || unlockParams.recipient == address(0)
-                || unlockParams.trustBonding == address(0)
+                || unlockParams.trustBonding == address(0) || unlockParams.multiVault == address(0)
         ) {
             revert Errors.Unlock_ZeroAddress();
         }
@@ -154,6 +176,7 @@ contract TrustUnlock is IUnlock, ReentrancyGuard {
 
         recipient = unlockParams.recipient;
         trustBonding = TrustBonding(unlockParams.trustBonding);
+        multiVault = IMultiVault(unlockParams.multiVault);
         lastUpdate = unlockBegin;
     }
 
@@ -163,16 +186,16 @@ contract TrustUnlock is IUnlock, ReentrancyGuard {
 
     /**
      * @notice Sets the recipient of the unlocked Trust tokens
-     * @param _recipient The address of the recipient
+     * @param newRecipient The address of the new recipient
      */
-    function setRecipient(address _recipient) external onlyRecipient {
-        if (_recipient == address(0)) {
+    function setRecipient(address newRecipient) external onlyRecipient {
+        if (newRecipient == address(0)) {
             revert Errors.Unlock_ZeroAddress();
         }
 
-        recipient = _recipient;
+        recipient = newRecipient;
 
-        emit RecipientSet(_recipient);
+        emit RecipientSet(newRecipient);
     }
 
     /// @notice Claims the unlocked Trust tokens and transfers them to the recipient
@@ -196,23 +219,16 @@ contract TrustUnlock is IUnlock, ReentrancyGuard {
         emit Claimed(recipient, amount, block.timestamp);
     }
 
+    /*////////////////////////////////////////////////////////////////
+                            TRUSTBONDING ACTIONS
+    //////////////////////////////////////////////////////////////*/
+
     /**
      * @notice Approves the TrustBonding contract to spend Trust tokens held by this contract
      * @param amount The amount of Trust tokens to approve
      */
     function approveTrustBonding(uint256 amount) external onlyRecipient {
-        trustToken.safeIncreaseAllowance(address(trustBonding), amount);
-    }
-
-    /**
-     * @notice Revokes the approval of the TrustBonding contract to spend Trust tokens held by this contract
-     * @dev This function sets the allowance to zero, effectively revoking the approval. If the allowance is already zero,
-     *      the function returns early to avoid wasting gas.
-     */
-    function revokeTrustBondingApproval() external onlyRecipient {
-        uint256 allowance = trustToken.allowance(address(this), address(trustBonding));
-        if (allowance == 0) return;
-        trustToken.safeDecreaseAllowance(address(trustBonding), allowance);
+        trustToken.forceApprove(address(trustBonding), amount);
     }
 
     /**
@@ -220,7 +236,7 @@ contract TrustUnlock is IUnlock, ReentrancyGuard {
      * @param amount The amount of Trust tokens to bond
      * @param lockDuration The duration in seconds for which the Trust tokens are locked in bonding
      */
-    function createBond(uint256 amount, uint256 lockDuration) external onlyRecipient nonReentrant {
+    function createBond(uint256 amount, uint256 lockDuration) external nonReentrant onlyRecipient {
         // Increase internal accounting of bonded amount and create the bonding lock
         bondedAmount += amount;
 
@@ -234,7 +250,7 @@ contract TrustUnlock is IUnlock, ReentrancyGuard {
      * @notice Increase the amount locked in an existing bonding lock
      * @param amount The amount of Trust tokens to add to the lock
      */
-    function increaseBondedAmount(uint256 amount) external onlyRecipient nonReentrant {
+    function increaseBondedAmount(uint256 amount) external nonReentrant onlyRecipient {
         // Increase internal accounting of bonded amount and increase the amount in the TrustBonding lock
         bondedAmount += amount;
         trustBonding.increase_amount(amount);
@@ -246,7 +262,7 @@ contract TrustUnlock is IUnlock, ReentrancyGuard {
      * @notice Increase the unlock time of an existing bonding lock
      * @param newUnlockTime The new unlock time for the existing bonding lock
      */
-    function increaseBondingUnlockTime(uint256 newUnlockTime) external onlyRecipient nonReentrant {
+    function increaseBondingUnlockTime(uint256 newUnlockTime) external nonReentrant onlyRecipient {
         trustBonding.increase_unlock_time(newUnlockTime);
     }
 
@@ -264,8 +280,146 @@ contract TrustUnlock is IUnlock, ReentrancyGuard {
      * @dev `rewardsRecipient` can be any address, not necessarily the recipient of the unlocked Trust tokens
      * @param rewardsRecipient The address to which the rewards are sent
      */
-    function claimRewards(address rewardsRecipient) external onlyRecipient nonReentrant {
+    function claimRewards(address rewardsRecipient) external nonReentrant onlyRecipient {
         trustBonding.claimRewards(rewardsRecipient);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            MULTIVAULT ACTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @notice Approves the MultiVault contract to spend Trust tokens held by this contract
+     * @param amount The amount of Trust tokens to approve
+     */
+    function approveMultiVault(uint256 amount) external onlyRecipient {
+        trustToken.forceApprove(address(multiVault), amount);
+    }
+
+    /**
+     * @notice Creates new atoms in the MultiVault contract
+     * @param atomDataArray An array of bytes containing the data for each atom to be created
+     * @param value The amount of Trust tokens to use for creating each atom
+     */
+    function createAtoms(bytes[] calldata atomDataArray, uint256 value)
+        external
+        nonReentrant
+        onlyRecipient
+        onlyNonLockedTokens(value)
+        returns (bytes32[] memory atomIds)
+    {
+        atomIds = multiVault.createAtoms(atomDataArray, value);
+    }
+
+    /**
+     * @notice Creates new triples in the MultiVault contract
+     * @param subjectIds An array of subject IDs for the triples
+     * @param predicateIds An array of predicate IDs for the triples
+     * @param objectIds An array of object IDs for the triples
+     * @param value The amount of Trust tokens to use for creating each triple
+     */
+    function createTriples(
+        bytes32[] calldata subjectIds,
+        bytes32[] calldata predicateIds,
+        bytes32[] calldata objectIds,
+        uint256 value
+    ) external nonReentrant onlyRecipient onlyNonLockedTokens(value) returns (bytes32[] memory tripleIds) {
+        tripleIds = multiVault.createTriples(subjectIds, predicateIds, objectIds, value);
+    }
+
+    /**
+     * @notice Deposits Trust tokens into the MultiVault contract and receives shares in return
+     * @param receiver The address that will receive the shares
+     * @param termId The ID of the term to deposit into
+     * @param bondingCurveId The ID of the bonding curve to use for the deposit
+     * @param value The amount of Trust tokens to deposit
+     * @param minSharesToReceive The minimum number of shares to receive in return for the deposit
+     */
+    function depositIntoMultiVault(
+        address receiver,
+        bytes32 termId,
+        uint256 bondingCurveId,
+        uint256 value,
+        uint256 minSharesToReceive
+    ) external nonReentrant onlyRecipient onlyNonLockedTokens(value) returns (uint256 shares) {
+        shares = multiVault.deposit(receiver, termId, bondingCurveId, value, minSharesToReceive);
+    }
+
+    /**
+     * @notice Batch deposits Trust tokens into the MultiVault contract and receives shares in return
+     * @param receiver The address that will receive the shares
+     * @param termIds An array of term IDs to deposit into
+     * @param bondingCurveIds An array of bonding curve IDs to use for the deposits
+     * @param amounts An array of amounts of Trust tokens to deposit for each term
+     * @param minSharesToReceive An array of minimum shares to receive in return for each deposit
+     */
+    function batchDepositIntoMultiVault(
+        address receiver,
+        bytes32[] calldata termIds,
+        uint256[] calldata bondingCurveIds,
+        uint256[] calldata amounts,
+        uint256[] calldata minSharesToReceive
+    ) external nonReentrant onlyRecipient onlyNonLockedTokens(_sum(amounts)) returns (uint256[] memory shares) {
+        shares = multiVault.batchDeposit(receiver, termIds, bondingCurveIds, amounts, minSharesToReceive);
+    }
+
+    /**
+     * @notice Redeems shares from the MultiVault contract and receives Trust tokens in return
+     * @param shares The number of shares to redeem
+     * @param receiver The address that will receive the withdrawn Trust tokens
+     * @param termId The ID of the term to redeem from
+     * @param bondingCurveId The ID of the bonding curve to use for the redemption
+     * @param minAssetsToReceive The minimum amount of Trust tokens to receive in return for the redemption
+     */
+    function redeemFromMultiVault(
+        uint256 shares,
+        address receiver,
+        bytes32 termId,
+        uint256 bondingCurveId,
+        uint256 minAssetsToReceive
+    ) external nonReentrant onlyRecipient returns (uint256 assets) {
+        assets = multiVault.redeem(shares, receiver, termId, bondingCurveId, minAssetsToReceive);
+    }
+
+    /**
+     * @notice Batch redeems shares from the MultiVault contract and receives Trust tokens in return
+     * @param shares An array of numbers of shares to redeem
+     * @param receiver The address that will receive the withdrawn Trust tokens
+     * @param termIds An array of term IDs to redeem from
+     * @param bondingCurveIds An array of bonding curve IDs to use for the redemptions
+     * @param minAssetsToReceive An array of minimum amounts of Trust tokens to receive in return for the redemptions
+     */
+    function batchRedeemFromMultiVault(
+        uint256[] calldata shares,
+        address receiver,
+        bytes32[] calldata termIds,
+        uint256[] calldata bondingCurveIds,
+        uint256[] calldata minAssetsToReceive
+    ) external nonReentrant onlyRecipient returns (uint256[] memory assets) {
+        assets = multiVault.batchRedeem(shares, receiver, termIds, bondingCurveIds, minAssetsToReceive);
+    }
+
+    /**
+     * @notice Withdraws non-locked Trust tokens from this contract to the specified receiver
+     * @param amount The amount of Trust tokens to withdraw
+     * @param receiver The address that will receive the withdrawn Trust tokens
+     */
+    function withdrawNonLockedTokens(uint256 amount, address receiver)
+        external
+        nonReentrant
+        onlyRecipient
+        onlyNonLockedTokens(amount)
+    {
+        if (receiver == address(0)) {
+            revert Errors.Unlock_ZeroAddress();
+        }
+
+        if (amount == 0) {
+            revert Errors.Unlock_ZeroAmount();
+        }
+
+        // Withdraw the specified amount of Trust tokens to the receiver
+        trustToken.safeTransfer(receiver, amount);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -324,6 +478,21 @@ contract TrustUnlock is IUnlock, ReentrancyGuard {
             uint256 weeklyUnlocked = (remainingAmount * elapsedWeeks) / totalWeeks;
 
             return cliffAmount + weeklyUnlocked;
+        }
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                         INTERNAL FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @notice Sums the elements of an array of uint256
+     * @param values The array of uint256 values to sum
+     * @return total The sum of the elements in the array
+     */
+    function _sum(uint256[] memory values) internal pure returns (uint256 total) {
+        for (uint256 i = 0; i < values.length; i++) {
+            total += values[i];
         }
     }
 }

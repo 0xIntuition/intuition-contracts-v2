@@ -28,7 +28,7 @@ contract TrustBondingBaseTest is Test {
     uint256 public dealAmount = 100 * 1e18;
     uint256 public initialTokens = 10_000 * 1e18;
     uint256 public defaultUnlockDuration = 2 * 365 days; // 2 years
-    uint256 public constant MAX_POSSIBLE_ANNUAL_EMISSION = 1e8 * 1e18; // 10% of the initial supply
+    uint256 public constant MAX_POSSIBLE_ANNUAL_EMISSION = 0.75e8 * 1e18; // 7.5% of the initial supply
     address public alice = address(1);
     address public bob = address(2);
     address public admin = address(3);
@@ -60,15 +60,11 @@ contract TrustBondingBaseTest is Test {
         trustBonding = TrustBonding(address(trustBondingProxy));
 
         // Initialize TrustBonding contract
-        trustBonding.initialize(
-            admin,
-            address(trustToken),
-            epochLength_,
-            startTimestamp,
-            address(multiVault),
-            systemUtilizationLowerBound,
-            personalUtilizationLowerBound
-        );
+        trustBonding.initialize(admin, address(trustToken), epochLength_, startTimestamp);
+
+        // reinitialize the TrustBonding contract with MultiVault and system utilization bounds
+        vm.prank(admin);
+        trustBonding.reinitialize(address(multiVault), systemUtilizationLowerBound, personalUtilizationLowerBound);
 
         // Deal ether to test addresses
         vm.deal(alice, dealAmount);
@@ -99,6 +95,9 @@ contract TrustBondingBaseTest is Test {
         trustBonding.grantRole(trustBonding.TIMELOCK_ROLE(), timelock);
 
         vm.stopPrank();
+
+        // Fund TrustBonding with the sufficient amount of TRUST for rewards
+        trustToken.mint(address(trustBonding), MAX_POSSIBLE_ANNUAL_EMISSION / 2);
 
         vm.warp(startTimestamp);
     }
@@ -173,15 +172,7 @@ contract TrustBondingTest is TrustBondingBaseTest {
         TrustBonding newTrustBonding = _deployNewTrustBondingContract();
 
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableInvalidOwner.selector, address(0)));
-        newTrustBonding.initialize(
-            address(0),
-            address(trustToken),
-            epochLength_,
-            startTimestamp,
-            address(multiVault),
-            systemUtilizationLowerBound,
-            personalUtilizationLowerBound
-        );
+        newTrustBonding.initialize(address(0), address(trustToken), epochLength_, startTimestamp);
 
         vm.stopPrank();
     }
@@ -192,15 +183,7 @@ contract TrustBondingTest is TrustBondingBaseTest {
         TrustBonding newTrustBonding = _deployNewTrustBondingContract();
 
         vm.expectRevert("Token address cannot be 0");
-        newTrustBonding.initialize(
-            admin,
-            address(0),
-            epochLength_,
-            startTimestamp,
-            address(multiVault),
-            systemUtilizationLowerBound,
-            personalUtilizationLowerBound
-        );
+        newTrustBonding.initialize(admin, address(0), epochLength_, startTimestamp);
 
         vm.stopPrank();
     }
@@ -213,15 +196,7 @@ contract TrustBondingTest is TrustBondingBaseTest {
         uint256 invalidEpochLength = 2 weeks - 1;
 
         vm.expectRevert("Min lock time must be at least 2 weeks");
-        newTrustBonding.initialize(
-            admin,
-            address(trustToken),
-            invalidEpochLength,
-            startTimestamp,
-            address(multiVault),
-            systemUtilizationLowerBound,
-            personalUtilizationLowerBound
-        );
+        newTrustBonding.initialize(admin, address(trustToken), invalidEpochLength, startTimestamp);
 
         vm.stopPrank();
     }
@@ -234,34 +209,20 @@ contract TrustBondingTest is TrustBondingBaseTest {
         uint256 pastTimestamp = block.timestamp - 1;
 
         vm.expectRevert(abi.encodeWithSelector(Errors.TrustBonding_InvalidStartTimestamp.selector));
-        newTrustBonding.initialize(
-            admin,
-            address(trustToken),
-            epochLength_,
-            pastTimestamp,
-            address(multiVault),
-            systemUtilizationLowerBound,
-            personalUtilizationLowerBound
-        );
+        newTrustBonding.initialize(admin, address(trustToken), epochLength_, pastTimestamp);
 
         vm.stopPrank();
     }
 
-    function test_initialize_shouldRevertIfMultiVaultIsAddressZero() external {
+    function test_reinitialize_shouldRevertIfMultiVaultIsAddressZero() external {
         vm.startPrank(admin);
 
         TrustBonding newTrustBonding = _deployNewTrustBondingContract();
 
+        newTrustBonding.initialize(admin, address(trustToken), epochLength_, startTimestamp);
+
         vm.expectRevert(abi.encodeWithSelector(Errors.TrustBonding_ZeroAddress.selector));
-        newTrustBonding.initialize(
-            admin,
-            address(trustToken),
-            epochLength_,
-            startTimestamp,
-            address(0),
-            systemUtilizationLowerBound,
-            personalUtilizationLowerBound
-        );
+        newTrustBonding.reinitialize(address(0), systemUtilizationLowerBound, personalUtilizationLowerBound);
 
         vm.stopPrank();
     }
@@ -273,15 +234,11 @@ contract TrustBondingTest is TrustBondingBaseTest {
 
         uint256 invalidSystemUtilizationLowerBound = trustBonding.BASIS_POINTS_DIVISOR() + 1; // 100% + 1 basis point
 
+        newTrustBonding.initialize(admin, address(trustToken), epochLength_, startTimestamp);
+
         vm.expectRevert(abi.encodeWithSelector(Errors.TrustBonding_InvalidUtilizationLowerBound.selector));
-        newTrustBonding.initialize(
-            admin,
-            address(trustToken),
-            epochLength_,
-            startTimestamp,
-            address(multiVault),
-            invalidSystemUtilizationLowerBound,
-            personalUtilizationLowerBound
+        newTrustBonding.reinitialize(
+            address(multiVault), invalidSystemUtilizationLowerBound, personalUtilizationLowerBound
         );
 
         vm.stopPrank();
@@ -294,15 +251,11 @@ contract TrustBondingTest is TrustBondingBaseTest {
 
         uint256 invalidPersonalUtilizationLowerBound = trustBonding.BASIS_POINTS_DIVISOR() + 1; // 100% + 1 basis point
 
+        newTrustBonding.initialize(admin, address(trustToken), epochLength_, startTimestamp);
+
         vm.expectRevert(abi.encodeWithSelector(Errors.TrustBonding_InvalidUtilizationLowerBound.selector));
-        newTrustBonding.initialize(
-            admin,
-            address(trustToken),
-            epochLength_,
-            startTimestamp,
-            address(multiVault),
-            systemUtilizationLowerBound,
-            invalidPersonalUtilizationLowerBound
+        newTrustBonding.reinitialize(
+            address(multiVault), systemUtilizationLowerBound, invalidPersonalUtilizationLowerBound
         );
 
         vm.stopPrank();
@@ -548,7 +501,7 @@ contract TrustBondingTest is TrustBondingBaseTest {
         uint256 trustPerEpoch = trustBonding.trustPerEpoch(currentEpoch);
 
         uint256 epochsPerYear = trustBonding.epochsPerYear();
-        uint256 expectedAnnualEmission = trustToken.maxAnnualEmission();
+        uint256 expectedAnnualEmission = trustBonding.INITIAL_MAX_ANNUAL_EMISSION();
         uint256 expectedTrustPerEpoch = expectedAnnualEmission / epochsPerYear;
 
         assertEq(trustPerEpoch, expectedTrustPerEpoch);
@@ -926,7 +879,7 @@ contract TrustBondingUtilizationCalculationsTest is TrustBondingBaseTest {
         _bondSomeTokens(alice);
 
         uint256 trustPerEpoch = trustBonding.trustPerEpoch(0);
-        uint256 expectedTrustPerEpoch = MAX_POSSIBLE_ANNUAL_EMISSION / trustBonding.epochsPerYear();
+        uint256 expectedTrustPerEpoch = trustBonding.INITIAL_MAX_ANNUAL_EMISSION() / trustBonding.epochsPerYear();
 
         assertEq(trustPerEpoch, expectedTrustPerEpoch);
 
@@ -937,12 +890,14 @@ contract TrustBondingUtilizationCalculationsTest is TrustBondingBaseTest {
 
     function test_trustPerEpoch_shouldReturnEmissionAmountScaledByTheSystemUtilization() external {
         uint256 currentEpoch = trustBonding.currentEpoch();
-        multiVault.setTotalUtilizationForEpoch(currentEpoch - 1, 1000); // 100% utilizations
+        multiVault.setTotalUtilizationForEpoch(currentEpoch - 1, 1000); // Set utilization to create a scenario
 
-        // lock tokens so emission is non‑zero and verify scaling
+        // lock tokens so emission is non-zero and verify scaling
         _bondSomeTokens(alice);
-        uint256 maxPerEpoch = MAX_POSSIBLE_ANNUAL_EMISSION / trustBonding.epochsPerYear();
+
+        uint256 maxPerEpoch = trustBonding.INITIAL_MAX_ANNUAL_EMISSION() / trustBonding.epochsPerYear();
         uint256 expected = (maxPerEpoch * systemUtilizationLowerBound) / trustBonding.BASIS_POINTS_DIVISOR();
+
         assertEq(trustBonding.trustPerEpoch(trustBonding.currentEpoch()), expected);
     }
 

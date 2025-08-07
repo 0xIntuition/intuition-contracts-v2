@@ -12,6 +12,20 @@ interface ITrustBonding {
     //////////////////////////////////////////////////////////////*/
 
     /**
+     * @notice Emitted when the start timestamp for the bonding period is set
+     * @param startTimestamp The timestamp when the bonding period starts
+     */
+    event StartTimestampSet(uint256 startTimestamp);
+
+    /**
+     * @notice Emitted when the tokens are recovered from the contract
+     * @param token The address of the token that was recovered
+     * @param recipient The address to which the recovered tokens were sent
+     * @param amount The amount of tokens that were recovered
+     */
+    event TokensRecovered(address indexed token, address indexed recipient, uint256 amount);
+
+    /**
      * @notice Emitted when a user claims their accrued Trust rewards
      * @param user The user who claimed the rewards
      * @param recipient The address to which the rewards were sent
@@ -63,11 +77,9 @@ interface ITrustBonding {
                                  FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    function initialize(
-        address _owner,
-        address _trustToken,
-        uint256 _epochLength,
-        uint256 _startTimestamp,
+    function initialize(address _owner, address _trustToken, uint256 _epochLength, uint256 _startTimestamp) external;
+
+    function reinitialize(
         address _multiVault,
         uint256 _systemUtilizationLowerBound,
         uint256 _personalUtilizationLowerBound
@@ -121,5 +133,5 @@ interface ITrustBonding {
 
     function setMaxClaimableProtocolFeesForPreviousEpoch(uint256 _maxClaimableProtocolFees) external;
 
-    function withdrawUnclaimedProtocolFees(address recipient) external;
+    function recoverTokens(address tokenAddress, address recipient, uint256 amount) external;
 }

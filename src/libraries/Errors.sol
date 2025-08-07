@@ -99,6 +99,7 @@ library Errors {
     ///////// TRUSTBONDING ERRORS ///////////////////////////////////////////////////////////
 
     error TrustBonding_ClaimableProtocolFeesExceedBalance();
+    error TrustBonding_InsufficientBalance();
     error TrustBonding_InvalidEpoch();
     error TrustBonding_InvalidUtilizationLowerBound();
     error TrustBonding_InvalidStartTimestamp();
@@ -111,6 +112,7 @@ library Errors {
     error TrustBonding_ProtocolFeesExceedMaxClaimable();
     error TrustBonding_RewardsAlreadyClaimedForEpoch();
     error TrustBonding_ZeroAddress();
+    error TrustBonding_ZeroAmount();
 
     ///////// BONDINGCURVEREGISTRY ERRORS ///////////////////////////////////////////////////
 
@@ -134,6 +136,7 @@ library Errors {
     error Unlock_CliffIsTooEarly();
     error Unlock_EndIsTooEarly();
     error Unlock_InsufficientBalance(uint256 balance, uint256 required);
+    error Unlock_InsufficientUnlockedTokens();
     error Unlock_InvalidCliffPercentage();
     error Unlock_InvalidUnlockCliff();
     error Unlock_InvalidUnlockDuration();

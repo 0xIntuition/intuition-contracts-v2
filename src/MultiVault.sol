@@ -50,6 +50,9 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
     /// @notice Constant representing 1 share in the vault (1e18)
     uint256 public constant ONE_SHARE = 1e18;
 
+    /// @notice Constant representing the salt used to compute the counter triple IDs
+    bytes32 public constant COUNTER_SALT = keccak256("COUNTER");
+
     /// @notice Constant representing the burn address, which receives the "ghost shares"
     address public constant BURN_ADDRESS = address(0x000000000000000000000000000000000000dEaD);
 
@@ -74,8 +77,6 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
 
     /// @notice ID of the last term to be created
     uint256 public termCount;
-
-    bytes32 public constant COUNTER_SALT = keccak256("COUNTER");
 
     /// @notice Mapping of term ID to bonding curve ID to vault state
     // Term ID (atom or triple ID) -> Bonding Curve ID -> Vault State
@@ -1395,7 +1396,6 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
     /*                 Shares Migrations                   */
     /* =================================================== */
 
-
     function isApprovedToPullShares(address accountFrom, address accountTo) internal view returns (bool) {
         return approvedToPullShares[accountFrom][accountTo];
     }
@@ -1408,11 +1408,10 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
         emit SharesPullApproval(msg.sender, account, status);
     }
 
-    function pullShares(
-        address accountFrom,
-        bytes32[] calldata termId,
-        uint256[] calldata bondingCurveId
-    ) external nonReentrant {
+    function pullShares(address accountFrom, bytes32[] calldata termId, uint256[] calldata bondingCurveId)
+        external
+        nonReentrant
+    {
         if (!isApprovedToPullShares(accountFrom, msg.sender)) {
             revert Errors.MultiVault_SenderNotApproved();
         }
@@ -1430,13 +1429,7 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
         }
     }
 
-
-    function _pullShares(
-        address accountFrom,
-        address accountTo,
-        bytes32 termId,
-        uint256 bondingCurveId
-    ) internal {
+    function _pullShares(address accountFrom, address accountTo, bytes32 termId, uint256 bondingCurveId) internal {
         if (accountFrom == address(0) || accountTo == address(0)) {
             revert Errors.MultiVault_ZeroAddress();
         }
@@ -1477,7 +1470,6 @@ contract MultiVault is IMultiVault, Initializable, ReentrancyGuardUpgradeable {
 
         emit WalletMigrated(termId, bondingCurveId, accountFrom, accountTo, shares);
     }
-
 
     /* =================================================== */
     /*                    VIEW FUNCTIONS                   */
