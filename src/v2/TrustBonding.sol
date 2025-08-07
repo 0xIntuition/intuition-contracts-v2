@@ -711,7 +711,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
-        if (token == address(0) || recipient == address(0)) {
+        if (tokenAddress == address(0) || recipient == address(0)) {
             revert Errors.TrustBonding_ZeroAddress();
         }
 
@@ -719,15 +719,15 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
             revert Errors.TrustBonding_ZeroAmount();
         }
 
-        uint256 balance = IERC20(token).balanceOf(address(this));
+        uint256 balance = IERC20(tokenAddress).balanceOf(address(this));
 
         if (amount > balance) {
             revert Errors.TrustBonding_InsufficientBalance();
         }
 
-        IERC20(token).safeTransfer(recipient, amount);
+        IERC20(tokenAddress).safeTransfer(recipient, amount);
 
-        emit TokensRecovered(token, recipient, amount);
+        emit TokensRecovered(tokenAddress, recipient, amount);
     }
 
     /*//////////////////////////////////////////////////////////////

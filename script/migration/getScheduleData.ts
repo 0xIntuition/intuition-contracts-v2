@@ -10,8 +10,8 @@ if (!BASE_RPC_URL) {
 async function main() {
   // Constants for the TimelockController and schedule parameters
   const timelockControllerAddress =
-    "0xe6BE2A42cCAeB73909A79CC89299eBDA7bAa7Ea2"; // TimelockController contract address on Base mainnet
-  const target = "0xD4436f981D2dcE0C074Eca869fdA1650227c7Efe"; // ProxyAdmin contract address on Base mainnet
+    "0xe6BE2A42cCAeB73909A79CC89299eBDA7bAa7Ea2"; // TimelockController contract address on Base Sepolia
+  const target = "0xD4436f981D2dcE0C074Eca869fdA1650227c7Efe"; // ProxyAdmin contract address on Base Sepolia
   const value = 0;
   const predecessor =
     "0x0000000000000000000000000000000000000000000000000000000000000000";
@@ -24,7 +24,7 @@ async function main() {
   // To be replaced with actual values as needed
   const proxy = process.argv[3]
     ? process.argv[3]
-    : "0x1A6950807E33d5bC9975067e6D6b5Ea4cD661665"; // EthMultiVault proxy contract address on Base mainnet
+    : "0x1A6950807E33d5bC9975067e6D6b5Ea4cD661665"; // EthMultiVault proxy contract address on Base Sepolia
   const implementation = process.argv[4] ? process.argv[4] : "0xabc"; // Replace with the actual implementation address you want to upgrade to once it's deployed
 
   // Validate proxy and implementation addresses are provided and are valid

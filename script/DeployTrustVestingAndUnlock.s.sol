@@ -6,19 +6,13 @@ import {Script, console} from "forge-std/Script.sol";
 import {TrustVestingAndUnlock} from "src/v2/TrustVestingAndUnlock.sol";
 
 contract DeployTrustVestingAndUnlock is Script {
-    /// @notice Deployed Trust token address on Base
-    address public trustTokenAddress = 0x6cd905dF2Ed214b22e0d48FF17CD4200C1C6d8A3;
+    /// @notice Constants
+    address public trustTokenAddress = vm.envAddress("TRUST_TOKEN_ADDRESS");
+    address public admin = vm.envAddress("ADMIN");
+    address public trustBondingAddress = vm.envAddress("TRUST_BONDING_ADDRESS");
+    address public multiVaultAddress = vm.envAddress("MULTI_VAULT_ADDRESS");
 
-    /// @notice Admin of the TrustVestingAndUnlock contract (can set TrustBonding address and TGE timestamp)
-    address public admin;
-
-    /// @notice Deployed TrustBonding contract address on Base
-    address public trustBondingAddress;
-
-    /// @notice MultiVault contract address on Base
-    address public multiVaultAddress;
-
-    // TrustVestingAndUnlock parameters (specific for each recipient)
+    /// @notice TrustVestingAndUnlock parameters (specific for each recipient)
     address public recipient;
     uint256 public vestingAmount;
     uint256 public vestingBegin;
@@ -56,7 +50,10 @@ contract DeployTrustVestingAndUnlock is Script {
 
         trustVestingAndUnlock = new TrustVestingAndUnlock(vestingParams);
 
-        console.log("TrustUnlock address: ", address(trustVestingAndUnlock));
+        console.log("TrustVestingAndUnlock address: ", address(trustVestingAndUnlock));
+
+        // NOTE: Add the TrustVestingAndUnlock contract to the whitelist for the TrustBonding contract
+        // Call from the admin Safe: trustBonding.add_to_whitelist(address(trustVestingAndUnlock));
 
         vm.stopBroadcast();
     }
