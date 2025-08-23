@@ -3,6 +3,7 @@ cache
 coverage
 node_modules
 out
+.wake
 
 # files
 *.env
@@ -22,3 +23,4 @@ broadcast/*/31337/
 # Claude Code personal settings
 .claude/settings.local.json
 CLAUDE.md
+
