@@ -8,11 +8,11 @@ import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/ac
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /**
- * @title  SateliteEmissionsController
+ * @title  SatelliteEmissionsController
  * @author 0xIntuition
  * @notice Controls the transfers of TRUST tokens from the TrustBonding contract.
  */
-contract SateliteEmissionsController is ReentrancyGuardUpgradeable, AccessControlUpgradeable {
+contract SatelliteEmissionsController is ReentrancyGuardUpgradeable, AccessControlUpgradeable {
     using SafeERC20 for IERC20;
 
     /* =================================================== */
@@ -42,10 +42,10 @@ contract SateliteEmissionsController is ReentrancyGuardUpgradeable, AccessContro
 
     error Unauthorized();
 
-    error SateliteEmissionsController_InvalidAddress();
+    error SatelliteEmissionsController_InvalidAddress();
 
-    error SateliteEmissionsController_InvalidAmount();
-    error SateliteEmissionsController_InsufficientBalance();
+    error SatelliteEmissionsController_InvalidAmount();
+    error SatelliteEmissionsController_InsufficientBalance();
 
     modifier onlyController() {
         if (!hasRole(CONTROLLER_ROLE, msg.sender)) {
@@ -78,8 +78,8 @@ contract SateliteEmissionsController is ReentrancyGuardUpgradeable, AccessContro
     }
 
     function transfer(address recipient, uint256 amount) external onlyController nonReentrant {
-        if (amount == 0) revert SateliteEmissionsController_InvalidAmount();
-        if (address(this).balance < amount) revert SateliteEmissionsController_InsufficientBalance();
+        if (amount == 0) revert SatelliteEmissionsController_InvalidAmount();
+        if (address(this).balance < amount) revert SatelliteEmissionsController_InsufficientBalance();
         Address.sendValue(payable(recipient), amount);
     }
 }

@@ -6,7 +6,7 @@ import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/ac
 
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 import { ITrustBonding } from "src/interfaces/ITrustBonding.sol";
-import { ISateliteEmissionsController } from "src/interfaces/ISateliteEmissionsController.sol";
+import { ISatelliteEmissionsController } from "src/interfaces/ISatelliteEmissionsController.sol";
 
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { VotingEscrow } from "src/external/curve/VotingEscrow.sol";
@@ -86,7 +86,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
     IMultiVault public multiVault;
 
     /// @notice The SatelliteEmissionsController contract address
-    ISateliteEmissionsController public sateliteEmissionsController;
+    ISatelliteEmissionsController public satelliteEmissionsController;
 
     /// @notice The system utilization lower bound in basis points (represents the minimum possible system utilization
     /// ratio)
@@ -153,7 +153,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         uint256 _epochLength,
         uint256 _startTimestamp,
         address _multiVault,
-        address _sateliteEmissionsController,
+        address _satelliteEmissionsController,
         uint256 _systemUtilizationLowerBound,
         uint256 _personalUtilizationLowerBound
     )
@@ -191,7 +191,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
 
         startTimestamp = _startTimestamp;
         multiVault = IMultiVault(_multiVault);
-        sateliteEmissionsController = ISateliteEmissionsController(_sateliteEmissionsController);
+        satelliteEmissionsController = ISatelliteEmissionsController(_satelliteEmissionsController);
         systemUtilizationLowerBound = _systemUtilizationLowerBound;
         personalUtilizationLowerBound = _personalUtilizationLowerBound;
     }
@@ -594,7 +594,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         userClaimedRewardsForEpoch[msg.sender][previousEpoch] = userRewards;
 
         // Mint the rewards to the recipient address
-        ISateliteEmissionsController(sateliteEmissionsController).transfer(recipient, userRewards);
+        ISatelliteEmissionsController(satelliteEmissionsController).transfer(recipient, userRewards);
 
         emit RewardsClaimed(msg.sender, recipient, userRewards);
 
@@ -620,16 +620,16 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
 
     /**
      * @notice Sets the SatelliteEmissionsController contract address
-     * @param _sateliteEmissionsController The address of the SatelliteEmissionsController contract
+     * @param _satelliteEmissionsController The address of the SatelliteEmissionsController contract
      */
-    function setSateliteEmissionsController(address _sateliteEmissionsController) external onlyRole(TIMELOCK_ROLE) {
-        if (_sateliteEmissionsController == address(0)) {
+    function setSatelliteEmissionsController(address _satelliteEmissionsController) external onlyRole(TIMELOCK_ROLE) {
+        if (_satelliteEmissionsController == address(0)) {
             revert TrustBonding_ZeroAddress();
         }
 
-        sateliteEmissionsController = ISateliteEmissionsController(_sateliteEmissionsController);
+        satelliteEmissionsController = ISatelliteEmissionsController(_satelliteEmissionsController);
 
-        emit SateliteEmissionsControllerSet(_sateliteEmissionsController);
+        emit SatelliteEmissionsControllerSet(_satelliteEmissionsController);
     }
 
     /**

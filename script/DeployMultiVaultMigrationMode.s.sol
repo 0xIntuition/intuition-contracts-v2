@@ -161,7 +161,7 @@ contract DeployMultiVaultMigrationMode is Script {
             EPOCH_LENGTH, // epochLength
             block.timestamp + 10 minutes, // startTimestamp (future)
             address(multiVaultProxy), // multiVault
-            address(0), // sateliteEmissionsController (can be set later)
+            address(0), // satelliteEmissionsController (can be set later)
             SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound
             PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound
         );

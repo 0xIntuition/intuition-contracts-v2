@@ -34,10 +34,10 @@ interface ITrustBonding {
     event MultiVaultSet(address indexed multiVault);
 
     /**
-     * @notice Emitted when the SateliteEmissionsController contract is set
-     * @param sateliteEmissionsController The address of the SateliteEmissionsController contract
+     * @notice Emitted when the SatelliteEmissionsController contract is set
+     * @param satelliteEmissionsController The address of the SatelliteEmissionsController contract
      */
-    event SateliteEmissionsControllerSet(address indexed sateliteEmissionsController);
+    event SatelliteEmissionsControllerSet(address indexed satelliteEmissionsController);
 
     /**
      * @notice Emitted when the lower bound for the system utilization ratio is updated
@@ -75,7 +75,7 @@ interface ITrustBonding {
         uint256 _epochLength,
         uint256 _startTimestamp,
         address _multiVault,
-        address _sateliteEmissionsController,
+        address _satelliteEmissionsController,
         uint256 _systemUtilizationLowerBound,
         uint256 _personalUtilizationLowerBound
     )

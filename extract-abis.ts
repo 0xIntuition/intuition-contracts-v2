@@ -8,7 +8,7 @@ const CONTRACTS_TO_EXTRACT = [
   'Trust',
   'MultiVault',
   'AtomWalletFactory',
-  'SateliteEmissionsController',
+  'SatelliteEmissionsController',
   'TrustBonding',
   'BondingCurveRegistry',
   'LinearCurve',

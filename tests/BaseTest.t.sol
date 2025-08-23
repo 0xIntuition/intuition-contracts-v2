@@ -10,7 +10,7 @@ import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 import { AtomWalletFactory } from "src/protocol/wallet/AtomWalletFactory.sol";
-import { SateliteEmissionsController } from "src/protocol/emissions/SateliteEmissionsController.sol";
+import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
@@ -150,14 +150,14 @@ abstract contract BaseTest is Modifiers, Test {
         protocol.trustBonding = TrustBonding(address(trustBondingProxy));
         console2.log("TrustBonding proxy address: ", address(trustBondingProxy));
 
-        // Deploy SateliteEmissionsController implementation and proxy
-        SateliteEmissionsController sateliteEmissionsControllerImpl = new SateliteEmissionsController();
-        console2.log("SateliteEmissionsController Implementation", address(sateliteEmissionsControllerImpl));
+        // Deploy SatelliteEmissionsController implementation and proxy
+        SatelliteEmissionsController satelliteEmissionsControllerImpl = new SatelliteEmissionsController();
+        console2.log("SatelliteEmissionsController Implementation", address(satelliteEmissionsControllerImpl));
 
-        TransparentUpgradeableProxy sateliteEmissionsControllerProxy =
-            new TransparentUpgradeableProxy(address(sateliteEmissionsControllerImpl), users.admin, "");
-        protocol.sateliteEmissionsController = SateliteEmissionsController(address(sateliteEmissionsControllerProxy));
-        console2.log("SateliteEmissionsController Proxy", address(sateliteEmissionsControllerProxy));
+        TransparentUpgradeableProxy satelliteEmissionsControllerProxy =
+            new TransparentUpgradeableProxy(address(satelliteEmissionsControllerImpl), users.admin, "");
+        protocol.satelliteEmissionsController = SatelliteEmissionsController(address(satelliteEmissionsControllerProxy));
+        console2.log("SatelliteEmissionsController Proxy", address(satelliteEmissionsControllerProxy));
 
         // Deploy BondingCurveRegistry
         BondingCurveRegistry bondingCurveRegistry = new BondingCurveRegistry(users.admin);
@@ -190,7 +190,7 @@ abstract contract BaseTest is Modifiers, Test {
         vm.label(address(linearCurve), "LinearCurve");
         vm.label(address(progressiveCurve), "ProgressiveCurve");
 
-        protocol.sateliteEmissionsController.initialize(
+        protocol.satelliteEmissionsController.initialize(
             users.admin, address(protocol.trustBonding)
         );
 
@@ -207,7 +207,7 @@ abstract contract BaseTest is Modifiers, Test {
             2 weeks, // epochLength (minimum 2 weeks required)
             block.timestamp, // startTimestamp (future)
             address(protocol.multiVault), // multiVault
-            address(protocol.sateliteEmissionsController), // sateliteEmissionsController
+            address(protocol.satelliteEmissionsController), // satelliteEmissionsController
             5000, // systemUtilizationLowerBound (50%)
             3000 // personalUtilizationLowerBound (30%)
         );
