@@ -5,6 +5,15 @@ import { Errors } from "src/libraries/Errors.sol";
 import { IBondingCurveRegistry } from "src/interfaces/IBondingCurveRegistry.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 
+
+struct BatchSetUserBalancesParams {
+    bytes32[] termIds;
+    uint256 bondingCurveId;
+    address user;
+    uint256[] userBalances;
+}
+
+
 /**
  * @title MultiVaultMigrationMode
  * @author 0xIntuition
@@ -166,54 +175,48 @@ contract MultiVaultMigrationMode is MultiVault {
 
     /**
      * @notice Sets the user balances for each vault
-     * @param termIds The term IDs of the vaults
-     * @param bondingCurveId The bonding curve ID of all of the vaults
-     * @param user The user address
-     * @param userBalances The user balances for each vault
+     * @param params The parameters for the batch set user balances.
      */
     function batchSetUserBalances(
-        bytes32[] calldata termIds,
-        uint256 bondingCurveId,
-        address user,
-        uint256[] calldata userBalances
+        BatchSetUserBalancesParams calldata params
     )
         external
         onlyRole(MIGRATOR_ROLE)
     {
-        if (bondingCurveId == 0) {
+        if (params.bondingCurveId == 0) {
             revert Errors.MultiVault_InvalidBondingCurveId();
         }
 
-        if (user == address(0)) {
+        if (params.user == address(0)) {
             revert Errors.MultiVault_ZeroAddress();
         }
 
-        if (termIds.length == 0) {
+        if (params.termIds.length == 0) {
             revert Errors.MultiVault_EmptyArray();
         }
 
-        if (termIds.length != userBalances.length) {
+        if (params.termIds.length != params.userBalances.length) {
             revert Errors.MultiVault_ArraysNotSameLength();
         }
 
-        for (uint256 i = 0; i < termIds.length; i++) {
-            _vaults[termIds[i]][bondingCurveId].balanceOf[user] = userBalances[i];
+        for (uint256 i = 0; i < params.termIds.length; i++) {
+            _vaults[params.termIds[i]][params.bondingCurveId].balanceOf[params.user] = params.userBalances[i];
 
             emit Deposited(
-                user,
-                user,
-                termIds[i],
-                bondingCurveId,
+                params.user,
+                params.user,
+                params.termIds[i],
+                params.bondingCurveId,
                 convertToAssets(
-                    bondingCurveId,
-                    _vaults[termIds[i]][bondingCurveId].totalShares,
-                    _vaults[termIds[i]][bondingCurveId].totalAssets,
-                    userBalances[i]
+                    params.bondingCurveId,
+                    _vaults[params.termIds[i]][params.bondingCurveId].totalShares,
+                    _vaults[params.termIds[i]][params.bondingCurveId].totalAssets,
+                    params.userBalances[i]
                 ),
                 0, // assetsAfterFees are not set here, as this is a migration
-                userBalances[i],
-                getShares(user, termIds[i], bondingCurveId),
-                getVaultType(termIds[i])
+                params.userBalances[i],
+                getShares(params.user, params.termIds[i], params.bondingCurveId),
+                getVaultType(params.termIds[i])
             );
         }
     }

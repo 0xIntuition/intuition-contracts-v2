@@ -6,10 +6,21 @@ import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
+import { ITrust } from "src/interfaces/ITrust.sol";
 import { MetaERC20Dispatcher, FinalityState, IMetaERC20Hub, IIGP, IMetalayerRouter } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
 
-interface ITrustToken {
-    function mint(address to, uint256 amount) external;
+struct BaseEmissionsControllerInitializeParams {
+    address admin;
+    address minter;
+    address trustToken;
+    address metaERC20Hub;
+    address satelliteEmissionsController;
+    uint32 recipientDomain;
+    uint256 maxAnnualEmission;
+    uint256 maxEmissionPerEpochBasisPoints;
+    uint256 annualReductionBasisPoints;
+    uint256 startTimestamp;
+    uint256 epochDuration;
 }
 
 /**
@@ -143,53 +154,35 @@ contract BaseEmissionsController is AccessControlUpgradeable, ReentrancyGuardUpg
 
     /**
      * @notice Reinitializes the Trust contract
-     * @param _admin Admin address (multisig)
-     * @param _minter Initial minter address
-     * @param _metaERC20Hub Address of the TRUST token contract
-     * @param _trustToken Address of the TRUST token contract
-     * @param _maxAnnualEmission Maximum annual emission of Trust tokens
-     * @param _maxEmissionPerEpochBasisPoints Maximum emission per epoch
-     * @param _annualReductionBasisPoints Annual reduction basis points
-     * @param _startTimestamp Start timestamp for the epoch and annual period tracking
-     * @param _epochDuration Duration of each epoch in seconds
+     * @param params Initialization parameters
      */
     function initialize(
-        address _admin,
-        address _minter,
-        address _trustToken,
-        address _metaERC20Hub,
-        address _satelliteEmissionsController,
-        uint32 _recipientDomain,
-        uint256 _maxAnnualEmission,
-        uint256 _maxEmissionPerEpochBasisPoints,
-        uint256 _annualReductionBasisPoints,
-        uint256 _startTimestamp,
-        uint256 _epochDuration
+        BaseEmissionsControllerInitializeParams memory params
     )
         external
         initializer
     {
-        if (_admin == address(0) || _minter == address(0) || _trustToken == address(0)) {
+        if (params.admin == address(0) || params.minter == address(0) || params.trustToken == address(0)) {
             revert BaseEmissionsController_ZeroAddress();
         }
 
-        if (_maxAnnualEmission > MAX_POSSIBLE_ANNUAL_EMISSION) {
+        if (params.maxAnnualEmission > MAX_POSSIBLE_ANNUAL_EMISSION) {
             revert BaseEmissionsController_InvalidMaxAnnualEmission();
         }
 
-        if (_maxEmissionPerEpochBasisPoints > BASIS_POINTS_DIVISOR) {
+        if (params.maxEmissionPerEpochBasisPoints > BASIS_POINTS_DIVISOR) {
             revert BaseEmissionsController_InvalidMaxEmissionPerEpochBasisPoints();
         }
 
-        if (_annualReductionBasisPoints >= BASIS_POINTS_DIVISOR) {
+        if (params.annualReductionBasisPoints >= BASIS_POINTS_DIVISOR) {
             revert BaseEmissionsController_InvalidAnnualReductionBasisPoints();
         }
 
-        if (_startTimestamp < block.timestamp) {
+        if (params.startTimestamp < block.timestamp) {
             revert BaseEmissionsController_InvalidStartTimestamp();
         }
 
-        if (_epochDuration == 0) {
+        if (params.epochDuration == 0) {
             revert BaseEmissionsController_InvalidEpochDuration();
         }
 
@@ -198,30 +191,30 @@ contract BaseEmissionsController is AccessControlUpgradeable, ReentrancyGuardUpg
         __ReentrancyGuard_init();
 
         // Assign the roles
-        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
-        _grantRole(CONTROLLER_ROLE, _minter);
+        _grantRole(DEFAULT_ADMIN_ROLE, params.admin);
+        _grantRole(CONTROLLER_ROLE, params.minter);
 
         // Set the Trust token contract address
-        trustToken = _trustToken;
+        trustToken = params.trustToken;
         
         // Bridging configurations
-        metaERC20Hub = _metaERC20Hub;
-        satelliteEmissionsController = _satelliteEmissionsController;
-        recipientDomain = _recipientDomain;
+        metaERC20Hub = params.metaERC20Hub;
+        satelliteEmissionsController = params.satelliteEmissionsController;
+        recipientDomain = params.recipientDomain;
 
         // Initialize annual minting variables
-        annualPeriodStartTime = _startTimestamp;
-        maxAnnualEmission = _maxAnnualEmission;
+        annualPeriodStartTime = params.startTimestamp;
+        maxAnnualEmission = params.maxAnnualEmission;
 
         // Initialize epoch variables
-        epochStartTime = _startTimestamp;
-        maxEmissionPerEpochBasisPoints = _maxEmissionPerEpochBasisPoints;
+        epochStartTime = params.startTimestamp;
+        maxEmissionPerEpochBasisPoints = params.maxEmissionPerEpochBasisPoints;
 
         // Initialize emission reduction variables
-        annualReductionBasisPoints = _annualReductionBasisPoints;
+        annualReductionBasisPoints = params.annualReductionBasisPoints;
 
         // Set the epoch duration
-        epochDuration = _epochDuration;
+        epochDuration = params.epochDuration;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -347,7 +340,7 @@ contract BaseEmissionsController is AccessControlUpgradeable, ReentrancyGuardUpg
      */
     function mint() payable external nonReentrant onlyRole(CONTROLLER_ROLE) {
         uint256 epochMaxMintAmount = _updateMinting();
-        ITrustToken(trustToken).mint(address(this), epochMaxMintAmount);
+        ITrust(trustToken).mint(address(this), epochMaxMintAmount);
 
         IIGP igp = IIGP(IMetalayerRouter(IMetaERC20Hub(metaERC20Hub).metalayerRouter()).igp());
         uint256 gasLimit = igp.quoteGasPayment(recipientDomain, GAS_CONSTANT + 125_000);

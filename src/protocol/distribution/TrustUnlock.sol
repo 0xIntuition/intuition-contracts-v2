@@ -104,31 +104,13 @@ contract TrustUnlock is IUnlock, ReentrancyGuard, Ownable {
                                  ERRORS
     //////////////////////////////////////////////////////////////*/
 
-    error Unlock_ApprovalFailed();
-    error Unlock_ArrayLengthMismatch();
     error Unlock_CliffIsTooEarly();
     error Unlock_EndIsTooEarly();
-    error Unlock_InsufficientBalance(uint256 balance, uint256 required);
     error Unlock_InvalidCliffPercentage();
-    error Unlock_InvalidUnlockCliff();
-    error Unlock_InvalidUnlockDuration();
     error Unlock_InsufficientUnlockedTokens();
-    error Unlock_NotEnoughBalance();
-    error Unlock_NotEnoughVested();
-    error Unlock_NotTimeYet();
-    error Unlock_OnlyAdmin();
-    error Unlock_OnlyRecipient();
-    error Unlock_SuspensionBeforeVestingBegin();
-    error Unlock_SuspensionTimestampInFuture();
-    error Unlock_TGETimestampAlreadySet();
-    error Unlock_TrustUnlockAlreadyExists();
     error Unlock_UnlockBeginTooEarly();
-    error Unlock_VestingAlreadyEnded();
-    error Unlock_VestingAlreadySuspended();
-    error Unlock_VestingBeginTooEarly();
     error Unlock_ZeroAddress();
     error Unlock_ZeroAmount();
-    error Unlock_ZeroLengthArray();
 
     /*//////////////////////////////////////////////////////////////
                                 MODIFIERS
@@ -140,13 +122,9 @@ contract TrustUnlock is IUnlock, ReentrancyGuard, Ownable {
      * @param amount The amount of Trust tokens to check against the required locked amount
      */
     modifier onlyNonLockedTokens(uint256 amount) {
-        uint256 balance = address(this).balance;
-        uint256 available = unlockAmount - _unlockedAmount(block.timestamp);
-        uint256 balanceAfter = balance > amount ? balance - amount : 0;
-        if (balanceAfter < available) {
+        if (address(this).balance < amount + unlockAmount - _unlockedAmount(block.timestamp)) {
             revert Unlock_InsufficientUnlockedTokens();
         }
-
         _;
     }
 
