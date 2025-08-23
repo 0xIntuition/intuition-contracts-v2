@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
-import {IMultiVault} from "src/interfaces/IMultiVault.sol";
+import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 
 /**
  * @title IAtomWalletFactory

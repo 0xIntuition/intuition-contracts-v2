@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
-import {IPermit2} from "src/interfaces/IPermit2.sol";
+import { IPermit2 } from "src/interfaces/IPermit2.sol";
 
 /// @title IMultiVault
 /// @author 0xIntuition
@@ -21,26 +21,6 @@ interface IMultiVault {
         mapping(address account => uint256 balance) balanceOf;
     }
 
-    /// @notice Fees struct to return all applicable fees for a given transaction
-    struct FeesAndSharesBreakdown {
-        /// @dev the amount of shares to be minted for the receiver
-        uint256 sharesForReceiver;
-        /// @dev the amount of assets to be withdrawn to the receiver
-        uint256 assetsForReceiver;
-        /// @dev the assets delta used for setting the vault totals
-        uint256 assetsDelta;
-        /// @dev entry fee that is charged when depositing assets into the vault
-        uint256 entryFee;
-        /// @dev exit fee that is charged when redeeming shares from the vault
-        uint256 exitFee;
-        /// @dev protocol fee that is charged when depositing assets into the vault
-        uint256 protocolFee;
-        /// @dev atom wallet fee that is charged when depositing assets into the atom vault
-        uint256 atomWalletDepositFee;
-        /// @dev atom deposit fraction that is charged when depositing assets into the triple vault
-        uint256 atomDepositFraction;
-    }
-
     /* =================================================== */
     /*                        ENUMS                        */
     /* =================================================== */
@@ -54,6 +34,13 @@ interface IMultiVault {
         BOTH
     }
 
+    /// @notice Enum for the vault types
+    enum VaultType {
+        ATOM,
+        TRIPLE,
+        COUNTER_TRIPLE
+    }
+
     /* =================================================== */
     /*                       EVENTS                        */
     /* =================================================== */
@@ -61,19 +48,19 @@ interface IMultiVault {
     /// @notice emitted when a wrapped ERC20 token is registered for a term and bonding curve id combination
     ///
     /// @param termId term id of the vault
-    /// @param bondingCurveId bonding curve id of the vault
+    /// @param curveId bonding curve id of the vault
     /// @param wrappedERC20 address of the wrapped ERC20 token
-    event WrappedERC20Registered(bytes32 indexed termId, uint256 indexed bondingCurveId, address indexed wrappedERC20);
+    event WrappedERC20Registered(bytes32 indexed termId, uint256 indexed curveId, address indexed wrappedERC20);
 
     /// @notice emitted when an internal wrapper transfer is made in order to wrap or unwrap the wrapped ERC20 tokens
     ///
     /// @param from address of the sender
     /// @param to address of the receiver
     /// @param termId term id of the vault
-    /// @param bondingCurveId bonding curve id of the vault
+    /// @param curveId bonding curve id of the vault
     /// @param shares amount of shares transferred
     event WrapperTransfer(
-        address indexed from, address indexed to, bytes32 indexed termId, uint256 bondingCurveId, uint256 shares
+        address indexed from, address indexed to, bytes32 indexed termId, uint256 curveId, uint256 shares
     );
 
     /// @notice emitted when the config is synced between the MultiVault and the MultiVaultConfig
@@ -96,11 +83,11 @@ interface IMultiVault {
 
     /// @notice emitted upon claiming the fees from the atom wallet
     ///
-    /// @param atomId atom id of the atom
+    /// @param termId atom id of the atom
     /// @param atomWalletOwner address of the atom wallet owner
     /// @param feesClaimed amount of fees claimed from the atom wallet
     event AtomWalletDepositFeesClaimed(
-        bytes32 indexed atomId, address indexed atomWalletOwner, uint256 indexed feesClaimed
+        bytes32 indexed termId, address indexed atomWalletOwner, uint256 indexed feesClaimed
     );
 
     /// @notice emitted upon adding the total utilization for the epoch
@@ -137,40 +124,51 @@ interface IMultiVault {
         address indexed user, uint256 indexed epoch, int256 indexed valueRemoved, int256 personalUtilization
     );
 
-    /// @notice emitted upon depositing assets into the vault
+    /// @notice emitted upon depositing assets into a vault
     ///
-    /// @param termId term id of the vault
-    /// @param bondingCurveId bonding curve id of the vault
     /// @param sender address of the sender
     /// @param receiver address of the receiver
-    /// @param assetsIn amount of assets deposited (gross assets deposited by the sender, including atomCost/tripleCost where applicable)
-    /// @param assetsAfterTotalFees amount of assets after all fees for the deposit are deducted
-    /// @param sharesOut amount of shares minted to the receiver
+    /// @param termId term id of the vault
+    /// @param curveId bonding curve id of the vault
+    /// @param assets amount of assets deposited (gross assets deposited by the sender, including atomCost/tripleCost
+    /// where applicable)
+    /// @param assetsAfterFees amount of assets after all fees for the deposit are deducted
+    /// @param shares amount of shares minted to the receiver
+    /// @param totalShares total shares in the vault after the deposit
+    /// @param vaultType type of the vault (ATOM, TRIPLE, COUNTER_TRIPLE)
     event Deposited(
-        bytes32 indexed termId,
-        uint256 indexed bondingCurveId,
         address indexed sender,
-        address receiver,
-        uint256 assetsIn,
-        uint256 assetsAfterTotalFees,
-        uint256 sharesOut
+        address indexed receiver,
+        bytes32 indexed termId,
+        uint256 curveId,
+        uint256 assets,
+        uint256 assetsAfterFees,
+        uint256 shares,
+        uint256 totalShares,
+        VaultType vaultType
     );
 
     /// @notice emitted upon redeeming shares from the vault
     ///
     /// @param termId term id of the vault
-    /// @param bondingCurveId bonding curve id of the vault
+    /// @param curveId bonding curve id of the vault
     /// @param sender address of the sender
     /// @param receiver address of the receiver
-    /// @param sharesIn amount of shares redeemed
-    /// @param assetsOut amount of assets withdrawn (net assets received by the receiver)
+    /// @param shares amount of shares redeemed
+    /// @param totalShares balance of the user in the vault after the redemption
+    /// @param assets amount of assets withdrawn (net assets received by the receiver)
+    /// @param fees amount of fees charged
+    /// @param vaultType type of the vault (ATOM, TRIPLE, COUNTER_TRIPLE)
     event Redeemed(
-        bytes32 indexed termId,
-        uint256 indexed bondingCurveId,
         address indexed sender,
-        address receiver,
-        uint256 sharesIn,
-        uint256 assetsOut
+        address indexed receiver,
+        bytes32 indexed termId,
+        uint256 curveId,
+        uint256 shares,
+        uint256 totalShares,
+        uint256 assets,
+        uint256 fees,
+        VaultType vaultType
     );
 
     /// @notice emitted after entry fee is collected
@@ -178,24 +176,20 @@ interface IMultiVault {
     ///      rather than going towards minting shares for the receiver
     ///
     /// @param termId term id of the vault
-    /// @param bondingCurveId bonding curve id of the vault
+    /// @param curveId bonding curve id of the vault
     /// @param sender address of the sender
     /// @param amount amount of entry fee collected
-    event EntryFeeCollected(
-        bytes32 indexed termId, uint256 indexed bondingCurveId, address indexed sender, uint256 amount
-    );
+    event EntryFeeCollected(bytes32 indexed termId, uint256 indexed curveId, address indexed sender, uint256 amount);
 
     /// @notice emitted after exit fee is collected
     /// @dev exit fee is charged when redeeming shares from the vault and they stay in the vault as assets
     ///      rather than being sent to the receiver
     ///
     /// @param termId term id of the vault
-    /// @param bondingCurveId bonding curve id of the vault
+    /// @param curveId bonding curve id of the vault
     /// @param sender address of the sender
     /// @param amount amount of exit fee collected
-    event ExitFeeCollected(
-        bytes32 indexed termId, uint256 indexed bondingCurveId, address indexed sender, uint256 amount
-    );
+    event ExitFeeCollected(bytes32 indexed termId, uint256 indexed curveId, address indexed sender, uint256 amount);
 
     /// @notice emitted after atom wallet deposit fee is collected
     /// @dev atom wallet deposit fee is charged when depositing assets into the atom vaults and it's used
@@ -232,51 +226,51 @@ interface IMultiVault {
     /// @param amount amount of protocol fee transferred
     event ProtocolFeeTransferred(uint256 indexed epoch, address indexed destination, uint256 amount);
 
-    /// @notice emitted when the vault totals are changed
-    ///
-    /// @param termId term id of the vault
-    /// @param bondingCurveId bonding curve id of the vault
-    /// @param totalAssets total assets in the vault
-    /// @param totalShares total shares in the vault
-    event VaultTotalsChanged(
-        bytes32 indexed termId, uint256 indexed bondingCurveId, uint256 totalAssets, uint256 totalShares
-    );
-
     /// @notice emitted when the share price is changed
     ///
     /// @param termId term id of the vault
-    /// @param bondingCurveId bonding curve id of the vault
+    /// @param curveId bonding curve id of the vault
     /// @param sharePrice new share price
-    event SharePriceChanged(bytes32 indexed termId, uint256 indexed bondingCurveId, uint256 sharePrice);
+    /// @param totalAssets total assets in the vault after the change
+    /// @param totalShares total shares in the vault after the change
+    /// @param vaultType type of the vault (ATOM, TRIPLE, COUNTER_TRIPLE)
+    event SharePriceChanged(
+        bytes32 indexed termId,
+        uint256 indexed curveId,
+        uint256 sharePrice,
+        uint256 totalAssets,
+        uint256 totalShares,
+        VaultType vaultType
+    );
 
     /// @notice emitted when the atom vault is created
     ///
-    /// @param atomId atom id of the atom vault
+    /// @param termId term id of the atom vault
     /// @param creator address of the creator
     /// @param atomWallet address of the atom wallet associated with the atom vault
-    event AtomCreated(bytes32 indexed atomId, address indexed creator, address atomWallet);
+    event AtomCreated(address indexed creator, bytes32 indexed termId, bytes atomData, address atomWallet);
 
     /// @notice emitted when the triple vault is created
     ///
-    /// @param tripleId triple id of the triple vault
     /// @param creator address of the creator
+    /// @param termId term id of the triple vault
     /// @param subjectId atom id of the subject vault
     /// @param predicateId atom id of the predicate vault
     /// @param objectId atom id of the object vault
     event TripleCreated(
-        bytes32 indexed tripleId, address indexed creator, bytes32 subjectId, bytes32 predicateId, bytes32 objectId
+        address indexed creator, bytes32 indexed termId, bytes32 subjectId, bytes32 predicateId, bytes32 objectId
     );
 
     /// @notice Migrate shares from an old wallet to a new wallet for a specific term and bonding curve
     /// @param oldWallet The address of the old wallet
     /// @param newWallet The address of the new wallet
     /// @param termId The ID of the atom or triple (term)
-    /// @param bondingCurveId The ID of the bonding curve to use
+    /// @param curveId The ID of the bonding curve to use
     /// @dev This function burns shares from the old wallet and mints them to the new wallet.
     /// @dev Emits a WalletMigrated event on successful migration.
     event WalletMigrated(
         bytes32 indexed termId,
-        uint256 indexed bondingCurveId,
+        uint256 indexed curveId,
         address indexed oldWallet,
         address newWallet,
         uint256 sharesMigrated
@@ -295,162 +289,84 @@ interface IMultiVault {
     /*                    INITIALIZER                      */
     /* =================================================== */
 
-    function initialize(address _multiVaultConfig) external;
+    // function initialize(address _multiVaultConfig) external;
 
     /* =================================================== */
     /*                    ADMIN FUNCTIONS                  */
     /* =================================================== */
 
-    function recoverTokens(address token, address recipient) external;
-
-    function registerWrappedERC20(bytes32 termId, uint256 bondingCurveId, address wrappedERC20) external;
-
-    function wrapperTransfer(address from, address to, bytes32 termId, uint256 bondingCurveId, uint256 shares)
-        external;
-
     /* =================================================== */
     /*                MUTATIVE FUNCTIONS                   */
     /* =================================================== */
 
-    function syncConfig() external;
+    // function syncConfig() external;
 
-    function claimAtomWalletDepositFees(bytes32 atomId) external;
-
-    function safeTransferFrom(
-        address from,
-        address to,
-        bytes32 termId,
-        uint256 bondingCurveId,
-        uint256 value,
-        bytes calldata data
-    ) external pure;
-
-    function safeBatchTransferFrom(
-        address from,
-        address to,
-        uint256[] calldata termIds,
-        uint256 bondingCurveId,
-        uint256[] calldata values,
-        bytes calldata data
-    ) external pure;
-
-    function approve(address sender, ApprovalTypes approvalType) external;
-
-    function atomData(bytes32 atomId) external returns (bytes calldata data);
-
-    function createAtoms(bytes[] calldata atomDataArray, uint256 value) external returns (bytes32[] memory);
+    function createAtoms(
+        bytes[] calldata atomDatas,
+        uint256[] calldata assets
+    )
+        external
+        payable
+        returns (bytes32[] memory);
 
     function createTriples(
         bytes32[] calldata subjectIds,
         bytes32[] calldata predicateIds,
         bytes32[] calldata objectIds,
-        uint256 value
-    ) external returns (bytes32[] memory);
+        uint256[] calldata assets
+    )
+        external
+        payable
+        returns (bytes32[] memory);
 
     function deposit(
         address receiver,
         bytes32 termId,
-        uint256 bondingCurveId,
-        uint256 value,
-        uint256 minSharesToReceive
-    ) external returns (uint256);
+        uint256 curveId,
+        uint256 minShares
+    )
+        external
+        payable
+        returns (uint256);
 
-    function batchDeposit(
+    function depositBatch(
         address receiver,
         bytes32[] calldata termIds,
-        uint256[] calldata bondingCurveIds,
-        uint256[] calldata amounts,
-        uint256[] calldata minSharesToReceive
-    ) external returns (uint256[] memory);
+        uint256[] calldata curveIds,
+        uint256[] calldata assets,
+        uint256[] calldata minShares
+    )
+        external
+        payable
+        returns (uint256[] memory);
 
     function redeem(
-        uint256 shares,
         address receiver,
         bytes32 termId,
-        uint256 bondingCurveId,
-        uint256 minAssetsToReceive
-    ) external returns (uint256);
+        uint256 curveId,
+        uint256 shares,
+        uint256 minAssets
+    )
+        external
+        returns (uint256);
 
-    function batchRedeem(
-        uint256[] calldata shares,
+    function redeemBatch(
         address receiver,
         bytes32[] calldata termIds,
-        uint256[] calldata bondingCurveIds,
-        uint256[] calldata minAssetsToReceive
-    ) external returns (uint256[] memory);
+        uint256[] calldata curveIds,
+        uint256[] calldata shares,
+        uint256[] calldata minAssets
+    )
+        external
+        returns (uint256[] memory);
 
     /* =================================================== */
     /*                    VIEW FUNCTIONS                   */
     /* =================================================== */
 
-    function termCount() external view returns (uint256);
-
-    function getAtomCost() external view returns (uint256);
-
-    function getTripleCost() external view returns (uint256);
-
-    function entryFeeAmount(uint256 assets) external view returns (uint256);
-
-    function exitFeeAmount(uint256 assets) external view returns (uint256);
-
-    function protocolFeeAmount(uint256 assets) external view returns (uint256);
-
-    function atomDepositFractionAmount(uint256 assets, bytes32 termId) external view returns (uint256);
-
-    function atomWalletDepositFeeAmount(uint256 assets, bytes32 termId) external view returns (uint256);
-
-    function currentSharePrice(bytes32 termId, uint256 bondingCurveId) external view returns (uint256);
-
-    function maxDeposit() external view returns (uint256);
-
-    function maxRedeem(address sender, bytes32 termId, uint256 bondingCurveId) external view returns (uint256);
-
-    function convertToShares(uint256 assets, bytes32 termId, uint256 bondingCurveId) external view returns (uint256);
-
-    function convertToAssets(uint256 shares, bytes32 termId, uint256 bondingCurveId) external view returns (uint256);
-
-    function previewDeposit(uint256 assets, bytes32 termId, uint256 bondingCurveId) external view returns (uint256);
-
-    function previewRedeem(uint256 shares, bytes32 termId, uint256 bondingCurveId) external view returns (uint256);
-
-    function isTripleId(bytes32 termId) external view returns (bool);
-
-    function isCounterTripleId(bytes32 termId) external view returns (bool);
-
-    function getTripleAtoms(bytes32 tripleId) external view returns (bytes32, bytes32, bytes32);
-
-    function tripleIdFromAtomIds(bytes32 subjectId, bytes32 predicateId, bytes32 objectId)
-        external
-        pure
-        returns (bytes32);
-
-    function getCounterIdFromTriple(bytes32 termId) external pure returns (bytes32);
-
-    function getTripleIdFromCounter(bytes32 counterId) external view returns (bytes32);
-
-    function balanceOf(address account, bytes32 termId, uint256 bondingCurveId) external view returns (uint256);
-
-    function balanceOfBatch(address[] calldata accounts, bytes32[] calldata termIds, uint256 bondingCurveId)
-        external
-        view
-        returns (uint256[] memory);
-
-    function getIsProtocolFeeDistributionEnabled() external view returns (bool);
-
-    function protocolFeeDistributionEnabledAtEpoch(uint256 epoch) external view returns (bool);
-
-    function getAtomWarden() external view returns (address);
-
-    function getVaultStateForUser(bytes32 termId, uint256 bondingCurveId, address receiver)
-        external
-        view
-        returns (uint256, uint256);
-
-    function getVaultTotals(bytes32 termId, uint256 bondingCurveId) external view returns (uint256, uint256);
-
-    function computeAtomWalletAddr(bytes32 atomId) external view returns (address);
-
-    function currentEpoch() external view returns (uint256);
+    // function atoms(bytes32 id) external returns (bytes calldata data);
+    // mapping(bytes32 termId => mapping(uint256 curveId => VaultState vaultState)) public vaults;
+    // function vaults(bytes32 termId, uint256 curveId) external view returns (VaultState memory);
 
     function getUserUtilizationForEpoch(address user, uint256 epoch) external view returns (int256);
 
@@ -458,41 +374,13 @@ interface IMultiVault {
 
     function accumulatedProtocolFees(uint256 epoch) external view returns (uint256);
 
-    function isApprovedToDeposit(address sender, address receiver) external view returns (bool);
+    function protocolFeeDistributionEnabledAtEpoch(uint256 epoch) external view returns (bool);
 
-    function isApprovedToRedeem(address sender, address receiver) external view returns (bool);
+    function getAtomWarden() external view returns (address);
 
-    function isTermIdValid(bytes32 id) external view returns (bool);
+    function claimAtomWalletDepositFees(bytes32 atomId) external;
 
-    function isBondingCurveIdValid(uint256 bondingCurveId) external view returns (bool);
-
-    function generalConfig()
-        external
-        view
-        returns (
-            address admin,
-            address protocolMultisig,
-            uint256 feeDenominator,
-            address trust,
-            address trustBonding,
-            uint256 minDeposit,
-            uint256 minShare,
-            uint256 atomDataMaxLength,
-            uint256 decimalPrecision,
-            string memory baseURI,
-            bool protocolFeeDistributionEnabled
-        );
-
-    function atomConfig() external view returns (uint256 atomCreationProtocolFee, uint256 atomWalletDepositFee);
-
-    function tripleConfig()
-        external
-        view
-        returns (
-            uint256 tripleCreationProtocolFee,
-            uint256 totalAtomDepositsOnTripleCreation,
-            uint256 atomDepositFractionForTriple
-        );
+    function isTermCreated(bytes32 id) external view returns (bool);
 
     function walletConfig()
         external
@@ -505,9 +393,5 @@ interface IMultiVault {
             address atomWalletFactory
         );
 
-    function vaultFees() external view returns (uint256 entryFee, uint256 exitFee, uint256 protocolFee);
-
-    function bondingCurveConfig() external view returns (address registry, uint256 defaultCurveId);
-
-    function wrapperConfig() external view returns (address wrappedERC20Beacon, address wrappedERC20Factory);
+    // function termCount() external view returns (uint256);
 }

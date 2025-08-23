@@ -1,42 +1,24 @@
-node_modules
-.env
-coverage
-coverage.json
-typechain
-typechain-types
-
-# Hardhat files
+# directories
 cache
-artifacts
-
-# Foundry files
-cache_forge
+coverage
+node_modules
 out
-broadcast
-cache_hardhat
-artifacts
-exports/abis/local.json
-exports/addresses/local.json
 
-# misc
-.vscode
-.idea
+# files
+*.env
+*.log
 .DS_Store
-_playground/*.json
-.env_mainnet
-.env_testnet
-venv
-test/tools/__pycache__/
-script/utilization/distributions.json
-script/utilization/merkletree.json
-slither-report.txt
-slither-raw.txt
-slither-output.json
-test-summary.md
-flattened
-mythril_reports
-private
-claude.md
+.pnp.*
+lcov.info
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
 
-# docs
-docs/
+# broadcasts
+!broadcast
+broadcast/*
+broadcast/*/31337/
+
+# Claude Code personal settings
+.claude/settings.local.json
+CLAUDE.md

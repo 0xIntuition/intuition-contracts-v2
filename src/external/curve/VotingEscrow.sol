@@ -2,13 +2,16 @@
 pragma solidity ^0.8.4;
 
 /**
+ * https://github.com/stargate-protocol/stargate-dao/blob/main/contracts/VotingEscrow.sol
+ */
+/**
  * @title Voting Escrow
  * @author Curve Finance
  * @license MIT
  * @notice Votes have a weight depending on time, so that users are
  *         committed to the future of (whatever they are voting for)
  * @dev Vote weight decays linearly over time. Lock time cannot be
- *      more than `MAXTIME` (2 years).
+ *      more than `MAXTIME` (3 years).
  *
  * # Voting escrow to have time-weighted votes
  * # Votes have a weight depending on time, so that users are committed
@@ -21,14 +24,19 @@ pragma solidity ^0.8.4;
  * #   |  /
  * #   |/
  * # 0 +--------+------> time
- * #       maxtime (2 years)
+ * #       maxtime (3 years?)
  */
-import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
-import {Initializable} from "@openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
-import {Ownable2StepUpgradeable} from "@openzeppelin-contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
-import {PausableUpgradeable} from "@openzeppelin-contracts-upgradeable/utils/PausableUpgradeable.sol";
-import {ReentrancyGuardUpgradeable} from "@openzeppelin-contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+
+// Removed from original source.
+// import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
+
+// Replaces Ownable2StepUpgradeable
+import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 
 struct Point {
     int128 bias;
@@ -45,20 +53,14 @@ struct LockedBalance {
     uint256 end;
 }
 
-abstract contract VotingEscrow is
-    Initializable,
-    Ownable2StepUpgradeable,
-    PausableUpgradeable,
-    ReentrancyGuardUpgradeable
-{
+contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20;
 
     enum DepositType {
         DEPOSIT_FOR_TYPE,
         CREATE_LOCK_TYPE,
         INCREASE_LOCK_AMOUNT,
-        INCREASE_UNLOCK_TIME,
-        INCREASE_AMOUNT_AND_TIME_FOR
+        INCREASE_UNLOCK_TIME
     }
 
     event Deposit(
@@ -68,8 +70,8 @@ abstract contract VotingEscrow is
     event Supply(uint256 prevSupply, uint256 supply);
 
     uint256 internal constant WEEK = 1 weeks;
-    uint256 public constant MAXTIME = 2 * 365 * 86400;
-    int128 internal constant iMAXTIME = 2 * 365 * 86400;
+    uint256 public constant MAXTIME = 3 * 365 * 86_400;
+    int128 internal constant iMAXTIME = 3 * 365 * 86_400;
     uint256 internal constant MULTIPLIER = 1 ether;
 
     uint256 public MINTIME;
@@ -81,7 +83,7 @@ abstract contract VotingEscrow is
 
     uint256 public epoch;
     mapping(uint256 => Point) public point_history; // epoch -> unsigned point
-    mapping(address => Point[1000000000]) public user_point_history; // user -> Point[user_epoch]
+    mapping(address => Point[1_000_000_000]) public user_point_history; // user -> Point[user_epoch]
     mapping(address => uint256) public user_point_epoch;
     mapping(uint256 => int128) public slope_changes; // time -> signed slope change
 
@@ -103,8 +105,6 @@ abstract contract VotingEscrow is
         require(token_addr != address(0), "Token address cannot be 0");
         require(min_time >= 2 * WEEK, "Min lock time must be at least 2 weeks");
 
-        __Ownable_init(_owner);
-        __Pausable_init();
         __ReentrancyGuard_init();
 
         token = token_addr;
@@ -115,18 +115,10 @@ abstract contract VotingEscrow is
         MINTIME = min_time;
     }
 
-    /// @notice Intentionally uses tx.origin to *tighten* permissions:
-    ///         EOAs are allowed; smart contract callers must be whitelisted.
     modifier onlyUserOrWhitelist() {
         if (msg.sender != tx.origin) {
             require(contracts_whitelist[msg.sender], "Smart contract not allowed");
         }
-        _;
-    }
-
-    /// @notice Modifier to restrict access to the whitelisted smart contracts only
-    modifier onlyWhitelist() {
-        require(contracts_whitelist[msg.sender], "Smart contract not allowed");
         _;
     }
 
@@ -137,34 +129,18 @@ abstract contract VotingEscrow is
 
     /// @notice Add address to whitelist smart contract depositors `addr`
     /// @param addr Address to be whitelisted
-    function add_to_whitelist(address addr) external onlyOwner {
+    function add_to_whitelist(address addr) external onlyRole(DEFAULT_ADMIN_ROLE) {
         contracts_whitelist[addr] = true;
-    }
-
-    /// @notice Add multiple addresses to whitelist smart contract depositors `addrs`
-    /// @param addrs Addresses to be whitelisted
-    function batch_add_to_whitelist(address[] calldata addrs) external onlyOwner {
-        for (uint256 i = 0; i < addrs.length; ++i) {
-            contracts_whitelist[addrs[i]] = true;
-        }
     }
 
     /// @notice Remove a smart contract address from whitelist
     /// @param addr Address to be removed from whitelist
-    function remove_from_whitelist(address addr) external onlyOwner {
+    function remove_from_whitelist(address addr) external onlyRole(DEFAULT_ADMIN_ROLE) {
         contracts_whitelist[addr] = false;
     }
 
-    /// @notice Remove multiple smart contract addresses from whitelist
-    /// @param addrs Addresses to be removed from whitelist
-    function batch_remove_from_whitelist(address[] calldata addrs) external onlyOwner {
-        for (uint256 i = 0; i < addrs.length; ++i) {
-            contracts_whitelist[addrs[i]] = false;
-        }
-    }
-
     /// @notice Unlock all locked balances
-    function unlock() external onlyOwner {
+    function unlock() external onlyRole(DEFAULT_ADMIN_ROLE) {
         unlocked = true;
     }
 
@@ -193,7 +169,7 @@ abstract contract VotingEscrow is
 
     /// @notice Record global and per-user data to checkpoint
     /// @param _addr User's wallet address. No user checkpoint if 0x0
-    /// @param old_locked Previous locked amount / end lock time for the user
+    /// @param old_locked Pevious locked amount / end lock time for the user
     /// @param new_locked New locked amount / end lock time for the user
     function _checkpoint(address _addr, LockedBalance memory old_locked, LockedBalance memory new_locked) internal {
         Point memory u_old;
@@ -227,7 +203,7 @@ abstract contract VotingEscrow is
             }
         }
 
-        Point memory last_point = Point({bias: 0, slope: 0, ts: block.timestamp, blk: block.number});
+        Point memory last_point = Point({ bias: 0, slope: 0, ts: block.timestamp, blk: block.number });
         if (_epoch > 0) {
             last_point = point_history[_epoch];
         }
@@ -343,7 +319,9 @@ abstract contract VotingEscrow is
         uint256 unlock_time,
         LockedBalance memory locked_balance,
         DepositType deposit_type
-    ) internal {
+    )
+        internal
+    {
         LockedBalance memory _locked = locked_balance;
         uint256 supply_before = supply;
 
@@ -364,7 +342,7 @@ abstract contract VotingEscrow is
         _checkpoint(_addr, old_locked, _locked);
 
         if (_value != 0) {
-            IERC20(token).safeTransferFrom(msg.sender, address(this), _value);
+            IERC20(token).safeTransferFrom(_addr, address(this), _value);
         }
 
         emit Deposit(_addr, _value, _locked.end, deposit_type, block.timestamp);
@@ -401,7 +379,7 @@ abstract contract VotingEscrow is
 
         uint256 unlock_time = (_unlock_time / WEEK) * WEEK; // Locktime is rounded down to weeks
         require(unlock_time >= block.timestamp + MINTIME, "Voting lock must be at least MINTIME");
-        require(unlock_time <= block.timestamp + MAXTIME, "Voting lock can be 2 years max");
+        require(unlock_time <= block.timestamp + MAXTIME, "Voting lock can be 3 years max");
 
         _deposit_for(msg.sender, _value, unlock_time, _locked, DepositType.CREATE_LOCK_TYPE);
     }
@@ -411,29 +389,6 @@ abstract contract VotingEscrow is
     /// @param _unlock_time Epoch time when tokens unlock, rounded down to whole weeks
     function create_lock(uint256 _value, uint256 _unlock_time) external nonReentrant onlyUserOrWhitelist notUnlocked {
         _create_lock(_value, _unlock_time);
-    }
-
-    /// @notice Deposit `_value` tokens for `_addr` and create a new lock
-    /// @dev Only users or whitelisted smart contracts can call this function.
-    /// @param _addr User's wallet address
-    /// @param _value Amount to deposit and lock
-    function create_lock_for(address _addr, uint256 _value, uint256 _unlock_time)
-        external
-        nonReentrant
-        onlyWhitelist
-        notUnlocked
-    {
-        require(_addr != address(0), "Cannot create lock for zero address");
-        require(_value > 0, "Need non-zero value");
-
-        LockedBalance memory _locked = locked[_addr];
-        require(_locked.amount == 0, "Withdraw old tokens first");
-
-        uint256 unlock_time = (_unlock_time / WEEK) * WEEK; // Locktime is rounded down to weeks
-        require(unlock_time >= block.timestamp + MINTIME, "Voting lock must be at least MINTIME");
-        require(unlock_time <= block.timestamp + MAXTIME, "Voting lock can be 2 years max");
-
-        _deposit_for(_addr, _value, unlock_time, _locked, DepositType.CREATE_LOCK_TYPE);
     }
 
     /// @notice Deposit `_value` additional tokens for `msg.sender` without modifying the unlock time
@@ -465,14 +420,17 @@ abstract contract VotingEscrow is
         require(_locked.end > block.timestamp, "Lock expired");
         require(_locked.amount > 0, "Nothing is locked");
         require(unlock_time > _locked.end, "Can only increase lock duration");
-        require(unlock_time <= block.timestamp + MAXTIME, "Voting lock can be 2 years max");
+        require(unlock_time <= block.timestamp + MAXTIME, "Voting lock can be 3 years max");
 
         _deposit_for(msg.sender, 0, unlock_time, _locked, DepositType.INCREASE_UNLOCK_TIME);
     }
 
     /// @notice Extend the unlock time and/or for `msg.sender` to `_unlock_time`
     /// @param _unlock_time New epoch time for unlocking
-    function increase_amount_and_time(uint256 _value, uint256 _unlock_time)
+    function increase_amount_and_time(
+        uint256 _value,
+        uint256 _unlock_time
+    )
         external
         nonReentrant
         onlyUserOrWhitelist
@@ -487,65 +445,6 @@ abstract contract VotingEscrow is
         } else {
             _increase_unlock_time(_unlock_time);
         }
-    }
-
-    /**
-     * @notice (Whitelisted) Extend _addr’s lock and/or add _value more TRUST.
-     *         Works even if the lock has expired.
-     * @dev    Mimics increase_amount_and_time() but operates on the supplied address.
-     *         Designed for helper contracts (e.g. vesting distributors) - EOAs must
-     *         stick with the standard functions.
-     *
-     * @param _addr User whose lock is being modified
-     * @param _value Additional TRUST to lock (can be 0)
-     * @param _unlock_time New unlock timestamp (can be 0)
-     */
-    function increase_amount_and_time_for(address _addr, uint256 _value, uint256 _unlock_time)
-        external
-        nonReentrant
-        onlyWhitelist
-        notUnlocked
-    {
-        require(_addr != address(0), "zero address");
-        require(_value > 0 || _unlock_time > 0, "Value and Unlock cannot both be 0");
-
-        LockedBalance memory _locked = locked[_addr];
-
-        if (_value > 0) {
-            // If the old lock is expired we still allow top‑ups – the new end
-            // will be set further below.
-            require(_locked.amount > 0, "no existing lock");
-        }
-
-        uint256 unlockRounded = (_unlock_time / WEEK) * WEEK; // round down to weeks
-
-        if (_unlock_time > 0) {
-            require(unlockRounded > block.timestamp, "unlock in past");
-            require(unlockRounded <= block.timestamp + MAXTIME, "Voting lock can be 2 years max");
-        }
-
-        // work out the new lock state
-        LockedBalance memory newLocked = _locked;
-
-        if (_value > 0) newLocked.amount += int128(int256(_value));
-
-        // If the old lock is expired, any non‑zero _unlock_time is accepted
-        // (because newLocked.end may be in the past).
-        if (_unlock_time > 0) {
-            require(unlockRounded >= block.timestamp + MINTIME, "must satisfy MINTIME");
-            if (unlockRounded > newLocked.end) {
-                newLocked.end = unlockRounded;
-            }
-        }
-
-        // write state & checkpoint
-        _deposit_for(
-            _addr,
-            _value,
-            newLocked.end, // 0 → unchanged
-            _locked,
-            DepositType.INCREASE_AMOUNT_AND_TIME_FOR
-        );
     }
 
     /// @notice Withdraw all tokens for `msg.sender`
@@ -580,7 +479,10 @@ abstract contract VotingEscrow is
     /// @notice Deposit `_value` tokens for `msg.sender` and lock until `_unlock_time`
     /// @param _value Amount to deposit
     /// @param _unlock_time Epoch time when tokens unlock, rounded down to whole weeks
-    function withdraw_and_create_lock(uint256 _value, uint256 _unlock_time)
+    function withdraw_and_create_lock(
+        uint256 _value,
+        uint256 _unlock_time
+    )
         external
         nonReentrant
         onlyUserOrWhitelist

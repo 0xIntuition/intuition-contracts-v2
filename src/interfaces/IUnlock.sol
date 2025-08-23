@@ -17,7 +17,7 @@ interface IUnlock {
      * @param amount The amount of Trust tokens claimed
      * @param timestamp The time of the claim
      */
-    event Claimed(address indexed recipient, uint256 amount, uint256 timestamp);
+    event Transferred(address indexed recipient, uint256 amount, uint256 timestamp);
 
     /**
      * @notice Emitted when the new recipient is set
@@ -32,10 +32,10 @@ interface IUnlock {
     event TrustBondingSet(address indexed newTrustBonding);
 
     /**
-     * @notice Emitted when the TGE timestamp is set
-     * @param tgeTimestamp The timestamp of the Trust TGE event
+     * @notice Emitted when the unlock start timestamp is set
+     * @param unlockStartTimestamp The timestamp of the unlock start
      */
-    event TGETimestampSet(uint256 indexed tgeTimestamp);
+    event UnlockStartTimestampSet(uint256 indexed unlockStartTimestamp);
 
     /**
      * @notice Emitted when the bondedAmount is updated in the TrustVestingAndUnlock contract
@@ -58,12 +58,4 @@ interface IUnlock {
         uint256 alreadyClaimed,
         uint256 withdrawnAmount
     );
-
-    /*//////////////////////////////////////////////////////////////
-                            SHARED FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    function setRecipient(address _recipient) external;
-
-    function claim() external;
 }

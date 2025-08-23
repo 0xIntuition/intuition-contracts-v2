@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
-/// @title  Errors Library
+/// @title  MultiVaultErrorsErrors Library
 /// @author 0xIntuition
 /// @notice Library containing all custom errors detailing cases where the Intuition Protocol may revert.
 library Errors {
@@ -95,6 +95,18 @@ library Errors {
     error MultiVaultConfig_InvalidProtocolFee();
     error MultiVaultConfig_ZeroAddress();
     error MultiVaultConfig_ZeroValue();
+
+    ///////// TRUST ERRORS //////////////////////////////////////////////////////////////////
+
+    error Trust_ZeroAddress();
+    error Trust_InvalidMaxAnnualEmission();
+    error Trust_InvalidMaxEmissionPerEpochBasisPoints();
+    error Trust_InvalidAnnualReductionBasisPoints();
+    error Trust_InvalidStartTimestamp();
+    error Trust_InvalidEpochDuration();
+    error Trust_ZeroAmount();
+    error Trust_AnnualMintingLimitExceeded();
+    error Trust_EpochMintingLimitExceeded();
 
     ///////// TRUSTBONDING ERRORS ///////////////////////////////////////////////////////////
 

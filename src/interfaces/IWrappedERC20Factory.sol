@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
-import {IMultiVault} from "src/interfaces/IMultiVault.sol";
+import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 
 /**
  * @title IWrappedERC20Factory
@@ -24,7 +24,12 @@ interface IWrappedERC20Factory {
     /*                   WRITE FUNCTIONS                   */
     /* =================================================== */
 
-    function deployWrapper(bytes32 termId, uint256 bondingCurveId, string calldata name, string calldata symbol)
+    function deployWrapper(
+        bytes32 termId,
+        uint256 bondingCurveId,
+        string calldata name,
+        string calldata symbol
+    )
         external
         returns (address);
 
@@ -39,5 +44,8 @@ interface IWrappedERC20Factory {
         uint256 bondingCurveId,
         string calldata name,
         string calldata symbol
-    ) external view returns (address);
+    )
+        external
+        view
+        returns (address);
 }

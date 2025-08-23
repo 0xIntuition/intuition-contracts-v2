@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // Minimal Permit2 interface, derived from:
 // https://github.com/Uniswap/permit2/blob/main/src/interfaces/ISignatureTransfer.sol
@@ -43,5 +43,6 @@ interface IPermit2 {
         SignatureTransferDetails calldata transferDetails,
         address owner,
         bytes calldata signature
-    ) external;
+    )
+        external;
 }
