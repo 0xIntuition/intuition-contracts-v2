@@ -1,0 +1,13 @@
+{
+    "wake.compiler.solc.remappings": [
+        "forge-std/=lib/forge-std/",
+        "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+        "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
+        "@openzeppelinV4/contracts/=node_modules/@openzeppelin/contracts/",
+        "@openzeppelinV4/contracts-upgradeable/=node_modules/@openzeppelin/contracts-upgradeable/",
+        "solady/=lib/solady/src/",
+        "@prb/math/=lib/prb-math/",
+        "@account-abstraction/=lib/account-abstraction/contracts/",
+        "@metalayer/=node_modules/@metalayer/contracts/src/"
+    ]
+}

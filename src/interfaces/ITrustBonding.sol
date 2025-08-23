@@ -34,6 +34,12 @@ interface ITrustBonding {
     event MultiVaultSet(address indexed multiVault);
 
     /**
+     * @notice Emitted when the SateliteEmissionsController contract is set
+     * @param sateliteEmissionsController The address of the SateliteEmissionsController contract
+     */
+    event SateliteEmissionsControllerSet(address indexed sateliteEmissionsController);
+
+    /**
      * @notice Emitted when the lower bound for the system utilization ratio is updated
      * @param newLowerBound The new lower bound for the system utilization ratio
      */
@@ -69,9 +75,11 @@ interface ITrustBonding {
         uint256 _epochLength,
         uint256 _startTimestamp,
         address _multiVault,
+        address _sateliteEmissionsController,
         uint256 _systemUtilizationLowerBound,
         uint256 _personalUtilizationLowerBound
-    ) external;
+    )
+        external;
 
     function epochLength() external view returns (uint256);
 
@@ -85,8 +93,6 @@ interface ITrustBonding {
 
     function totalLocked() external view returns (uint256);
 
-    function lockedTrustPercentage() external view returns (uint256);
-
     function totalBondedBalance() external view returns (uint256);
 
     function totalBondedBalanceAtEpochEnd(uint256 _epoch) external view returns (uint256);
@@ -99,8 +105,6 @@ interface ITrustBonding {
 
     function hasClaimedRewardsForEpoch(address _account, uint256 _epoch) external view returns (bool);
 
-    function trustPerEpoch(uint256 _epoch) external view returns (uint256);
-
     function getAPRAtEpoch(uint256 _epoch) external view returns (uint256);
 
     function getSystemUtilizationRatio(uint256 _epoch) external view returns (uint256);
@@ -109,9 +113,9 @@ interface ITrustBonding {
 
     function claimRewards(address recipient) external;
 
-    function pause() external;
+    // function pause() external;
 
-    function unpause() external;
+    // function unpause() external;
 
     function setMultiVault(address _multiVault) external;
 

@@ -1,7 +1,0 @@
-1. After making a change, use `forge test` to see if it worked.
-
-2. If a specific test file relates to or covers the changed code already, call that test or test file specifically with a level of verbosity that works best for you.
-   Example: `forge test --match-test test_littleJumps -vvv`
-   Example: `forge test --match-path test/unit/BondingCurveRegistry/LinearCurve.t.sol -vv`
-
-3. If tests were failing before you made your change, then those failures are likely unrelated and don't require attention. Always prompt the user if this comes up instead of trying to fix all of the tests, when some failures may not be relevant. 

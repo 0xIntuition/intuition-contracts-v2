@@ -11,4 +11,6 @@ interface IAtomWallet {
     /// @param newOwner the new owner of the wallet (becomes the pending owner)
     /// NOTE: Overrides the transferOwnership function of Ownable2StepUpgradeable
     function transferOwnership(address newOwner) external;
+
+    function owner() external view returns (address);
 }
