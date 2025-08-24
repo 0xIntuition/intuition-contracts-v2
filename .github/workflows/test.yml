@@ -2,14 +2,9 @@ name: test
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - labeled
+    types: [opened, synchronize, reopened, labeled]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -17,8 +12,8 @@ concurrency:
 
 env:
   FOUNDRY_PROFILE: 'ci'
-  SEPOLIA_RPC_URL: 'https://sepolia.base.org' # TODO: Throw this in repo env once permissioned to do so
-  BASE_RPC_URL: 'https://mainnet.base.org' # TODO: Throw this in repo env once permissioned to do so
+  SEPOLIA_RPC_URL: 'https://sepolia.base.org'
+  BASE_RPC_URL: 'https://mainnet.base.org'
 
 jobs:
   lint:
@@ -35,20 +30,29 @@ jobs:
         with:
           version: nightly
 
-      - name: Install Node.js
-        uses: actions/setup-node@v3
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: 'lts/*'
-          cache: 'npm'
+          bun-version: 'latest'
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+          key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Run fmt
-        run: npm run fmt
+        run: bun run fmt
 
       - name: Run fmt check
-        run: npm run fmt:check
+        run: bun run fmt:check
 
   test:
     name: Foundry Tests
@@ -74,15 +78,24 @@ jobs:
             out/
           key: foundry-${{ runner.os }}-${{ hashFiles('foundry.toml') }}-${{ hashFiles('**/foundry.lock') }}
 
-      - name: Install Node.js
-        uses: actions/setup-node@v3
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: 'lts/*'
-          cache: 'npm'
+          bun-version: 'latest'
 
-      - name: Install dependencies
+      - name: Cache Bun dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+          key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Install JS deps
         run: |
-          npm ci
+          bun install --frozen-lockfile
           forge install
 
       - name: Run Forge tests
@@ -92,7 +105,6 @@ jobs:
           forge test -vvv 2>&1 | tee artifacts/forge-test-results/forge-test-results.txt
           exit ${PIPESTATUS[0]}
 
-      # NEW STEP: Capture contract sizes
       - name: Run Forge build with contract sizes
         id: forge-build-sizes
         run: |
@@ -137,15 +149,24 @@ jobs:
             out/
           key: foundry-${{ runner.os }}-${{ hashFiles('foundry.toml') }}-${{ hashFiles('**/foundry.lock') }}
 
-      - name: Install Node.js
-        uses: actions/setup-node@v3
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: 'lts/*'
-          cache: 'npm'
+          bun-version: 'latest'
 
-      - name: Install dependencies
+      - name: Cache Bun dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+          key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Install JS deps
         run: |
-          npm ci
+          bun install --frozen-lockfile
           forge install
 
       - name: Generate gas report
@@ -153,9 +174,7 @@ jobs:
         continue-on-error: true
         run: |
           mkdir -p snapshots
-          # Run tests and capture gas reports for successful tests
           forge test --gas-report > snapshots/current-gas-report.txt
-          # Generate snapshot (Forge automatically includes only successful tests)
           forge snapshot --snap snapshots/current-gas.snap
 
       - name: Compare gas snapshots
@@ -165,7 +184,6 @@ jobs:
             echo "⚠️ No gas snapshot generated - skipping comparison"
             exit 0
           fi
-
           if [ -f ".gas-snapshot" ]; then
             echo "📊 Gas Comparison:"
             forge snapshot --diff .gas-snapshot snapshots/current-gas.snap || (
