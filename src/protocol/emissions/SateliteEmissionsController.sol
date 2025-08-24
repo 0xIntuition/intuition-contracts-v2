@@ -62,13 +62,7 @@ contract SateliteEmissionsController is ReentrancyGuardUpgradeable, AccessContro
         _disableInitializers();
     }
 
-    function initialize(
-        address admin,
-        address controller
-    )
-        external
-        initializer
-    {
+    function initialize(address admin, address controller) external initializer {
         __AccessControl_init();
         __ReentrancyGuard_init();
 

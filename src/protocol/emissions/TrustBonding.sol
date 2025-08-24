@@ -250,7 +250,6 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         return supply;
     }
 
-
     /**
      * @notice Returns the total bonded balance (i.e. the sum of all users’ veTRUST)
      *         at the current block timestamp
@@ -597,7 +596,6 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         ISateliteEmissionsController(sateliteEmissionsController).transfer(recipient, userRewards);
 
         emit RewardsClaimed(msg.sender, recipient, userRewards);
-
     }
 
     /*//////////////////////////////////////////////////////////////

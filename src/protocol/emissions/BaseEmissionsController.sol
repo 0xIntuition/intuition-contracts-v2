@@ -6,7 +6,13 @@ import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
-import { MetaERC20Dispatcher, FinalityState, IMetaERC20Hub, IIGP, IMetalayerRouter } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
+import {
+    MetaERC20Dispatcher,
+    FinalityState,
+    IMetaERC20Hub,
+    IIGP,
+    IMetalayerRouter
+} from "src/protocol/emissions/MetaERC20Dispatcher.sol";
 
 interface ITrustToken {
     function mint(address to, uint256 amount) external;
@@ -47,17 +53,15 @@ contract BaseEmissionsController is AccessControlUpgradeable, ReentrancyGuardUpg
     /// @notice Trust token contract address
     address public trustToken;
 
-
     // @notice MetaLayer Hub for the Trust token.
     address public metaERC20Hub;
-    
+
     /// @notice Recipient domain for bridging Trust tokens to the satellite chain
     uint32 public recipientDomain;
 
     /// @notice Address of the emissions controller on the satellite chain
     address public satelliteEmissionsController;
-    
-    
+
     /// @notice Tracks the start of the current annual period
     uint256 public annualPeriodStartTime;
 
@@ -113,7 +117,6 @@ contract BaseEmissionsController is AccessControlUpgradeable, ReentrancyGuardUpg
      * @param amount Amount of Trust tokens minted
      */
     event TrustMinted(address indexed to, uint256 amount);
-
 
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
@@ -203,7 +206,7 @@ contract BaseEmissionsController is AccessControlUpgradeable, ReentrancyGuardUpg
 
         // Set the Trust token contract address
         trustToken = _trustToken;
-        
+
         // Bridging configurations
         metaERC20Hub = _metaERC20Hub;
         satelliteEmissionsController = _satelliteEmissionsController;
@@ -345,14 +348,14 @@ contract BaseEmissionsController is AccessControlUpgradeable, ReentrancyGuardUpg
     /**
      * @notice Mint new energy tokens to an address
      */
-    function mint() payable external nonReentrant onlyRole(CONTROLLER_ROLE) {
+    function mint() external payable nonReentrant onlyRole(CONTROLLER_ROLE) {
         uint256 epochMaxMintAmount = _updateMinting();
         ITrustToken(trustToken).mint(address(this), epochMaxMintAmount);
 
         IIGP igp = IIGP(IMetalayerRouter(IMetaERC20Hub(metaERC20Hub).metalayerRouter()).igp());
         uint256 gasLimit = igp.quoteGasPayment(recipientDomain, GAS_CONSTANT + 125_000);
 
-        if(msg.value < gasLimit) {
+        if (msg.value < gasLimit) {
             revert BaseEmissionsController_InsufficientGasPayment();
         }
 

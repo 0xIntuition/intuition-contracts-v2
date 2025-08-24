@@ -190,9 +190,7 @@ abstract contract BaseTest is Modifiers, Test {
         vm.label(address(linearCurve), "LinearCurve");
         vm.label(address(progressiveCurve), "ProgressiveCurve");
 
-        protocol.sateliteEmissionsController.initialize(
-            users.admin, address(protocol.trustBonding)
-        );
+        protocol.sateliteEmissionsController.initialize(users.admin, address(protocol.trustBonding));
 
         // Initialize AtomWalletFactory
         atomWalletFactory.initialize(address(protocol.multiVault));

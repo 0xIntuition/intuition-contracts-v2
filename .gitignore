@@ -4,6 +4,8 @@ coverage
 node_modules
 out
 .wake
+private
+cache_forge
 
 # files
 *.env

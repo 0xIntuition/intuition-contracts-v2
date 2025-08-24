@@ -295,9 +295,7 @@ contract IntuitionDeploy is BaseScript {
         // Initialize AtomWalletFactory
         atomWalletFactory.initialize(address(multiVault));
 
-        sateliteEmissionsController.initialize(
-            ADMIN, address(trustBonding)
-        );
+        sateliteEmissionsController.initialize(ADMIN, address(trustBonding));
 
         // Initialize TrustBonding
         trustBonding.initialize(

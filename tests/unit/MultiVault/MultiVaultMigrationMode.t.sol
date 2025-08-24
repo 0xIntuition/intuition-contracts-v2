@@ -477,7 +477,8 @@ contract MultiVaultMigrationModeTest is BaseTest {
         multiVaultMigrationMode.batchSetTripleData(creators, tripleAtomIds);
 
         // Verify triple data was set
-        (bytes32 retrievedAtomId1, bytes32 retrievedAtomId2, bytes32 retrievedAtomId3) = multiVaultMigrationMode.getTriple(tripleId);
+        (bytes32 retrievedAtomId1, bytes32 retrievedAtomId2, bytes32 retrievedAtomId3) =
+            multiVaultMigrationMode.getTriple(tripleId);
         assertEq(retrievedAtomId1, atomId1);
         assertEq(retrievedAtomId2, atomId2);
         assertEq(retrievedAtomId3, atomId3);
@@ -595,8 +596,7 @@ contract MultiVaultMigrationModeTest is BaseTest {
         for (uint256 i = 0; i < arraySize; i++) {
             termIds[i] = keccak256(abi.encodePacked("atom", i));
             vaultTotals[i] = MultiVaultMigrationMode.VaultTotals((i + 1) * 1e18, (i + 1) * 1e18);
-            vaultTypes[i] =
-                i % 2 == 0 ? IMultiVault.VaultType.ATOM : IMultiVault.VaultType.TRIPLE;
+            vaultTypes[i] = i % 2 == 0 ? IMultiVault.VaultType.ATOM : IMultiVault.VaultType.TRIPLE;
         }
 
         vm.prank(users.admin);
