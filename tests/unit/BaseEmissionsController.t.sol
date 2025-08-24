@@ -29,6 +29,7 @@ contract BaseEmissionsControllerTest is Test {
     //////////////////////////////////////////////////////////////*/
 
     BaseEmissionsController controller;
+    BaseEmissionsController.InitParams initParams;
     ERC20Mock trustToken;
     MetaERC20HubMock metaERC20HubMock;
     MetalayerRouterMock metalayerRouterMock;
@@ -72,6 +73,10 @@ contract BaseEmissionsControllerTest is Test {
         // Deploy mock TRUST token
         trustToken = new ERC20Mock("Trust Token", "TRUST", 18);
 
+        // Get InitParams for BaseEmissionsController
+        initParams =
+            BaseEmissionsController.InitParams({ admin: admin, minter: minter, trustToken: address(trustToken) });
+
         // Deploy BaseEmissionsController implementation
         BaseEmissionsController controllerImpl = new BaseEmissionsController();
 
@@ -92,9 +97,7 @@ contract BaseEmissionsControllerTest is Test {
 
     function initializeController() internal {
         controller.initialize(
-            admin,
-            minter,
-            address(trustToken),
+            initParams,
             address(metaERC20HubMock),
             address(1),
             13_579,
@@ -130,9 +133,11 @@ contract BaseEmissionsControllerTest is Test {
     function test_Initialize_RevertsOnZeroAddresses() public {
         vm.expectRevert(BaseEmissionsController.BaseEmissionsController_ZeroAddress.selector);
         controller.initialize(
-            address(0), // zero admin
-            minter,
-            address(trustToken),
+            BaseEmissionsController.InitParams({
+                admin: address(0), // zero admin
+                minter: minter,
+                trustToken: address(trustToken)
+            }),
             address(metaERC20HubMock),
             address(1),
             13_579,
@@ -145,9 +150,11 @@ contract BaseEmissionsControllerTest is Test {
 
         vm.expectRevert(BaseEmissionsController.BaseEmissionsController_ZeroAddress.selector);
         controller.initialize(
-            admin,
-            address(0), // zero minter
-            address(trustToken),
+            BaseEmissionsController.InitParams({
+                admin: admin,
+                minter: address(0), // zero minter
+                trustToken: address(trustToken)
+            }),
             address(metaERC20HubMock),
             address(1),
             13_579,
@@ -160,9 +167,11 @@ contract BaseEmissionsControllerTest is Test {
 
         vm.expectRevert(BaseEmissionsController.BaseEmissionsController_ZeroAddress.selector);
         controller.initialize(
-            admin,
-            minter,
-            address(0), // zero trust token,
+            BaseEmissionsController.InitParams({
+                admin: admin,
+                minter: minter,
+                trustToken: address(0) // zero trust token
+             }),
             address(1),
             address(1),
             13_579,
@@ -177,9 +186,7 @@ contract BaseEmissionsControllerTest is Test {
     function test_Initialize_RevertsOnInvalidMaxAnnualEmission() public {
         vm.expectRevert(BaseEmissionsController.BaseEmissionsController_InvalidMaxAnnualEmission.selector);
         controller.initialize(
-            admin,
-            minter,
-            address(trustToken),
+            initParams,
             address(metaERC20HubMock),
             address(1),
             13_579,
@@ -194,9 +201,7 @@ contract BaseEmissionsControllerTest is Test {
     function test_Initialize_RevertsOnInvalidEpochBasisPoints() public {
         vm.expectRevert(BaseEmissionsController.BaseEmissionsController_InvalidMaxEmissionPerEpochBasisPoints.selector);
         controller.initialize(
-            admin,
-            minter,
-            address(trustToken),
+            initParams,
             address(metaERC20HubMock),
             address(1),
             13_579,
@@ -211,9 +216,7 @@ contract BaseEmissionsControllerTest is Test {
     function test_Initialize_RevertsOnInvalidReductionBasisPoints() public {
         vm.expectRevert(BaseEmissionsController.BaseEmissionsController_InvalidAnnualReductionBasisPoints.selector);
         controller.initialize(
-            admin,
-            minter,
-            address(trustToken),
+            initParams,
             address(metaERC20HubMock),
             address(1),
             13_579,
@@ -228,9 +231,7 @@ contract BaseEmissionsControllerTest is Test {
     function test_Initialize_RevertsOnPastTimestamp() public {
         vm.expectRevert(BaseEmissionsController.BaseEmissionsController_InvalidStartTimestamp.selector);
         controller.initialize(
-            admin,
-            minter,
-            address(trustToken),
+            initParams,
             address(metaERC20HubMock),
             address(1),
             13_579,
@@ -245,9 +246,7 @@ contract BaseEmissionsControllerTest is Test {
     function test_Initialize_RevertsOnZeroEpochDuration() public {
         vm.expectRevert(BaseEmissionsController.BaseEmissionsController_InvalidEpochDuration.selector);
         controller.initialize(
-            admin,
-            minter,
-            address(trustToken),
+            initParams,
             address(metaERC20HubMock),
             address(1),
             13_579,

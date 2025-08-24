@@ -124,10 +124,7 @@ contract RedeemBatchTest is BaseTest {
         sharesToRedeem[0] = depositShares[0] / 2;
         uint256[] memory minAssets = createUniformArray(1e4, 1);
 
-        uint256 bobBalanceBefore = users.bob.balance;
-
-        uint256[] memory assets =
-            redeemSharesBatch(users.bob, users.alice, atomIds, curveIds, sharesToRedeem, minAssets);
+        redeemSharesBatch(users.bob, users.alice, atomIds, curveIds, sharesToRedeem, minAssets);
         uint256 aliceShares = protocol.multiVault.getShares(users.alice, atomIds[0], CURVE_ID);
         uint256 expectedRemaining = depositShares[0] - sharesToRedeem[0];
         assertApproxEqRel(aliceShares, expectedRemaining, 1e16, "Alice shares should be reduced");
@@ -162,7 +159,7 @@ contract RedeemBatchTest is BaseTest {
     }
 
     function test_redeemBatch_FullRedemption_Success() public {
-        (bytes32[] memory atomIds, uint256[] memory depositShares) = _setupAtomsWithDeposits(2, 18e18);
+        (bytes32[] memory atomIds,) = _setupAtomsWithDeposits(2, 18e18);
 
         uint256[] memory curveIds = createDefaultCurveIdArray(2);
         uint256[] memory maxRedeemableShares = new uint256[](2);

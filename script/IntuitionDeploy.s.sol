@@ -12,7 +12,7 @@ import { Trust } from "src/Trust.sol";
 import { TestTrust } from "tests/mocks/TestTrust.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { AtomWalletFactory } from "src/protocol/wallet/AtomWalletFactory.sol";
-import { SateliteEmissionsController } from "src/protocol/emissions/SateliteEmissionsController.sol";
+import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
@@ -82,7 +82,7 @@ contract IntuitionDeploy is BaseScript {
     Trust public trust;
     MultiVault public multiVault;
     AtomWalletFactory public atomWalletFactory;
-    SateliteEmissionsController public sateliteEmissionsController;
+    SatelliteEmissionsController public satelliteEmissionsController;
     TrustBonding public trustBonding;
     BondingCurveRegistry public bondingCurveRegistry;
     LinearCurve public linearCurve;
@@ -156,7 +156,7 @@ contract IntuitionDeploy is BaseScript {
         contractInfo("Trust", address(trust));
         contractInfo("MultiVault", address(multiVault));
         contractInfo("AtomWalletFactory", address(atomWalletFactory));
-        contractInfo("SateliteEmissionsController", address(sateliteEmissionsController));
+        contractInfo("SatelliteEmissionsController", address(satelliteEmissionsController));
         contractInfo("TrustBonding", address(trustBonding));
         contractInfo("BondingCurveRegistry", address(bondingCurveRegistry));
         contractInfo("LinearCurve", address(linearCurve));
@@ -183,10 +183,10 @@ contract IntuitionDeploy is BaseScript {
         );
         console2.log(
             string.concat(
-                "  SateliteEmissionsController: { [",
+                "  SatelliteEmissionsController: { [",
                 "intuitionSepolia.id",
                 "]: '",
-                vm.toString(address(sateliteEmissionsController)),
+                vm.toString(address(satelliteEmissionsController)),
                 "' },"
             )
         );
@@ -255,14 +255,14 @@ contract IntuitionDeploy is BaseScript {
         atomWalletFactory = AtomWalletFactory(address(atomWalletFactoryProxy));
         info("AtomWalletFactory Proxy", address(atomWalletFactoryProxy));
 
-        // Deploy SateliteEmissionsController implementation and proxy
-        SateliteEmissionsController sateliteEmissionsControllerImpl = new SateliteEmissionsController();
-        info("SateliteEmissionsController Implementation", address(sateliteEmissionsControllerImpl));
+        // Deploy SatelliteEmissionsController implementation and proxy
+        SatelliteEmissionsController satelliteEmissionsControllerImpl = new SatelliteEmissionsController();
+        info("SatelliteEmissionsController Implementation", address(satelliteEmissionsControllerImpl));
 
-        TransparentUpgradeableProxy sateliteEmissionsControllerProxy =
-            new TransparentUpgradeableProxy(address(sateliteEmissionsControllerImpl), ADMIN, "");
-        sateliteEmissionsController = SateliteEmissionsController(address(sateliteEmissionsControllerProxy));
-        info("SateliteEmissionsController Proxy", address(sateliteEmissionsControllerProxy));
+        TransparentUpgradeableProxy satelliteEmissionsControllerProxy =
+            new TransparentUpgradeableProxy(address(satelliteEmissionsControllerImpl), ADMIN, "");
+        satelliteEmissionsController = SatelliteEmissionsController(address(satelliteEmissionsControllerProxy));
+        info("SatelliteEmissionsController Proxy", address(satelliteEmissionsControllerProxy));
 
         // Deploy TrustBonding implementation and proxy
         TrustBonding trustBondingImpl = new TrustBonding();
@@ -295,7 +295,7 @@ contract IntuitionDeploy is BaseScript {
         // Initialize AtomWalletFactory
         atomWalletFactory.initialize(address(multiVault));
 
-        sateliteEmissionsController.initialize(ADMIN, address(trustBonding));
+        satelliteEmissionsController.initialize(ADMIN, address(trustBonding));
 
         // Initialize TrustBonding
         trustBonding.initialize(
@@ -304,7 +304,7 @@ contract IntuitionDeploy is BaseScript {
             EPOCH_LENGTH, // epochLength
             block.timestamp + 20, // startTimestamp
             address(multiVault), // multiVault
-            address(sateliteEmissionsController),
+            address(satelliteEmissionsController),
             SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound
             PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound
         );

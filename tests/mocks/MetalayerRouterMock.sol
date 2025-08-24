@@ -8,7 +8,7 @@ enum FinalityState {
 }
 
 contract IIGPMock {
-    function quoteGasPayment(uint32 domain, uint256 gasLimit) external view returns (uint256) {
+    function quoteGasPayment(uint32, /* domain */ uint256 /* gasLimit */ ) external pure returns (uint256) {
         return 0 ether; // Return a fixed gas quote for testing
     }
 }
@@ -37,11 +37,11 @@ contract MetaERC20HubMock {
     }
 
     function transferRemote(
-        uint32 _recipientDomain,
-        bytes32 _recipientAddress,
-        uint256 _amount,
-        uint256 _gasLimit,
-        FinalityState _finalityState
+        uint32, /* _recipientDomain */
+        bytes32, /* _recipientAddress */
+        uint256, /* _amount */
+        uint256, /* _gasLimit */
+        FinalityState /* _finalityState */
     )
         external
         payable

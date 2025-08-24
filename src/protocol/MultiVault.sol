@@ -278,7 +278,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         return walletConfig.atomWarden;
     }
 
-    function getVault(bytes32 termId, uint256 curveId) public view returns (uint256, uint256) {
+    function getVault(bytes32 termId, uint256 curveId) public view returns (uint256 totalAssets, uint256 totalShares) {
         VaultState storage vault = _vaults[termId][curveId];
         return (vault.totalAssets, vault.totalShares);
     }
@@ -318,6 +318,17 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /// @return price current share price for the given vault id
     function currentSharePrice(bytes32 termId, uint256 curveId) external view returns (uint256) {
         return convertToAssets(termId, curveId, ONE_SHARE);
+    }
+
+    /// @notice returns max amount of shares that can be redeemed from the 'sender' balance through a redeem call
+    ///
+    /// @param sender address of the account to get max redeemable shares for
+    /// @param termId atom or triple (term) id to get corresponding shares for
+    /// @param curveId bonding curve ID to get corresponding shares for
+    ///
+    /// @return shares amount of shares that can be redeemed from the 'sender' balance through a redeem call
+    function maxRedeem(address sender, bytes32 termId, uint256 curveId) public view returns (uint256) {
+        return _vaults[termId][curveId].balanceOf[sender];
     }
 
     function previewAtomCreate(

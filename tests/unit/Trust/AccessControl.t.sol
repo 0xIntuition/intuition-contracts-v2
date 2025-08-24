@@ -194,11 +194,14 @@ contract TrustAccessControlTest is BaseTest {
 
         // Non-admin cannot grant MINTER_ROLE
         resetPrank(user);
-        vm.expectRevert();
-        protocol.trust.grantRole(protocol.trust.MINTER_ROLE(), newMinter);
 
-        // assertFalse(protocol.trust.hasRole(protocol.trust.MINTER_ROLE(), newMinter), "New address should not have
-        // MINTER_ROLE");
+        // Expect revert when non-admin tries to grant role
+        bytes32 minterRole = protocol.trust.MINTER_ROLE();
+
+        vm.expectRevert();
+        protocol.trust.grantRole(minterRole, newMinter);
+
+        assertFalse(protocol.trust.hasRole(minterRole, newMinter), "New address should not have MINTER_ROLE");
     }
 
     function test_Mint_EventEmission() public {
@@ -242,10 +245,12 @@ contract TrustAccessControlTest is BaseTest {
             "Admin should no longer have DEFAULT_ADMIN_ROLE"
         );
 
+        bytes32 adminRole = protocol.trust.DEFAULT_ADMIN_ROLE();
+
         // Should not be able to grant roles after renouncing admin
         resetPrank(admin);
         vm.expectRevert();
-        // protocol.trust.grantRole(protocol.trust.DEFAULT_ADMIN_ROLE(), makeAddr("newMinter"));
+        protocol.trust.grantRole(adminRole, makeAddr("newMinter"));
     }
 
     function test_AccessControl_MultipleAdmins() public {

@@ -23,7 +23,7 @@ contract Template is BaseTest {
     /// @dev Fuzz test that provides random values for an unsigned integer, but which rejects zero as an input.
     /// If you need more sophisticated input validation, you should use the `bound` utility instead.
     /// See https://twitter.com/PaulRBerg/status/1622558791685242880
-    function testFuzz_Example(uint256 x) external view {
+    function testFuzz_Example(uint256 x) external pure {
         vm.assume(x != 0); // or x = bound(x, 1, 100)
     }
 }

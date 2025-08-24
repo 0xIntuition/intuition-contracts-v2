@@ -6,6 +6,7 @@ import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
+import { ITrust } from "src/interfaces/ITrust.sol";
 import {
     MetaERC20Dispatcher,
     FinalityState,
@@ -14,16 +15,27 @@ import {
     IMetalayerRouter
 } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
 
-interface ITrustToken {
-    function mint(address to, uint256 amount) external;
-}
-
 /**
  * @title  BaseEmissionsController
  * @author 0xIntuition
  * @notice Controls the release of TRUST tokens by sending mint requests to the TRUST token.
  */
 contract BaseEmissionsController is AccessControlUpgradeable, ReentrancyGuardUpgradeable, MetaERC20Dispatcher {
+    /*//////////////////////////////////////////////////////////////
+                                 STRUCTS
+    //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @param _admin Admin address (multisig)
+     * @param _minter Initial minter address
+     * @param _trustToken Address of the TRUST token contract
+     */
+    struct InitParams {
+        address admin;
+        address minter;
+        address trustToken;
+    }
+
     /*//////////////////////////////////////////////////////////////
                                  CONSTANTS
     //////////////////////////////////////////////////////////////*/
@@ -146,10 +158,8 @@ contract BaseEmissionsController is AccessControlUpgradeable, ReentrancyGuardUpg
 
     /**
      * @notice Reinitializes the Trust contract
-     * @param _admin Admin address (multisig)
-     * @param _minter Initial minter address
-     * @param _metaERC20Hub Address of the TRUST token contract
-     * @param _trustToken Address of the TRUST token contract
+     * @param _params Initialization parameters containing admin and minter addresses
+     * @param _metaERC20Hub Address of the MetaERC20 Hub for bridging Trust tokens
      * @param _maxAnnualEmission Maximum annual emission of Trust tokens
      * @param _maxEmissionPerEpochBasisPoints Maximum emission per epoch
      * @param _annualReductionBasisPoints Annual reduction basis points
@@ -157,9 +167,7 @@ contract BaseEmissionsController is AccessControlUpgradeable, ReentrancyGuardUpg
      * @param _epochDuration Duration of each epoch in seconds
      */
     function initialize(
-        address _admin,
-        address _minter,
-        address _trustToken,
+        InitParams calldata _params,
         address _metaERC20Hub,
         address _satelliteEmissionsController,
         uint32 _recipientDomain,
@@ -172,7 +180,7 @@ contract BaseEmissionsController is AccessControlUpgradeable, ReentrancyGuardUpg
         external
         initializer
     {
-        if (_admin == address(0) || _minter == address(0) || _trustToken == address(0)) {
+        if (_params.admin == address(0) || _params.minter == address(0) || _params.trustToken == address(0)) {
             revert BaseEmissionsController_ZeroAddress();
         }
 
@@ -201,11 +209,11 @@ contract BaseEmissionsController is AccessControlUpgradeable, ReentrancyGuardUpg
         __ReentrancyGuard_init();
 
         // Assign the roles
-        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
-        _grantRole(CONTROLLER_ROLE, _minter);
+        _grantRole(DEFAULT_ADMIN_ROLE, _params.admin);
+        _grantRole(CONTROLLER_ROLE, _params.minter);
 
         // Set the Trust token contract address
-        trustToken = _trustToken;
+        trustToken = _params.trustToken;
 
         // Bridging configurations
         metaERC20Hub = _metaERC20Hub;
@@ -346,11 +354,11 @@ contract BaseEmissionsController is AccessControlUpgradeable, ReentrancyGuardUpg
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @notice Mint new energy tokens to an address
+     * @notice Mint new Trust tokens to this contract and bridge them to the satellite emissions controller
      */
     function mint() external payable nonReentrant onlyRole(CONTROLLER_ROLE) {
         uint256 epochMaxMintAmount = _updateMinting();
-        ITrustToken(trustToken).mint(address(this), epochMaxMintAmount);
+        ITrust(trustToken).mint(address(this), epochMaxMintAmount);
 
         IIGP igp = IIGP(IMetalayerRouter(IMetaERC20Hub(metaERC20Hub).metalayerRouter()).igp());
         uint256 gasLimit = igp.quoteGasPayment(recipientDomain, GAS_CONSTANT + 125_000);
@@ -369,7 +377,9 @@ contract BaseEmissionsController is AccessControlUpgradeable, ReentrancyGuardUpg
         );
 
         if (msg.value > gasLimit) {
-            payable(msg.sender).transfer(msg.value - gasLimit);
+            uint256 refund = msg.value - gasLimit;
+            (bool success,) = msg.sender.call{ value: refund }("");
+            require(success, "Gas refund failed");
         }
     }
 

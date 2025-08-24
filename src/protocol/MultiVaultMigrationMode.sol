@@ -153,10 +153,13 @@ contract MultiVaultMigrationMode is MultiVault {
             _vaults[termIds[i]][bondingCurveId].totalAssets = vaultTotals[i].totalAssets;
             _vaults[termIds[i]][bondingCurveId].totalShares = vaultTotals[i].totalShares;
 
+            uint256 currentSharePriceForVault =
+                currentSharePrice(bondingCurveId, vaultTotals[i].totalShares, vaultTotals[i].totalAssets);
+
             emit SharePriceChanged(
                 termIds[i],
                 bondingCurveId,
-                currentSharePrice(bondingCurveId, vaultTotals[i].totalShares, vaultTotals[i].totalAssets),
+                currentSharePriceForVault,
                 vaultTotals[i].totalAssets,
                 vaultTotals[i].totalShares,
                 getVaultType(termIds[i])
@@ -197,23 +200,29 @@ contract MultiVaultMigrationMode is MultiVault {
         }
 
         for (uint256 i = 0; i < termIds.length; i++) {
-            _vaults[termIds[i]][bondingCurveId].balanceOf[user] = userBalances[i];
+            bytes32 termId = termIds[i];
+            uint256 userBalance = userBalances[i];
+
+            // Set the user balance of shares
+            _vaults[termId][bondingCurveId].balanceOf[user] = userBalance;
+
+            // Cache vault data to reduce stack depth
+            uint256 totalShares = _vaults[termId][bondingCurveId].totalShares;
+            uint256 totalAssets = _vaults[termId][bondingCurveId].totalAssets;
+
+            // Calculate assets equivalent
+            uint256 assetsEquivalent = convertToAssets(bondingCurveId, totalShares, totalAssets, userBalance);
 
             emit Deposited(
                 user,
                 user,
-                termIds[i],
+                termId,
                 bondingCurveId,
-                convertToAssets(
-                    bondingCurveId,
-                    _vaults[termIds[i]][bondingCurveId].totalShares,
-                    _vaults[termIds[i]][bondingCurveId].totalAssets,
-                    userBalances[i]
-                ),
+                assetsEquivalent,
                 0, // assetsAfterFees are not set here, as this is a migration
-                userBalances[i],
-                getShares(user, termIds[i], bondingCurveId),
-                getVaultType(termIds[i])
+                userBalance,
+                totalShares,
+                getVaultType(termId)
             );
         }
     }

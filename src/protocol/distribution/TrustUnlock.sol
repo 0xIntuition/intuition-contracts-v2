@@ -375,8 +375,7 @@ contract TrustUnlock is IUnlock, ReentrancyGuard, Ownable {
         onlyNonLockedTokens(_sum(assets))
         returns (uint256[] memory shares)
     {
-        shares =
-            IMultiVault(multiVault).depositBatch{ value: msg.value }(receiver, termIds, curveIds, assets, minShares);
+        shares = _depositBatch(receiver, termIds, curveIds, assets, minShares);
     }
 
     /**
@@ -494,13 +493,35 @@ contract TrustUnlock is IUnlock, ReentrancyGuard, Ownable {
         }
     }
 
+    /**
+     * @notice Wraps Trust tokens into the WrappedTrust contract and approves the TrustBonding contract to spend them
+     * @param amount The amount of Trust tokens to wrap
+     */
     function _wrapTrustTokens(uint256 amount) internal {
         WrappedTrust(trustToken).deposit{ value: amount }();
         WrappedTrust(trustToken).approve(address(trustBonding), amount);
     }
 
+    /*     * @notice Unwraps Trust tokens from the WrappedTrust contract and sends them to this contract
+     * @param amount The amount of Trust tokens to unwrap
+     */
     function _unwrapTrustTokens(uint256 amount) internal {
         WrappedTrust(trustToken).withdraw(amount);
+    }
+
+    /// @dev Internal function to handle the batch deposit logic
+    function _depositBatch(
+        address receiver,
+        bytes32[] calldata termIds,
+        uint256[] calldata curveIds,
+        uint256[] calldata assets,
+        uint256[] calldata minShares
+    )
+        internal
+        returns (uint256[] memory shares)
+    {
+        shares =
+            IMultiVault(multiVault).depositBatch{ value: msg.value }(receiver, termIds, curveIds, assets, minShares);
     }
 
     /**
