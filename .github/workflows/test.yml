@@ -98,17 +98,16 @@ jobs:
           bun install --frozen-lockfile
           forge install
 
+      - name: Run Forge build
+        id: forge-build
+        run: |
+          forge build
+
       - name: Run Forge tests
         id: forge-test
         run: |
           mkdir -p artifacts/forge-test-results
           forge test -vvv 2>&1 | tee artifacts/forge-test-results/forge-test-results.txt
-          exit ${PIPESTATUS[0]}
-
-      - name: Run Forge build with contract sizes
-        id: forge-build-sizes
-        run: |
-          forge build --sizes 2>&1 | tee artifacts/forge-test-results/forge-build-sizes.txt
           exit ${PIPESTATUS[0]}
 
       - name: Upload test results
