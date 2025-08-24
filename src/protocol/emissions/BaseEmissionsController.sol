@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.29;
 
+import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
@@ -378,8 +379,7 @@ contract BaseEmissionsController is AccessControlUpgradeable, ReentrancyGuardUpg
 
         if (msg.value > gasLimit) {
             uint256 refund = msg.value - gasLimit;
-            (bool success,) = msg.sender.call{ value: refund }("");
-            require(success, "Gas refund failed");
+            Address.sendValue(payable(msg.sender), refund);
         }
     }
 
