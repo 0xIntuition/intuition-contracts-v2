@@ -1,10 +1,10 @@
 {
-  "name": "@0xIntuition/intuition-v2-sol",
-  "description": "",
+  "name": "intuition-contracts-v2",
+  "description": "Intuition Contracts V2",
   "version": "1.0.0",
   "author": {
     "name": "0xIntuition",
-    "url": "https://github.com/0xIntuition"
+    "url": "https://github.com/0xIntuition/intuition-contracts-v2"
   },
   "dependencies": {
     "@metalayer/contracts": "^1.1.0-beta",
@@ -28,6 +28,8 @@
   "scripts": {
     "clean": "rm -rf cache out",
     "build": "forge build",
+    "fmt": "forge fmt",
+    "fmt:check": "forge fmt --check",
     "lint": "bun run lint:sol && bun run prettier:check",
     "lint:sol": "forge fmt --check && bun solhint \"{script,src,tests}/**/*.sol\"",
     "prettier:check": "prettier --check \"**/*.{json,md,yml}\"",
