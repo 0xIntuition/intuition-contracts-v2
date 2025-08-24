@@ -5,9 +5,20 @@ import { console2 } from "forge-std/src/console2.sol";
 import { Test } from "forge-std/src/Test.sol";
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+
 import { IPermit2 } from "src/interfaces/IPermit2.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
-import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import { MetaERC20DispatchInit, FinalityState } from "src/interfaces/IMetaLayer.sol";
+import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";
+import {
+    GeneralConfig,
+    AtomConfig,
+    TripleConfig,
+    WalletConfig,
+    VaultFees,
+    BondingCurveConfig
+} from "src/interfaces/IMultiVaultCore.sol";
 
 import { AtomWalletFactory } from "src/protocol/wallet/AtomWalletFactory.sol";
 import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
@@ -19,14 +30,6 @@ import { ERC20Mock } from "./mocks/ERC20Mock.sol";
 import { Users } from "./utils/Types.sol";
 import { Trust } from "src/Trust.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
-import {
-    GeneralConfig,
-    AtomConfig,
-    TripleConfig,
-    WalletConfig,
-    VaultFees,
-    BondingCurveConfig
-} from "src/interfaces/IMultiVaultCore.sol";
 
 import { Modifiers } from "./utils/Modifiers.sol";
 
@@ -35,20 +38,38 @@ abstract contract BaseTest is Modifiers, Test {
                                      VARIABLES
     //////////////////////////////////////////////////////////////////////////*/
 
-    uint256 internal MIN_SHARES = 1e6; // GHOST Shares
-    uint256 internal MIN_DEPOSIT = 1e18; // 1 Trust
-    uint256 internal ATOM_PROTOCOL_FEE = 1e15; // 0.001 Trust
-    uint256 internal ATOM_WALLET_DEPOSIT_FEE = 100; // 0.0001 Trust
-    uint256 internal ATOM_CREATION_PROTOCOL_FEE = 1e15; // 0.001 Trust
-    uint256 internal TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 1e15; // 0.001 Trust
-    uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 5000; // 50%
-    uint256 internal TRIPLE_CREATION_PROTOCOL_FEE = 1e15; // 0.001 Trust
     uint256[] internal ATOM_COST;
     uint256[] internal TRIPLE_COST;
+    uint8 internal DECIMAL_PRECISION = 18;
+    uint256 internal FEE_DENOMINATOR = 10_000;
+    uint256 internal MIN_DEPOSIT = 1e17; // 0.1 Trust
+    uint256 internal MIN_SHARES = 1e6; // Ghost Shares
+    uint256 internal ATOM_DATA_MAX_LENGTH = 1000;
+
+    // Atom Config
+    uint256 internal ATOM_CREATION_PROTOCOL_FEE = 1e15; // 0.001 Trust (Fixed Cost)
+    uint256 internal ATOM_WALLET_DEPOSIT_FEE = 100; // 1% of assets after fixed costs (Percentage Cost)
+
+    // Triple Config
+    uint256 internal TRIPLE_CREATION_PROTOCOL_FEE = 1e15; // 0.001 Trust (Fixed Cost)
+    uint256 internal TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 1e15; // 0.001 Trust (Fixed Cost)
+    uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 300; // 3% (Percentage Cost)
+
+    // Vault Config
+    uint256 internal ENTRY_FEE = 500; // 5% of assets deposited after fixed costs (Percentage Cost)
+    uint256 internal EXIT_FEE = 500; // 5% of assets deposited after fixed costs (Percentage Cost)
+    uint256 internal PROTOCOL_FEE = 1000; // 10% of assets deposited after fixed costs (Percentage Cost)
+
+    // TrustBonding configuration
+    uint256 internal EPOCH_LENGTH = 2 weeks;
+    uint256 internal SYSTEM_UTILIZATION_LOWER_BOUND = 5000; // 50%
+    uint256 internal PERSONAL_UTILIZATION_LOWER_BOUND = 2500; // 30%
+
+    // Curve Configurations
+    uint256 internal PROGRESSIVE_CURVE_SLOPE = 1e15; // 0.001 slope
 
     // Emissions Configurations
-    uint256 internal MAX_ANNUAL_EMISSION = 10e18; // 10 Trust
-    uint256 internal INITIAL_SUPPLY = 1000e18; // 1k Trust
+    uint256 internal MAX_ANNUAL_EMISSION = 1_000_000e18; // 10 Trust
 
     /*//////////////////////////////////////////////////////////////////////////
                                    TEST CONTRACTS
@@ -191,7 +212,23 @@ abstract contract BaseTest is Modifiers, Test {
         vm.label(address(progressiveCurve), "ProgressiveCurve");
 
         protocol.satelliteEmissionsController.initialize(
-            users.admin, address(protocol.trustBonding)
+            users.admin,
+            address(protocol.trustBonding),
+            address(1), // metaERC20Hub
+            MetaERC20DispatchInit({
+                hubOrSpoke: address(1),
+                recipientDomain: 1,
+                recipientAddress: address(1),
+                gasLimit: 125_000,
+                finalityState: FinalityState.INSTANT
+            }),
+            CoreEmissionsControllerInit({
+                startTimestamp: block.timestamp,
+                emissionsLength: 1 weeks,
+                emissionsPerEpoch: MAX_ANNUAL_EMISSION / 52, // weekly epochs
+                emissionsReductionCliff: 52, // reduce every 52 epochs (1 year)
+                emissionsReductionBasisPoints: 1000 // reduce by 10% each cliff
+             })
         );
 
         // Initialize AtomWalletFactory

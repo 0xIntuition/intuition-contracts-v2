@@ -105,11 +105,12 @@ interface ITrustBonding {
 
     function hasClaimedRewardsForEpoch(address _account, uint256 _epoch) external view returns (bool);
 
-    function getAPRAtEpoch(uint256 _epoch) external view returns (uint256);
+    function getAprAtEpoch(uint256 _epoch) external view returns (uint256);
 
     function getSystemUtilizationRatio(uint256 _epoch) external view returns (uint256);
 
     function getPersonalUtilizationRatio(address _account, uint256 _epoch) external view returns (uint256);
+    function getUnclaimedRewards() external view returns (uint256);
 
     function claimRewards(address recipient) external;
 

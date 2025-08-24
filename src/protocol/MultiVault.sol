@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.29;
 
-import { console2 } from "forge-std/src/console2.sol";
 import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -37,7 +36,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     using FixedPointMathLib for uint256;
 
     /* =================================================== */
-    /*                  CONSTANTS                          */
+    /*                       CONSTANTS                     */
     /* =================================================== */
 
     /// @notice Role used for the timelocked operations
@@ -1178,7 +1177,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     }
 
     /* =================================================== */
-    /*                      Internal                       */
+    /*                      INTERNAL                       */
     /* =================================================== */
 
     function _requireVaultType(bytes32 termId) internal view returns (bool isAtomType, VaultType vaultType) {

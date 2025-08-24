@@ -5,14 +5,12 @@ import { Errors } from "src/libraries/Errors.sol";
 import { IBondingCurveRegistry } from "src/interfaces/IBondingCurveRegistry.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 
-
 struct BatchSetUserBalancesParams {
     bytes32[] termIds;
     uint256 bondingCurveId;
     address user;
     uint256[] userBalances;
 }
-
 
 /**
  * @title MultiVaultMigrationMode
@@ -177,12 +175,7 @@ contract MultiVaultMigrationMode is MultiVault {
      * @notice Sets the user balances for each vault
      * @param params The parameters for the batch set user balances.
      */
-    function batchSetUserBalances(
-        BatchSetUserBalancesParams calldata params
-    )
-        external
-        onlyRole(MIGRATOR_ROLE)
-    {
+    function batchSetUserBalances(BatchSetUserBalancesParams calldata params) external onlyRole(MIGRATOR_ROLE) {
         if (params.bondingCurveId == 0) {
             revert Errors.MultiVault_InvalidBondingCurveId();
         }

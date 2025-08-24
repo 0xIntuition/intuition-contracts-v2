@@ -7,7 +7,13 @@ import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/ac
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import { ITrust } from "src/interfaces/ITrust.sol";
-import { MetaERC20Dispatcher, FinalityState, IMetaERC20Hub, IIGP, IMetalayerRouter } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
+import {
+    MetaERC20Dispatcher,
+    FinalityState,
+    IMetaERC20Hub,
+    IIGP,
+    IMetalayerRouter
+} from "src/protocol/emissions/MetaERC20Dispatcher.sol";
 
 struct BaseEmissionsControllerInitializeParams {
     address admin;
@@ -58,17 +64,15 @@ contract BaseEmissionsController is AccessControlUpgradeable, ReentrancyGuardUpg
     /// @notice Trust token contract address
     address public trustToken;
 
-
     // @notice MetaLayer Hub for the Trust token.
     address public metaERC20Hub;
-    
+
     /// @notice Recipient domain for bridging Trust tokens to the satellite chain
     uint32 public recipientDomain;
 
     /// @notice Address of the emissions controller on the satellite chain
     address public satelliteEmissionsController;
-    
-    
+
     /// @notice Tracks the start of the current annual period
     uint256 public annualPeriodStartTime;
 
@@ -125,7 +129,6 @@ contract BaseEmissionsController is AccessControlUpgradeable, ReentrancyGuardUpg
      */
     event TrustMinted(address indexed to, uint256 amount);
 
-
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
     //////////////////////////////////////////////////////////////*/
@@ -156,12 +159,7 @@ contract BaseEmissionsController is AccessControlUpgradeable, ReentrancyGuardUpg
      * @notice Reinitializes the Trust contract
      * @param params Initialization parameters
      */
-    function initialize(
-        BaseEmissionsControllerInitializeParams memory params
-    )
-        external
-        initializer
-    {
+    function initialize(BaseEmissionsControllerInitializeParams memory params) external initializer {
         if (params.admin == address(0) || params.minter == address(0) || params.trustToken == address(0)) {
             revert BaseEmissionsController_ZeroAddress();
         }
@@ -194,13 +192,17 @@ contract BaseEmissionsController is AccessControlUpgradeable, ReentrancyGuardUpg
         _grantRole(DEFAULT_ADMIN_ROLE, params.admin);
         _grantRole(CONTROLLER_ROLE, params.minter);
 
+        // Initialize MetaERC20Dispatcher
+        _setRecipientDomain(params.recipientDomain);
+        _setMetaERC20SpokeOrHub(params.metaERC20Hub);
+        _setMessageGasCost(125_000);
+        _setFinalityState(FinalityState.INSTANT);
+
         // Set the Trust token contract address
         trustToken = params.trustToken;
-        
+
         // Bridging configurations
-        metaERC20Hub = params.metaERC20Hub;
         satelliteEmissionsController = params.satelliteEmissionsController;
-        recipientDomain = params.recipientDomain;
 
         // Initialize annual minting variables
         annualPeriodStartTime = params.startTimestamp;
@@ -293,9 +295,40 @@ contract BaseEmissionsController is AccessControlUpgradeable, ReentrancyGuardUpg
         return maxAnnualEmission - reductionAmount;
     }
 
-    /*//////////////////////////////////////////////////////////////
-                             ADMIN FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
+    /* =================================================== */
+    /*                    CONTROLLER                       */
+    /* =================================================== */
+
+    /**
+     * @notice Mint new energy tokens to an address
+     */
+    function mintAndBridge() external payable nonReentrant onlyRole(CONTROLLER_ROLE) {
+        uint256 epochMaxMintAmount = _updateMinting();
+        ITrust(trustToken).mint(address(this), epochMaxMintAmount);
+
+        uint256 gasLimit = _quoteGasPayment(_recipientDomain, GAS_CONSTANT + _messageGasCost);
+
+        if (msg.value < gasLimit) {
+            revert BaseEmissionsController_InsufficientGasPayment();
+        }
+
+        _bridgeTokens(
+            _metaERC20SpokeOrHub,
+            _recipientDomain,
+            bytes32(uint256(uint160(satelliteEmissionsController))),
+            epochMaxMintAmount,
+            gasLimit,
+            _finalityState
+        );
+
+        if (msg.value > gasLimit) {
+            payable(msg.sender).transfer(msg.value - gasLimit);
+        }
+    }
+
+    /* =================================================== */
+    /*                       ADMIN                         */
+    /* =================================================== */
 
     /**
      * @notice Sets the maximum emission per epoch in basis points of max annual emission
@@ -331,45 +364,26 @@ contract BaseEmissionsController is AccessControlUpgradeable, ReentrancyGuardUpg
         emit AnnualReductionBasisPointsChanged(newAnnualReductionBasisPoints);
     }
 
-    /*//////////////////////////////////////////////////////////////
-                             MINTER FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    /**
-     * @notice Mint new energy tokens to an address
-     */
-    function mint() payable external nonReentrant onlyRole(CONTROLLER_ROLE) {
-        uint256 epochMaxMintAmount = _updateMinting();
-        ITrust(trustToken).mint(address(this), epochMaxMintAmount);
-
-        IIGP igp = IIGP(IMetalayerRouter(IMetaERC20Hub(metaERC20Hub).metalayerRouter()).igp());
-        uint256 gasLimit = igp.quoteGasPayment(recipientDomain, GAS_CONSTANT + 125_000);
-
-        if(msg.value < gasLimit) {
-            revert BaseEmissionsController_InsufficientGasPayment();
-        }
-
-        _bridgeTokens(
-            metaERC20Hub,
-            recipientDomain,
-            bytes32(uint256(uint160(satelliteEmissionsController))),
-            epochMaxMintAmount,
-            gasLimit,
-            FinalityState.INSTANT
-        );
-
-        if (msg.value > gasLimit) {
-            payable(msg.sender).transfer(msg.value - gasLimit);
-        }
+    function setMessageGasCost(uint256 newGasCost) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _setMessageGasCost(newGasCost);
     }
 
-    /*//////////////////////////////////////////////////////////////
-                             INTERNAL FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
+    function setFinalityState(FinalityState newFinalityState) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _setFinalityState(newFinalityState);
+    }
 
-    /**
-     * @dev Internal function to update annual and epoch minting amounts
-     */
+    function setMetaERC20SpokeOrHub(address newMetaERC20SpokeOrHub) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _setMetaERC20SpokeOrHub(newMetaERC20SpokeOrHub);
+    }
+
+    function setRecipientDomain(uint32 newRecipientDomain) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _setRecipientDomain(newRecipientDomain);
+    }
+
+    /* =================================================== */
+    /*                      INTERNAL                       */
+    /* =================================================== */
+
     function _updateMinting() internal returns (uint256) {
         // Adjust maxAnnualEmission annually
         if (block.timestamp >= annualPeriodStartTime + ONE_YEAR) {

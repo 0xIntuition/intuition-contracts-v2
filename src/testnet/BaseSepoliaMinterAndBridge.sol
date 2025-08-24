@@ -1,4 +1,3 @@
-
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.29;
 
@@ -13,54 +12,40 @@ interface IERC20 {
 }
 
 contract BaseSepoliaMinterAndBridge is MetaERC20Dispatcher, AccessControl {
-
     address public token;
 
     address public metaERC20Hub;
 
-    constructor (address _owner, address _token, address _metaERC20Hub) {
+    constructor(address _owner, address _token, address _metaERC20Hub) {
         token = _token;
         metaERC20Hub = _metaERC20Hub;
         _grantRole(DEFAULT_ADMIN_ROLE, _owner);
     }
 
-    receive() external payable {}
-    
-    function bridge(
-        address to,
-        uint32 domain,
-        uint256 amount
-    ) external payable onlyRole(DEFAULT_ADMIN_ROLE) {
+    receive() external payable { }
+
+    function bridge(address to, uint32 domain, uint256 amount) external payable onlyRole(DEFAULT_ADMIN_ROLE) {
         IERC20(token).transferFrom(msg.sender, address(this), amount);
         IERC20(token).approve(metaERC20Hub, amount);
 
         uint256 GAS_CONSTANT = 100_000;
         IIGP igp = IIGP(IMetalayerRouter(IMetatoken(metaERC20Hub).metalayerRouter()).igp());
 
-        uint256 gasLimit; 
+        uint256 gasLimit;
         try igp.quoteGasPayment(domain, GAS_CONSTANT + 125_000) returns (uint256 _gasLimit) {
             gasLimit = _gasLimit;
         } catch {
-            gasLimit = 34750000000000;
+            gasLimit = 34_750_000_000_000;
         }
         require(msg.value >= gasLimit, "Not enough value sent");
 
-        _bridgeTokens(
-            metaERC20Hub,
-            domain,
-            bytes32(uint256(uint160(to))),
-            amount,
-            gasLimit,
-            FinalityState.INSTANT
-        );
+        _bridgeTokens(metaERC20Hub, domain, bytes32(uint256(uint160(to))), amount, gasLimit, FinalityState.INSTANT);
 
         if (msg.value > gasLimit) {
             payable(msg.sender).transfer(msg.value - gasLimit);
         }
     }
 }
-
-
 
 interface IMetalayerRouter {
     function igp() external view returns (address);
@@ -77,7 +62,10 @@ interface IMetatoken {
         uint256 _amount,
         uint256 _gasLimit,
         FinalityState _finalityState
-    ) external payable returns (bytes32 transferId);
+    )
+        external
+        payable
+        returns (bytes32 transferId);
 
     function metalayerRouter() external view returns (address);
 }
