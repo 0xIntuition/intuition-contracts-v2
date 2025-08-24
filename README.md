@@ -15,22 +15,6 @@ The Intuition V2 smart contracts for the Intuition protocol, built using [Foundr
 
 This is a list of the most frequently needed commands.
 
-### Build
-
-Build the contracts:
-
-```sh
-$ forge build
-```
-
-### Clean
-
-Delete the build artifacts and cache directories:
-
-```sh
-$ forge clean
-```
-
 ### Compile
 
 Compile the contracts:
@@ -39,42 +23,12 @@ Compile the contracts:
 $ forge build
 ```
 
-### Coverage
-
-Get a test coverage report:
-
-```sh
-$ forge coverage
-```
-
-### Deploy
-
-Deploy to Anvil:
-
-```sh
-$ forge script script/Deploy.s.sol --broadcast --fork-url http://localhost:8545
-```
-
-For this script to work, you need to have a `MNEMONIC` environment variable set to a valid
-[BIP39 mnemonic](https://iancoleman.io/bip39/).
-
-For instructions on how to deploy to a testnet or mainnet, check out the
-[Solidity Scripting](https://book.getfoundry.sh/tutorials/solidity-scripting.html) tutorial.
-
 ### Format
 
 Format the contracts:
 
 ```sh
 $ forge fmt
-```
-
-### Gas Usage
-
-Get a gas report:
-
-```sh
-$ forge test --gas-report
 ```
 
 ### Lint
@@ -85,12 +39,28 @@ Lint the contracts:
 $ bun run lint
 ```
 
+### Clean
+
+Delete the build artifacts and cache directories:
+
+```sh
+$ forge clean
+```
+
 ### Test
 
 Run the tests:
 
 ```sh
 $ forge test
+```
+
+### Gas Usage
+
+Get a gas report:
+
+```sh
+$ forge test --gas-report
 ```
 
 ### Test Coverage
@@ -110,6 +80,20 @@ simply copy paste the path):
 $ bun run test:coverage:report
 ```
 
+### Deploy
+
+Deploy to Anvil:
+
+```sh
+$ forge script script/Deploy.s.sol --broadcast --fork-url http://localhost:8545
+```
+
+For this script to work, you need to have a `MNEMONIC` environment variable set to a valid
+[BIP39 mnemonic](https://iancoleman.io/bip39/).
+
+For instructions on how to deploy to a testnet or mainnet, check out the
+[Solidity Scripting](https://book.getfoundry.sh/tutorials/solidity-scripting.html) tutorial.
+
 > [!NOTE]
 >
 > This command requires you to have [`lcov`](https://github.com/linux-test-project/lcov) installed on your machine. On
@@ -118,9 +102,11 @@ $ bun run test:coverage:report
 
 ## License
 
-This project is licensed under MIT.
+This project is licensed under BUSL-1.1
 
 
-## Deployed Contract Addresses:
+# Deployed Contract Addresses:
 
-EntryPoint: 0x334bE66b33EC87698c16D4386896f8E807d5d2D8
+## Network: Intuition Testnet (Chain ID: 13579)
+
+`EntryPoint`: 0x334bE66b33EC87698c16D4386896f8E807d5d2D8
