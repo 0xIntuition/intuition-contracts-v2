@@ -63,7 +63,7 @@ abstract contract BaseTest is Modifiers, Test {
     // TrustBonding configuration
     uint256 internal EPOCH_LENGTH = 2 weeks;
     uint256 internal SYSTEM_UTILIZATION_LOWER_BOUND = 5000; // 50%
-    uint256 internal PERSONAL_UTILIZATION_LOWER_BOUND = 2500; // 30%
+    uint256 internal PERSONAL_UTILIZATION_LOWER_BOUND = 3000; // 25%
 
     // Curve Configurations
     uint256 internal PROGRESSIVE_CURVE_SLOPE = 1e15; // 0.001 slope
@@ -260,8 +260,8 @@ abstract contract BaseTest is Modifiers, Test {
             block.timestamp, // startTimestamp (future)
             address(protocol.multiVault), // multiVault
             address(protocol.satelliteEmissionsController), // satelliteEmissionsController
-            5000, // systemUtilizationLowerBound (50%)
-            3000 // personalUtilizationLowerBound (30%)
+            SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound (50%)
+            PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound (30%)
         );
 
         // Prepare configuration structs with deployed addresses
@@ -313,8 +313,7 @@ abstract contract BaseTest is Modifiers, Test {
             minDeposit: MIN_DEPOSIT,
             minShare: MIN_SHARES,
             atomDataMaxLength: 1000,
-            decimalPrecision: 18,
-            protocolFeeDistributionEnabled: false
+            decimalPrecision: 18
         });
     }
 

@@ -88,10 +88,6 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     // User address -> Last active epoch
     mapping(address user => uint256 epoch) public lastActiveEpoch;
 
-    /// @notice Mapping of epochs to whether protocol fee distribution is enabled for that epoch or not
-    // Epoch -> Is protocol fee distribution enabled for that epoch
-    mapping(uint256 epoch => bool isProtocolFeeDistributionEnabled) public protocolFeeDistributionEnabledAtEpoch;
-
     /* =================================================== */
     /*                        Errors                       */
     /* =================================================== */
@@ -207,12 +203,12 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         initializer
     {
         __AccessControl_init();
-        _grantRole(DEFAULT_ADMIN_ROLE, _generalConfig.admin);
         __ReentrancyGuard_init();
         __Pausable_init();
         __MultiVaultCore_init(
             _generalConfig, _atomConfig, _tripleConfig, _walletConfig, _vaultFees, _bondingCurveConfig
         );
+        _grantRole(DEFAULT_ADMIN_ROLE, _generalConfig.admin);
     }
 
     /* =================================================== */
@@ -1303,7 +1299,6 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /// @param amountToRemove the amount of utilization to remove
     function _removeUtilization(address user, int256 amountToRemove) internal {
         // First, roll the user's old epoch usage forward so we adjust the current epoch’s usage
-        _rollover(user);
 
         uint256 epoch = currentEpoch();
 
@@ -1337,25 +1332,13 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         // first action in the new epoch automatically rolls over the totalUtilization
         if (totalUtilization[currentEpochLocal] == 0) {
             totalUtilization[currentEpochLocal] = totalUtilization[oldEpoch];
-
-            // snapshot the protocol fee distribution status for the current epoch to make sure it's not altered
-            // mid-epoch (any changes to the protocol fee distribution status will be reflected in the next epoch)
-            protocolFeeDistributionEnabledAtEpoch[currentEpochLocal] = generalConfig.protocolFeeDistributionEnabled;
-
             uint256 previousEpoch = currentEpochLocal - 1;
-
-            // since this is the first action in the new epoch, we should now claim the accumulated protocol fees
-            // from the previous epoch and send them to the TrustBonding contract for users to claim. The only
-            // exception is the very first epoch, where this is skipped since there are no previous epochs to claim
-            // the accumulated protocol fees for
             if (currentEpochLocal > 0) {
                 _claimAccumulatedProtocolFees(previousEpoch);
             }
         }
 
-        // if user’s oldEpoch < currentEpochLocal, we do a rollover
         if (personalUtilization[user][currentEpochLocal] == 0) {
-            // move leftover from oldEpoch to currentEpoch on the first action in the new epoch
             personalUtilization[user][currentEpochLocal] = personalUtilization[user][oldEpoch];
         }
 
@@ -1369,34 +1352,8 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     function _claimAccumulatedProtocolFees(uint256 epoch) internal {
         uint256 protocolFees = accumulatedProtocolFees[epoch];
         if (protocolFees == 0) return;
-
-        // Check if the protocol fee distribution is enabled using the snapshot instead of the live value to
-        // prevent mid-epoch changes to the protocol fee distribution
-        bool distributionEnabled = protocolFeeDistributionEnabledAtEpoch[epoch];
-
-        // Set the destination to the TrustBonding contract if distribution is enabled, otherwise set it to the protocol
-        // multisig
-        address destination;
-
-        if (distributionEnabled) {
-            destination = generalConfig.trustBonding;
-
-            // Set the max claimable protocol fees for the previous epoch in the TrustBonding contract to the amount
-            // of TRUST tokens being sent to the TrustBonding contract. This is done to be sure that the internal
-            // accounting works as intended, instead of relying simply on the `balanceOf` of the contract
-            ITrustBonding(generalConfig.trustBonding).setMaxClaimableProtocolFeesForPreviousEpoch(protocolFees);
-
-            // Transfer the protocol fees to the TrustBonding contract
-            Address.sendValue(payable(destination), protocolFees);
-        } else {
-            destination = generalConfig.protocolMultisig;
-
-            // If the protocol fee distribution is not enabled, we simply transfer the protocol fees to the protocol
-            // multisig
-            Address.sendValue(payable(destination), protocolFees);
-        }
-
-        emit ProtocolFeeTransferred(epoch, destination, protocolFees);
+        Address.sendValue(payable(generalConfig.protocolMultisig), protocolFees);
+        emit ProtocolFeeTransferred(epoch, generalConfig.protocolMultisig, protocolFees);
     }
 
     function _updateVaultOnCreation(

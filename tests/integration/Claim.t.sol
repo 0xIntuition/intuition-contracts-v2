@@ -68,8 +68,7 @@ contract ClaimTest is BaseTest {
         _createLocksForUsers(_users, stakeAmount, THREE_YEARS);
         _nextCliff(users.alice, 1, DEFAULT_EMISSIONS_PER_EPOCH / _users.length);
         _nextCliff(users.alice, 2, (900_000 * 1e18) / _users.length);
-        _nextCliff(users.alice, 3, (121_500 * 1e18) / _users.length); // Dramatic reduction after 2nd epoch without full
-            // utilization.
+        _nextCliff(users.alice, 3, (121_500 * 1e18) / _users.length); // Dramatic reduction after 2nd epoch without full// utilization.
         _nextCliff(users.alice, 4, (109_350 * 1e18) / _users.length);
         _nextCliff(users.alice, 5, (98_415 * 1e18) / _users.length);
     }
@@ -118,6 +117,28 @@ contract ClaimTest is BaseTest {
         _nextCliffWithRewardsDeposit(_users, 4, (729_000 * 1e18) / _users.length);
         _nextCliffWithRewardsDeposit(_users, 5, (656_100 * 1e18) / _users.length);
     }
+    
+    function test_mixedUsers_createStakeRewards_FullyBonded_MaxUtilization_Success() public {
+        uint256 stakeAmount = 1000 * 1e18;
+        address[] memory _users1 = new address[](2);
+        _users1[0] = users.alice;
+        _users1[1] = users.bob;
+
+        address[] memory _users2 = new address[](1);
+        _users2[0] = users.charlie;
+
+        _addToWhiteList(_users1);
+        _addToWhiteList(_users2);
+        _createLocksForUsers(_users1, stakeAmount, THREE_YEARS);
+        _createLocksForUsers(_users2, stakeAmount, THREE_YEARS);
+        _nextCliffWithRewardsDeposit(_users1, 1, DEFAULT_EMISSIONS_PER_EPOCH / 3);
+        resetPrank({ msgSender: users.charlie });
+        protocol.trustBonding.claimRewards(users.charlie);
+        _nextCliffWithRewardsDeposit(_users1, 2, (900_000 * 1e18) / 3);
+        resetPrank({ msgSender: users.charlie });
+        protocol.trustBonding.claimRewards(users.charlie);
+        _nextCliffWithRewardsDeposit(_users1, 3, (224_991 * 1e18));
+    }
 
     function _addToWhiteList(address[] memory _users) internal {
         resetPrank({ msgSender: users.admin });
@@ -146,6 +167,19 @@ contract ClaimTest is BaseTest {
         protocol.trustBonding.claimRewards(user);
         uint256 balanceAfter = address(user).balance;
         assertEq(balanceBefore + rewardAmount, balanceAfter);
+    }
+
+    function _nextCliffForUsers(address[] memory users, uint256 epoch, uint256 rewardAmount) internal {
+        vm.warp(block.timestamp + DEFAULT_EPOCH_LENGTH);
+        for (uint256 i = 0; i < users.length; i++) {
+            address user = users[i];
+            assertEq(protocol.trustBonding.currentEpoch(), epoch);
+            assertEq(protocol.trustBonding.eligibleRewards(user), rewardAmount);
+            uint256 balanceBefore = address(user).balance;
+            protocol.trustBonding.claimRewards(user);
+            uint256 balanceAfter = address(user).balance;
+            assertEq(balanceBefore + rewardAmount, balanceAfter);
+        }
     }
 
     function _nextCliffWithRewardsDeposit(address user, uint256 epoch, uint256 rewardAmount) internal {

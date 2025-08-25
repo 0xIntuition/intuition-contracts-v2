@@ -209,9 +209,7 @@ interface IMultiVault {
     /// @param amount amount of atom deposit fraction deposited
     event AtomDepositFractionDeposited(bytes32 indexed termId, address indexed sender, uint256 amount);
 
-    /// @notice emitted after protocol fee is accrued internally. It's later transferred either to the protocol multisig
-    ///         or to the TrustBonding contract for pro-rata distribution among the bonders, depending on the
-    ///         `generalConfig.protocolFeeDistributionEnabled` setting
+    /// @notice emitted after protocol fee is accrued internally.
     ///
     /// @param epoch epoch in which the protocol fee was accrued (current epoch)
     /// @param amount amount of protocol fee accrued
@@ -373,8 +371,6 @@ interface IMultiVault {
     function getTotalUtilizationForEpoch(uint256 epoch) external view returns (int256);
 
     function accumulatedProtocolFees(uint256 epoch) external view returns (uint256);
-
-    function protocolFeeDistributionEnabledAtEpoch(uint256 epoch) external view returns (bool);
 
     function getAtomWarden() external view returns (address);
 

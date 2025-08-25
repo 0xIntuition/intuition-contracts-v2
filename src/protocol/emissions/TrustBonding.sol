@@ -429,53 +429,6 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
             revert TrustBonding_RewardsAlreadyClaimedForEpoch();
         }
 
-        // if (false) {
-        if (IMultiVault(multiVault).protocolFeeDistributionEnabledAtEpoch(previousEpoch)) {
-            uint256 accumulatedProtocolFeesForPreviousEpoch =
-                IMultiVault(multiVault).accumulatedProtocolFees(previousEpoch);
-
-            uint256 maxClaimableProtocolFees = maxClaimableProtocolFeesForEpoch[previousEpoch];
-
-            // Check if the accumulated protocol fees from the previous epoch are sent to the TrustBonding contract
-            if (accumulatedProtocolFeesForPreviousEpoch > 0 && maxClaimableProtocolFees == 0) {
-                revert TrustBonding_ProtocolFeesNotSentToTrustBondingYet();
-            }
-
-            // Once we're sure there are protocol fees to claim, we can check if the user is eligible for them
-            if (accumulatedProtocolFeesForPreviousEpoch > 0 && maxClaimableProtocolFees > 0) {
-                uint256 userProtocolFees = _userEligibleProtocolFeeRewards(msg.sender);
-
-                // Check if the user has any protocol fees to claim
-                if (userProtocolFees > 0) {
-                    // Check if the user has already claimed protocol fees for the previous epoch
-                    if (userClaimedProtocolFeesForEpoch[msg.sender][previousEpoch] > 0) {
-                        revert TrustBonding_ProtocolFeesAlreadyClaimedForEpoch();
-                    }
-
-                    // Increment the total claimed protocol fees for the previous epoch and set the user's claimed
-                    // protocol fees
-                    totalClaimedProtocolFeesForEpoch[previousEpoch] += userProtocolFees;
-                    userClaimedProtocolFeesForEpoch[msg.sender][previousEpoch] = userProtocolFees;
-
-                    // At this point, we should be sure that there are enough protocol fees to claim for the user,
-                    // but we're also adding a few sanity checks here that should never fail
-                    if (userProtocolFees + totalClaimedProtocolFeesForEpoch[previousEpoch] > maxClaimableProtocolFees) {
-                        revert TrustBonding_ProtocolFeesExceedMaxClaimable();
-                    }
-
-                    // Also ensure that the user is not trying to claim more protocol fees than the contract has
-                    if (userProtocolFees > address(this).balance) {
-                        revert TrustBonding_ClaimableProtocolFeesExceedBalance();
-                    }
-
-                    // Transfer the protocol fees to the recipient address
-                    Address.sendValue(payable(recipient), userProtocolFees);
-
-                    emit ProtocolFeesClaimed(msg.sender, recipient, userProtocolFees);
-                }
-            }
-        }
-
         // Increment the total claimed inflationary rewards for the previous epoch and set the user's claimed rewards
         totalClaimedRewardsForEpoch[previousEpoch] += userRewards;
         userClaimedRewardsForEpoch[msg.sender][previousEpoch] = userRewards;
@@ -667,10 +620,10 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
             return maxEpochEmissions;
         }
 
-        uint256 systemUtilizationRatio = getSystemUtilizationRatio(epoch);
-        uint256 emissionPerEpoch = maxEpochEmissions * systemUtilizationRatio / BASIS_POINTS_DIVISOR;
+        uint256 systemUtilizationRatio = _getSystemUtilizationRatio(epoch);
+        uint256 epochEmissions = maxEpochEmissions * systemUtilizationRatio / BASIS_POINTS_DIVISOR;
 
-        return emissionPerEpoch;
+        return epochEmissions;
     }
 
     function _hasClaimedRewardsForEpoch(address account, uint256 epoch) internal view returns (bool) {
@@ -718,28 +671,6 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         return userBalance * accumulatedProtocolFeesForPreviousEpoch / totalBalance;
     }
 
-    /**
-     * @notice Returns the normalized utilization ratio, adjusted for the desired range (lowerBound,
-     * BASIS_POINTS_DIVISOR)
-     * @param delta The change in utilization from the previous epoch
-     * @param target The target utilization for the previous epoch
-     * @param lowerBound The lower bound for the utilization ratio
-     * @return The normalized utilization ratio for the given parameters
-     */
-    function _getNormalizedUtilizationRatio(
-        uint256 delta,
-        uint256 target,
-        uint256 lowerBound
-    )
-        internal
-        pure
-        returns (uint256)
-    {
-        uint256 ratioRange = BASIS_POINTS_DIVISOR - lowerBound;
-        uint256 utilizationRatio = lowerBound + (delta * ratioRange) / target;
-        return utilizationRatio;
-    }
-
     function _getPersonalUtilizationRatio(address _account, uint256 _epoch) internal view returns (uint256) {
         // In epochs 0 and 1, the utilization ratio is set to the maximum value (100%)
         if (_account == address(0)) {
@@ -785,6 +716,28 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         // BASIS_POINTS_DIVISOR
         return
             _getNormalizedUtilizationRatio(userUtilizationDelta, userUtilizationTarget, personalUtilizationLowerBound);
+    }
+
+    /**
+     * @notice Returns the normalized utilization ratio, adjusted for the desired range (lowerBound,
+     * BASIS_POINTS_DIVISOR)
+     * @param delta The change in utilization from the previous epoch
+     * @param target The target utilization for the previous epoch
+     * @param lowerBound The lower bound for the utilization ratio
+     * @return The normalized utilization ratio for the given parameters
+     */
+    function _getNormalizedUtilizationRatio(
+        uint256 delta,
+        uint256 target,
+        uint256 lowerBound
+    )
+        internal
+        pure
+        returns (uint256)
+    {
+        uint256 ratioRange = BASIS_POINTS_DIVISOR - lowerBound;
+        uint256 utilizationRatio = lowerBound + (delta * ratioRange) / target;
+        return utilizationRatio;
     }
 
     function _getSystemUtilizationRatio(uint256 _epoch) internal view returns (uint256) {

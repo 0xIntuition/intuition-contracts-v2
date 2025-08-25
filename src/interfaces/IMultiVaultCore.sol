@@ -25,10 +25,6 @@ struct GeneralConfig {
     uint256 atomDataMaxLength;
     /// @dev Decimal precision used for calculating share prices
     uint256 decimalPrecision;
-    /// @dev If true, accrued protocol fees are routed to the TrustBonding contract for the pro-rata
-    ///      distribution among the bonders. If false, accrued protocol fees are simply sent to the
-    ///      protocol multisig address instead.
-    bool protocolFeeDistributionEnabled;
 }
 
 /// @dev Atom configuration struct

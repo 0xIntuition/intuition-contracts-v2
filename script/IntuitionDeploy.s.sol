@@ -347,8 +347,7 @@ contract IntuitionDeploy is BaseScript {
             minDeposit: MIN_DEPOSIT,
             minShare: MIN_SHARES,
             atomDataMaxLength: ATOM_DATA_MAX_LENGTH,
-            decimalPrecision: DECIMAL_PRECISION,
-            protocolFeeDistributionEnabled: true
+            decimalPrecision: DECIMAL_PRECISION
         });
 
         AtomConfig memory atomConfig = AtomConfig({

@@ -253,8 +253,7 @@ contract DeployMultiVaultMigrationMode is Script {
             minDeposit: MIN_DEPOSIT,
             minShare: MIN_SHARES,
             atomDataMaxLength: 250,
-            decimalPrecision: 1e18,
-            protocolFeeDistributionEnabled: false
+            decimalPrecision: 1e18
         });
     }
 
