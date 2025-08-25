@@ -46,7 +46,6 @@ contract MultiVaultMigrationMode is MultiVault {
      */
     event TermCountSet(uint256 termCount);
 
-
     error MultiVault_EmptyArray();
     error MultiVault_InvalidBondingCurveId();
 

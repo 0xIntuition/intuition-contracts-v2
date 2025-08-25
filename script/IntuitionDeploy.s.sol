@@ -72,7 +72,7 @@ contract IntuitionDeploy is BaseScript {
     uint256 internal EPOCH_LENGTH = 2 weeks;
     uint256 internal SYSTEM_UTILIZATION_LOWER_BOUND = 5000; // 50%
     uint256 internal PERSONAL_UTILIZATION_LOWER_BOUND = 2500; // 25%
-    
+
     // SatelliteEmissionsController configuration
     uint256 internal EMISSIONS_LENGTH = 1 days;
     uint256 internal EMISSIONS_PER_EPOCH = 1000e18; // 1000 TRUST per epoch
@@ -80,7 +80,7 @@ contract IntuitionDeploy is BaseScript {
     uint256 internal EMISSIONS_REDUCTION_BASIS_POINTS = 1000; // 10%
 
     uint32 internal RECIPIENT_DOMAIN = 1; // Domain ID
-    uint256 internal GAS_LIMIT = 200000; // Gas limit for cross-chain operations
+    uint256 internal GAS_LIMIT = 200_000; // Gas limit for cross-chain operations
 
     // Curve Configurations
     uint256 internal PROGRESSIVE_CURVE_SLOPE = 1e15; // 0.001 slope

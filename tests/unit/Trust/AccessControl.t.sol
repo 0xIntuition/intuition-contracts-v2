@@ -28,7 +28,9 @@ contract TrustAccessControlTest is BaseTest {
         assertTrue(
             protocol.trust.hasRole(protocol.trust.DEFAULT_ADMIN_ROLE(), admin), "Admin should have DEFAULT_ADMIN_ROLE"
         );
-        assertTrue(protocol.trust.hasRole(protocol.trust.CONTROLLER_ROLE(), minter), "Minter should have CONTROLLER_ROLE");
+        assertTrue(
+            protocol.trust.hasRole(protocol.trust.CONTROLLER_ROLE(), minter), "Minter should have CONTROLLER_ROLE"
+        );
     }
 
     function test_AccessControl_OnlyAdmin_WithRoleFallback() public {
@@ -49,7 +51,8 @@ contract TrustAccessControlTest is BaseTest {
         protocol.trust.grantRole(protocol.trust.CONTROLLER_ROLE(), user);
 
         assertTrue(
-            protocol.trust.hasRole(protocol.trust.CONTROLLER_ROLE(), user), "newAdmin should be able to set minter via role"
+            protocol.trust.hasRole(protocol.trust.CONTROLLER_ROLE(), user),
+            "newAdmin should be able to set minter via role"
         );
     }
 
@@ -164,7 +167,8 @@ contract TrustAccessControlTest is BaseTest {
         protocol.trust.mint(recipient, mintAmount);
 
         assertFalse(
-            protocol.trust.hasRole(protocol.trust.CONTROLLER_ROLE(), minter), "Minter should no longer have CONTROLLER_ROLE"
+            protocol.trust.hasRole(protocol.trust.CONTROLLER_ROLE(), minter),
+            "Minter should no longer have CONTROLLER_ROLE"
         );
     }
 
@@ -178,7 +182,8 @@ contract TrustAccessControlTest is BaseTest {
         protocol.trust.grantRole(protocol.trust.CONTROLLER_ROLE(), newMinter);
 
         assertTrue(
-            protocol.trust.hasRole(protocol.trust.CONTROLLER_ROLE(), newMinter), "New address should have CONTROLLER_ROLE"
+            protocol.trust.hasRole(protocol.trust.CONTROLLER_ROLE(), newMinter),
+            "New address should have CONTROLLER_ROLE"
         );
 
         // New minter should be able to mint
@@ -225,7 +230,8 @@ contract TrustAccessControlTest is BaseTest {
         protocol.trust.renounceRole(protocol.trust.CONTROLLER_ROLE(), minter);
 
         assertFalse(
-            protocol.trust.hasRole(protocol.trust.CONTROLLER_ROLE(), minter), "Minter should no longer have CONTROLLER_ROLE"
+            protocol.trust.hasRole(protocol.trust.CONTROLLER_ROLE(), minter),
+            "Minter should no longer have CONTROLLER_ROLE"
         );
 
         // Should not be able to mint after renouncing
@@ -270,7 +276,8 @@ contract TrustAccessControlTest is BaseTest {
         protocol.trust.grantRole(protocol.trust.CONTROLLER_ROLE(), newMinter);
 
         assertTrue(
-            protocol.trust.hasRole(protocol.trust.CONTROLLER_ROLE(), newMinter), "New minter should have CONTROLLER_ROLE"
+            protocol.trust.hasRole(protocol.trust.CONTROLLER_ROLE(), newMinter),
+            "New minter should have CONTROLLER_ROLE"
         );
 
         // New minter should be able to mint

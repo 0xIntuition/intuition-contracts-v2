@@ -80,7 +80,7 @@ contract Trust is Initializable, ERC20Upgradeable, AccessControlUpgradeable {
      */
     function reinitialize(address _admin, address _controller) external reinitializer(2) {
         // WARNING: UPDATE TO BASE ADMIN BEFORE DEPLOY
-        if(INITIAL_ADMIN != address(0)) {
+        if (INITIAL_ADMIN != address(0)) {
             if (msg.sender != INITIAL_ADMIN) {
                 revert Trust_OnlyInitialAdmin();
             }
