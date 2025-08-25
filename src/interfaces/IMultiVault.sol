@@ -284,21 +284,17 @@ interface IMultiVault {
     event SharesPullApproval(address indexed accountFrom, address indexed accountTo, bool status);
 
     /* =================================================== */
-    /*                    INITIALIZER                      */
-    /* =================================================== */
-
-    // function initialize(address _multiVaultConfig) external;
-
-    /* =================================================== */
-    /*                    ADMIN FUNCTIONS                  */
-    /* =================================================== */
-
-    /* =================================================== */
     /*                MUTATIVE FUNCTIONS                   */
     /* =================================================== */
 
     // function syncConfig() external;
 
+    /**
+     * @notice Creates multiple atom vaults with initial deposits
+     * @param atomDatas Array of atom data (metadata) for each atom to be created
+     * @param assets Array of asset amounts to deposit into each atom vault
+     * @return Array of atom IDs (termIds) for the created atoms
+     */
     function createAtoms(
         bytes[] calldata atomDatas,
         uint256[] calldata assets
@@ -307,6 +303,14 @@ interface IMultiVault {
         payable
         returns (bytes32[] memory);
 
+    /**
+     * @notice Creates multiple triple vaults with initial deposits
+     * @param subjectIds Array of atom IDs to use as subjects
+     * @param predicateIds Array of atom IDs to use as predicates  
+     * @param objectIds Array of atom IDs to use as objects
+     * @param assets Array of asset amounts to deposit into each triple vault
+     * @return Array of triple IDs (termIds) for the created triples
+     */
     function createTriples(
         bytes32[] calldata subjectIds,
         bytes32[] calldata predicateIds,
@@ -317,6 +321,14 @@ interface IMultiVault {
         payable
         returns (bytes32[] memory);
 
+    /**
+     * @notice Deposits assets into a vault and mints shares to the receiver
+     * @param receiver Address to receive the minted shares
+     * @param termId ID of the term (atom or triple) to deposit into
+     * @param curveId Bonding curve ID to use for the deposit
+     * @param minShares Minimum number of shares expected to be minted
+     * @return Number of shares minted to the receiver
+     */
     function deposit(
         address receiver,
         bytes32 termId,
@@ -327,6 +339,15 @@ interface IMultiVault {
         payable
         returns (uint256);
 
+    /**
+     * @notice Deposits assets into multiple vaults in a single transaction
+     * @param receiver Address to receive the minted shares
+     * @param termIds Array of term IDs to deposit into
+     * @param curveIds Array of bonding curve IDs to use for each deposit
+     * @param assets Array of asset amounts to deposit into each vault
+     * @param minShares Array of minimum shares expected for each deposit
+     * @return Array of shares minted for each deposit
+     */
     function depositBatch(
         address receiver,
         bytes32[] calldata termIds,
@@ -338,6 +359,15 @@ interface IMultiVault {
         payable
         returns (uint256[] memory);
 
+    /**
+     * @notice Redeems shares from a vault and returns assets to the receiver
+     * @param receiver Address to receive the redeemed assets
+     * @param termId ID of the term (atom or triple) to redeem from
+     * @param curveId Bonding curve ID to use for the redemption
+     * @param shares Number of shares to redeem
+     * @param minAssets Minimum number of assets expected to be returned
+     * @return Number of assets returned to the receiver
+     */
     function redeem(
         address receiver,
         bytes32 termId,
@@ -348,6 +378,15 @@ interface IMultiVault {
         external
         returns (uint256);
 
+    /**
+     * @notice Redeems shares from multiple vaults in a single transaction
+     * @param receiver Address to receive the redeemed assets
+     * @param termIds Array of term IDs to redeem from
+     * @param curveIds Array of bonding curve IDs to use for each redemption
+     * @param shares Array of share amounts to redeem from each vault
+     * @param minAssets Array of minimum assets expected for each redemption
+     * @return Array of assets returned for each redemption
+     */
     function redeemBatch(
         address receiver,
         bytes32[] calldata termIds,
@@ -362,18 +401,55 @@ interface IMultiVault {
     /*                    VIEW FUNCTIONS                   */
     /* =================================================== */
 
+    /**
+     * @notice Returns a user's utilization for a specific epoch
+     * @param user The user address to query
+     * @param epoch The epoch number to query
+     * @return The user's utilization value (can be positive or negative)
+     */
     function getUserUtilizationForEpoch(address user, uint256 epoch) external view returns (int256);
 
+    /**
+     * @notice Returns the total system utilization for a specific epoch
+     * @param epoch The epoch number to query  
+     * @return The total utilization value for the epoch (can be positive or negative)
+     */
     function getTotalUtilizationForEpoch(uint256 epoch) external view returns (int256);
 
+    /**
+     * @notice Returns the accumulated protocol fees for a specific epoch
+     * @param epoch The epoch number to query
+     * @return The accumulated protocol fees for the epoch
+     */
     function accumulatedProtocolFees(uint256 epoch) external view returns (uint256);
 
+    /**
+     * @notice Returns the AtomWarden contract address
+     * @return The address of the AtomWarden contract
+     */
     function getAtomWarden() external view returns (address);
 
+    /**
+     * @notice Claims accumulated deposit fees for an atom wallet owner
+     * @param atomId The ID of the atom to claim fees for
+     */
     function claimAtomWalletDepositFees(bytes32 atomId) external;
 
+    /**
+     * @notice Checks if a term (atom or triple) has been created
+     * @param id The term ID to check
+     * @return True if the term has been created, false otherwise
+     */
     function isTermCreated(bytes32 id) external view returns (bool);
 
+    /**
+     * @notice Returns the wallet configuration for ERC-4337 compatibility
+     * @return permit2 The Permit2 contract instance
+     * @return entryPoint The EntryPoint contract address for ERC-4337
+     * @return atomWarden The AtomWarden contract address
+     * @return atomWalletBeacon The UpgradeableBeacon contract address for AtomWallets
+     * @return atomWalletFactory The AtomWalletFactory contract address
+     */
     function walletConfig()
         external
         view

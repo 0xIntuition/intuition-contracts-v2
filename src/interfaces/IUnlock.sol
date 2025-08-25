@@ -7,9 +7,9 @@ pragma solidity ^0.8.27;
  * @notice A shared interface for the Intuition's Trust vesting and unlock contracts
  */
 interface IUnlock {
-    /*//////////////////////////////////////////////////////////////
-                                 EVENTS
-    //////////////////////////////////////////////////////////////*/
+    /* =================================================== */
+    /*                       EVENTS                        */
+    /* =================================================== */
 
     /**
      * @notice Emitted when Trust tokens are claimed

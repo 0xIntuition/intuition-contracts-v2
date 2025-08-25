@@ -94,32 +94,32 @@ abstract contract MultiVaultCore is IMultiVault, IMultiVaultCore {
     /*                  Protocol Getters                   */
     /* =================================================== */
 
-    /// @notice returns the general configuration struct
+    /// @inheritdoc IMultiVaultCore
     function getGeneralConfig() external view returns (GeneralConfig memory) {
         return generalConfig;
     }
 
-    /// @notice returns the atom configuration struct
+    /// @inheritdoc IMultiVaultCore
     function getAtomConfig() external view returns (AtomConfig memory) {
         return atomConfig;
     }
 
-    /// @notice returns the triple configuration struct
+    /// @inheritdoc IMultiVaultCore
     function getTripleConfig() external view returns (TripleConfig memory) {
         return tripleConfig;
     }
 
-    /// @notice returns the wallet configuration struct
+    /// @inheritdoc IMultiVaultCore
     function getWalletConfig() external view returns (WalletConfig memory) {
         return walletConfig;
     }
 
-    /// @notice returns the vault fees struct
+    /// @inheritdoc IMultiVaultCore
     function getVaultFees() external view returns (VaultFees memory) {
         return vaultFees;
     }
 
-    /// @notice returns the bonding curve configuration struct
+    /// @inheritdoc IMultiVaultCore
     function getBondingCurveConfig() external view returns (BondingCurveConfig memory) {
         return bondingCurveConfig;
     }

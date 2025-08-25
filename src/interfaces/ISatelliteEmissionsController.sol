@@ -7,10 +7,15 @@ import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/ac
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
 /**
- * @title  SatelliteEmissionsController
+ * @title  ISatelliteEmissionsController
  * @author 0xIntuition
- * @notice Controls the release of TRUST tokens to the TrustBonding contract.
+ * @notice Interface for the SatelliteEmissionsController that controls the release of TRUST tokens to the TrustBonding contract.
  */
 interface ISatelliteEmissionsController {
+    /**
+     * @notice Transfers TRUST tokens to the specified recipient
+     * @param recipient The address to transfer tokens to
+     * @param amount The amount of tokens to transfer
+     */
     function transfer(address recipient, uint256 amount) external;
 }

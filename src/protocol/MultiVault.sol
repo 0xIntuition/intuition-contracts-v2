@@ -9,6 +9,7 @@ import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/P
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 
+import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 import { IAtomWalletFactory } from "src/interfaces/IAtomWalletFactory.sol";
 import { IBondingCurveRegistry } from "src/interfaces/IBondingCurveRegistry.sol";
 import { IAtomWallet } from "src/interfaces/IAtomWallet.sol";
@@ -106,23 +107,17 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
     error MultiVault_CannotApproveOrRevokeSelf();
 
-    error MultiVault_CannotDirectlyInitializeCounterTripleVault();
 
-    error MultiVault_CannotRecoverTrust();
 
-    error MultiVault_ContractPaused();
 
-    error MultiVault_DeployAccountFailed();
 
     error MultiVault_DepositBelowMinimumDeposit();
 
     error MultiVault_DepositOrRedeemZeroShares();
 
-    error MultiVault_DepositTooSmallToCoverGhostShares();
 
     error MultiVault_InvalidArrayLength();
 
-    error MultiVault_HasCounterStake();
 
     error MultiVault_InsufficientAssets();
 
@@ -132,15 +127,11 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
     error MultiVault_InsufficientSharesInVault();
 
-    error MultiVault_InvalidCurveId();
 
-    error MultiVault_InvalidReceiver();
 
     error MultiVault_NoAtomDataProvided();
 
-    error MultiVault_NoTriplesProvided();
 
-    error MultiVault_NoSharesToMigrate();
 
     error MultiVault_OnlyAssociatedAtomWallet();
 
@@ -150,17 +141,13 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
     error MultiVault_SlippageExceeded();
 
-    error MultiVault_TransfersNotEnabled();
 
     error MultiVault_TripleExists(bytes32 termId, bytes32 subjectId, bytes32 predicateId, bytes32 objectId);
 
     error MultiVault_TermDoesNotExist();
 
-    error MultiVault_TermNotAtom();
 
-    error MultiVault_TermNotTriple();
 
-    error MultiVault_WalletsAreTheSame();
 
     error MultiVault_ZeroAddress();
 
@@ -215,6 +202,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /*                        Public                       */
     /* =================================================== */
 
+    /// @inheritdoc IMultiVault
     function isTermCreated(bytes32 id) public view returns (bool) {
         return _atoms[id].length > 0 || isTriple(id);
     }
@@ -254,21 +242,17 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         return _feeOnRaw(assets, tripleConfig.atomDepositFractionForTriple);
     }
 
-    /// @dev returns the total utilization of the TRUST token for the given epoch
-    /// @param epoch the epoch to get the total utilization for
-    /// @return int256 the total utilization of the TRUST token for the given epoch
+    /// @inheritdoc IMultiVault
     function getTotalUtilizationForEpoch(uint256 epoch) external view returns (int256) {
         return totalUtilization[epoch];
     }
 
-    /// @dev returns the personal utilization of the user for the given epoch
-    /// @param user the address of the user
-    /// @param epoch the epoch to get the personal utilization for
-    /// @return int256 the personal utilization of the user for the given epoch
+    /// @inheritdoc IMultiVault
     function getUserUtilizationForEpoch(address user, uint256 epoch) external view returns (int256) {
         return personalUtilization[user][epoch];
     }
 
+    /// @inheritdoc IMultiVault
     function getAtomWarden() external view returns (address) {
         return walletConfig.atomWarden;
     }
@@ -414,10 +398,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /*                      Atoms                          */
     /* =================================================== */
 
-    /// @notice Create atom(s) and return their vault ids
-    /// @param data atom data array to create atoms with
-    /// @param assets amount of Trust to deposit into all atoms combined
-    /// @return ids vault ids array of the atoms
+    /// @inheritdoc IMultiVault
     function createAtoms(
         bytes[] calldata data,
         uint256[] calldata assets
@@ -515,14 +496,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /* =================================================== */
     /*                      Triples                        */
     /* =================================================== */
-    /// @notice Batch create triples and return their ids
-    ///
-    /// @param subjectIds term ids of subject atoms
-    /// @param predicateIds term ids of predicate atoms
-    /// @param objectIds term ids of object atoms
-    /// @param assets amount of Trust to deposit into the triples
-    ///
-    /// @return ids vault ids array of the triples
+    /// @inheritdoc IMultiVault
     function createTriples(
         bytes32[] calldata subjectIds,
         bytes32[] calldata predicateIds,
@@ -662,14 +636,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /*                       Deposit                       */
     /* =================================================== */
 
-    /// @notice Deposit Trust into a vault using a specified bonding curve and grant ownership of 'shares' to 'receiver'
-    ///
-    /// @param receiver The address to receive the shares
-    /// @param termId The ID of the atom or triple (term)
-    /// @param curveId The ID of the bonding curve to use
-    /// @param minShares The minimum amount of shares to receive in return for the deposit
-    ///
-    /// @return shares The amount of shares minted
+    /// @inheritdoc IMultiVault
     function deposit(
         address receiver,
         bytes32 termId,
@@ -691,6 +658,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         return _processDeposit(_msgSender(), receiver, termId, curveId, msg.value, minShares);
     }
 
+    /// @inheritdoc IMultiVault
     function depositBatch(
         address receiver,
         bytes32[] calldata termIds,
@@ -780,14 +748,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /*                        Redeem                       */
     /* =================================================== */
 
-    /// @notice Redeem shares from a vault for assets using a specified bonding curve
-    ///
-    /// @param receiver The address to receive the assets
-    /// @param termId The ID of the atom or triple (term)
-    /// @param curveId The ID of the bonding curve to use
-    /// @param shares The amount of shares to redeem
-    /// @param minAssets The minimum amount of assets to receive in return for the shares being redeemed
-    ///
+    /// @inheritdoc IMultiVault
     function redeem(
         address receiver,
         bytes32 termId,
@@ -811,6 +772,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         return assetsAfterFees;
     }
 
+    /// @inheritdoc IMultiVault
     function redeemBatch(
         address receiver,
         bytes32[] calldata termIds,
@@ -897,6 +859,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /* =================================================== */
     /*                       Wallet                        */
     /* =================================================== */
+    /// @inheritdoc IMultiVault
     function claimAtomWalletDepositFees(bytes32 termId) external {
         address atomWalletAddress = computeAtomWalletAddr(termId);
 

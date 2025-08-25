@@ -24,6 +24,14 @@ interface IWrappedERC20Factory {
     /*                   WRITE FUNCTIONS                   */
     /* =================================================== */
 
+    /**
+     * @notice Deploys a new WrappedERC20 contract for a specific term and bonding curve
+     * @param termId The ID of the term (atom or triple) to create a wrapper for
+     * @param bondingCurveId The bonding curve ID to create a wrapper for
+     * @param name The name for the WrappedERC20 token
+     * @param symbol The symbol for the WrappedERC20 token
+     * @return The address of the newly deployed WrappedERC20 contract
+     */
     function deployWrapper(
         bytes32 termId,
         uint256 bondingCurveId,
@@ -37,8 +45,20 @@ interface IWrappedERC20Factory {
     /*                   VIEW FUNCTIONS                    */
     /* =================================================== */
 
+    /**
+     * @notice Returns the MultiVault contract address
+     * @return The MultiVault contract instance
+     */
     function multiVault() external view returns (IMultiVault);
 
+    /**
+     * @notice Computes the deterministic address of a WrappedERC20 contract
+     * @param termId The ID of the term (atom or triple)
+     * @param bondingCurveId The bonding curve ID
+     * @param name The name for the WrappedERC20 token
+     * @param symbol The symbol for the WrappedERC20 token
+     * @return The computed address where the WrappedERC20 would be deployed
+     */
     function computeWrappedERC20Address(
         bytes32 termId,
         uint256 bondingCurveId,

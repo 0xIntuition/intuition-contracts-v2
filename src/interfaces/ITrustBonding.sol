@@ -7,9 +7,9 @@ pragma solidity ^0.8.27;
  * @notice Interface for the Intuition's TrustBondingV2 contract
  */
 interface ITrustBonding {
-    /*//////////////////////////////////////////////////////////////
-                                 EVENTS
-    //////////////////////////////////////////////////////////////*/
+    /* =================================================== */
+    /*                       EVENTS                        */
+    /* =================================================== */
 
     /**
      * @notice Emitted when a user claims their accrued Trust rewards
@@ -65,9 +65,9 @@ interface ITrustBonding {
      */
     event UnclaimedProtocolFeesWithdrawn(address indexed recipient, uint256 feesWithdrawn);
 
-    /*//////////////////////////////////////////////////////////////
-                                 FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
+    /* =================================================== */
+    /*                      FUNCTIONS                      */
+    /* =================================================== */
 
     function initialize(
         address _owner,
