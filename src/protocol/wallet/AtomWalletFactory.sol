@@ -6,7 +6,6 @@ import { IEntryPoint } from "@account-abstraction/interfaces/IEntryPoint.sol";
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 import { AtomWallet } from "src/protocol/wallet/AtomWallet.sol";
-import { Errors } from "src/libraries/Errors.sol";
 import { IAtomWalletFactory } from "src/interfaces/IAtomWalletFactory.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 
@@ -16,6 +15,14 @@ import { IMultiVault } from "src/interfaces/IMultiVault.sol";
  * @notice Factory contract for deploying AtomWallets (ERC-4337 accounts) using the BeaconProxy pattern.
  */
 contract AtomWalletFactory is IAtomWalletFactory, Initializable {
+    /* =================================================== */
+    /*                      ERRORS                         */
+    /* =================================================== */
+
+    error AtomWalletFactory_ZeroAddress();
+    error AtomWalletFactory_DeployAtomWalletFailed();
+    error MultiVault_TermDoesNotExist();
+
     /* =================================================== */
     /*                  STATE VARIABLES                    */
     /* =================================================== */
@@ -43,7 +50,7 @@ contract AtomWalletFactory is IAtomWalletFactory, Initializable {
     /// @param _multiVault The address of the MultiVault contract
     function initialize(address _multiVault) external initializer {
         if (_multiVault == address(0)) {
-            revert Errors.AtomWalletFactory_ZeroAddress();
+            revert AtomWalletFactory_ZeroAddress();
         }
 
         multiVault = IMultiVault(_multiVault);
@@ -60,7 +67,7 @@ contract AtomWalletFactory is IAtomWalletFactory, Initializable {
     /// @return atomWallet the address of the atom wallet
     function deployAtomWallet(bytes32 atomId) external returns (address) {
         if (!multiVault.isTermCreated(atomId)) {
-            revert Errors.MultiVault_TermDoesNotExist();
+            revert MultiVault_TermDoesNotExist();
         }
 
         // if (multiVault.isTripleId(atomId)) {
@@ -91,7 +98,7 @@ contract AtomWalletFactory is IAtomWalletFactory, Initializable {
         }
 
         if (deployedAtomWalletAddress == address(0)) {
-            revert Errors.AtomWalletFactory_DeployAtomWalletFailed();
+            revert AtomWalletFactory_DeployAtomWalletFailed();
         }
 
         emit AtomWalletDeployed(atomId, deployedAtomWalletAddress);

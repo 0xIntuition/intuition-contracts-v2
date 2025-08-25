@@ -5,7 +5,6 @@ import { Ownable, Ownable2Step } from "@openzeppelin/contracts/access/Ownable2St
 
 import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
 import { IBondingCurveRegistry } from "src/interfaces/IBondingCurveRegistry.sol";
-import { Errors } from "src/libraries/Errors.sol";
 
 /**
  * @title  BondingCurveRegistry
@@ -23,6 +22,15 @@ import { Errors } from "src/libraries/Errors.sol";
  *         economic incentive patterns.
  */
 contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2Step {
+    /* =================================================== */
+    /*                      ERRORS                         */
+    /* =================================================== */
+
+    error BondingCurveRegistry_ZeroAddress();
+    error BondingCurveRegistry_CurveAlreadyExists();
+    error BondingCurveRegistry_EmptyCurveName();
+    error BondingCurveRegistry_CurveNameNotUnique();
+
     /* =================================================== */
     /*                  STATE VARIABLES                    */
     /* =================================================== */
@@ -55,24 +63,24 @@ contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2Step {
     /// @param bondingCurve Address of the new bonding curve
     function addBondingCurve(address bondingCurve) external onlyOwner {
         if (bondingCurve == address(0)) {
-            revert Errors.BondingCurveRegistry_ZeroAddress();
+            revert BondingCurveRegistry_ZeroAddress();
         }
 
         // Ensure curve is not already registered
         if (curveIds[bondingCurve] != 0) {
-            revert Errors.BondingCurveRegistry_CurveAlreadyExists();
+            revert BondingCurveRegistry_CurveAlreadyExists();
         }
 
         string memory curveName = IBaseCurve(bondingCurve).name();
 
         // Ensure the curve name is not empty
         if (bytes(curveName).length == 0) {
-            revert Errors.BondingCurveRegistry_EmptyCurveName();
+            revert BondingCurveRegistry_EmptyCurveName();
         }
 
         // Enforce curve name uniqueness
         if (registeredCurveNames[curveName]) {
-            revert Errors.BondingCurveRegistry_CurveNameNotUnique();
+            revert BondingCurveRegistry_CurveNameNotUnique();
         }
 
         // 0 is reserved to safeguard against uninitialized values

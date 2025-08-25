@@ -68,7 +68,8 @@ contract ClaimTest is BaseTest {
         _createLocksForUsers(_users, stakeAmount, THREE_YEARS);
         _nextCliff(users.alice, 1, DEFAULT_EMISSIONS_PER_EPOCH / _users.length);
         _nextCliff(users.alice, 2, (900_000 * 1e18) / _users.length);
-        _nextCliff(users.alice, 3, (121_500 * 1e18) / _users.length); // Dramatic reduction after 2nd epoch without full// utilization.
+        _nextCliff(users.alice, 3, (121_500 * 1e18) / _users.length); // Dramatic reduction after 2nd epoch without
+            // full// utilization.
         _nextCliff(users.alice, 4, (109_350 * 1e18) / _users.length);
         _nextCliff(users.alice, 5, (98_415 * 1e18) / _users.length);
     }
@@ -117,7 +118,7 @@ contract ClaimTest is BaseTest {
         _nextCliffWithRewardsDeposit(_users, 4, (729_000 * 1e18) / _users.length);
         _nextCliffWithRewardsDeposit(_users, 5, (656_100 * 1e18) / _users.length);
     }
-    
+
     function test_mixedUsers_createStakeRewards_FullyBonded_MaxUtilization_Success() public {
         uint256 stakeAmount = 1000 * 1e18;
         address[] memory _users1 = new address[](2);

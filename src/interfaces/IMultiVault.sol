@@ -362,10 +362,6 @@ interface IMultiVault {
     /*                    VIEW FUNCTIONS                   */
     /* =================================================== */
 
-    // function atoms(bytes32 id) external returns (bytes calldata data);
-    // mapping(bytes32 termId => mapping(uint256 curveId => VaultState vaultState)) public vaults;
-    // function vaults(bytes32 termId, uint256 curveId) external view returns (VaultState memory);
-
     function getUserUtilizationForEpoch(address user, uint256 epoch) external view returns (int256);
 
     function getTotalUtilizationForEpoch(uint256 epoch) external view returns (int256);

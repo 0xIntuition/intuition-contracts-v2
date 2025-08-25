@@ -6,7 +6,6 @@ import { Ownable, Ownable2Step } from "@openzeppelin/contracts/access/Ownable2St
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import { Errors } from "src/libraries/Errors.sol";
 import { TrustUnlock } from "src/protocol/distribution/TrustUnlock.sol";
 
 /**
@@ -64,6 +63,15 @@ contract TrustUnlockFactory is Ownable2Step, ReentrancyGuard {
     event TokensRecovered(address indexed token, address indexed recipient, uint256 amount);
 
     /*//////////////////////////////////////////////////////////////
+                              ERRORS
+    //////////////////////////////////////////////////////////////*/
+
+    error Unlock_ZeroAddress();
+    error Unlock_ZeroLengthArray();
+    error Unlock_ArrayLengthMismatch();
+    error Unlock_TrustUnlockAlreadyExists();
+
+    /*//////////////////////////////////////////////////////////////
                              CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
 
@@ -74,7 +82,7 @@ contract TrustUnlockFactory is Ownable2Step, ReentrancyGuard {
      */
     constructor(address _trustToken, address _admin, address _trustBonding, address _multiVault) Ownable(_admin) {
         if (_trustToken == address(0) || _trustBonding == address(0) || _multiVault == address(0)) {
-            revert Errors.Unlock_ZeroAddress();
+            revert Unlock_ZeroAddress();
         }
 
         trustToken = payable(trustToken);
@@ -139,11 +147,11 @@ contract TrustUnlockFactory is Ownable2Step, ReentrancyGuard {
     {
         // Validate the recipients and unlockAmounts arrays
         if (recipients.length == 0) {
-            revert Errors.Unlock_ZeroLengthArray();
+            revert Unlock_ZeroLengthArray();
         }
 
         if (recipients.length != unlockAmounts.length) {
-            revert Errors.Unlock_ArrayLengthMismatch();
+            revert Unlock_ArrayLengthMismatch();
         }
 
         // Deploy and fund TrustUnlock contracts for each recipient
@@ -163,7 +171,7 @@ contract TrustUnlockFactory is Ownable2Step, ReentrancyGuard {
      */
     function recoverTokens(address token, address recipient) external onlyOwner nonReentrant {
         if (token == address(0) || recipient == address(0)) {
-            revert Errors.Unlock_ZeroAddress();
+            revert Unlock_ZeroAddress();
         }
 
         uint256 balance = IERC20(token).balanceOf(address(this));
@@ -201,7 +209,7 @@ contract TrustUnlockFactory is Ownable2Step, ReentrancyGuard {
     {
         // Check if the TrustUnlock contract already exists for the recipient
         if (trustUnlocks[recipient] != address(0)) {
-            revert Errors.Unlock_TrustUnlockAlreadyExists();
+            revert Unlock_TrustUnlockAlreadyExists();
         }
 
         // Build the TrustUnlock contract parameters
