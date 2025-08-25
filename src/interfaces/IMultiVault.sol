@@ -306,7 +306,7 @@ interface IMultiVault {
     /**
      * @notice Creates multiple triple vaults with initial deposits
      * @param subjectIds Array of atom IDs to use as subjects
-     * @param predicateIds Array of atom IDs to use as predicates  
+     * @param predicateIds Array of atom IDs to use as predicates
      * @param objectIds Array of atom IDs to use as objects
      * @param assets Array of asset amounts to deposit into each triple vault
      * @return Array of triple IDs (termIds) for the created triples
@@ -411,7 +411,7 @@ interface IMultiVault {
 
     /**
      * @notice Returns the total system utilization for a specific epoch
-     * @param epoch The epoch number to query  
+     * @param epoch The epoch number to query
      * @return The total utilization value for the epoch (can be positive or negative)
      */
     function getTotalUtilizationForEpoch(uint256 epoch) external view returns (int256);

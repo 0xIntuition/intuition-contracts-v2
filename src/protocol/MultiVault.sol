@@ -107,17 +107,11 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
     error MultiVault_CannotApproveOrRevokeSelf();
 
-
-
-
-
     error MultiVault_DepositBelowMinimumDeposit();
 
     error MultiVault_DepositOrRedeemZeroShares();
 
-
     error MultiVault_InvalidArrayLength();
-
 
     error MultiVault_InsufficientAssets();
 
@@ -127,11 +121,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
     error MultiVault_InsufficientSharesInVault();
 
-
-
     error MultiVault_NoAtomDataProvided();
-
-
 
     error MultiVault_OnlyAssociatedAtomWallet();
 
@@ -141,13 +131,9 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
     error MultiVault_SlippageExceeded();
 
-
     error MultiVault_TripleExists(bytes32 termId, bytes32 subjectId, bytes32 predicateId, bytes32 objectId);
 
     error MultiVault_TermDoesNotExist();
-
-
-
 
     error MultiVault_ZeroAddress();
 

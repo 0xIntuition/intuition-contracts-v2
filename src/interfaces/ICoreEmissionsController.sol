@@ -29,21 +29,21 @@ interface ICoreEmissionsController {
      * @return The epoch length in seconds
      */
     function epochLength() external view returns (uint256);
-    
+
     /**
      * @notice Returns the epoch number for a given timestamp
      * @param timestamp The timestamp to query
      * @return The epoch number corresponding to the timestamp
      */
     function epochAtTimestamp(uint256 timestamp) external view returns (uint256);
-    
+
     /**
      * @notice Returns the end timestamp for a given epoch number
      * @param epochNumber The epoch number to query
      * @return The timestamp when the epoch ends
      */
     function epochEndTimestamp(uint256 epochNumber) external view returns (uint256);
-    
+
     /**
      * @notice Returns the number of TRUST tokens to be emitted for a given epoch
      * @param epochNumber The epoch number to query

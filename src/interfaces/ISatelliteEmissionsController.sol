@@ -9,7 +9,8 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 /**
  * @title  ISatelliteEmissionsController
  * @author 0xIntuition
- * @notice Interface for the SatelliteEmissionsController that controls the release of TRUST tokens to the TrustBonding contract.
+ * @notice Interface for the SatelliteEmissionsController that controls the release of TRUST tokens to the TrustBonding
+ * contract.
  */
 interface ISatelliteEmissionsController {
     /**
