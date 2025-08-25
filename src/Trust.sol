@@ -5,8 +5,6 @@ import { ERC20Upgradeable } from "@openzeppelinV4/contracts-upgradeable/token/ER
 import { Initializable } from "@openzeppelinV4/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { AccessControlUpgradeable } from "@openzeppelinV4/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 
-import { TrustErrors } from "src/libraries/TrustErrors.sol";
-
 /**
  * @title  Trust
  * @author 0xIntuition
@@ -43,21 +41,24 @@ contract Trust is Initializable, ERC20Upgradeable, AccessControlUpgradeable {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Role for minting tokens
-    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+    bytes32 public constant CONTROLLER_ROLE = keccak256("CONTROLLER_ROLE");
 
     /// @notice Role for pausing/unpausing the contract
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     /// @notice Role for initializing the contract
-    /// TODO: UPDATE TO CORRECT ADMIN
-    address public constant INITIAL_ADMIN = 0x395867a085228940cA50a26166FDAD3f382aeB09;
+    /// WARNING: UPDATE TO BASE ADMIN BEFORE DEPLOY
+    address public constant INITIAL_ADMIN = address(0);
 
     /*//////////////////////////////////////////////////////////////
                                  STATE
     //////////////////////////////////////////////////////////////*/
 
     /// @dev Gap for upgrade safety (reduced to account for AccessControl storage)
-    uint256[45] private __gap;
+    uint256[50] private __gap;
+
+    error Trust_ZeroAddress();
+    error Trust_OnlyInitialAdmin();
 
     /*//////////////////////////////////////////////////////////////
                                  CONSTRUCTOR
@@ -75,20 +76,18 @@ contract Trust is Initializable, ERC20Upgradeable, AccessControlUpgradeable {
     /**
      * @notice Reinitializes the Trust contract with AccessControl
      * @param _admin Admin address (multisig)
-     * @param _minter Initial minter address
-     * @param _startTimestamp Start timestamp for the annual period tracking
+     * @param _controller Initial minter address
      */
-    function reinitialize(address _admin, address _minter, uint256 _startTimestamp) external reinitializer(2) {
-        // if (msg.sender != INITIAL_ADMIN) {
-        //     revert TrustErrors.Trust_OnlyInitialAdmin();
-        // }
-
-        if (_admin == address(0) || _minter == address(0)) {
-            revert TrustErrors.Trust_ZeroAddress();
+    function reinitialize(address _admin, address _controller) external reinitializer(2) {
+        // WARNING: UPDATE TO BASE ADMIN BEFORE DEPLOY
+        if (INITIAL_ADMIN != address(0)) {
+            if (msg.sender != INITIAL_ADMIN) {
+                revert Trust_OnlyInitialAdmin();
+            }
         }
 
-        if (_startTimestamp < block.timestamp) {
-            revert TrustErrors.Trust_InvalidStartTimestamp();
+        if (_admin == address(0) || _controller == address(0)) {
+            revert Trust_ZeroAddress();
         }
 
         // Initialize AccessControl
@@ -96,7 +95,7 @@ contract Trust is Initializable, ERC20Upgradeable, AccessControlUpgradeable {
 
         // Set up roles
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
-        _grantRole(MINTER_ROLE, _minter);
+        _grantRole(CONTROLLER_ROLE, _controller);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -121,7 +120,11 @@ contract Trust is Initializable, ERC20Upgradeable, AccessControlUpgradeable {
      * @param to Address to mint to
      * @param amount Amount to mint
      */
-    function mint(address to, uint256 amount) external onlyRole(MINTER_ROLE) {
+    function mint(address to, uint256 amount) external onlyRole(CONTROLLER_ROLE) {
         _mint(to, amount);
+    }
+
+    function burn(address from, uint256 amount) external onlyRole(CONTROLLER_ROLE) {
+        _burn(from, amount);
     }
 }

@@ -5,20 +5,12 @@ import { console2 } from "forge-std/src/console2.sol";
 import { Test } from "forge-std/src/Test.sol";
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { IPermit2 } from "src/interfaces/IPermit2.sol";
-import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
-import { AtomWalletFactory } from "src/protocol/wallet/AtomWalletFactory.sol";
-import { SateliteEmissionsController } from "src/protocol/emissions/SateliteEmissionsController.sol";
-import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
-import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
-import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
-import { ProgressiveCurve } from "src/protocol/curves/ProgressiveCurve.sol";
-import { ERC20Mock } from "./mocks/ERC20Mock.sol";
-import { Users } from "./utils/Types.sol";
-import { Trust } from "src/Trust.sol";
-import { MultiVault } from "src/protocol/MultiVault.sol";
+import { IPermit2 } from "src/interfaces/IPermit2.sol";
+import { IMultiVault } from "src/interfaces/IMultiVault.sol";
+import { MetaERC20DispatchInit, FinalityState } from "src/interfaces/IMetaLayer.sol";
+import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";
 import {
     GeneralConfig,
     AtomConfig,
@@ -28,6 +20,17 @@ import {
     BondingCurveConfig
 } from "src/interfaces/IMultiVaultCore.sol";
 
+import { AtomWalletFactory } from "src/protocol/wallet/AtomWalletFactory.sol";
+import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
+import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
+import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
+import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
+import { ProgressiveCurve } from "src/protocol/curves/ProgressiveCurve.sol";
+import { ERC20Mock } from "./mocks/ERC20Mock.sol";
+import { Users } from "./utils/Types.sol";
+import { Trust } from "src/Trust.sol";
+import { MultiVault } from "src/protocol/MultiVault.sol";
+
 import { Modifiers } from "./utils/Modifiers.sol";
 
 abstract contract BaseTest is Modifiers, Test {
@@ -35,20 +38,54 @@ abstract contract BaseTest is Modifiers, Test {
                                      VARIABLES
     //////////////////////////////////////////////////////////////////////////*/
 
-    uint256 internal MIN_SHARES = 1e6; // GHOST Shares
-    uint256 internal MIN_DEPOSIT = 1e18; // 1 Trust
-    uint256 internal ATOM_PROTOCOL_FEE = 1e15; // 0.001 Trust
-    uint256 internal ATOM_WALLET_DEPOSIT_FEE = 100; // 0.0001 Trust
-    uint256 internal ATOM_CREATION_PROTOCOL_FEE = 1e15; // 0.001 Trust
-    uint256 internal TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 1e15; // 0.001 Trust
-    uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 5000; // 50%
-    uint256 internal TRIPLE_CREATION_PROTOCOL_FEE = 1e15; // 0.001 Trust
     uint256[] internal ATOM_COST;
     uint256[] internal TRIPLE_COST;
+    uint8 internal DECIMAL_PRECISION = 18;
+    uint256 internal FEE_DENOMINATOR = 10_000;
+    uint256 internal MIN_DEPOSIT = 1e17; // 0.1 Trust
+    uint256 internal MIN_SHARES = 1e6; // Ghost Shares
+    uint256 internal ATOM_DATA_MAX_LENGTH = 1000;
+
+    // Atom Config
+    uint256 internal ATOM_CREATION_PROTOCOL_FEE = 1e15; // 0.001 Trust (Fixed Cost)
+    uint256 internal ATOM_WALLET_DEPOSIT_FEE = 100; // 1% of assets after fixed costs (Percentage Cost)
+
+    // Triple Config
+    uint256 internal TRIPLE_CREATION_PROTOCOL_FEE = 1e15; // 0.001 Trust (Fixed Cost)
+    uint256 internal TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 1e15; // 0.001 Trust (Fixed Cost)
+    uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 300; // 3% (Percentage Cost)
+
+    // Vault Config
+    uint256 internal ENTRY_FEE = 500; // 5% of assets deposited after fixed costs (Percentage Cost)
+    uint256 internal EXIT_FEE = 500; // 5% of assets deposited after fixed costs (Percentage Cost)
+    uint256 internal PROTOCOL_FEE = 1000; // 10% of assets deposited after fixed costs (Percentage Cost)
+
+    // TrustBonding configuration
+    uint256 internal EPOCH_LENGTH = 2 weeks;
+    uint256 internal SYSTEM_UTILIZATION_LOWER_BOUND = 5000; // 50%
+    uint256 internal PERSONAL_UTILIZATION_LOWER_BOUND = 3000; // 25%
+
+    // Curve Configurations
+    uint256 internal PROGRESSIVE_CURVE_SLOPE = 1e15; // 0.001 slope
 
     // Emissions Configurations
-    uint256 internal MAX_ANNUAL_EMISSION = 10e18; // 10 Trust
-    uint256 internal INITIAL_SUPPLY = 1000e18; // 1k Trust
+    uint256 internal MAX_ANNUAL_EMISSION = 1_000_000e18;
+
+    // Common test parameters
+    uint256 internal constant DEFAULT_EPOCH_LENGTH = 1 days;
+    uint256 internal constant DEFAULT_EMISSIONS_PER_EPOCH = 1_000_000 * 1e18; // 1M tokens
+    uint256 internal constant DEFAULT_CLIFF = 1;
+    uint256 internal constant DEFAULT_REDUCTION_BP = 1000; // 10%
+
+    // Time constants for easier reading
+    uint256 internal constant ONE_HOUR = 1 hours;
+    uint256 internal constant ONE_DAY = 1 days;
+    uint256 internal constant ONE_WEEK = 7 days;
+    uint256 internal constant TWO_WEEKS = 14 days;
+    uint256 internal constant THREE_WEEKS = 21 days;
+    uint256 internal constant ONE_YEAR = 52 weeks;
+    uint256 internal constant TWO_YEARS = 104 weeks;
+    uint256 internal constant THREE_YEARS = 156 weeks;
 
     /*//////////////////////////////////////////////////////////////////////////
                                    TEST CONTRACTS
@@ -86,11 +123,10 @@ abstract contract BaseTest is Modifiers, Test {
         Trust trust = Trust(address(trustProxy));
 
         // Initialize Trust contract via proxy
-        vm.prank(0xa28d4AAcA48bE54824dA53a19b05121DE71Ef480); // admin address set on Base
+        // vm.prank(0x395867a085228940cA50a26166FDAD3f382aeB09); // admin address set on Base
         trust.reinitialize(
             users.admin, // admin
-            users.admin, // initial minter
-            block.timestamp // startTimestamp
+            users.admin // initial minter
         );
 
         vm.label(address(trustProxy), "TrustProxy");
@@ -150,14 +186,14 @@ abstract contract BaseTest is Modifiers, Test {
         protocol.trustBonding = TrustBonding(address(trustBondingProxy));
         console2.log("TrustBonding proxy address: ", address(trustBondingProxy));
 
-        // Deploy SateliteEmissionsController implementation and proxy
-        SateliteEmissionsController sateliteEmissionsControllerImpl = new SateliteEmissionsController();
-        console2.log("SateliteEmissionsController Implementation", address(sateliteEmissionsControllerImpl));
+        // Deploy SatelliteEmissionsController implementation and proxy
+        SatelliteEmissionsController satelliteEmissionsControllerImpl = new SatelliteEmissionsController();
+        console2.log("SatelliteEmissionsController Implementation", address(satelliteEmissionsControllerImpl));
 
-        TransparentUpgradeableProxy sateliteEmissionsControllerProxy =
-            new TransparentUpgradeableProxy(address(sateliteEmissionsControllerImpl), users.admin, "");
-        protocol.sateliteEmissionsController = SateliteEmissionsController(address(sateliteEmissionsControllerProxy));
-        console2.log("SateliteEmissionsController Proxy", address(sateliteEmissionsControllerProxy));
+        TransparentUpgradeableProxy satelliteEmissionsControllerProxy =
+            new TransparentUpgradeableProxy(address(satelliteEmissionsControllerImpl), users.admin, "");
+        protocol.satelliteEmissionsController = SatelliteEmissionsController(address(satelliteEmissionsControllerProxy));
+        console2.log("SatelliteEmissionsController Proxy", address(satelliteEmissionsControllerProxy));
 
         // Deploy BondingCurveRegistry
         BondingCurveRegistry bondingCurveRegistry = new BondingCurveRegistry(users.admin);
@@ -190,8 +226,24 @@ abstract contract BaseTest is Modifiers, Test {
         vm.label(address(linearCurve), "LinearCurve");
         vm.label(address(progressiveCurve), "ProgressiveCurve");
 
-        protocol.sateliteEmissionsController.initialize(
-            users.admin, address(protocol.trustBonding)
+        protocol.satelliteEmissionsController.initialize(
+            users.admin,
+            address(protocol.trustBonding),
+            address(1), // metaERC20Hub
+            MetaERC20DispatchInit({
+                hubOrSpoke: address(1),
+                recipientDomain: 1,
+                recipientAddress: address(1),
+                gasLimit: 125_000,
+                finalityState: FinalityState.INSTANT
+            }),
+            CoreEmissionsControllerInit({
+                startTimestamp: block.timestamp,
+                emissionsLength: DEFAULT_EPOCH_LENGTH,
+                emissionsPerEpoch: DEFAULT_EMISSIONS_PER_EPOCH,
+                emissionsReductionCliff: DEFAULT_CLIFF,
+                emissionsReductionBasisPoints: DEFAULT_REDUCTION_BP
+            })
         );
 
         // Initialize AtomWalletFactory
@@ -207,9 +259,9 @@ abstract contract BaseTest is Modifiers, Test {
             2 weeks, // epochLength (minimum 2 weeks required)
             block.timestamp, // startTimestamp (future)
             address(protocol.multiVault), // multiVault
-            address(protocol.sateliteEmissionsController), // sateliteEmissionsController
-            5000, // systemUtilizationLowerBound (50%)
-            3000 // personalUtilizationLowerBound (30%)
+            address(protocol.satelliteEmissionsController), // satelliteEmissionsController
+            SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound (50%)
+            PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound (30%)
         );
 
         // Prepare configuration structs with deployed addresses
@@ -261,8 +313,7 @@ abstract contract BaseTest is Modifiers, Test {
             minDeposit: MIN_DEPOSIT,
             minShare: MIN_SHARES,
             atomDataMaxLength: 1000,
-            decimalPrecision: 18,
-            protocolFeeDistributionEnabled: true
+            decimalPrecision: 18
         });
     }
 

@@ -12,7 +12,7 @@ import { Trust } from "src/Trust.sol";
 import { TestTrust } from "tests/mocks/TestTrust.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { AtomWalletFactory } from "src/protocol/wallet/AtomWalletFactory.sol";
-import { SateliteEmissionsController } from "src/protocol/emissions/SateliteEmissionsController.sol";
+import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
@@ -26,11 +26,13 @@ import {
     VaultFees,
     BondingCurveConfig
 } from "src/interfaces/IMultiVaultCore.sol";
+import { MetaERC20DispatchInit, FinalityState } from "src/interfaces/IMetaLayer.sol";
+import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";
 
 /*
 LOCAL
 forge script script/IntuitionDeploy.s.sol:IntuitionDeploy \
---rpc-url geth \
+--rpc-url anvil \
 --broadcast
 
 TESTNET
@@ -48,7 +50,7 @@ contract IntuitionDeploy is BaseScript {
     address internal TRUST_TOKEN;
     uint8 internal DECIMAL_PRECISION = 18;
     uint256 internal FEE_DENOMINATOR = 10_000;
-    uint256 internal MIN_DEPOSIT = 1e17; // 0.1 Trust
+    uint256 internal MIN_DEPOSIT = 1e15; // 0.001 Trust
     uint256 internal MIN_SHARES = 1e6; // Ghost Shares
     uint256 internal ATOM_DATA_MAX_LENGTH = 1000;
 
@@ -68,21 +70,26 @@ contract IntuitionDeploy is BaseScript {
 
     // TrustBonding configuration
     uint256 internal EPOCH_LENGTH = 2 weeks;
-    uint256 internal SYSTEM_UTILIZATION_LOWER_BOUND = 2500; // 50%
-    uint256 internal PERSONAL_UTILIZATION_LOWER_BOUND = 2500; // 30%
+    uint256 internal SYSTEM_UTILIZATION_LOWER_BOUND = 5000; // 50%
+    uint256 internal PERSONAL_UTILIZATION_LOWER_BOUND = 2500; // 25%
+
+    // SatelliteEmissionsController configuration
+    uint256 internal EMISSIONS_LENGTH = 1 days;
+    uint256 internal EMISSIONS_PER_EPOCH = 1000e18; // 1000 TRUST per epoch
+    uint256 internal EMISSIONS_REDUCTION_CLIFF = 1; // 1 epoch
+    uint256 internal EMISSIONS_REDUCTION_BASIS_POINTS = 1000; // 10%
+
+    uint32 internal RECIPIENT_DOMAIN = 1; // Domain ID
+    uint256 internal GAS_LIMIT = 200_000; // Gas limit for cross-chain operations
 
     // Curve Configurations
     uint256 internal PROGRESSIVE_CURVE_SLOPE = 1e15; // 0.001 slope
-
-    // Emissions Configurations
-    uint256 internal MAX_ANNUAL_EMISSION = 10e18; // 10 Trust
-    uint256 internal INITIAL_SUPPLY = 1000e18; // 1k Trust
 
     // Deployed contracts
     Trust public trust;
     MultiVault public multiVault;
     AtomWalletFactory public atomWalletFactory;
-    SateliteEmissionsController public sateliteEmissionsController;
+    SatelliteEmissionsController public satelliteEmissionsController;
     TrustBonding public trustBonding;
     BondingCurveRegistry public bondingCurveRegistry;
     LinearCurve public linearCurve;
@@ -156,7 +163,7 @@ contract IntuitionDeploy is BaseScript {
         contractInfo("Trust", address(trust));
         contractInfo("MultiVault", address(multiVault));
         contractInfo("AtomWalletFactory", address(atomWalletFactory));
-        contractInfo("SateliteEmissionsController", address(sateliteEmissionsController));
+        contractInfo("SatelliteEmissionsController", address(satelliteEmissionsController));
         contractInfo("TrustBonding", address(trustBonding));
         contractInfo("BondingCurveRegistry", address(bondingCurveRegistry));
         contractInfo("LinearCurve", address(linearCurve));
@@ -183,10 +190,10 @@ contract IntuitionDeploy is BaseScript {
         );
         console2.log(
             string.concat(
-                "  SateliteEmissionsController: { [",
+                "  SatelliteEmissionsController: { [",
                 "intuitionSepolia.id",
                 "]: '",
-                vm.toString(address(sateliteEmissionsController)),
+                vm.toString(address(satelliteEmissionsController)),
                 "' },"
             )
         );
@@ -230,8 +237,7 @@ contract IntuitionDeploy is BaseScript {
         // Initialize Trust contract
         trustToken.reinitialize(
             ADMIN, // admin
-            ADMIN, // initial minter
-            block.timestamp + 100 // startTimestamp
+            ADMIN // initial controller
         );
         return trustToken;
     }
@@ -255,14 +261,14 @@ contract IntuitionDeploy is BaseScript {
         atomWalletFactory = AtomWalletFactory(address(atomWalletFactoryProxy));
         info("AtomWalletFactory Proxy", address(atomWalletFactoryProxy));
 
-        // Deploy SateliteEmissionsController implementation and proxy
-        SateliteEmissionsController sateliteEmissionsControllerImpl = new SateliteEmissionsController();
-        info("SateliteEmissionsController Implementation", address(sateliteEmissionsControllerImpl));
+        // Deploy SatelliteEmissionsController implementation and proxy
+        SatelliteEmissionsController satelliteEmissionsControllerImpl = new SatelliteEmissionsController();
+        info("SatelliteEmissionsController Implementation", address(satelliteEmissionsControllerImpl));
 
-        TransparentUpgradeableProxy sateliteEmissionsControllerProxy =
-            new TransparentUpgradeableProxy(address(sateliteEmissionsControllerImpl), ADMIN, "");
-        sateliteEmissionsController = SateliteEmissionsController(address(sateliteEmissionsControllerProxy));
-        info("SateliteEmissionsController Proxy", address(sateliteEmissionsControllerProxy));
+        TransparentUpgradeableProxy satelliteEmissionsControllerProxy =
+            new TransparentUpgradeableProxy(address(satelliteEmissionsControllerImpl), ADMIN, "");
+        satelliteEmissionsController = SatelliteEmissionsController(address(satelliteEmissionsControllerProxy));
+        info("SatelliteEmissionsController Proxy", address(satelliteEmissionsControllerProxy));
 
         // Deploy TrustBonding implementation and proxy
         TrustBonding trustBondingImpl = new TrustBonding();
@@ -295,8 +301,29 @@ contract IntuitionDeploy is BaseScript {
         // Initialize AtomWalletFactory
         atomWalletFactory.initialize(address(multiVault));
 
-        sateliteEmissionsController.initialize(
-            ADMIN, address(trustBonding)
+        // Initialize SatelliteEmissionsController with proper struct parameters
+        MetaERC20DispatchInit memory metaERC20DispatchInit = MetaERC20DispatchInit({
+            hubOrSpoke: address(1), // placeholder metaERC20Hub
+            recipientDomain: RECIPIENT_DOMAIN,
+            recipientAddress: address(1), // placeholder base emissions controller
+            gasLimit: GAS_LIMIT,
+            finalityState: FinalityState.FINALIZED
+        });
+
+        CoreEmissionsControllerInit memory coreEmissionsInit = CoreEmissionsControllerInit({
+            startTimestamp: block.timestamp + 10,
+            emissionsLength: EMISSIONS_LENGTH,
+            emissionsPerEpoch: EMISSIONS_PER_EPOCH,
+            emissionsReductionCliff: EMISSIONS_REDUCTION_CLIFF,
+            emissionsReductionBasisPoints: EMISSIONS_REDUCTION_BASIS_POINTS
+        });
+
+        satelliteEmissionsController.initialize(
+            ADMIN,
+            address(trustBonding),
+            address(1), // baseEmissionsController placeholder
+            metaERC20DispatchInit,
+            coreEmissionsInit
         );
 
         // Initialize TrustBonding
@@ -304,9 +331,9 @@ contract IntuitionDeploy is BaseScript {
             ADMIN, // owner
             address(trust), // trustToken
             EPOCH_LENGTH, // epochLength
-            block.timestamp + 20, // startTimestamp
+            block.timestamp + 10, // startTimestamp
             address(multiVault), // multiVault
-            address(sateliteEmissionsController),
+            address(satelliteEmissionsController),
             SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound
             PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound
         );
@@ -320,8 +347,7 @@ contract IntuitionDeploy is BaseScript {
             minDeposit: MIN_DEPOSIT,
             minShare: MIN_SHARES,
             atomDataMaxLength: ATOM_DATA_MAX_LENGTH,
-            decimalPrecision: DECIMAL_PRECISION,
-            protocolFeeDistributionEnabled: true
+            decimalPrecision: DECIMAL_PRECISION
         });
 
         AtomConfig memory atomConfig = AtomConfig({

@@ -9,7 +9,6 @@ import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/I
 import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
-import { Errors } from "src/libraries/Errors.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 
 // For SIG_VALIDATION_FAILED
@@ -23,6 +22,19 @@ import "@account-abstraction/core/Helpers.sol";
  */
 contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
     using ECDSA for bytes32;
+
+    /* =================================================== */
+    /*                      ERRORS                         */
+    /* =================================================== */
+
+    error AtomWallet_OnlyOwnerOrEntryPoint();
+    error AtomWallet_ZeroAddress();
+    error AtomWallet_WrongArrayLengths();
+    error AtomWallet_OnlyOwner();
+    error AtomWallet_InvalidSignature();
+    error AtomWallet_InvalidSignatureLength(uint256 length);
+    error AtomWallet_InvalidSignatureS(bytes32 s);
+    error AtomWallet_InvalidCallDataLength();
 
     /* =================================================== */
     /*                  CONSTANTS                          */
@@ -64,7 +76,7 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
     /// @dev Modifier to allow only the owner or entry point to call a function
     modifier onlyOwnerOrEntryPoint() {
         if (!(msg.sender == address(entryPoint()) || msg.sender == owner())) {
-            revert Errors.AtomWallet_OnlyOwnerOrEntryPoint();
+            revert AtomWallet_OnlyOwnerOrEntryPoint();
         }
         _;
     }
@@ -89,11 +101,11 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
     /// @param _termId the term ID of the atom associated with this wallet
     function initialize(address anEntryPoint, address _multiVault, bytes32 _termId) external initializer {
         if (anEntryPoint == address(0)) {
-            revert Errors.AtomWallet_ZeroAddress();
+            revert AtomWallet_ZeroAddress();
         }
 
         if (_multiVault == address(0)) {
-            revert Errors.AtomWallet_ZeroAddress();
+            revert AtomWallet_ZeroAddress();
         }
 
         __Ownable_init(IMultiVault(_multiVault).getAtomWarden());
@@ -147,7 +159,7 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
         nonReentrant
     {
         if (dest.length != values.length || values.length != func.length) {
-            revert Errors.AtomWallet_WrongArrayLengths();
+            revert AtomWallet_WrongArrayLengths();
         }
 
         for (uint256 i = 0; i < dest.length; i++) {
@@ -166,7 +178,7 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
     /// @param amount to withdraw
     function withdrawDepositTo(address payable withdrawAddress, uint256 amount) public {
         if (!(msg.sender == owner() || msg.sender == address(this))) {
-            revert Errors.AtomWallet_OnlyOwner();
+            revert AtomWallet_OnlyOwner();
         }
         entryPoint().withdrawTo(withdrawAddress, amount);
     }
@@ -266,11 +278,11 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
             ECDSA.tryRecover(hash, userOp.signature);
 
         if (recoverError == ECDSA.RecoverError.InvalidSignature) {
-            revert Errors.AtomWallet_InvalidSignature();
+            revert AtomWallet_InvalidSignature();
         } else if (recoverError == ECDSA.RecoverError.InvalidSignatureLength) {
-            revert Errors.AtomWallet_InvalidSignatureLength(uint256(errorArg));
+            revert AtomWallet_InvalidSignatureLength(uint256(errorArg));
         } else if (recoverError == ECDSA.RecoverError.InvalidSignatureS) {
-            revert Errors.AtomWallet_InvalidSignatureS(errorArg);
+            revert AtomWallet_InvalidSignatureS(errorArg);
         }
 
         if (recovered != owner()) {
@@ -306,7 +318,7 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
         returns (uint256 validUntil, uint256 validAfter, bytes memory actualCallData)
     {
         if (callData.length < 24) {
-            revert Errors.AtomWallet_InvalidCallDataLength();
+            revert AtomWallet_InvalidCallDataLength();
         }
 
         // Extract uint96 values (12 bytes each) and convert to uint256

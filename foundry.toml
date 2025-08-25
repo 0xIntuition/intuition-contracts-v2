@@ -2,7 +2,6 @@
 
 [profile.default]
   auto_detect_solc = false
-  block_timestamp = 1_738_368_000 # Feb 1, 2025 at 00:00 GMT
   bytecode_hash = "none"
   evm_version = "cancun"
   fuzz = { runs = 1_000 }

@@ -3,15 +3,15 @@ pragma solidity ^0.8.27;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 
+import { ICoreEmissionsController } from "src/interfaces/ICoreEmissionsController.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 import { ITrustBonding } from "src/interfaces/ITrustBonding.sol";
-import { ISateliteEmissionsController } from "src/interfaces/ISateliteEmissionsController.sol";
+import { ISatelliteEmissionsController } from "src/interfaces/ISatelliteEmissionsController.sol";
 
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { VotingEscrow } from "src/external/curve/VotingEscrow.sol";
-
-import { Errors } from "src/libraries/Errors.sol";
 
 /**
  * @title  TrustBonding
@@ -83,10 +83,10 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
     mapping(address user => mapping(uint256 epoch => uint256 claimedRewards)) public userClaimedRewardsForEpoch;
 
     /// @notice The MultiVault contract address
-    IMultiVault public multiVault;
+    address public multiVault;
 
     /// @notice The SatelliteEmissionsController contract address
-    ISateliteEmissionsController public sateliteEmissionsController;
+    address public satelliteEmissionsController;
 
     /// @notice The system utilization lower bound in basis points (represents the minimum possible system utilization
     /// ratio)
@@ -153,7 +153,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         uint256 _epochLength,
         uint256 _startTimestamp,
         address _multiVault,
-        address _sateliteEmissionsController,
+        address _satelliteEmissionsController,
         uint256 _systemUtilizationLowerBound,
         uint256 _personalUtilizationLowerBound
     )
@@ -190,8 +190,8 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         _grantRole(PAUSER_ROLE, _owner);
 
         startTimestamp = _startTimestamp;
-        multiVault = IMultiVault(_multiVault);
-        sateliteEmissionsController = ISateliteEmissionsController(_sateliteEmissionsController);
+        multiVault = _multiVault;
+        satelliteEmissionsController = _satelliteEmissionsController;
         systemUtilizationLowerBound = _systemUtilizationLowerBound;
         personalUtilizationLowerBound = _personalUtilizationLowerBound;
     }
@@ -205,7 +205,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
      * @return The length of an epoch in seconds
      */
     function epochLength() public view returns (uint256) {
-        return MINTIME;
+        return ICoreEmissionsController(satelliteEmissionsController).epochLength();
     }
 
     /**
@@ -218,11 +218,11 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
 
     /**
      * @notice Returns the timestamp at the end of a specific epoch
-     * @param _epoch The epoch to get the end timestamp for
+     * @param epoch The epoch to get the end timestamp for
      * @return The timestamp at the end of the given epoch
      */
-    function epochEndTimestamp(uint256 _epoch) public view returns (uint256) {
-        return startTimestamp + ((_epoch + 1) * epochLength());
+    function epochEndTimestamp(uint256 epoch) public view returns (uint256) {
+        return _epochEndTimestamp(epoch);
     }
 
     /**
@@ -231,15 +231,19 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
      * @return Epoch at the given timestamp
      */
     function epochAtTimestamp(uint256 timestamp) public view returns (uint256) {
-        return (timestamp - startTimestamp) / epochLength();
+        return _epochAtTimestamp(timestamp);
     }
-
     /**
      * @notice Returns the current epoch
      * @return Current epoch
      */
+
     function currentEpoch() public view returns (uint256) {
-        return epochAtTimestamp(block.timestamp);
+        return _currentEpoch();
+    }
+
+    function previousEpoch() public view returns (uint256) {
+        return _currentEpoch() - 1;
     }
 
     /**
@@ -250,7 +254,6 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         return supply;
     }
 
-
     /**
      * @notice Returns the total bonded balance (i.e. the sum of all users’ veTRUST)
      *         at the current block timestamp
@@ -260,17 +263,24 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         return _totalSupply(block.timestamp);
     }
 
+    function eligibleRewards(address account) public view returns (uint256) {
+        uint256 currentEpoch = _currentEpoch();
+        uint256 prevEpoch = currentEpoch > 1 ? currentEpoch - 1 : 0;
+        return _userEligibleRewardsForEpoch(account, prevEpoch) * _getPersonalUtilizationRatio(account, prevEpoch)
+            / BASIS_POINTS_DIVISOR;
+    }
+
     /**
      * @notice Returns the total veTRUST balance at the end of a specific epoch
-     * @param _epoch The epoch to get the total veTRUST balance for
+     * @param epoch The epoch to get the total veTRUST balance for
      * @return The total amount of veTRUST at the end of the given epoch
      */
-    function totalBondedBalanceAtEpochEnd(uint256 _epoch) public view returns (uint256) {
-        if (_epoch > currentEpoch()) {
+    function totalBondedBalanceAtEpochEnd(uint256 epoch) public view returns (uint256) {
+        if (epoch > currentEpoch()) {
             revert TrustBonding_InvalidEpoch();
         }
 
-        return _totalSupply(epochEndTimestamp(_epoch));
+        return _totalSupply(_epochEndTimestamp(epoch));
     }
 
     /**
@@ -288,92 +298,65 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
             revert TrustBonding_InvalidEpoch();
         }
 
-        return _balanceOf(_account, epochEndTimestamp(_epoch));
+        return _balanceOf(_account, _epochEndTimestamp(_epoch));
     }
 
     /**
      * @notice Returns the user's raw eligible rewards for a specific epoch.
-     * @param _account The user's address
-     * @param _epoch The epoch to get the eligible rewards for
+     * @param account The user's address
+     * @param epoch The epoch to get the eligible rewards for
      * @return The user's eligible rewards for the given epoch
      */
-    function userEligibleRewardsForEpoch(address _account, uint256 _epoch) public view returns (uint256) {
-        if (_account == address(0)) {
-            revert TrustBonding_ZeroAddress();
-        }
-
-        if (_epoch > currentEpoch()) {
-            revert TrustBonding_InvalidEpoch();
-        }
-
-        uint256 userBalance = userBondedBalanceAtEpochEnd(_account, _epoch);
-        uint256 totalBalance = totalBondedBalanceAtEpochEnd(_epoch);
-
-        if (userBalance == 0 || totalBalance == 0) {
-            return 0;
-        }
-
-        return userBalance * trustPerEpoch(_epoch) / totalBalance;
+    function userEligibleRewardsForEpoch(address account, uint256 epoch) public view returns (uint256) {
+        return _userEligibleRewardsForEpoch(account, epoch);
     }
 
     /**
      * @notice Returns the user's eligible protocol fee rewards for the previous epoch they can claim now
-     * @param _account The user's address
+     * @param account The user's address
      * @return The user's eligible protocol fee rewards for the previous epoch they can claim now
      */
-    function userEligibleProtocolFeeRewards(address _account) public view returns (uint256) {
-        if (_account == address(0)) {
-            revert TrustBonding_ZeroAddress();
-        }
-
-        uint256 previousEpoch = currentEpoch() - 1;
-        uint256 accumulatedProtocolFeesForPreviousEpoch = multiVault.accumulatedProtocolFees(previousEpoch);
-
-        if (accumulatedProtocolFeesForPreviousEpoch == 0) {
-            return 0;
-        }
-
-        uint256 userBalance = userBondedBalanceAtEpochEnd(_account, previousEpoch);
-        uint256 totalBalance = totalBondedBalanceAtEpochEnd(previousEpoch);
-
-        if (userBalance == 0 || totalBalance == 0) {
-            return 0;
-        }
-
-        return userBalance * accumulatedProtocolFeesForPreviousEpoch / totalBalance;
+    function userEligibleProtocolFeeRewards(address account) public view returns (uint256) {
+        return _userEligibleProtocolFeeRewards(account);
     }
 
     /**
      * @notice Returns whether the user has claimed rewards for a specific epoch
-     * @param _account The user's address
-     * @param _epoch The epoch to check if the user has claimed rewards for
+     * @param account The user's address
+     * @param epoch The epoch to check if the user has claimed rewards for
      * @return Whether the user has claimed rewards for the given epoch
      */
-    function hasClaimedRewardsForEpoch(address _account, uint256 _epoch) public view returns (bool) {
-        return userClaimedRewardsForEpoch[_account][_epoch] > 0;
+    function hasClaimedRewardsForEpoch(address account, uint256 epoch) public view returns (bool) {
+        return _hasClaimedRewardsForEpoch(account, epoch);
     }
 
     /**
      * @notice Calculates the amount of TRUST tokens to be emitted per epoch, based on bonding percentage and max
      * emission
-     * @param _epoch The epoch to calculate the TRUST emission for
+     * @param epoch The epoch to calculate the TRUST emission for
      * @return The amount of TRUST emitted per epoch
      */
-    function trustPerEpoch(uint256 _epoch) public view returns (uint256) {
-        if (_epoch > currentEpoch()) {
-            revert TrustBonding_InvalidEpoch();
-        }
+    function trustPerEpoch(uint256 epoch) public view returns (uint256) {
+        return _emissionsForEpoch(epoch);
+    }
 
-        uint256 maxEmissionPerEpoch = maxAnnualEmission / epochsPerYear();
+    /**
+     * @notice Returns the system utilization ratio for a specific epoch
+     * @param _epoch The epoch to calculate the system utilization ratio for
+     * @return The system utilization ratio for the given epoch
+     */
+    function getSystemUtilizationRatio(uint256 _epoch) public view returns (uint256) {
+        return _getSystemUtilizationRatio(_epoch);
+    }
 
-        if (_epoch < 2) {
-            return maxEmissionPerEpoch;
-        }
-
-        uint256 systemUtilizationRatio = getSystemUtilizationRatio(_epoch);
-        uint256 emissionPerEpoch = maxEmissionPerEpoch * systemUtilizationRatio / BASIS_POINTS_DIVISOR;
-
-        return emissionPerEpoch;
+    /**
+     * @notice Returns the user's personal utilization ratio for a specific epoch
+     * @param _account The user's address
+     * @param _epoch The epoch to calculate the personal utilization ratio for
+     * @return The personal utilization ratio for the given epoch
+     */
+    function getPersonalUtilizationRatio(address _account, uint256 _epoch) public view returns (uint256) {
+        return _getPersonalUtilizationRatio(_account, _epoch);
     }
 
     /**
@@ -381,7 +364,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
      * @param _epoch The epoch to calculate the APR for
      * @return The current APR in basis points for bonding TRUST tokens
      */
-    function getAPRAtEpoch(uint256 _epoch) external view returns (uint256) {
+    function getAprAtEpoch(uint256 _epoch) external view returns (uint256) {
         if (_epoch > currentEpoch()) {
             revert TrustBonding_InvalidEpoch();
         }
@@ -395,105 +378,6 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         uint256 trustPerYear = trustPerEpoch(_epoch) * epochsPerYear();
 
         return trustPerYear * BASIS_POINTS_DIVISOR / totalLockedAmount;
-    }
-
-    /**
-     * @notice Returns the system utilization ratio for a specific epoch
-     * @param _epoch The epoch to calculate the system utilization ratio for
-     * @return The system utilization ratio for the given epoch
-     */
-    function getSystemUtilizationRatio(uint256 _epoch) public view returns (uint256) {
-        // In epochs 0 and 1, the utilization ratio is set to the maximum value (100%)
-        if (_epoch < 2) {
-            return BASIS_POINTS_DIVISOR;
-        }
-
-        // If the epoch is in the future, return 0 and exit early
-        if (_epoch > currentEpoch()) {
-            return 0;
-        }
-
-        // Fetch the system utilization before and after the epoch
-        int256 utilizationBefore = multiVault.getTotalUtilizationForEpoch(_epoch - 1);
-        int256 utilizationAfter = multiVault.getTotalUtilizationForEpoch(_epoch);
-
-        // Since rawUtilizationDelta is signed, we only do a sign check, as the explicit underflow check is not needed
-        int256 rawUtilizationDelta = utilizationAfter - utilizationBefore;
-
-        // If the utilizationDelta is negative or zero, we return the minimum system utilization ratio
-        if (rawUtilizationDelta <= 0) {
-            return systemUtilizationLowerBound;
-        }
-
-        // Since we previously ensured that utilizationDelta > 0, we can now safely cast it to uint256
-        uint256 utilizationDelta = uint256(rawUtilizationDelta);
-
-        // Fetch the target utilization for the previous epoch
-        uint256 utilizationTarget = totalClaimedRewardsForEpoch[_epoch - 1];
-
-        // If there was no target utilization in the previous epoch, any increase in utilization is rewarded with the
-        // max ratio.
-        // Similarly, if the utilizationDelta is greater than the target, we also return the max ratio.
-        if (utilizationTarget == 0 || utilizationDelta >= utilizationTarget) {
-            return BASIS_POINTS_DIVISOR;
-        }
-
-        // Normalize the final utilizationRatio to be within the bounds of the systemUtilizationLowerBound and
-        // BASIS_POINTS_DIVISOR
-        return _getNormalizedUtilizationRatio(utilizationDelta, utilizationTarget, systemUtilizationLowerBound);
-    }
-
-    /**
-     * @notice Returns the user's personal utilization ratio for a specific epoch
-     * @param _account The user's address
-     * @param _epoch The epoch to calculate the personal utilization ratio for
-     * @return The personal utilization ratio for the given epoch
-     */
-    function getPersonalUtilizationRatio(address _account, uint256 _epoch) public view returns (uint256) {
-        // In epochs 0 and 1, the utilization ratio is set to the maximum value (100%)
-        if (_account == address(0)) {
-            revert TrustBonding_ZeroAddress();
-        }
-
-        // If the epoch is in the future, return 0 and exit early
-        if (_epoch < 2) {
-            return BASIS_POINTS_DIVISOR;
-        }
-
-        // If the epoch is in the future, return 0 and exit early
-        if (_epoch > currentEpoch()) {
-            return 0;
-        }
-
-        // Fetch the personal utilization before and after the epoch
-        int256 userUtilizationBefore = multiVault.getUserUtilizationForEpoch(_account, _epoch - 1);
-        int256 userUtilizationAfter = multiVault.getUserUtilizationForEpoch(_account, _epoch);
-
-        // Since rawUtilizationDelta is signed, we only do a sign check, as the explicit underflow check is not needed
-        int256 rawUtilizationDelta = userUtilizationAfter - userUtilizationBefore;
-
-        // If the utilizationDelta is negative or zero, we return the minimum personal utilization ratio
-        if (rawUtilizationDelta <= 0) {
-            return personalUtilizationLowerBound;
-        }
-
-        // Since we previously ensured that userUtilizationDelta > 0, we can now safely cast it to uint256
-        uint256 userUtilizationDelta = uint256(rawUtilizationDelta);
-
-        // Fetch the target utilization for the previous epoch
-        uint256 userUtilizationTarget = userClaimedRewardsForEpoch[_account][_epoch - 1];
-
-        // If there was no target utilization in the previous epoch, any increase in utilization is rewarded with the
-        // max ratio.
-        // Similarly, if the userUtilizationDelta is greater than the target, we also return the max ratio.
-        if (userUtilizationTarget == 0 || userUtilizationDelta >= userUtilizationTarget) {
-            return BASIS_POINTS_DIVISOR;
-        }
-
-        // Normalize the final utilizationRatio to be within the bounds of the personalUtilizationLowerBound and
-        // BASIS_POINTS_DIVISOR
-        return
-            _getNormalizedUtilizationRatio(userUtilizationDelta, userUtilizationTarget, personalUtilizationLowerBound);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -522,7 +406,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
 
         // Fetch the raw (pro-rata) rewards for the previous epoch
         uint256 previousEpoch = currentEpochLocal - 1;
-        uint256 rawUserRewards = userEligibleRewardsForEpoch(msg.sender, previousEpoch);
+        uint256 rawUserRewards = _userEligibleRewardsForEpoch(msg.sender, previousEpoch);
 
         // Check if the user has any rewards to claim
         if (rawUserRewards == 0) {
@@ -530,7 +414,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         }
 
         // Apply the personal utilization ratio to the raw rewards
-        uint256 personalUtilizationRatio = getPersonalUtilizationRatio(msg.sender, previousEpoch);
+        uint256 personalUtilizationRatio = _getPersonalUtilizationRatio(msg.sender, previousEpoch);
         uint256 userRewards = rawUserRewards * personalUtilizationRatio / BASIS_POINTS_DIVISOR;
 
         // Check if the user has any rewards to claim after applying the personal utilization ratio.
@@ -541,52 +425,8 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         }
 
         // Check if the user has already claimed rewards for the previous epoch
-        if (hasClaimedRewardsForEpoch(msg.sender, previousEpoch)) {
+        if (_hasClaimedRewardsForEpoch(msg.sender, previousEpoch)) {
             revert TrustBonding_RewardsAlreadyClaimedForEpoch();
-        }
-
-        if (multiVault.protocolFeeDistributionEnabledAtEpoch(previousEpoch)) {
-            uint256 accumulatedProtocolFeesForPreviousEpoch = multiVault.accumulatedProtocolFees(previousEpoch);
-            uint256 maxClaimableProtocolFees = maxClaimableProtocolFeesForEpoch[previousEpoch];
-
-            // Check if the accumulated protocol fees from the previous epoch are sent to the TrustBonding contract
-            if (accumulatedProtocolFeesForPreviousEpoch > 0 && maxClaimableProtocolFees == 0) {
-                revert TrustBonding_ProtocolFeesNotSentToTrustBondingYet();
-            }
-
-            // Once we're sure there are protocol fees to claim, we can check if the user is eligible for them
-            if (accumulatedProtocolFeesForPreviousEpoch > 0 && maxClaimableProtocolFees > 0) {
-                uint256 userProtocolFees = userEligibleProtocolFeeRewards(msg.sender);
-
-                // Check if the user has any protocol fees to claim
-                if (userProtocolFees > 0) {
-                    // Check if the user has already claimed protocol fees for the previous epoch
-                    if (userClaimedProtocolFeesForEpoch[msg.sender][previousEpoch] > 0) {
-                        revert TrustBonding_ProtocolFeesAlreadyClaimedForEpoch();
-                    }
-
-                    // Increment the total claimed protocol fees for the previous epoch and set the user's claimed
-                    // protocol fees
-                    totalClaimedProtocolFeesForEpoch[previousEpoch] += userProtocolFees;
-                    userClaimedProtocolFeesForEpoch[msg.sender][previousEpoch] = userProtocolFees;
-
-                    // At this point, we should be sure that there are enough protocol fees to claim for the user,
-                    // but we're also adding a few sanity checks here that should never fail
-                    if (userProtocolFees + totalClaimedProtocolFeesForEpoch[previousEpoch] > maxClaimableProtocolFees) {
-                        revert TrustBonding_ProtocolFeesExceedMaxClaimable();
-                    }
-
-                    // Also ensure that the user is not trying to claim more protocol fees than the contract has
-                    if (userProtocolFees > IERC20(token).balanceOf(address(this))) {
-                        revert TrustBonding_ClaimableProtocolFeesExceedBalance();
-                    }
-
-                    // Transfer the protocol fees to the recipient address
-                    IERC20(token).safeTransfer(recipient, userProtocolFees);
-
-                    emit ProtocolFeesClaimed(msg.sender, recipient, userProtocolFees);
-                }
-            }
         }
 
         // Increment the total claimed inflationary rewards for the previous epoch and set the user's claimed rewards
@@ -594,10 +434,9 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         userClaimedRewardsForEpoch[msg.sender][previousEpoch] = userRewards;
 
         // Mint the rewards to the recipient address
-        ISateliteEmissionsController(sateliteEmissionsController).transfer(recipient, userRewards);
+        ISatelliteEmissionsController(satelliteEmissionsController).transfer(recipient, userRewards);
 
         emit RewardsClaimed(msg.sender, recipient, userRewards);
-
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -613,23 +452,23 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
             revert TrustBonding_ZeroAddress();
         }
 
-        multiVault = IMultiVault(_multiVault);
+        multiVault = _multiVault;
 
         emit MultiVaultSet(_multiVault);
     }
 
     /**
      * @notice Sets the SatelliteEmissionsController contract address
-     * @param _sateliteEmissionsController The address of the SatelliteEmissionsController contract
+     * @param _satelliteEmissionsController The address of the SatelliteEmissionsController contract
      */
-    function setSateliteEmissionsController(address _sateliteEmissionsController) external onlyRole(TIMELOCK_ROLE) {
-        if (_sateliteEmissionsController == address(0)) {
+    function setSatelliteEmissionsController(address _satelliteEmissionsController) external onlyRole(TIMELOCK_ROLE) {
+        if (_satelliteEmissionsController == address(0)) {
             revert TrustBonding_ZeroAddress();
         }
 
-        sateliteEmissionsController = ISateliteEmissionsController(_sateliteEmissionsController);
+        satelliteEmissionsController = _satelliteEmissionsController;
 
-        emit SateliteEmissionsControllerSet(_sateliteEmissionsController);
+        emit SatelliteEmissionsControllerSet(_satelliteEmissionsController);
     }
 
     /**
@@ -692,6 +531,35 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
     }
 
     /**
+     * @notice Returns the amount of unclaimed rewards that can be reclaimed by admin/controller
+     * @dev Calculates unclaimed rewards from past epochs, excluding rewards that can still be claimed
+     *      for the previous epoch
+     * @return The amount of unclaimed rewards available for reclaiming
+     */
+    function getUnclaimedRewards() external view returns (uint256) {
+        // There cannot be any unclaimed rewards during the first epoch as the first epoch is not claimable
+        if (currentEpoch() == 0) {
+            return 0;
+        }
+
+        uint256 previousEpoch = currentEpoch() - 1;
+        uint256 totalUnclaimedRewards = 0;
+
+        // Sum up all unclaimed rewards from all past epochs except the previous epoch
+        // The previous epoch's rewards can still be claimed, so we exclude them
+        for (uint256 epoch = 1; epoch < previousEpoch; epoch++) {
+            uint256 epochRewards = trustPerEpoch(epoch);
+            uint256 claimedRewards = totalClaimedRewardsForEpoch[epoch];
+
+            if (epochRewards > claimedRewards) {
+                totalUnclaimedRewards += epochRewards - claimedRewards;
+            }
+        }
+
+        return totalUnclaimedRewards;
+    }
+
+    /**
      * @notice Withdraws all of the unclaimed protocol fees from the contract
      * @dev This function withdraws all unclaimed protocol fees from the contract, except for the ones
      *      that can still be claimed for the previous epoch, whose claim period is still open.
@@ -715,11 +583,11 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
             maxClaimableProtocolFeesForEpoch[previousEpoch] - totalClaimedProtocolFeesForEpoch[previousEpoch];
 
         // Calculate the withdrawable protocol fees
-        uint256 unclaimedProtocolFees = IERC20(token).balanceOf(address(this)) - currentlyClaimableProtocolFees;
+        uint256 unclaimedProtocolFees = address(this).balance - currentlyClaimableProtocolFees;
 
         if (unclaimedProtocolFees > 0) {
             // Transfer the unclaimed protocol fees to the recipient address specified by the owner
-            IERC20(token).safeTransfer(recipient, unclaimedProtocolFees);
+            Address.sendValue(payable(recipient), unclaimedProtocolFees);
 
             emit UnclaimedProtocolFeesWithdrawn(recipient, unclaimedProtocolFees);
         }
@@ -728,6 +596,127 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
     /*//////////////////////////////////////////////////////////////
                             INTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
+
+    function _currentEpoch() internal view returns (uint256) {
+        return _epochAtTimestamp(block.timestamp);
+    }
+
+    function _epochEndTimestamp(uint256 epoch) internal view returns (uint256) {
+        return ICoreEmissionsController(satelliteEmissionsController).epochEndTimestamp(epoch);
+    }
+
+    function _epochAtTimestamp(uint256 timestamp) internal view returns (uint256) {
+        return ICoreEmissionsController(satelliteEmissionsController).epochAtTimestamp(timestamp);
+    }
+
+    function _emissionsForEpoch(uint256 epoch) internal view returns (uint256) {
+        if (epoch > currentEpoch()) {
+            revert TrustBonding_InvalidEpoch();
+        }
+
+        uint256 maxEpochEmissions = ICoreEmissionsController(satelliteEmissionsController).emissionsAtEpoch(epoch);
+
+        if (epoch < 2) {
+            return maxEpochEmissions;
+        }
+
+        uint256 systemUtilizationRatio = _getSystemUtilizationRatio(epoch);
+        uint256 epochEmissions = maxEpochEmissions * systemUtilizationRatio / BASIS_POINTS_DIVISOR;
+
+        return epochEmissions;
+    }
+
+    function _hasClaimedRewardsForEpoch(address account, uint256 epoch) internal view returns (bool) {
+        return userClaimedRewardsForEpoch[account][epoch] > 0;
+    }
+
+    function _userEligibleRewardsForEpoch(address account, uint256 epoch) internal view returns (uint256) {
+        if (account == address(0)) {
+            revert TrustBonding_ZeroAddress();
+        }
+
+        if (epoch > currentEpoch()) {
+            revert TrustBonding_InvalidEpoch();
+        }
+
+        uint256 userBalance = userBondedBalanceAtEpochEnd(account, epoch);
+        uint256 totalBalance = totalBondedBalanceAtEpochEnd(epoch);
+
+        if (userBalance == 0 || totalBalance == 0) {
+            return 0;
+        }
+
+        return userBalance * _emissionsForEpoch(epoch) / totalBalance;
+    }
+
+    function _userEligibleProtocolFeeRewards(address account) internal view returns (uint256) {
+        if (account == address(0)) {
+            revert TrustBonding_ZeroAddress();
+        }
+
+        uint256 previousEpoch = currentEpoch() - 1;
+        uint256 accumulatedProtocolFeesForPreviousEpoch = IMultiVault(multiVault).accumulatedProtocolFees(previousEpoch);
+
+        if (accumulatedProtocolFeesForPreviousEpoch == 0) {
+            return 0;
+        }
+
+        uint256 userBalance = userBondedBalanceAtEpochEnd(account, previousEpoch);
+        uint256 totalBalance = totalBondedBalanceAtEpochEnd(previousEpoch);
+
+        if (userBalance == 0 || totalBalance == 0) {
+            return 0;
+        }
+
+        return userBalance * accumulatedProtocolFeesForPreviousEpoch / totalBalance;
+    }
+
+    function _getPersonalUtilizationRatio(address _account, uint256 _epoch) internal view returns (uint256) {
+        // In epochs 0 and 1, the utilization ratio is set to the maximum value (100%)
+        if (_account == address(0)) {
+            revert TrustBonding_ZeroAddress();
+        }
+
+        // If the epoch is in the future, return 0 and exit early
+        if (_epoch < 2) {
+            return BASIS_POINTS_DIVISOR;
+        }
+
+        // If the epoch is in the future, return 0 and exit early
+        if (_epoch > currentEpoch()) {
+            return 0;
+        }
+
+        // Fetch the personal utilization before and after the epoch
+        int256 userUtilizationBefore = IMultiVault(multiVault).getUserUtilizationForEpoch(_account, _epoch - 1);
+        int256 userUtilizationAfter = IMultiVault(multiVault).getUserUtilizationForEpoch(_account, _epoch);
+
+        // Since rawUtilizationDelta is signed, we only do a sign check, as the explicit underflow check is not needed
+        int256 rawUtilizationDelta = userUtilizationAfter - userUtilizationBefore;
+
+        // If the utilizationDelta is negative or zero, we return the minimum personal utilization ratio
+        if (rawUtilizationDelta <= 0) {
+            return personalUtilizationLowerBound;
+        }
+
+        // Since we previously ensured that userUtilizationDelta > 0, we can now safely cast it to uint256
+        uint256 userUtilizationDelta = uint256(rawUtilizationDelta);
+
+        // Fetch the target utilization for the previous epoch
+        uint256 userUtilizationTarget = userClaimedRewardsForEpoch[_account][_epoch - 1];
+
+        // If there was no target utilization in the previous epoch, any increase in utilization is rewarded with the
+        // max ratio.
+        // Similarly, if the userUtilizationDelta is greater than the target, we also return the max ratio.
+        if (userUtilizationTarget == 0 || userUtilizationDelta >= userUtilizationTarget) {
+            return BASIS_POINTS_DIVISOR;
+        }
+
+        // Normalize the final utilizationRatio to be within the bounds of the personalUtilizationLowerBound and
+        // BASIS_POINTS_DIVISOR
+        return
+            _getNormalizedUtilizationRatio(userUtilizationDelta, userUtilizationTarget, personalUtilizationLowerBound);
+    }
 
     /**
      * @notice Returns the normalized utilization ratio, adjusted for the desired range (lowerBound,
@@ -749,5 +738,46 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         uint256 ratioRange = BASIS_POINTS_DIVISOR - lowerBound;
         uint256 utilizationRatio = lowerBound + (delta * ratioRange) / target;
         return utilizationRatio;
+    }
+
+    function _getSystemUtilizationRatio(uint256 _epoch) internal view returns (uint256) {
+        // In epochs 0 and 1, the utilization ratio is set to the maximum value (100%)
+        if (_epoch < 2) {
+            return BASIS_POINTS_DIVISOR;
+        }
+
+        // If the epoch is in the future, return 0 and exit early
+        if (_epoch > currentEpoch()) {
+            return 0;
+        }
+
+        // Fetch the system utilization before and after the epoch
+        int256 utilizationBefore = IMultiVault(multiVault).getTotalUtilizationForEpoch(_epoch - 1);
+        int256 utilizationAfter = IMultiVault(multiVault).getTotalUtilizationForEpoch(_epoch);
+
+        // Since rawUtilizationDelta is signed, we only do a sign check, as the explicit underflow check is not needed
+        int256 rawUtilizationDelta = utilizationAfter - utilizationBefore;
+
+        // If the utilizationDelta is negative or zero, we return the minimum system utilization ratio
+        if (rawUtilizationDelta <= 0) {
+            return systemUtilizationLowerBound;
+        }
+
+        // Since we previously ensured that utilizationDelta > 0, we can now safely cast it to uint256
+        uint256 utilizationDelta = uint256(rawUtilizationDelta);
+
+        // Fetch the target utilization for the previous epoch
+        uint256 utilizationTarget = totalClaimedRewardsForEpoch[_epoch - 1];
+
+        // If there was no target utilization in the previous epoch, any increase in utilization is rewarded with the
+        // max ratio.
+        // Similarly, if the utilizationDelta is greater than the target, we also return the max ratio.
+        if (utilizationTarget == 0 || utilizationDelta >= utilizationTarget) {
+            return BASIS_POINTS_DIVISOR;
+        }
+
+        // Normalize the final utilizationRatio to be within the bounds of the systemUtilizationLowerBound and
+        // BASIS_POINTS_DIVISOR
+        return _getNormalizedUtilizationRatio(utilizationDelta, utilizationTarget, systemUtilizationLowerBound);
     }
 }

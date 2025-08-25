@@ -7,9 +7,9 @@ pragma solidity ^0.8.27;
  * @notice Interface for the Intuition's TrustBondingV2 contract
  */
 interface ITrustBonding {
-    /*//////////////////////////////////////////////////////////////
-                                 EVENTS
-    //////////////////////////////////////////////////////////////*/
+    /* =================================================== */
+    /*                       EVENTS                        */
+    /* =================================================== */
 
     /**
      * @notice Emitted when a user claims their accrued Trust rewards
@@ -34,10 +34,10 @@ interface ITrustBonding {
     event MultiVaultSet(address indexed multiVault);
 
     /**
-     * @notice Emitted when the SateliteEmissionsController contract is set
-     * @param sateliteEmissionsController The address of the SateliteEmissionsController contract
+     * @notice Emitted when the SatelliteEmissionsController contract is set
+     * @param satelliteEmissionsController The address of the SatelliteEmissionsController contract
      */
-    event SateliteEmissionsControllerSet(address indexed sateliteEmissionsController);
+    event SatelliteEmissionsControllerSet(address indexed satelliteEmissionsController);
 
     /**
      * @notice Emitted when the lower bound for the system utilization ratio is updated
@@ -65,9 +65,9 @@ interface ITrustBonding {
      */
     event UnclaimedProtocolFeesWithdrawn(address indexed recipient, uint256 feesWithdrawn);
 
-    /*//////////////////////////////////////////////////////////////
-                                 FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
+    /* =================================================== */
+    /*                      FUNCTIONS                      */
+    /* =================================================== */
 
     function initialize(
         address _owner,
@@ -75,7 +75,7 @@ interface ITrustBonding {
         uint256 _epochLength,
         uint256 _startTimestamp,
         address _multiVault,
-        address _sateliteEmissionsController,
+        address _satelliteEmissionsController,
         uint256 _systemUtilizationLowerBound,
         uint256 _personalUtilizationLowerBound
     )
@@ -105,11 +105,12 @@ interface ITrustBonding {
 
     function hasClaimedRewardsForEpoch(address _account, uint256 _epoch) external view returns (bool);
 
-    function getAPRAtEpoch(uint256 _epoch) external view returns (uint256);
+    function getAprAtEpoch(uint256 _epoch) external view returns (uint256);
 
     function getSystemUtilizationRatio(uint256 _epoch) external view returns (uint256);
 
     function getPersonalUtilizationRatio(address _account, uint256 _epoch) external view returns (uint256);
+    function getUnclaimedRewards() external view returns (uint256);
 
     function claimRewards(address recipient) external;
 

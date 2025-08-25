@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
-import { Errors } from "src/libraries/Errors.sol";
 import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
 
 /**
@@ -15,6 +14,16 @@ import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
  *      of the curves themselves.
  */
 abstract contract BaseCurve is IBaseCurve {
+    /* =================================================== */
+    /*                      ERRORS                         */
+    /* =================================================== */
+
+    error BaseCurve_EmptyStringNotAllowed();
+
+    /* =================================================== */
+    /*                  STATE VARIABLES                    */
+    /* =================================================== */
+
     /// @notice The name of the curve
     string public name;
 
@@ -23,7 +32,7 @@ abstract contract BaseCurve is IBaseCurve {
     /// @param _name Unique name for the curve
     constructor(string memory _name) {
         if (bytes(_name).length == 0) {
-            revert Errors.BaseCurve_EmptyStringNotAllowed();
+            revert BaseCurve_EmptyStringNotAllowed();
         }
 
         name = _name;

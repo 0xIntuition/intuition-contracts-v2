@@ -3,7 +3,6 @@ pragma solidity ^0.8.19;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { Trust } from "src/Trust.sol";
-import { TrustErrors } from "src/libraries/TrustErrors.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { BaseTest } from "tests/BaseTest.t.sol";
 
@@ -29,7 +28,9 @@ contract TrustAccessControlTest is BaseTest {
         assertTrue(
             protocol.trust.hasRole(protocol.trust.DEFAULT_ADMIN_ROLE(), admin), "Admin should have DEFAULT_ADMIN_ROLE"
         );
-        assertTrue(protocol.trust.hasRole(protocol.trust.MINTER_ROLE(), minter), "Minter should have MINTER_ROLE");
+        assertTrue(
+            protocol.trust.hasRole(protocol.trust.CONTROLLER_ROLE(), minter), "Minter should have CONTROLLER_ROLE"
+        );
     }
 
     function test_AccessControl_OnlyAdmin_WithRoleFallback() public {
@@ -47,10 +48,11 @@ contract TrustAccessControlTest is BaseTest {
 
         // newAdmin should be able to use admin functions via role
         resetPrank(newAdmin);
-        protocol.trust.grantRole(protocol.trust.MINTER_ROLE(), user);
+        protocol.trust.grantRole(protocol.trust.CONTROLLER_ROLE(), user);
 
         assertTrue(
-            protocol.trust.hasRole(protocol.trust.MINTER_ROLE(), user), "newAdmin should be able to set minter via role"
+            protocol.trust.hasRole(protocol.trust.CONTROLLER_ROLE(), user),
+            "newAdmin should be able to set minter via role"
         );
     }
 
@@ -127,9 +129,9 @@ contract TrustAccessControlTest is BaseTest {
         address recipient1 = makeAddr("recipient1");
         address recipient2 = makeAddr("recipient2");
 
-        // Grant MINTER_ROLE to newMinter
+        // Grant CONTROLLER_ROLE to newMinter
         resetPrank(admin);
-        protocol.trust.grantRole(protocol.trust.MINTER_ROLE(), newMinter);
+        protocol.trust.grantRole(protocol.trust.CONTROLLER_ROLE(), newMinter);
 
         uint256 initialSupply = protocol.trust.totalSupply();
 
@@ -155,9 +157,9 @@ contract TrustAccessControlTest is BaseTest {
         resetPrank(minter);
         protocol.trust.mint(recipient, mintAmount);
 
-        // Revoke MINTER_ROLE
+        // Revoke CONTROLLER_ROLE
         resetPrank(admin);
-        protocol.trust.revokeRole(protocol.trust.MINTER_ROLE(), minter);
+        protocol.trust.revokeRole(protocol.trust.CONTROLLER_ROLE(), minter);
 
         // Second mint should fail
         resetPrank(minter);
@@ -165,7 +167,8 @@ contract TrustAccessControlTest is BaseTest {
         protocol.trust.mint(recipient, mintAmount);
 
         assertFalse(
-            protocol.trust.hasRole(protocol.trust.MINTER_ROLE(), minter), "Minter should no longer have MINTER_ROLE"
+            protocol.trust.hasRole(protocol.trust.CONTROLLER_ROLE(), minter),
+            "Minter should no longer have CONTROLLER_ROLE"
         );
     }
 
@@ -174,12 +177,13 @@ contract TrustAccessControlTest is BaseTest {
         uint256 mintAmount = 1000 * 1e18;
         address recipient = makeAddr("recipient");
 
-        // Admin grants MINTER_ROLE to new address
+        // Admin grants CONTROLLER_ROLE to new address
         resetPrank(admin);
-        protocol.trust.grantRole(protocol.trust.MINTER_ROLE(), newMinter);
+        protocol.trust.grantRole(protocol.trust.CONTROLLER_ROLE(), newMinter);
 
         assertTrue(
-            protocol.trust.hasRole(protocol.trust.MINTER_ROLE(), newMinter), "New address should have MINTER_ROLE"
+            protocol.trust.hasRole(protocol.trust.CONTROLLER_ROLE(), newMinter),
+            "New address should have CONTROLLER_ROLE"
         );
 
         // New minter should be able to mint
@@ -192,13 +196,16 @@ contract TrustAccessControlTest is BaseTest {
     function test_Mint_NonAdminCannotGrantMinterRole() public {
         address newMinter = makeAddr("newMinter");
 
-        // Non-admin cannot grant MINTER_ROLE
+        // Non-admin cannot grant CONTROLLER_ROLE
         resetPrank(user);
-        vm.expectRevert();
-        protocol.trust.grantRole(protocol.trust.MINTER_ROLE(), newMinter);
 
-        // assertFalse(protocol.trust.hasRole(protocol.trust.MINTER_ROLE(), newMinter), "New address should not have
-        // MINTER_ROLE");
+        // Expect revert when non-admin tries to grant role
+        bytes32 minterRole = protocol.trust.CONTROLLER_ROLE();
+
+        vm.expectRevert();
+        protocol.trust.grantRole(minterRole, newMinter);
+
+        assertFalse(protocol.trust.hasRole(minterRole, newMinter), "New address should not have CONTROLLER_ROLE");
     }
 
     function test_Mint_EventEmission() public {
@@ -220,10 +227,11 @@ contract TrustAccessControlTest is BaseTest {
     function test_AccessControl_RenounceRole() public {
         // Minter can renounce their own role
         resetPrank(minter);
-        protocol.trust.renounceRole(protocol.trust.MINTER_ROLE(), minter);
+        protocol.trust.renounceRole(protocol.trust.CONTROLLER_ROLE(), minter);
 
         assertFalse(
-            protocol.trust.hasRole(protocol.trust.MINTER_ROLE(), minter), "Minter should no longer have MINTER_ROLE"
+            protocol.trust.hasRole(protocol.trust.CONTROLLER_ROLE(), minter),
+            "Minter should no longer have CONTROLLER_ROLE"
         );
 
         // Should not be able to mint after renouncing
@@ -242,10 +250,12 @@ contract TrustAccessControlTest is BaseTest {
             "Admin should no longer have DEFAULT_ADMIN_ROLE"
         );
 
+        bytes32 adminRole = protocol.trust.DEFAULT_ADMIN_ROLE();
+
         // Should not be able to grant roles after renouncing admin
         resetPrank(admin);
         vm.expectRevert();
-        // protocol.trust.grantRole(protocol.trust.DEFAULT_ADMIN_ROLE(), makeAddr("newMinter"));
+        protocol.trust.grantRole(adminRole, makeAddr("newMinter"));
     }
 
     function test_AccessControl_MultipleAdmins() public {
@@ -263,10 +273,11 @@ contract TrustAccessControlTest is BaseTest {
 
         // Second admin should be able to grant minter role
         resetPrank(secondAdmin);
-        protocol.trust.grantRole(protocol.trust.MINTER_ROLE(), newMinter);
+        protocol.trust.grantRole(protocol.trust.CONTROLLER_ROLE(), newMinter);
 
         assertTrue(
-            protocol.trust.hasRole(protocol.trust.MINTER_ROLE(), newMinter), "New minter should have MINTER_ROLE"
+            protocol.trust.hasRole(protocol.trust.CONTROLLER_ROLE(), newMinter),
+            "New minter should have CONTROLLER_ROLE"
         );
 
         // New minter should be able to mint

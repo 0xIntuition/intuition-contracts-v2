@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.29;
 
-import { console2 } from "forge-std/src/console2.sol";
 import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -10,6 +9,7 @@ import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/P
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 
+import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 import { IAtomWalletFactory } from "src/interfaces/IAtomWalletFactory.sol";
 import { IBondingCurveRegistry } from "src/interfaces/IBondingCurveRegistry.sol";
 import { IAtomWallet } from "src/interfaces/IAtomWallet.sol";
@@ -37,7 +37,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     using FixedPointMathLib for uint256;
 
     /* =================================================== */
-    /*                  CONSTANTS                          */
+    /*                       CONSTANTS                     */
     /* =================================================== */
 
     /// @notice Role used for the timelocked operations
@@ -89,10 +89,6 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     // User address -> Last active epoch
     mapping(address user => uint256 epoch) public lastActiveEpoch;
 
-    /// @notice Mapping of epochs to whether protocol fee distribution is enabled for that epoch or not
-    // Epoch -> Is protocol fee distribution enabled for that epoch
-    mapping(uint256 epoch => bool isProtocolFeeDistributionEnabled) public protocolFeeDistributionEnabledAtEpoch;
-
     /* =================================================== */
     /*                        Errors                       */
     /* =================================================== */
@@ -111,23 +107,17 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
     error MultiVault_CannotApproveOrRevokeSelf();
 
-    error MultiVault_CannotDirectlyInitializeCounterTripleVault();
 
-    error MultiVault_CannotRecoverTrust();
 
-    error MultiVault_ContractPaused();
 
-    error MultiVault_DeployAccountFailed();
 
     error MultiVault_DepositBelowMinimumDeposit();
 
     error MultiVault_DepositOrRedeemZeroShares();
 
-    error MultiVault_DepositTooSmallToCoverGhostShares();
 
     error MultiVault_InvalidArrayLength();
 
-    error MultiVault_HasCounterStake();
 
     error MultiVault_InsufficientAssets();
 
@@ -137,15 +127,11 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
     error MultiVault_InsufficientSharesInVault();
 
-    error MultiVault_InvalidCurveId();
 
-    error MultiVault_InvalidReceiver();
 
     error MultiVault_NoAtomDataProvided();
 
-    error MultiVault_NoTriplesProvided();
 
-    error MultiVault_NoSharesToMigrate();
 
     error MultiVault_OnlyAssociatedAtomWallet();
 
@@ -155,17 +141,13 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
     error MultiVault_SlippageExceeded();
 
-    error MultiVault_TransfersNotEnabled();
 
     error MultiVault_TripleExists(bytes32 termId, bytes32 subjectId, bytes32 predicateId, bytes32 objectId);
 
     error MultiVault_TermDoesNotExist();
 
-    error MultiVault_TermNotAtom();
 
-    error MultiVault_TermNotTriple();
 
-    error MultiVault_WalletsAreTheSame();
 
     error MultiVault_ZeroAddress();
 
@@ -208,18 +190,19 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         initializer
     {
         __AccessControl_init();
-        _grantRole(DEFAULT_ADMIN_ROLE, _generalConfig.admin);
         __ReentrancyGuard_init();
         __Pausable_init();
         __MultiVaultCore_init(
             _generalConfig, _atomConfig, _tripleConfig, _walletConfig, _vaultFees, _bondingCurveConfig
         );
+        _grantRole(DEFAULT_ADMIN_ROLE, _generalConfig.admin);
     }
 
     /* =================================================== */
     /*                        Public                       */
     /* =================================================== */
 
+    /// @inheritdoc IMultiVault
     function isTermCreated(bytes32 id) public view returns (bool) {
         return _atoms[id].length > 0 || isTriple(id);
     }
@@ -259,21 +242,17 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         return _feeOnRaw(assets, tripleConfig.atomDepositFractionForTriple);
     }
 
-    /// @dev returns the total utilization of the TRUST token for the given epoch
-    /// @param epoch the epoch to get the total utilization for
-    /// @return int256 the total utilization of the TRUST token for the given epoch
+    /// @inheritdoc IMultiVault
     function getTotalUtilizationForEpoch(uint256 epoch) external view returns (int256) {
         return totalUtilization[epoch];
     }
 
-    /// @dev returns the personal utilization of the user for the given epoch
-    /// @param user the address of the user
-    /// @param epoch the epoch to get the personal utilization for
-    /// @return int256 the personal utilization of the user for the given epoch
+    /// @inheritdoc IMultiVault
     function getUserUtilizationForEpoch(address user, uint256 epoch) external view returns (int256) {
         return personalUtilization[user][epoch];
     }
 
+    /// @inheritdoc IMultiVault
     function getAtomWarden() external view returns (address) {
         return walletConfig.atomWarden;
     }
@@ -419,10 +398,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /*                      Atoms                          */
     /* =================================================== */
 
-    /// @notice Create atom(s) and return their vault ids
-    /// @param data atom data array to create atoms with
-    /// @param assets amount of Trust to deposit into all atoms combined
-    /// @return ids vault ids array of the atoms
+    /// @inheritdoc IMultiVault
     function createAtoms(
         bytes[] calldata data,
         uint256[] calldata assets
@@ -520,14 +496,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /* =================================================== */
     /*                      Triples                        */
     /* =================================================== */
-    /// @notice Batch create triples and return their ids
-    ///
-    /// @param subjectIds term ids of subject atoms
-    /// @param predicateIds term ids of predicate atoms
-    /// @param objectIds term ids of object atoms
-    /// @param assets amount of Trust to deposit into the triples
-    ///
-    /// @return ids vault ids array of the triples
+    /// @inheritdoc IMultiVault
     function createTriples(
         bytes32[] calldata subjectIds,
         bytes32[] calldata predicateIds,
@@ -667,14 +636,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /*                       Deposit                       */
     /* =================================================== */
 
-    /// @notice Deposit Trust into a vault using a specified bonding curve and grant ownership of 'shares' to 'receiver'
-    ///
-    /// @param receiver The address to receive the shares
-    /// @param termId The ID of the atom or triple (term)
-    /// @param curveId The ID of the bonding curve to use
-    /// @param minShares The minimum amount of shares to receive in return for the deposit
-    ///
-    /// @return shares The amount of shares minted
+    /// @inheritdoc IMultiVault
     function deposit(
         address receiver,
         bytes32 termId,
@@ -696,6 +658,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         return _processDeposit(_msgSender(), receiver, termId, curveId, msg.value, minShares);
     }
 
+    /// @inheritdoc IMultiVault
     function depositBatch(
         address receiver,
         bytes32[] calldata termIds,
@@ -785,14 +748,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /*                        Redeem                       */
     /* =================================================== */
 
-    /// @notice Redeem shares from a vault for assets using a specified bonding curve
-    ///
-    /// @param receiver The address to receive the assets
-    /// @param termId The ID of the atom or triple (term)
-    /// @param curveId The ID of the bonding curve to use
-    /// @param shares The amount of shares to redeem
-    /// @param minAssets The minimum amount of assets to receive in return for the shares being redeemed
-    ///
+    /// @inheritdoc IMultiVault
     function redeem(
         address receiver,
         bytes32 termId,
@@ -816,6 +772,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         return assetsAfterFees;
     }
 
+    /// @inheritdoc IMultiVault
     function redeemBatch(
         address receiver,
         bytes32[] calldata termIds,
@@ -902,6 +859,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /* =================================================== */
     /*                       Wallet                        */
     /* =================================================== */
+    /// @inheritdoc IMultiVault
     function claimAtomWalletDepositFees(bytes32 termId) external {
         address atomWalletAddress = computeAtomWalletAddr(termId);
 
@@ -1178,7 +1136,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     }
 
     /* =================================================== */
-    /*                      Internal                       */
+    /*                      INTERNAL                       */
     /* =================================================== */
 
     function _requireVaultType(bytes32 termId) internal view returns (bool isAtomType, VaultType vaultType) {
@@ -1304,7 +1262,6 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /// @param amountToRemove the amount of utilization to remove
     function _removeUtilization(address user, int256 amountToRemove) internal {
         // First, roll the user's old epoch usage forward so we adjust the current epoch’s usage
-        _rollover(user);
 
         uint256 epoch = currentEpoch();
 
@@ -1338,25 +1295,13 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         // first action in the new epoch automatically rolls over the totalUtilization
         if (totalUtilization[currentEpochLocal] == 0) {
             totalUtilization[currentEpochLocal] = totalUtilization[oldEpoch];
-
-            // snapshot the protocol fee distribution status for the current epoch to make sure it's not altered
-            // mid-epoch (any changes to the protocol fee distribution status will be reflected in the next epoch)
-            protocolFeeDistributionEnabledAtEpoch[currentEpochLocal] = generalConfig.protocolFeeDistributionEnabled;
-
             uint256 previousEpoch = currentEpochLocal - 1;
-
-            // since this is the first action in the new epoch, we should now claim the accumulated protocol fees
-            // from the previous epoch and send them to the TrustBonding contract for users to claim. The only
-            // exception is the very first epoch, where this is skipped since there are no previous epochs to claim
-            // the accumulated protocol fees for
             if (currentEpochLocal > 0) {
                 _claimAccumulatedProtocolFees(previousEpoch);
             }
         }
 
-        // if user’s oldEpoch < currentEpochLocal, we do a rollover
         if (personalUtilization[user][currentEpochLocal] == 0) {
-            // move leftover from oldEpoch to currentEpoch on the first action in the new epoch
             personalUtilization[user][currentEpochLocal] = personalUtilization[user][oldEpoch];
         }
 
@@ -1370,34 +1315,8 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     function _claimAccumulatedProtocolFees(uint256 epoch) internal {
         uint256 protocolFees = accumulatedProtocolFees[epoch];
         if (protocolFees == 0) return;
-
-        // Check if the protocol fee distribution is enabled using the snapshot instead of the live value to
-        // prevent mid-epoch changes to the protocol fee distribution
-        bool distributionEnabled = protocolFeeDistributionEnabledAtEpoch[epoch];
-
-        // Set the destination to the TrustBonding contract if distribution is enabled, otherwise set it to the protocol
-        // multisig
-        address destination;
-
-        if (distributionEnabled) {
-            destination = generalConfig.trustBonding;
-
-            // Set the max claimable protocol fees for the previous epoch in the TrustBonding contract to the amount
-            // of TRUST tokens being sent to the TrustBonding contract. This is done to be sure that the internal
-            // accounting works as intended, instead of relying simply on the `balanceOf` of the contract
-            ITrustBonding(generalConfig.trustBonding).setMaxClaimableProtocolFeesForPreviousEpoch(protocolFees);
-
-            // Transfer the protocol fees to the TrustBonding contract
-            Address.sendValue(payable(destination), protocolFees);
-        } else {
-            destination = generalConfig.protocolMultisig;
-
-            // If the protocol fee distribution is not enabled, we simply transfer the protocol fees to the protocol
-            // multisig
-            Address.sendValue(payable(destination), protocolFees);
-        }
-
-        emit ProtocolFeeTransferred(epoch, destination, protocolFees);
+        Address.sendValue(payable(generalConfig.protocolMultisig), protocolFees);
+        emit ProtocolFeeTransferred(epoch, generalConfig.protocolMultisig, protocolFees);
     }
 
     function _updateVaultOnCreation(

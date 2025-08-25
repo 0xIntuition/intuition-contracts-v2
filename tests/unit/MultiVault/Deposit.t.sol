@@ -6,7 +6,6 @@ import { Test } from "forge-std/src/Test.sol";
 
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
-import { MultiVaultErrors } from "src/libraries/MultiVaultErrors.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 
 contract DepositTest is BaseTest {

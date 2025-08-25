@@ -35,17 +35,37 @@ interface IWrappedERC20 {
     /*                   WRITE FUNCTIONS                   */
     /* =================================================== */
 
+    /**
+     * @notice Wraps MultiVault shares into WrappedERC20 tokens
+     * @param shares The amount of shares to wrap
+     */
     function wrap(uint256 shares) external;
 
+    /**
+     * @notice Unwraps WrappedERC20 tokens back into MultiVault shares
+     * @param shares The amount of WrappedERC20 tokens to unwrap
+     */
     function unwrap(uint256 shares) external;
 
     /* =================================================== */
     /*                   VIEW FUNCTIONS                    */
     /* =================================================== */
 
+    /**
+     * @notice Returns the MultiVault contract address
+     * @return The MultiVault contract instance
+     */
     function multiVault() external view returns (IMultiVault);
 
+    /**
+     * @notice Returns the term ID associated with this wrapped token
+     * @return The term ID (atom or triple ID)
+     */
     function termId() external view returns (bytes32);
 
+    /**
+     * @notice Returns the bonding curve ID associated with this wrapped token
+     * @return The bonding curve ID
+     */
     function bondingCurveId() external view returns (uint256);
 }

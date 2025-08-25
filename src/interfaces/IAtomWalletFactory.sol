@@ -23,13 +23,27 @@ interface IAtomWalletFactory {
     /*                   WRITE FUNCTIONS                   */
     /* =================================================== */
 
+    /**
+     * @notice Deploys a new AtomWallet for the given atom ID
+     * @param atomId The ID of the atom to deploy a wallet for
+     * @return The address of the newly deployed AtomWallet
+     */
     function deployAtomWallet(bytes32 atomId) external returns (address);
 
     /* =================================================== */
     /*                   VIEW FUNCTIONS                    */
     /* =================================================== */
 
+    /**
+     * @notice Returns the MultiVault contract address
+     * @return The MultiVault contract instance
+     */
     function multiVault() external view returns (IMultiVault);
 
+    /**
+     * @notice Computes the deterministic address of an AtomWallet for a given atom ID
+     * @param atomId The ID of the atom
+     * @return The computed address where the AtomWallet would be deployed
+     */
     function computeAtomWalletAddr(bytes32 atomId) external view returns (address);
 }

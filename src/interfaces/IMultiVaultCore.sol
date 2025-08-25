@@ -25,10 +25,6 @@ struct GeneralConfig {
     uint256 atomDataMaxLength;
     /// @dev Decimal precision used for calculating share prices
     uint256 decimalPrecision;
-    /// @dev If true, accrued protocol fees are routed to the TrustBonding contract for the pro-rata
-    ///      distribution among the bonders. If false, accrued protocol fees are simply sent to the
-    ///      protocol multisig address instead.
-    bool protocolFeeDistributionEnabled;
 }
 
 /// @dev Atom configuration struct
@@ -96,6 +92,15 @@ interface IMultiVaultCore {
     /*                    INITIALIZER                      */
     /* =================================================== */
 
+    /**
+     * @notice Initializes the MultiVaultCore contract with configuration parameters
+     * @param _generalConfig General configuration settings including admin addresses and protocol parameters
+     * @param _atomConfig Configuration specific to atom vault creation and fees
+     * @param _tripleConfig Configuration specific to triple vault creation and deposits
+     * @param _walletConfig Configuration for ERC-4337 atom wallet setup
+     * @param _vaultFees Fee configuration for entry, exit, and protocol fees
+     * @param _bondingCurveConfig Bonding curve registry and default curve settings
+     */
     function initialize(
         GeneralConfig memory _generalConfig,
         AtomConfig memory _atomConfig,
@@ -114,15 +119,39 @@ interface IMultiVaultCore {
     /*                   VIEW FUNCTIONS                    */
     /* =================================================== */
 
+    /**
+     * @notice Returns the general configuration settings
+     * @return GeneralConfig struct containing admin addresses, protocol parameters, and system limits
+     */
     function getGeneralConfig() external view returns (GeneralConfig memory);
 
+    /**
+     * @notice Returns the atom configuration settings
+     * @return AtomConfig struct containing atom creation fees and wallet deposit fee settings
+     */
     function getAtomConfig() external view returns (AtomConfig memory);
 
+    /**
+     * @notice Returns the triple configuration settings
+     * @return TripleConfig struct containing triple creation fees and atom deposit configuration
+     */
     function getTripleConfig() external view returns (TripleConfig memory);
 
+    /**
+     * @notice Returns the wallet configuration settings for ERC-4337 compatibility
+     * @return WalletConfig struct containing Permit2, EntryPoint, and AtomWallet factory addresses
+     */
     function getWalletConfig() external view returns (WalletConfig memory);
 
+    /**
+     * @notice Returns the vault fees configuration
+     * @return VaultFees struct containing entry, exit, and protocol fee settings
+     */
     function getVaultFees() external view returns (VaultFees memory);
 
+    /**
+     * @notice Returns the bonding curve configuration
+     * @return BondingCurveConfig struct containing registry address and default curve ID
+     */
     function getBondingCurveConfig() external view returns (BondingCurveConfig memory);
 }
