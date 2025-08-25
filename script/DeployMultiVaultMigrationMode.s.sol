@@ -50,9 +50,9 @@ contract DeployMultiVaultMigrationMode is Script {
     uint256 internal constant MIN_SHARES = 1e6;
     uint256 internal constant MIN_DEPOSIT = 0.1 * 1e18;
     uint256 internal constant ATOM_CREATION_PROTOCOL_FEE = 0.01 * 1e18;
-    uint256 internal constant ATOM_WALLET_DEPOSIT_FEE = 100;
+    uint256 internal constant ATOM_WALLET_DEPOSIT_FEE = 100; // 1%
     uint256 internal constant TRIPLE_CREATION_PROTOCOL_FEE = 0.01 * 1e18;
-    uint256 internal constant TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 0.009 * 1e18;
+    uint256 internal constant TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 0;
     uint256 internal constant ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 300; // 3%
 
     // TrustBonding configuration
@@ -72,8 +72,8 @@ contract DeployMultiVaultMigrationMode is Script {
 
         vm.startBroadcast();
 
-        // Only deploy on Intuition testnet (chain ID 13579)
-        if (block.chainid != 13_579) {
+        // Only deploy on a specific chain (defaults to local network chain ID 31337 if TARGET_CHAIN_ID is not set)
+        if (block.chainid != vm.envOr("TARGET_CHAIN_ID", uint256(31_337))) {
             revert UnsupportedChainId();
         }
 
@@ -159,7 +159,7 @@ contract DeployMultiVaultMigrationMode is Script {
             multiVaultAdmin, // owner
             wrappedTrustTokenAddress, // WTRUST token
             EPOCH_LENGTH, // epochLength
-            block.timestamp + 10 minutes, // startTimestamp (future)
+            block.timestamp + 5 minutes, // startTimestamp (future)
             address(multiVaultProxy), // multiVault
             address(0), // satelliteEmissionsController (can be set later)
             SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound
@@ -276,14 +276,9 @@ contract DeployMultiVaultMigrationMode is Script {
         address entryPoint = address(new EntryPoint());
         console.log("EntryPoint deployed at:", entryPoint);
 
-        if (permit2 == address(0)) {
-            console.log("Warning: Permit2 address not set - please deploy it separately before using the script");
-            revert InvalidAddress();
-        }
-
         return WalletConfig({
-            permit2: IPermit2(permit2), // Can be deployed separately and set later using Uniswap's script from the
-                // permit2 lib. We didn't include it here because it requires strictly 0.8.17 Solidity version.
+            permit2: IPermit2(permit2), // Can be deployed separately and set later. We didn't include it here because
+                // it requires strictly 0.8.17 Solidity version.
             entryPoint: entryPoint,
             atomWarden: atomWarden,
             atomWalletBeacon: atomWalletBeacon,

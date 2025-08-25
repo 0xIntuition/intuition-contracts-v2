@@ -4,13 +4,6 @@ pragma solidity ^0.8.27;
 import { IBondingCurveRegistry } from "src/interfaces/IBondingCurveRegistry.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 
-struct BatchSetUserBalancesParams {
-    bytes32[] termIds;
-    uint256 bondingCurveId;
-    address user;
-    uint256[] userBalances;
-}
-
 /**
  * @title MultiVaultMigrationMode
  * @author 0xIntuition
@@ -34,6 +27,20 @@ contract MultiVaultMigrationMode is MultiVault {
     struct VaultTotals {
         uint256 totalAssets;
         uint256 totalShares;
+    }
+
+    /**
+     * @notice Struct representing the parameters for batch setting user balances
+     * @param termIds The term IDs of the vaults
+     * @param bondingCurveId The bonding curve ID of all of the vaults
+     * @param user The user whose balances are being set
+     * @param userBalances The user balances for each vault
+     */
+    struct BatchSetUserBalancesParams {
+        bytes32[] termIds;
+        uint256 bondingCurveId;
+        address user;
+        uint256[] userBalances;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -90,8 +97,7 @@ contract MultiVaultMigrationMode is MultiVault {
         for (uint256 i = 0; i < atomDataArray.length; i++) {
             bytes32 atomId = calculateAtomId(atomDataArray[i]);
             _atoms[atomId] = atomDataArray[i];
-            emit AtomCreated(creators[i], atomId, atomDataArray[i], address(0)); // we do not emit the atom wallet
-                // address here
+            emit AtomCreated(creators[i], atomId, atomDataArray[i], computeAtomWalletAddr(atomId));
         }
     }
 
@@ -165,7 +171,9 @@ contract MultiVaultMigrationMode is MultiVault {
             emit SharePriceChanged(
                 termIds[i],
                 bondingCurveId,
-                currentSharePrice(bondingCurveId, vaultTotals[i].totalShares, vaultTotals[i].totalAssets),
+                IBondingCurveRegistry(bondingCurveConfig.registry).previewRedeem(
+                    ONE_SHARE, vaultTotals[i].totalShares, vaultTotals[i].totalAssets, bondingCurveId
+                ),
                 vaultTotals[i].totalAssets,
                 vaultTotals[i].totalShares,
                 getVaultType(termIds[i])
@@ -202,11 +210,11 @@ contract MultiVaultMigrationMode is MultiVault {
                 params.user,
                 params.termIds[i],
                 params.bondingCurveId,
-                convertToAssets(
-                    params.bondingCurveId,
+                IBondingCurveRegistry(bondingCurveConfig.registry).previewRedeem(
+                    params.userBalances[i],
                     _vaults[params.termIds[i]][params.bondingCurveId].totalShares,
                     _vaults[params.termIds[i]][params.bondingCurveId].totalAssets,
-                    params.userBalances[i]
+                    params.bondingCurveId
                 ),
                 0, // assetsAfterFees are not set here, as this is a migration
                 params.userBalances[i],
@@ -214,59 +222,5 @@ contract MultiVaultMigrationMode is MultiVault {
                 getVaultType(params.termIds[i])
             );
         }
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                             HELPER FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    /**
-     * @notice Calculates the current share price for a certain bonding curve ID given total shares and total assets
-     * @param bondingCurveId The bonding curve ID of the vault
-     * @param totalShares The total shares in the vault
-     * @param totalAssets The total assets in the vault
-     * @return The current share price
-     */
-    function currentSharePrice(
-        uint256 bondingCurveId,
-        uint256 totalShares,
-        uint256 totalAssets
-    )
-        public
-        view
-        returns (uint256)
-    {
-        if (bondingCurveId == 0) {
-            revert MultiVault_InvalidBondingCurveId();
-        }
-
-        IBondingCurveRegistry bcRegistry = IBondingCurveRegistry(bondingCurveConfig.registry);
-        return bcRegistry.previewRedeem(ONE_SHARE, totalShares, totalAssets, bondingCurveId);
-    }
-
-    /**
-     * @notice Converts a certain amount of shares to assets for a given bonding curve ID
-     * @param bondingCurveId The bonding curve ID of the vault
-     * @param totalShares The total shares in the vault
-     * @param totalAssets The total assets in the vault
-     * @param shares The amount of shares to convert to assets
-     * @return The amount of assets corresponding to the given shares
-     */
-    function convertToAssets(
-        uint256 bondingCurveId,
-        uint256 totalShares,
-        uint256 totalAssets,
-        uint256 shares
-    )
-        public
-        view
-        returns (uint256)
-    {
-        if (bondingCurveId == 0) {
-            revert MultiVault_InvalidBondingCurveId();
-        }
-
-        IBondingCurveRegistry bcRegistry = IBondingCurveRegistry(bondingCurveConfig.registry);
-        return bcRegistry.previewRedeem(shares, totalShares, totalAssets, bondingCurveId);
     }
 }
