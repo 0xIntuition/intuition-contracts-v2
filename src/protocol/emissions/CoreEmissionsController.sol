@@ -12,9 +12,6 @@ contract CoreEmissionsController is ICoreEmissionsController {
 
     uint256 public constant INITIAL_SUPPLY = 1_000_000_000 * 1e18;
 
-    uint256 public constant MAX_POSSIBLE_EPOCH_EMISSIONS = (INITIAL_SUPPLY * 750) / BASIS_POINTS_DIVISOR / 26; // ~2.88M
-        // tokens per epoch
-
     uint256 public constant MAX_CLIFF_REDUCTION_BASIS_POINTS = 1000; // 10% reduction per cliff
 
     /* =================================================== */
@@ -37,6 +34,7 @@ contract CoreEmissionsController is ICoreEmissionsController {
     error CoreEmissionsController_CheckpointExists();
     error CoreEmissionsController_InvalidCheckpointOrder();
     error CoreEmissionsController_ExcessiveEmissions();
+    error CoreEmissionsController_InvalidCheckpointStartTime();
 
     /* =================================================== */
     /*                       EVENTS                        */
@@ -54,7 +52,7 @@ contract CoreEmissionsController is ICoreEmissionsController {
     /*                 INITIALIZATION                      */
     /* =================================================== */
 
-    function _initCoreEmissionsController(
+    function __CoreEmissionsController_init(
         uint256 startTimestamp,
         uint256 emissionsLength,
         uint256 emissionsPerEpoch,
@@ -72,33 +70,8 @@ contract CoreEmissionsController is ICoreEmissionsController {
     }
 
     /* =================================================== */
-    /*                  MAIN FUNCTIONS                     */
-    /* =================================================== */
-
-    function currentEpochEmissions() external view returns (uint256) {
-        return _calculateCurrentEpochEmissions();
-    }
-
-    function currentEpoch() external view returns (uint256) {
-        return _currentEpoch();
-    }
-
-    function _currentEpoch() internal view returns (uint256) {
-        if (block.timestamp < EMISSIONS_START_TIMESTAMP) {
-            return 0;
-        }
-
-        return _calculateTotalEpochsToTimestamp(block.timestamp);
-    }
-
-    function _calculateCurrentEpochEmissions() internal view returns (uint256) {
-        return _calculateEpochEmissionsAt(block.timestamp);
-    }
-
-    /* =================================================== */
     /*                   VIEW FUNCTIONS                    */
     /* =================================================== */
-
     function epochLength() external view returns (uint256) {
         if (checkpoints.length == 0) {
             revert CoreEmissionsController_NoCheckpoints();
@@ -106,33 +79,30 @@ contract CoreEmissionsController is ICoreEmissionsController {
         return _findCheckpointForTimestamp(block.timestamp).emissionsLength;
     }
 
-    function getCheckpointCount() external view returns (uint256) {
-        return checkpoints.length;
+    function currentEpoch() external view returns (uint256) {
+        return _currentEpoch();
     }
 
-    function getCheckpoint(uint256 index) external view returns (EmissionsCheckpoint memory) {
-        require(index < checkpoints.length, "Checkpoint index out of bounds");
-        return checkpoints[index];
-    }
-
-    function getCurrentCheckpoint() external view returns (EmissionsCheckpoint memory) {
-        return _findCheckpointForTimestamp(block.timestamp);
-    }
-
-    function getAllCheckpoints() external view returns (EmissionsCheckpoint[] memory) {
-        return checkpoints;
-    }
-
-    function previewEmissionsAt(uint256 timestamp) external view returns (uint256) {
-        return _calculateEpochEmissionsAt(timestamp);
+    function currentEpochEmissions() external view returns (uint256) {
+        return _calculateEpochEmissionsAt(block.timestamp);
     }
 
     /**
-     * @notice Get the current epoch number
-     * @return Current epoch number (0-indexed)
+     * @notice Calculate emissions for a specific epoch number
+     * @param epoch The epoch number to calculate for
+     * @return emissions amount for that epoch
      */
-    function getCurrentEpochNumber() external view returns (uint256) {
-        return _currentEpoch();
+    function emissionsAtEpoch(uint256 epoch) external view returns (uint256) {
+        return _emissionsAtEpoch(epoch);
+    }
+
+    /**
+     * @notice Calculate emissions for a specific epoch number
+     * @param timestamp The timestamp to calculate for
+     * @return emissions amount for that epoch in the timestamp
+     */
+    function emissionsAtTimestamp(uint256 timestamp) external view returns (uint256) {
+        return _calculateEpochEmissionsAt(timestamp);
     }
 
     /**
@@ -146,11 +116,11 @@ contract CoreEmissionsController is ICoreEmissionsController {
 
     /**
      * @notice Calculate the end timestamp for a given epoch number
-     * @param epochNumber The epoch number to get end timestamp for
+     * @param epoch The epoch number to get end timestamp for
      * @return The timestamp when the given epoch ends
      */
-    function epochEndTimestamp(uint256 epochNumber) external view returns (uint256) {
-        uint256 startTimestamp = _calculateTimestampForEpoch(epochNumber);
+    function epochEndTimestamp(uint256 epoch) external view returns (uint256) {
+        uint256 startTimestamp = _calculateTimestampForEpoch(epoch);
         // Find the checkpoint that contains this epoch
         EmissionsCheckpoint memory checkpoint = _findCheckpointForTimestamp(startTimestamp);
 
@@ -158,18 +128,21 @@ contract CoreEmissionsController is ICoreEmissionsController {
         return startTimestamp + checkpoint.emissionsLength;
     }
 
-    /**
-     * @notice Calculate emissions for a specific epoch number
-     * @param epochNumber The epoch number to calculate for
-     * @return Emissions amount for that epoch
-     */
-    function epochEmissionsAtEpoch(uint256 epochNumber) external view returns (uint256) {
-        return _epochEmissionsAtEpoch(epochNumber);
+    function getCheckpointCount() external view returns (uint256) {
+        return checkpoints.length;
     }
 
-    function _epochEmissionsAtEpoch(uint256 epochNumber) internal view returns (uint256) {
-        uint256 epochTimestamp = _calculateTimestampForEpoch(epochNumber);
-        return _calculateEpochEmissionsAt(epochTimestamp);
+    function getCurrentCheckpoint() external view returns (EmissionsCheckpoint memory) {
+        return _findCheckpointForTimestamp(block.timestamp);
+    }
+
+    function getCheckpoint(uint256 index) external view returns (EmissionsCheckpoint memory) {
+        require(index < checkpoints.length, "Checkpoint index out of bounds");
+        return checkpoints[index];
+    }
+
+    function getAllCheckpoints() external view returns (EmissionsCheckpoint[] memory) {
+        return checkpoints;
     }
 
     /* =================================================== */
@@ -190,13 +163,13 @@ contract CoreEmissionsController is ICoreEmissionsController {
         EmissionsCheckpoint memory checkpoint = _findCheckpointForTimestamp(timestamp);
 
         // Calculate current epoch number based on timestamp
-        uint256 currentEpochNumber = _calculateEpochNumber(timestamp, checkpoint);
+        uint256 _currentEpochFromTimestamp = _calculateEpoch(timestamp, checkpoint);
 
         // Calculate checkpoint start epoch number
-        uint256 checkpointStartEpoch = _calculateEpochNumber(checkpoint.startTimestamp, checkpoint);
+        uint256 checkpointStartEpoch = _calculateEpoch(checkpoint.startTimestamp, checkpoint);
 
         // Calculate how many complete cliff periods have passed since this checkpoint
-        uint256 epochsSinceCheckpoint = currentEpochNumber - checkpointStartEpoch;
+        uint256 epochsSinceCheckpoint = _currentEpochFromTimestamp - checkpointStartEpoch;
         uint256 cliffsSinceCheckpoint = epochsSinceCheckpoint / checkpoint.emissionsReductionCliff;
 
         // Apply cliff reductions to base emissions
@@ -268,18 +241,18 @@ contract CoreEmissionsController is ICoreEmissionsController {
      * @param checkpoint The checkpoint containing emission parameters
      * @return The epoch number (0-indexed)
      */
-    function _calculateEpochNumber(
+    function _calculateEpoch(
         uint256 timestamp,
         EmissionsCheckpoint memory checkpoint
     )
         internal
-        view
+        pure
         returns (uint256)
     {
-        if (timestamp < EMISSIONS_START_TIMESTAMP) {
+        if (timestamp < checkpoint.startTimestamp) {
             return 0;
         }
-        return (timestamp - EMISSIONS_START_TIMESTAMP) / checkpoint.emissionsLength;
+        return (timestamp - checkpoint.startTimestamp) / checkpoint.emissionsLength;
     }
 
     /**
@@ -382,7 +355,10 @@ contract CoreEmissionsController is ICoreEmissionsController {
         _validateReductionBasisPoints(emissionsReductionBasisPoints);
         _validateCliff(emissionsReductionCliff);
 
-        // Ensure chronological order
+        // Validate that the new checkpoint starts at the correct epoch boundary
+        _validateCheckpointStartTimestamp(startTimestamp);
+
+        // Ensure chronological order (this should be redundant after timestamp validation)
         if (checkpoints.length > 0 && startTimestamp <= checkpoints[checkpoints.length - 1].startTimestamp) {
             revert CoreEmissionsController_InvalidCheckpointOrder();
         }
@@ -421,17 +397,94 @@ contract CoreEmissionsController is ICoreEmissionsController {
         }
     }
 
+    /* =================================================== */
+    /*              CHECKPOINT UTILITIES                   */
+    /* =================================================== */
+
+    /**
+     * @notice Calculate the expected start timestamp for a new checkpoint
+     * @dev New checkpoints should start at the end of a complete epoch from the previous checkpoint
+     * @param targetEpoch The target epoch number where the new checkpoint should begin
+     * @return expectedStartTimestamp The calculated start timestamp for the new checkpoint
+     */
+    function _calculateExpectedCheckpointStartTimestamp(uint256 targetEpoch) internal view returns (uint256) {
+        if (checkpoints.length == 0) {
+            // If no checkpoints exist, we can't calculate without knowing the emissions start timestamp
+            // This function should only be used after at least one checkpoint exists
+            revert CoreEmissionsController_NoCheckpoints();
+        }
+
+        // Calculate timestamp for the target epoch using existing function
+        return _calculateTimestampForEpoch(targetEpoch);
+    }
+
+    /**
+     * @notice Get the end timestamp of a specific epoch
+     * @param epoch The epoch number to get the end timestamp for
+     * @return The timestamp when the given epoch ends
+     */
+    function _getEpochEndTimestamp(uint256 epoch) internal view returns (uint256) {
+        uint256 epochStartTimestamp = _calculateTimestampForEpoch(epoch);
+        EmissionsCheckpoint memory checkpoint = _findCheckpointForTimestamp(epochStartTimestamp);
+        return epochStartTimestamp + checkpoint.emissionsLength;
+    }
+
+    /**
+     * @notice Validate that a new checkpoint's start timestamp aligns with epoch boundaries
+     * @dev Ensures the new checkpoint starts exactly at the end of a complete epoch
+     * @param proposedStartTimestamp The proposed start timestamp for the new checkpoint
+     */
+    function _validateCheckpointStartTimestamp(uint256 proposedStartTimestamp) internal view {
+        if (checkpoints.length == 0) {
+            // First checkpoint can start at any valid timestamp
+            return;
+        }
+
+        // Find the current epoch at the proposed start timestamp
+        uint256 totalEpochsToTimestamp = _calculateTotalEpochsToTimestamp(proposedStartTimestamp);
+
+        // Calculate what the timestamp should be for this epoch
+        uint256 expectedTimestamp = _calculateTimestampForEpoch(totalEpochsToTimestamp);
+
+        // The proposed timestamp must exactly match an epoch boundary
+        if (proposedStartTimestamp != expectedTimestamp) {
+            revert CoreEmissionsController_InvalidCheckpointStartTime();
+        }
+    }
+
+    /**
+     * @notice Get the current epoch number at a given timestamp
+     * @param timestamp The timestamp to check
+     * @return The current epoch number at that timestamp
+     */
+    function _getCurrentEpochAtTimestamp(uint256 timestamp) internal view returns (uint256) {
+        return _calculateTotalEpochsToTimestamp(timestamp);
+    }
+
+    function _emissionsAtEpoch(uint256 epoch) internal view returns (uint256) {
+        uint256 epochTimestamp = _calculateTimestampForEpoch(epoch);
+        return _calculateEpochEmissionsAt(epochTimestamp);
+    }
+
+    function _currentEpoch() internal view returns (uint256) {
+        if (block.timestamp < EMISSIONS_START_TIMESTAMP) {
+            return 0;
+        }
+
+        return _calculateTotalEpochsToTimestamp(block.timestamp);
+    }
+
     /**
      * @notice Calculate the timestamp for a given epoch number across all checkpoints
-     * @param epochNumber The epoch number to find timestamp for
+     * @param epoch The epoch number to find timestamp for
      * @return The timestamp when the given epoch starts
      */
-    function _calculateTimestampForEpoch(uint256 epochNumber) internal view returns (uint256) {
-        if (checkpoints.length == 0 || epochNumber == 0) {
+    function _calculateTimestampForEpoch(uint256 epoch) internal view returns (uint256) {
+        if (checkpoints.length == 0 || epoch == 0) {
             return EMISSIONS_START_TIMESTAMP;
         }
 
-        uint256 remainingEpochs = epochNumber;
+        uint256 remainingEpochs = epoch;
         uint256 currentTimestamp = EMISSIONS_START_TIMESTAMP;
 
         for (uint256 i = 0; i < checkpoints.length; i++) {

@@ -69,7 +69,23 @@ abstract contract BaseTest is Modifiers, Test {
     uint256 internal PROGRESSIVE_CURVE_SLOPE = 1e15; // 0.001 slope
 
     // Emissions Configurations
-    uint256 internal MAX_ANNUAL_EMISSION = 1_000_000e18; // 10 Trust
+    uint256 internal MAX_ANNUAL_EMISSION = 1_000_000e18;
+
+    // Common test parameters
+    uint256 internal constant DEFAULT_EPOCH_LENGTH = 1 days;
+    uint256 internal constant DEFAULT_EMISSIONS_PER_EPOCH = 1_000_000 * 1e18; // 1M tokens
+    uint256 internal constant DEFAULT_CLIFF = 1;
+    uint256 internal constant DEFAULT_REDUCTION_BP = 1000; // 10%
+
+    // Time constants for easier reading
+    uint256 internal constant ONE_HOUR = 1 hours;
+    uint256 internal constant ONE_DAY = 1 days;
+    uint256 internal constant ONE_WEEK = 7 days;
+    uint256 internal constant TWO_WEEKS = 14 days;
+    uint256 internal constant THREE_WEEKS = 21 days;
+    uint256 internal constant ONE_YEAR = 52 weeks;
+    uint256 internal constant TWO_YEARS = 104 weeks;
+    uint256 internal constant THREE_YEARS = 156 weeks;
 
     /*//////////////////////////////////////////////////////////////////////////
                                    TEST CONTRACTS
@@ -107,11 +123,10 @@ abstract contract BaseTest is Modifiers, Test {
         Trust trust = Trust(address(trustProxy));
 
         // Initialize Trust contract via proxy
-        vm.prank(0xa28d4AAcA48bE54824dA53a19b05121DE71Ef480); // admin address set on Base
+        vm.prank(0x395867a085228940cA50a26166FDAD3f382aeB09); // admin address set on Base
         trust.reinitialize(
             users.admin, // admin
-            users.admin, // initial minter
-            block.timestamp // startTimestamp
+            users.admin // initial minter
         );
 
         vm.label(address(trustProxy), "TrustProxy");
@@ -224,11 +239,11 @@ abstract contract BaseTest is Modifiers, Test {
             }),
             CoreEmissionsControllerInit({
                 startTimestamp: block.timestamp,
-                emissionsLength: 1 weeks,
-                emissionsPerEpoch: MAX_ANNUAL_EMISSION / 52, // weekly epochs
-                emissionsReductionCliff: 52, // reduce every 52 epochs (1 year)
-                emissionsReductionBasisPoints: 1000 // reduce by 10% each cliff
-             })
+                emissionsLength: DEFAULT_EPOCH_LENGTH,
+                emissionsPerEpoch: DEFAULT_EMISSIONS_PER_EPOCH,
+                emissionsReductionCliff: DEFAULT_CLIFF,
+                emissionsReductionBasisPoints: DEFAULT_REDUCTION_BP
+            })
         );
 
         // Initialize AtomWalletFactory
@@ -299,7 +314,7 @@ abstract contract BaseTest is Modifiers, Test {
             minShare: MIN_SHARES,
             atomDataMaxLength: 1000,
             decimalPrecision: 18,
-            protocolFeeDistributionEnabled: true
+            protocolFeeDistributionEnabled: false
         });
     }
 

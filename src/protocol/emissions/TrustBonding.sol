@@ -13,8 +13,6 @@ import { ISatelliteEmissionsController } from "src/interfaces/ISatelliteEmission
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { VotingEscrow } from "src/external/curve/VotingEscrow.sol";
 
-import { Errors } from "src/libraries/Errors.sol";
-
 /**
  * @title  TrustBonding
  * @author 0xIntuition
@@ -244,6 +242,10 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         return _currentEpoch();
     }
 
+    function previousEpoch() public view returns (uint256) {
+        return _currentEpoch() - 1;
+    }
+
     /**
      * @notice Returns the total amount of TRUST tokens locked in the contract
      * @return The total amount of TRUST tokens locked in the contract
@@ -261,25 +263,11 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         return _totalSupply(block.timestamp);
     }
 
-    /**
-     * @notice Returns the current APR (annual percentage rate) for bonding TRUST tokens
-     * @param _epoch The epoch to calculate the APR for
-     * @return The current APR in basis points for bonding TRUST tokens
-     */
-    function getAprAtEpoch(uint256 _epoch) external view returns (uint256) {
-        if (_epoch > currentEpoch()) {
-            revert TrustBonding_InvalidEpoch();
-        }
-
-        uint256 totalLockedAmount = totalLocked();
-
-        if (totalLockedAmount == 0) {
-            return 0;
-        }
-
-        uint256 trustPerYear = trustPerEpoch(_epoch) * epochsPerYear();
-
-        return trustPerYear * BASIS_POINTS_DIVISOR / totalLockedAmount;
+    function eligibleRewards(address account) public view returns (uint256) {
+        uint256 currentEpoch = _currentEpoch();
+        uint256 prevEpoch = currentEpoch > 1 ? currentEpoch - 1 : 0;
+        return _userEligibleRewardsForEpoch(account, prevEpoch) * _getPersonalUtilizationRatio(account, prevEpoch)
+            / BASIS_POINTS_DIVISOR;
     }
 
     /**
@@ -371,6 +359,27 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         return _getPersonalUtilizationRatio(_account, _epoch);
     }
 
+    /**
+     * @notice Returns the current APR (annual percentage rate) for bonding TRUST tokens
+     * @param _epoch The epoch to calculate the APR for
+     * @return The current APR in basis points for bonding TRUST tokens
+     */
+    function getAprAtEpoch(uint256 _epoch) external view returns (uint256) {
+        if (_epoch > currentEpoch()) {
+            revert TrustBonding_InvalidEpoch();
+        }
+
+        uint256 totalLockedAmount = totalLocked();
+
+        if (totalLockedAmount == 0) {
+            return 0;
+        }
+
+        uint256 trustPerYear = trustPerEpoch(_epoch) * epochsPerYear();
+
+        return trustPerYear * BASIS_POINTS_DIVISOR / totalLockedAmount;
+    }
+
     /*//////////////////////////////////////////////////////////////
                             USER ACTIONS
     //////////////////////////////////////////////////////////////*/
@@ -420,9 +429,11 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
             revert TrustBonding_RewardsAlreadyClaimedForEpoch();
         }
 
+        // if (false) {
         if (IMultiVault(multiVault).protocolFeeDistributionEnabledAtEpoch(previousEpoch)) {
             uint256 accumulatedProtocolFeesForPreviousEpoch =
                 IMultiVault(multiVault).accumulatedProtocolFees(previousEpoch);
+
             uint256 maxClaimableProtocolFees = maxClaimableProtocolFeesForEpoch[previousEpoch];
 
             // Check if the accumulated protocol fees from the previous epoch are sent to the TrustBonding contract
@@ -650,7 +661,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
             revert TrustBonding_InvalidEpoch();
         }
 
-        uint256 maxEpochEmissions = ICoreEmissionsController(satelliteEmissionsController).epochEmissionsAtEpoch(epoch);
+        uint256 maxEpochEmissions = ICoreEmissionsController(satelliteEmissionsController).emissionsAtEpoch(epoch);
 
         if (epoch < 2) {
             return maxEpochEmissions;

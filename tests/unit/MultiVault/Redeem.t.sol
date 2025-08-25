@@ -7,7 +7,6 @@ import { Test } from "forge-std/src/Test.sol";
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
-import { MultiVaultErrors } from "src/libraries/MultiVaultErrors.sol";
 
 contract RedeemTest is BaseTest {
     uint256 constant CURVE_ID = 1; // Default linear curve ID

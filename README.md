@@ -11,6 +11,11 @@ The Intuition V2 smart contracts for the Intuition protocol, built using [Foundr
 - [Prettier](https://github.com/prettier/prettier): code formatter for non-Solidity files
 - [Solhint](https://github.com/protofire/solhint): linter for Solidity code
 
+
+## Testing
+
+forge test --match-path 'tests/unit/CoreEmissionsController/*.sol'
+
 ## Usage
 
 This is a list of the most frequently needed commands.

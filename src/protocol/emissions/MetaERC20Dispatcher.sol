@@ -31,6 +31,25 @@ contract MetaERC20Dispatcher {
     event MetaERC20SpokeOrHubUpdated(address newMetaERC20SpokeOrHub);
 
     /* =================================================== */
+    /*                    INITIALIZER                      */
+    /* =================================================== */
+
+    function __MetaERC20Dispatcher_init(
+        address metaERC20SpokeOrHub,
+        uint32 recipientDomain,
+        uint256 gasCost,
+        FinalityState finalityState
+    )
+        internal
+    {
+        // Initialize MetaERC20Dispatcher
+        _setMetaERC20SpokeOrHub(metaERC20SpokeOrHub);
+        _setRecipientDomain(recipientDomain);
+        _setMessageGasCost(gasCost);
+        _setFinalityState(finalityState);
+    }
+
+    /* =================================================== */
     /*                      INTERNAL                       */
     /* =================================================== */
     function _quoteGasPayment(uint32 domain, uint256 gasLimit) internal view returns (uint256) {

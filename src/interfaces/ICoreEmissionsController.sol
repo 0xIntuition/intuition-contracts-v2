@@ -23,5 +23,5 @@ interface ICoreEmissionsController {
     function epochAtTimestamp(uint256 timestamp) external view returns (uint256);
     function epochEndTimestamp(uint256 epochNumber) external view returns (uint256);
     // function trustPerEpoch(uint256 epochNumber) external view returns (uint256);
-    function epochEmissionsAtEpoch(uint256 epochNumber) external view returns (uint256);
+    function emissionsAtEpoch(uint256 epochNumber) external view returns (uint256);
 }

@@ -54,20 +54,6 @@ contract SatelliteEmissionsController is
     error SatelliteEmissionsController_InsufficientBalance();
     error SatelliteEmissionsController_InsufficientGasPayment();
 
-    modifier onlyAdmin() {
-        if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
-            revert Unauthorized();
-        }
-        _;
-    }
-
-    modifier onlyController() {
-        if (!hasRole(CONTROLLER_ROLE, msg.sender)) {
-            revert Unauthorized();
-        }
-        _;
-    }
-
     /* =================================================== */
     /*                    CONSTRUCTOR                      */
     /* =================================================== */
@@ -78,7 +64,7 @@ contract SatelliteEmissionsController is
 
     function initialize(
         address admin,
-        address controller,
+        address trustBonding,
         address baseEmissionsController,
         MetaERC20DispatchInit memory metaERC20DispatchInit,
         CoreEmissionsControllerInit memory checkpointInit
@@ -89,11 +75,7 @@ contract SatelliteEmissionsController is
         __AccessControl_init();
         __ReentrancyGuard_init();
 
-        // Initialize access control
-        _grantRole(DEFAULT_ADMIN_ROLE, admin);
-        _grantRole(CONTROLLER_ROLE, controller);
-
-        _initCoreEmissionsController(
+        __CoreEmissionsController_init(
             checkpointInit.startTimestamp,
             checkpointInit.emissionsLength,
             checkpointInit.emissionsPerEpoch,
@@ -101,13 +83,18 @@ contract SatelliteEmissionsController is
             checkpointInit.emissionsReductionBasisPoints
         );
 
-        // Initialize MetaERC20Dispatcher
-        _setMetaERC20SpokeOrHub(metaERC20DispatchInit.hubOrSpoke);
-        _setRecipientDomain(metaERC20DispatchInit.recipientDomain);
-        _setMessageGasCost(metaERC20DispatchInit.gasLimit);
-        _setFinalityState(metaERC20DispatchInit.finalityState);
+        __MetaERC20Dispatcher_init(
+            metaERC20DispatchInit.hubOrSpoke,
+            metaERC20DispatchInit.recipientDomain,
+            metaERC20DispatchInit.gasLimit,
+            metaERC20DispatchInit.finalityState
+        );
 
-        _trustBonding = controller;
+        // Initialize access control
+        _grantRole(DEFAULT_ADMIN_ROLE, admin);
+        _grantRole(CONTROLLER_ROLE, trustBonding);
+
+        _trustBonding = trustBonding;
         _baseEmissionsController = baseEmissionsController;
     }
 
@@ -141,7 +128,7 @@ contract SatelliteEmissionsController is
     /*                    CONTROLLER                       */
     /* =================================================== */
 
-    function transfer(address recipient, uint256 amount) external onlyController nonReentrant {
+    function transfer(address recipient, uint256 amount) external nonReentrant onlyRole(CONTROLLER_ROLE) {
         if (recipient == address(0)) revert SatelliteEmissionsController_InvalidAddress();
         if (amount == 0) revert SatelliteEmissionsController_InvalidAmount();
         if (address(this).balance < amount) revert SatelliteEmissionsController_InsufficientBalance();
@@ -152,19 +139,41 @@ contract SatelliteEmissionsController is
     /*                       ADMIN                         */
     /* =================================================== */
 
-    function setMessageGasCost(uint256 newGasCost) external onlyAdmin {
+    function setMessageGasCost(uint256 newGasCost) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setMessageGasCost(newGasCost);
     }
 
-    function setFinalityState(FinalityState newFinalityState) external onlyAdmin {
+    function setFinalityState(FinalityState newFinalityState) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setFinalityState(newFinalityState);
     }
 
-    function setMetaERC20SpokeOrHub(address newMetaERC20SpokeOrHub) external onlyAdmin {
+    function setMetaERC20SpokeOrHub(address newMetaERC20SpokeOrHub) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setMetaERC20SpokeOrHub(newMetaERC20SpokeOrHub);
     }
 
-    function setRecipientDomain(uint32 newRecipientDomain) external onlyAdmin {
+    function setRecipientDomain(uint32 newRecipientDomain) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setRecipientDomain(newRecipientDomain);
+    }
+
+    function transferUnclaimedRewards(address to) external payable onlyRole(DEFAULT_ADMIN_ROLE) {
+        uint256 unclaimedRewards = ITrustBonding(_trustBonding).getUnclaimedRewards();
+        uint256 gasLimit = _quoteGasPayment(_recipientDomain, GAS_CONSTANT + _messageGasCost);
+
+        if (msg.value < gasLimit) {
+            revert SatelliteEmissionsController_InsufficientGasPayment();
+        }
+
+        _bridgeTokens(
+            _metaERC20SpokeOrHub,
+            _recipientDomain,
+            bytes32(uint256(uint160(to))),
+            unclaimedRewards,
+            gasLimit,
+            _finalityState
+        );
+
+        if (msg.value > gasLimit) {
+            payable(msg.sender).transfer(msg.value - gasLimit);
+        }
     }
 }
