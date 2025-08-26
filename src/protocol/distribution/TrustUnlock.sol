@@ -176,6 +176,9 @@ contract TrustUnlock is IUnlock, ReentrancyGuard, Ownable {
         multiVault = unlockParams.multiVault;
     }
 
+    /// @notice Allow the contract to receive TRUST directly
+    receive() external payable { }
+
     /*//////////////////////////////////////////////////////////////
                             OWNER ACTIONS
     //////////////////////////////////////////////////////////////*/
