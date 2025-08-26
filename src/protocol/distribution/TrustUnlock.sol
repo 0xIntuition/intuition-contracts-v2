@@ -212,11 +212,11 @@ contract TrustUnlock is IUnlock, ReentrancyGuard, Ownable {
     /**
      * @notice Bonds Trust tokens to the TrustBonding contract
      * @param amount The amount of Trust tokens to bond
-     * @param lockDuration The duration in seconds for which the Trust tokens are locked in bonding
+     * @param unlockTime The time at which the bonded Trust tokens will unlock
+     * @dev The `unlockTime` gets rounded down to the nearest whole week
      */
-    function createBond(uint256 amount, uint256 lockDuration) external nonReentrant onlyOwner {
+    function create_lock(uint256 amount, uint256 unlockTime) external nonReentrant onlyOwner {
         bondedAmount += amount;
-        uint256 unlockTime = block.timestamp + lockDuration;
         _wrapTrustTokens(amount);
         TrustBonding(trustBonding).create_lock(amount, unlockTime);
         emit BondedAmountUpdated(bondedAmount);
@@ -226,7 +226,7 @@ contract TrustUnlock is IUnlock, ReentrancyGuard, Ownable {
      * @notice Increase the amount locked in an existing bonding lock
      * @param amount The amount of Trust tokens to add to the lock
      */
-    function increaseBondedAmount(uint256 amount) external nonReentrant onlyOwner {
+    function increase_amount(uint256 amount) external nonReentrant onlyOwner {
         bondedAmount += amount;
         _wrapTrustTokens(amount);
         TrustBonding(trustBonding).increase_amount(amount);
@@ -236,13 +236,14 @@ contract TrustUnlock is IUnlock, ReentrancyGuard, Ownable {
     /**
      * @notice Increase the unlock time of an existing bonding lock
      * @param newUnlockTime The new unlock time for the existing bonding lock
+     * @dev The `newUnlockTime` gets rounded down to the nearest whole week
      */
-    function increaseBondingUnlockTime(uint256 newUnlockTime) external nonReentrant onlyOwner {
+    function increase_unlock_time(uint256 newUnlockTime) external nonReentrant onlyOwner {
         TrustBonding(trustBonding).increase_unlock_time(newUnlockTime);
     }
 
     /// @notice Claim unlocked tokens back from TrustBonding to this contract
-    function withdrawFromBonding() external onlyOwner nonReentrant {
+    function withdraw() external onlyOwner nonReentrant {
         // Decrease internal accounting of bonded amount and withdraw Trust from TrustBonding to this contract
         bondedAmount = 0;
         TrustBonding(trustBonding).withdraw();
