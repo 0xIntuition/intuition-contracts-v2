@@ -3,7 +3,7 @@ pragma solidity >=0.8.29 <0.9.0;
 
 import { console2 } from "forge-std/src/console2.sol";
 
-import { BaseScript } from "./Base.s.sol";
+import { SetupScript } from "../SetupScript.s.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IPermit2 } from "src/interfaces/IPermit2.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
@@ -17,7 +17,6 @@ import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
 import { ProgressiveCurve } from "src/protocol/curves/ProgressiveCurve.sol";
-
 import {
     GeneralConfig,
     AtomConfig,
@@ -31,117 +30,38 @@ import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsContro
 
 /*
 LOCAL
-forge script script/IntuitionDeploy.s.sol:IntuitionDeploy \
+forge script script/intuition/IntuitionDeployAndSetup.s.sol:IntuitionDeployAndSetup \
+--optimizer-runs 10000 \
 --rpc-url anvil \
 --broadcast
 
 TESTNET
-forge script script/IntuitionDeploy.s.sol:IntuitionDeploy \
+forge script script/intuition/IntuitionDeployAndSetup.s.sol:IntuitionDeployAndSetup \
+--optimizer-runs 10000 \
 --rpc-url intuition_sepolia \
 --broadcast
 */
 
-contract IntuitionDeploy is BaseScript {
-    // Configuration variables with defaults
+contract IntuitionDeployAndSetup is SetupScript {
 
-    // General Config
-    address internal ADMIN;
-    address internal PROTOCOL_MULTISIG;
-    address internal TRUST_TOKEN;
-    uint8 internal DECIMAL_PRECISION = 18;
-    uint256 internal FEE_DENOMINATOR = 10_000;
-    uint256 internal MIN_DEPOSIT = 1e15; // 0.001 Trust
-    uint256 internal MIN_SHARES = 1e6; // Ghost Shares
-    uint256 internal ATOM_DATA_MAX_LENGTH = 1000;
+    uint32 internal BASE_METALAYER_RECIPIENT_DOMAIN = 8453;
 
-    // Atom Config
-    uint256 internal ATOM_CREATION_PROTOCOL_FEE = 1e15; // 0.001 Trust (Fixed Cost)
-    uint256 internal ATOM_WALLET_DEPOSIT_FEE = 100; // 1% of assets after fixed costs (Percentage Cost)
+    address public MULTI_VAULT_MIGRATION_MODE;
+    address public BASE_EMISSIONS_CONTROLLER;
 
-    // Triple Config
-    uint256 internal TRIPLE_CREATION_PROTOCOL_FEE = 1e15; // 0.001 Trust (Fixed Cost)
-    uint256 internal TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 1e15; // 0.001 Trust (Fixed Cost)
-    uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 300; // 3% (Percentage Cost)
+    function setUp() public override {
+        super.setUp();
 
-    // Vault Config
-    uint256 internal ENTRY_FEE = 500; // 5% of assets deposited after fixed costs (Percentage Cost)
-    uint256 internal EXIT_FEE = 500; // 5% of assets deposited after fixed costs (Percentage Cost)
-    uint256 internal PROTOCOL_FEE = 1000; // 10% of assets deposited after fixed costs (Percentage Cost)
-
-    // TrustBonding configuration
-    uint256 internal EPOCH_LENGTH = 2 weeks;
-    uint256 internal SYSTEM_UTILIZATION_LOWER_BOUND = 5000; // 50%
-    uint256 internal PERSONAL_UTILIZATION_LOWER_BOUND = 2500; // 25%
-
-    // SatelliteEmissionsController configuration
-    uint256 internal EMISSIONS_LENGTH = 1 days;
-    uint256 internal EMISSIONS_PER_EPOCH = 1000e18; // 1000 TRUST per epoch
-    uint256 internal EMISSIONS_REDUCTION_CLIFF = 1; // 1 epoch
-    uint256 internal EMISSIONS_REDUCTION_BASIS_POINTS = 1000; // 10%
-
-    uint32 internal RECIPIENT_DOMAIN = 1; // Domain ID
-    uint256 internal GAS_LIMIT = 200_000; // Gas limit for cross-chain operations
-
-    // Curve Configurations
-    uint256 internal PROGRESSIVE_CURVE_SLOPE = 1e15; // 0.001 slope
-
-    // Deployed contracts
-    Trust public trust;
-    MultiVault public multiVault;
-    AtomWalletFactory public atomWalletFactory;
-    SatelliteEmissionsController public satelliteEmissionsController;
-    TrustBonding public trustBonding;
-    BondingCurveRegistry public bondingCurveRegistry;
-    LinearCurve public linearCurve;
-    ProgressiveCurve public progressiveCurve;
-
-    function setUp() public {
-        console2.log("NETWORK: =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+");
-        info("ChainID:", block.chainid);
-        info("Broadcasting:", broadcaster);
-
-        // Load environment variables
-        if (block.chainid == vm.envUint("BASE_CHAIN_ID")) {
-            ADMIN = vm.envAddress("BASE_ADMIN_ADDRESS");
-            TRUST_TOKEN = vm.envOr("BASE_TRUST_TOKEN", address(0));
-            PROTOCOL_MULTISIG = vm.envOr("BASE_PROTOCOL_MULTISIG", ADMIN);
-        } else if (block.chainid == vm.envUint("ANVIL_CHAIN_ID")) {
-            ADMIN = vm.envAddress("ANVIL_ADMIN_ADDRESS");
-            TRUST_TOKEN = vm.envOr("ANVIL_TRUST_TOKEN", address(0));
-            PROTOCOL_MULTISIG = vm.envOr("ANVIL_PROTOCOL_MULTISIG", ADMIN);
-        } else if (block.chainid == vm.envUint("BASE_SEPOLIA_CHAIN_ID")) {
-            ADMIN = vm.envAddress("BASE_SEPOLIA_ADMIN_ADDRESS");
-            TRUST_TOKEN = vm.envOr("BASE_SEPOLIA_TRUST_TOKEN", address(0));
-            PROTOCOL_MULTISIG = vm.envOr("BASE_SEPOLIA_PROTOCOL_MULTISIG", ADMIN);
+        if (block.chainid == vm.envUint("ANVIL_CHAIN_ID")) {
+            MULTI_VAULT_MIGRATION_MODE = vm.envAddress("ANVIL_MULTI_VAULT_MIGRATION_MODE");
+            BASE_EMISSIONS_CONTROLLER = vm.envAddress("ANVIL_BASE_EMISSIONS_CONTROLLER");
         } else if (block.chainid == vm.envUint("INTUITION_SEPOLIA_CHAIN_ID")) {
-            ADMIN = vm.envAddress("INTUITION_SEPOLIA_ADMIN_ADDRESS");
-            TRUST_TOKEN = vm.envOr("INTUITION_SEPOLIA_TRUST_TOKEN", address(0));
-            PROTOCOL_MULTISIG = vm.envOr("INTUITION_SEPOLIA_PROTOCOL_MULTISIG", ADMIN);
+            MULTI_VAULT_MIGRATION_MODE = vm.envAddress("INTUITION_SEPOLIA_MULTI_VAULT_MIGRATION_MODE");
+            BASE_EMISSIONS_CONTROLLER = vm.envAddress("INTUITION_SEPOLIA_BASE_EMISSIONS_CONTROLLER");
         } else {
             revert("Unsupported chain for broadcasting");
         }
 
-        // Load optional configuration from environment
-        MIN_SHARES = vm.envOr("MIN_SHARES", MIN_SHARES);
-        MIN_DEPOSIT = vm.envOr("MIN_DEPOSIT", MIN_DEPOSIT);
-        ATOM_CREATION_PROTOCOL_FEE = vm.envOr("ATOM_CREATION_PROTOCOL_FEE", ATOM_CREATION_PROTOCOL_FEE);
-        ATOM_WALLET_DEPOSIT_FEE = vm.envOr("ATOM_WALLET_DEPOSIT_FEE", ATOM_WALLET_DEPOSIT_FEE);
-        TRIPLE_CREATION_PROTOCOL_FEE = vm.envOr("TRIPLE_CREATION_PROTOCOL_FEE", TRIPLE_CREATION_PROTOCOL_FEE);
-        ENTRY_FEE = vm.envOr("ENTRY_FEE", ENTRY_FEE);
-        EXIT_FEE = vm.envOr("EXIT_FEE", EXIT_FEE);
-        PROTOCOL_FEE = vm.envOr("PROTOCOL_FEE", PROTOCOL_FEE);
-
-        console2.log("");
-        console2.log("CONFIGURATION: =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+");
-        info("Admin Address", ADMIN);
-        info("Trust Token", TRUST_TOKEN);
-        info("Protocol Multisig", PROTOCOL_MULTISIG);
-        info("MIN_SHARES", MIN_SHARES);
-        info("MIN_DEPOSIT", MIN_DEPOSIT);
-        info("ATOM_CREATION_PROTOCOL_FEE", ATOM_CREATION_PROTOCOL_FEE);
-        info("ENTRY_FEE", ENTRY_FEE);
-        info("EXIT_FEE", EXIT_FEE);
-        info("PROTOCOL_FEE", PROTOCOL_FEE);
     }
 
     function run() public broadcast {
@@ -150,7 +70,7 @@ contract IntuitionDeploy is BaseScript {
 
         // Deploy Trust token if not provided
         if (TRUST_TOKEN == address(0)) {
-            trust = _deployTrustToken();
+            trust = Trust(_deployTrustToken());
         } else {
             trust = Trust(TRUST_TOKEN);
         }
@@ -169,77 +89,6 @@ contract IntuitionDeploy is BaseScript {
         contractInfo("LinearCurve", address(linearCurve));
         contractInfo("ProgressiveCurve", address(progressiveCurve));
         _exportContractAddresses();
-    }
-
-    function _exportContractAddresses() internal view {
-        console2.log("");
-        console2.log("EXPORT JSON: =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=");
-        console2.log("{");
-        console2.log(string.concat("  Trust: { [", "intuitionSepolia.id", "]: '", vm.toString(address(trust)), "' },"));
-        console2.log(
-            string.concat("  MultiVault: { [", "intuitionSepolia.id", "]: '", vm.toString(address(multiVault)), "' },")
-        );
-        console2.log(
-            string.concat(
-                "  AtomWalletFactory: { [",
-                "intuitionSepolia.id",
-                "]: '",
-                vm.toString(address(atomWalletFactory)),
-                "' },"
-            )
-        );
-        console2.log(
-            string.concat(
-                "  SatelliteEmissionsController: { [",
-                "intuitionSepolia.id",
-                "]: '",
-                vm.toString(address(satelliteEmissionsController)),
-                "' },"
-            )
-        );
-        console2.log(
-            string.concat(
-                "  TrustBonding: { [", "intuitionSepolia.id", "]: '", vm.toString(address(trustBonding)), "' },"
-            )
-        );
-        console2.log(
-            string.concat(
-                "  BondingCurveRegistry: { [",
-                "intuitionSepolia.id",
-                "]: '",
-                vm.toString(address(bondingCurveRegistry)),
-                "' },"
-            )
-        );
-        console2.log(
-            string.concat(
-                "  LinearCurve: { [", "intuitionSepolia.id", "]: '", vm.toString(address(linearCurve)), "' },"
-            )
-        );
-        console2.log(
-            string.concat(
-                "  ProgressiveCurve: { [", "intuitionSepolia.id", "]: '", vm.toString(address(progressiveCurve)), "' }"
-            )
-        );
-        console2.log("}");
-    }
-
-    function _deployTrustToken() internal returns (Trust) {
-        // Deploy Trust implementation
-        Trust trustImpl = new Trust();
-        info("Trust Implementation", address(trustImpl));
-
-        // Deploy Trust proxy
-        TransparentUpgradeableProxy trustProxy = new TransparentUpgradeableProxy(address(trustImpl), ADMIN, "");
-        Trust trustToken = Trust(address(trustProxy));
-        info("Trust Proxy", address(trustProxy));
-
-        // Initialize Trust contract
-        trustToken.reinitialize(
-            ADMIN, // admin
-            ADMIN // initial controller
-        );
-        return trustToken;
     }
 
     function _deployMultiVaultSystem() internal {
@@ -303,15 +152,15 @@ contract IntuitionDeploy is BaseScript {
 
         // Initialize SatelliteEmissionsController with proper struct parameters
         MetaERC20DispatchInit memory metaERC20DispatchInit = MetaERC20DispatchInit({
-            hubOrSpoke: address(1), // placeholder metaERC20Hub
-            recipientDomain: RECIPIENT_DOMAIN,
-            recipientAddress: address(1), // placeholder base emissions controller
-            gasLimit: GAS_LIMIT,
+            recipientAddress: METALAYER_BASE_EMISSIONS_CONTROLLER, // placeholder base emissions controller
+            hubOrSpoke: METALAYER_HUB_OR_SPOKE, // placeholder metaERC20Hub
+            recipientDomain: BASE_METALAYER_RECIPIENT_DOMAIN,
+            gasLimit: METALAYER_GAS_LIMIT,
             finalityState: FinalityState.FINALIZED
         });
 
         CoreEmissionsControllerInit memory coreEmissionsInit = CoreEmissionsControllerInit({
-            startTimestamp: block.timestamp + 10,
+            startTimestamp: EMISSIONS_START_TIMESTAMP,
             emissionsLength: EMISSIONS_LENGTH,
             emissionsPerEpoch: EMISSIONS_PER_EPOCH,
             emissionsReductionCliff: EMISSIONS_REDUCTION_CLIFF,
@@ -321,7 +170,7 @@ contract IntuitionDeploy is BaseScript {
         satelliteEmissionsController.initialize(
             ADMIN,
             address(trustBonding),
-            address(1), // baseEmissionsController placeholder
+            BASE_EMISSIONS_CONTROLLER,
             metaERC20DispatchInit,
             coreEmissionsInit
         );
@@ -330,12 +179,12 @@ contract IntuitionDeploy is BaseScript {
         trustBonding.initialize(
             ADMIN, // owner
             address(trust), // trustToken
-            EPOCH_LENGTH, // epochLength
-            block.timestamp + 10, // startTimestamp
+            BONDING_EPOCH_LENGTH, // epochLength
+            BONDING_START_TIMESTAMP, // startTimestamp
             address(multiVault), // multiVault
             address(satelliteEmissionsController),
-            SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound
-            PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound
+            BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound
+            BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound
         );
 
         // Prepare configuration structs
@@ -377,4 +226,5 @@ contract IntuitionDeploy is BaseScript {
         // Initialize MultiVault
         multiVault.initialize(generalConfig, atomConfig, tripleConfig, walletConfig, vaultFees, bondingCurveConfig);
     }
+
 }

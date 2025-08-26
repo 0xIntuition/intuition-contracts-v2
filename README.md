@@ -11,6 +11,15 @@ The Intuition V2 smart contracts for the Intuition protocol, built using [Foundr
 - [Prettier](https://github.com/prettier/prettier): code formatter for non-Solidity files
 - [Solhint](https://github.com/protofire/solhint): linter for Solidity code
 
+## Deploy Smart Contracts on Test Network
+
+1. Execute BaseEmissionsControllerDeploy.s.sol
+   - Update the `INTUITION_SEPOLIA_BASE_EMISSIONS_CONTROLLER` in .env
+2. Execute MultiVaultMigrationDeploy.s.sol
+   - Update the `INTUITION_SEPOLIA_MULTI_VAULT_MIGRATION_MODE` in .env
+3. Execute IntuitionDeployAndSetup.s.sol
+   - Update the `BASE_SEPOLIA_SATELLITE_EMISSIONS_CONTROLLER` in .env
+4. Execute BaseEmissionsControllerSetup.s.sol
 
 ## Testing
 
