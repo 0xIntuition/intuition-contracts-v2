@@ -8,13 +8,13 @@ import { BaseEmissionsController } from "src/protocol/emissions/BaseEmissionsCon
 
 /*
 LOCAL
-forge script script/BaseEmissionsControllerDeploy.s.sol:BaseEmissionsControllerDeploy \
+forge script script/base/BaseEmissionsControllerDeploy.s.sol:BaseEmissionsControllerDeploy \
 --optimizer-runs 10000 \
 --rpc-url anvil \
 --broadcast
 
 TESTNET
-forge script script/BaseEmissionsControllerDeploy.s.sol:BaseEmissionsControllerDeploy \
+forge script script/base/BaseEmissionsControllerDeploy.s.sol:BaseEmissionsControllerDeploy \
 --optimizer-runs 10000 \
 --rpc-url intuition_sepolia \
 --broadcast

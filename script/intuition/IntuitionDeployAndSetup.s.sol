@@ -150,7 +150,7 @@ contract IntuitionDeployAndSetup is SetupScript {
 
         // Initialize SatelliteEmissionsController with proper struct parameters
         MetaERC20DispatchInit memory metaERC20DispatchInit = MetaERC20DispatchInit({
-            recipientAddress: METALAYER_BASE_EMISSIONS_CONTROLLER, // placeholder base emissions controller
+            recipientAddress: BASE_EMISSIONS_CONTROLLER, // placeholder base emissions controller
             hubOrSpoke: METALAYER_HUB_OR_SPOKE, // placeholder metaERC20Hub
             recipientDomain: BASE_METALAYER_RECIPIENT_DOMAIN,
             gasLimit: METALAYER_GAS_LIMIT,

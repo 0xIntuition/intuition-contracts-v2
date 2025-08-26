@@ -3,6 +3,7 @@ pragma solidity >=0.8.29 <0.9.0;
 
 import { console2 } from "forge-std/src/console2.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 
 import { SetupScript } from "../SetupScript.s.sol";
 import { MultiVaultMigrationMode } from "src/protocol/MultiVaultMigrationMode.sol";
@@ -10,17 +11,20 @@ import { MultiVaultMigrationMode } from "src/protocol/MultiVaultMigrationMode.so
 /*
 LOCAL
 forge script script/intuition/MultiVaultMigrationDeploy.s.sol:MultiVaultMigrationDeploy \
---optimizer-runs 200 \
+--optimizer-runs 400 \
 --rpc-url anvil \
 --broadcast
 
 TESTNET
 forge script script/intuition/MultiVaultMigrationDeploy.s.sol:MultiVaultMigrationDeploy \
---optimizer-runs 200 \
+--optimizer-runs 400 \
 --rpc-url intuition_sepolia \
 --broadcast
 */
 contract MultiVaultMigrationDeploy is SetupScript {
+
+    bytes32 public constant MIGRATOR_ROLE = keccak256("MIGRATOR_ROLE");
+
     address public MIGRATOR;
 
     MultiVaultMigrationMode public multiVaultMigrationModeImpl;
@@ -56,7 +60,7 @@ contract MultiVaultMigrationDeploy is SetupScript {
 
     function _setupContracts() internal {
         // 12. Grant MIGRATOR_ROLE to the migrator address
-        IAccessControl(address(multiVaultMigrationMode)).grantRole(MIGRATOR_ROLE, MIGRATOR);
-        console.log("MIGRATOR_ROLE granted to:", MIGRATOR);
+        IAccessControl(address(multiVaultMigrationModeProxy)).grantRole(MIGRATOR_ROLE, MIGRATOR);
+        console2.log("MIGRATOR_ROLE granted to:", MIGRATOR);
     }
 }
