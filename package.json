@@ -1,10 +1,10 @@
 {
-  "name": "@0xIntuition/intuition-v2-sol",
-  "description": "",
+  "name": "intuition-contracts-v2",
+  "description": "Intuition Contracts V2",
   "version": "1.0.0",
   "author": {
     "name": "0xIntuition",
-    "url": "https://github.com/0xIntuition"
+    "url": "https://github.com/0xIntuition/intuition-contracts-v2"
   },
   "dependencies": {
     "@metalayer/contracts": "^1.1.0-beta",
@@ -35,6 +35,7 @@
     "prettier:check": "prettier --check \"**/*.{json,md,yml}\"",
     "prettier:write": "prettier --write \"**/*.{json,md,yml}\"",
     "test": "forge test",
+    "coverage": "forge coverage --no-match-coverage '(script|tests|src/external/curve)'",
     "test:coverage": "forge coverage",
     "test:coverage:report": "forge coverage --report lcov && genhtml lcov.info --branch-coverage --output-dir coverage"
   }

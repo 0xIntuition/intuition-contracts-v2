@@ -271,7 +271,7 @@ abstract contract BaseTest is Modifiers, Test {
         AtomConfig memory atomConfig = _getDefaultAtomConfig();
         TripleConfig memory tripleConfig = _getDefaultTripleConfig();
 
-        WalletConfig memory walletConfig = _getDefaultWalletConfig();
+        WalletConfig memory walletConfig = _getDefaultWalletConfig(address(atomWalletFactory));
         walletConfig.atomWalletFactory = address(atomWalletFactory);
 
         VaultFees memory vaultFees = _getDefaultVaultFees();
@@ -332,13 +332,13 @@ abstract contract BaseTest is Modifiers, Test {
         });
     }
 
-    function _getDefaultWalletConfig() internal returns (WalletConfig memory) {
+    function _getDefaultWalletConfig(address _atomWalletFactory) internal returns (WalletConfig memory) {
         return WalletConfig({
             permit2: IPermit2(address(0)),
             entryPoint: address(0),
             atomWarden: address(0),
             atomWalletBeacon: address(0),
-            atomWalletFactory: address(0)
+            atomWalletFactory: address(_atomWalletFactory)
         });
     }
 

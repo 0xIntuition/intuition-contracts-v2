@@ -2,8 +2,6 @@
 pragma solidity ^0.8.29;
 
 import { Address } from "@openzeppelin/contracts/utils/Address.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
@@ -32,8 +30,6 @@ import { MultiVaultCore } from "src/protocol/MultiVaultCore.sol";
  *         associated with atoms & triples using Trust as the base asset.
  */
 contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuardUpgradeable, PausableUpgradeable {
-    using FixedPointMathLib for uint256;
-    using SafeERC20 for IERC20;
     using FixedPointMathLib for uint256;
 
     /* =================================================== */
@@ -140,16 +136,6 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     error MultiVault_ZeroValue();
 
     error MultiVault_ActionExceedsMaxAssets();
-
-    modifier onlyAdmin() {
-        _checkRole(DEFAULT_ADMIN_ROLE);
-        _;
-    }
-
-    modifier onlyController() {
-        _checkRole(CONTROLLER_ROLE);
-        _;
-    }
 
     /* =================================================== */
     /*                    CONSTRUCTOR                      */
@@ -578,13 +564,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         bytes32 _counterTripleId = getCounterIdFromTripleId(tripleId);
 
         // Set the triple mappings.
-        _triples[tripleId] = _atoms;
-        _isTriple[tripleId] = true;
-
-        // Set the counter triple mappings.
-        _isTriple[_counterTripleId] = true;
-        _triples[_counterTripleId] = _atoms;
-        _tripleIdFromCounterId[_counterTripleId] = tripleId;
+        _initializeTripleState(tripleId, _counterTripleId, _atoms);
 
         uint256 curveId = bondingCurveConfig.defaultCurveId;
 
@@ -616,6 +596,16 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
         totalTermsCreated++;
         return tripleId;
+    }
+
+    function _initializeTripleState(bytes32 tripleId, bytes32 counterTripleId, bytes32[3] memory _atoms) internal {
+        _triples[tripleId] = _atoms;
+        _isTriple[tripleId] = true;
+
+        // Set the counter triple mappings.
+        _isTriple[counterTripleId] = true;
+        _triples[counterTripleId] = _atoms;
+        _tripleIdFromCounterId[counterTripleId] = tripleId;
     }
 
     /* =================================================== */
@@ -871,41 +861,44 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /*                        Protocol                     */
     /* =================================================== */
 
-    function pause() external onlyAdmin whenNotPaused {
+    function pause() external onlyRole(DEFAULT_ADMIN_ROLE) whenNotPaused {
         _pause();
     }
 
-    function unpause() external onlyAdmin whenPaused {
+    function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) whenPaused {
         _unpause();
     }
 
     /// @notice returns the general configuration struct
-    function setGeneralConfig(GeneralConfig memory _generalConfig) external onlyAdmin {
+    function setGeneralConfig(GeneralConfig memory _generalConfig) external onlyRole(DEFAULT_ADMIN_ROLE) {
         generalConfig = _generalConfig;
     }
 
     /// @notice returns the atom configuration struct
-    function setAtomConfig(AtomConfig memory _atomConfig) external onlyAdmin {
+    function setAtomConfig(AtomConfig memory _atomConfig) external onlyRole(DEFAULT_ADMIN_ROLE) {
         atomConfig = _atomConfig;
     }
 
     /// @notice returns the triple configuration struct
-    function setTripleConfig(TripleConfig memory _tripleConfig) external onlyAdmin {
+    function setTripleConfig(TripleConfig memory _tripleConfig) external onlyRole(DEFAULT_ADMIN_ROLE) {
         tripleConfig = _tripleConfig;
     }
 
     /// @notice returns the vault fees struct
-    function setVaultFees(VaultFees memory _vaultFees) external onlyAdmin {
+    function setVaultFees(VaultFees memory _vaultFees) external onlyRole(DEFAULT_ADMIN_ROLE) {
         vaultFees = _vaultFees;
     }
 
     /// @notice returns the bonding curve configuration struct
-    function setBondingCurveConfig(BondingCurveConfig memory _bondingCurveConfig) external onlyAdmin {
+    function setBondingCurveConfig(BondingCurveConfig memory _bondingCurveConfig)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
         bondingCurveConfig = _bondingCurveConfig;
     }
 
     /// @notice returns the wallet configuration struct
-    function setWalletConfig(WalletConfig memory _walletConfig) external onlyAdmin {
+    function setWalletConfig(WalletConfig memory _walletConfig) external onlyRole(DEFAULT_ADMIN_ROLE) {
         walletConfig = _walletConfig;
     }
 
