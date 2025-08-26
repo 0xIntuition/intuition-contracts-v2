@@ -22,7 +22,6 @@ forge script script/intuition/MultiVaultMigrationDeploy.s.sol:MultiVaultMigratio
 --broadcast
 */
 contract MultiVaultMigrationDeploy is SetupScript {
-
     bytes32 public constant MIGRATOR_ROLE = keccak256("MIGRATOR_ROLE");
 
     address public MIGRATOR;

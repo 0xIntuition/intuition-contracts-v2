@@ -3,6 +3,7 @@ pragma solidity ^0.8.29;
 
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
+import { AtomWalletFactory } from "src/protocol/wallet/AtomWalletFactory.sol";
 import { MultiVaultMigrationMode } from "src/protocol/MultiVaultMigrationMode.sol";
 import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
@@ -17,9 +18,7 @@ import { BaseTest } from "tests/BaseTest.t.sol";
  * @title MultiVaultMigrationModeTest
  * @notice Test contract for MultiVaultMigrationMode
  *
- * forge test --match-path 'tests/unit/MultiVaultMigrationMode/MultiVaultMigrationMode.t.sol'
- *
- * ⚠️ CRITICAL MIGRATION ORDER ⚠️
+ * ‼ CRITICAL MIGRATION ORDER ‼
  * Migration MUST be performed in the following order:
  * 1. Set term count (setTermCount)
  * 2. Set atom data (batchSetAtomData)
@@ -42,6 +41,7 @@ contract MultiVaultMigrationModeTest is BaseTest {
     BondingCurveRegistry public testBondingCurveRegistry;
     LinearCurve public linearCurve;
     OffsetProgressiveCurve public offsetProgressiveCurve;
+    AtomWalletFactory public atomWalletFactory;
 
     /* =================================================== */
     /*                      CONSTANTS                      */
@@ -86,6 +86,15 @@ contract MultiVaultMigrationModeTest is BaseTest {
     function setUp() public override {
         super.setUp();
 
+        // Deploy AtomWalletFactory
+        atomWalletFactory = new AtomWalletFactory();
+
+        TransparentUpgradeableProxy atomWalletFactoryProxy =
+            new TransparentUpgradeableProxy(address(atomWalletFactory), users.admin, "");
+
+        // Cast the proxy to AtomWalletFactory
+        atomWalletFactory = AtomWalletFactory(address(atomWalletFactoryProxy));
+
         // Deploy test bonding curve registry and curves
         testBondingCurveRegistry = new BondingCurveRegistry(users.admin);
         linearCurve = new LinearCurve("Test Linear Curve");
@@ -112,10 +121,14 @@ contract MultiVaultMigrationModeTest is BaseTest {
             _getDefaultGeneralConfig(),
             _getDefaultAtomConfig(),
             _getDefaultTripleConfig(),
-            _getDefaultWalletConfig(),
+            _getDefaultWalletConfig(address(atomWalletFactory)),
             _getDefaultVaultFees(),
             _getTestBondingCurveConfig()
         );
+
+        // Initialize the atom wallet factory with the MultiVault address
+        vm.prank(users.admin);
+        atomWalletFactory.initialize(address(multiVaultMigrationMode));
 
         // Grant MIGRATOR_ROLE to admin for testing
         vm.prank(users.admin);
@@ -497,10 +510,10 @@ contract MultiVaultMigrationModeTest is BaseTest {
         bytes32 atomId2 = multiVaultMigrationMode.calculateAtomId(atomDataArray[1]);
 
         vm.expectEmit(true, true, true, true);
-        emit AtomCreated(creators[0], atomId1, atomDataArray[0], address(0));
+        emit AtomCreated(creators[0], atomId1, atomDataArray[0], multiVaultMigrationMode.computeAtomWalletAddr(atomId1));
 
         vm.expectEmit(true, true, true, true);
-        emit AtomCreated(creators[1], atomId2, atomDataArray[1], address(0));
+        emit AtomCreated(creators[1], atomId2, atomDataArray[1], multiVaultMigrationMode.computeAtomWalletAddr(atomId2));
 
         vm.prank(users.admin);
         multiVaultMigrationMode.batchSetAtomData(creators, atomDataArray);
