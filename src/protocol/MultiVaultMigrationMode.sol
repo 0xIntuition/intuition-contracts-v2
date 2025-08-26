@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.27;
+pragma solidity ^0.8.29;
 
 import { IBondingCurveRegistry } from "src/interfaces/IBondingCurveRegistry.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
@@ -44,16 +44,9 @@ contract MultiVaultMigrationMode is MultiVault {
     }
 
     /*//////////////////////////////////////////////////////////////
-                                 EVENTS
+                                 ERRORS
     //////////////////////////////////////////////////////////////*/
 
-    /**
-     * @notice Emitted when the term count is set
-     * @param termCount new term count
-     */
-    event TermCountSet(uint256 termCount);
-
-    error MultiVault_EmptyArray();
     error MultiVault_InvalidBondingCurveId();
 
     /*//////////////////////////////////////////////////////////////
@@ -65,13 +58,7 @@ contract MultiVaultMigrationMode is MultiVault {
      * @param _termCount The new term count
      */
     function setTermCount(uint256 _termCount) external onlyRole(MIGRATOR_ROLE) {
-        if (_termCount == 0) {
-            revert MultiVault_ZeroValue();
-        }
-
         totalTermsCreated = _termCount;
-
-        emit TermCountSet(_termCount);
     }
 
     /**
@@ -86,10 +73,6 @@ contract MultiVaultMigrationMode is MultiVault {
         external
         onlyRole(MIGRATOR_ROLE)
     {
-        if (atomDataArray.length == 0) {
-            revert MultiVault_EmptyArray();
-        }
-
         if (atomDataArray.length != creators.length) {
             revert MultiVault_ArraysNotSameLength();
         }
@@ -113,10 +96,6 @@ contract MultiVaultMigrationMode is MultiVault {
         external
         onlyRole(MIGRATOR_ROLE)
     {
-        if (tripleAtomIds.length == 0) {
-            revert MultiVault_EmptyArray();
-        }
-
         if (tripleAtomIds.length != creators.length) {
             revert MultiVault_ArraysNotSameLength();
         }
@@ -124,16 +103,7 @@ contract MultiVaultMigrationMode is MultiVault {
         for (uint256 i = 0; i < tripleAtomIds.length; i++) {
             bytes32 tripleId = calculateTripleId(tripleAtomIds[i][0], tripleAtomIds[i][1], tripleAtomIds[i][2]);
             bytes32 counterTripleId = getCounterIdFromTripleId(tripleId);
-
-            // Set the triple mappings
-            _triples[tripleId] = tripleAtomIds[i];
-            _isTriple[tripleId] = true;
-
-            // Set the counter triple mappings
-            _isTriple[counterTripleId] = true;
-            _triples[counterTripleId] = tripleAtomIds[i];
-            _tripleIdFromCounterId[counterTripleId] = tripleId;
-
+            _initializeTripleState(tripleId, counterTripleId, tripleAtomIds[i]);
             emit TripleCreated(creators[i], tripleId, tripleAtomIds[i][0], tripleAtomIds[i][1], tripleAtomIds[i][2]);
         }
     }
@@ -156,28 +126,12 @@ contract MultiVaultMigrationMode is MultiVault {
             revert MultiVault_InvalidBondingCurveId();
         }
 
-        if (termIds.length == 0) {
-            revert MultiVault_EmptyArray();
-        }
-
         if (termIds.length != vaultTotals.length) {
             revert MultiVault_ArraysNotSameLength();
         }
 
         for (uint256 i = 0; i < termIds.length; i++) {
-            _vaults[termIds[i]][bondingCurveId].totalAssets = vaultTotals[i].totalAssets;
-            _vaults[termIds[i]][bondingCurveId].totalShares = vaultTotals[i].totalShares;
-
-            emit SharePriceChanged(
-                termIds[i],
-                bondingCurveId,
-                IBondingCurveRegistry(bondingCurveConfig.registry).previewRedeem(
-                    ONE_SHARE, vaultTotals[i].totalShares, vaultTotals[i].totalAssets, bondingCurveId
-                ),
-                vaultTotals[i].totalAssets,
-                vaultTotals[i].totalShares,
-                getVaultType(termIds[i])
-            );
+            _setVaultTotals(termIds[i], bondingCurveId, vaultTotals[i].totalAssets, vaultTotals[i].totalShares, getVaultType(termIds[i]));
         }
     }
 
@@ -194,10 +148,6 @@ contract MultiVaultMigrationMode is MultiVault {
             revert MultiVault_ZeroAddress();
         }
 
-        if (params.termIds.length == 0) {
-            revert MultiVault_EmptyArray();
-        }
-
         if (params.termIds.length != params.userBalances.length) {
             revert MultiVault_ArraysNotSameLength();
         }
@@ -206,16 +156,11 @@ contract MultiVaultMigrationMode is MultiVault {
             _vaults[params.termIds[i]][params.bondingCurveId].balanceOf[params.user] = params.userBalances[i];
 
             emit Deposited(
-                params.user,
+                address(this),
                 params.user,
                 params.termIds[i],
                 params.bondingCurveId,
-                IBondingCurveRegistry(bondingCurveConfig.registry).previewRedeem(
-                    params.userBalances[i],
-                    _vaults[params.termIds[i]][params.bondingCurveId].totalShares,
-                    _vaults[params.termIds[i]][params.bondingCurveId].totalAssets,
-                    params.bondingCurveId
-                ),
+                _convertToAssets(params.termIds[i], params.bondingCurveId, params.userBalances[i]),
                 0, // assetsAfterFees are not set here, as this is a migration
                 params.userBalances[i],
                 getShares(params.user, params.termIds[i], params.bondingCurveId),
