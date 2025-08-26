@@ -17,7 +17,6 @@ The Intuition V2 smart contracts for the Intuition protocol, built using [Foundr
    - Update the `INTUITION_SEPOLIA_BASE_EMISSIONS_CONTROLLER` in .env
 2. Execute MultiVaultMigrationDeploy.s.sol
    - Update the `INTUITION_SEPOLIA_MULTI_VAULT_MIGRATION_MODE` in .env
-   - Make sure to set `IS_MIGRATION_MODE` to true in .env to assign the `MIGRATOR_ROLE` properly
 3. Execute IntuitionDeployAndSetup.s.sol
    - Update the `BASE_SEPOLIA_SATELLITE_EMISSIONS_CONTROLLER` in .env
 4. Execute BaseEmissionsControllerSetup.s.sol

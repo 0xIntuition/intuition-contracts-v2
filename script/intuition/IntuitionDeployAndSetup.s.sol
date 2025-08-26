@@ -234,13 +234,6 @@ contract IntuitionDeployAndSetup is SetupScript {
 
         // Initialize MultiVault
         multiVault.initialize(generalConfig, atomConfig, tripleConfig, walletConfig, vaultFees, bondingCurveConfig);
-
-        if (vm.envBool("IS_MIGRATION_MODE")) {
-            _setupMigratorRole();
-        }
-    }
-
-    function _setupMigratorRole() internal {
         // Grant MIGRATOR_ROLE to the migrator address
         IAccessControl(address(multiVault)).grantRole(MIGRATOR_ROLE, MIGRATOR);
         console2.log("MIGRATOR_ROLE granted to:", MIGRATOR);

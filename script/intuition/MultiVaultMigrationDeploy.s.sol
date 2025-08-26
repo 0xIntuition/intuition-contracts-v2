@@ -22,6 +22,7 @@ forge script script/intuition/MultiVaultMigrationDeploy.s.sol:MultiVaultMigratio
 --broadcast \
 --slow
 */
+
 contract MultiVaultMigrationDeploy is SetupScript {
     MultiVaultMigrationMode public multiVaultMigrationModeImpl;
     TransparentUpgradeableProxy public multiVaultMigrationModeProxy;
