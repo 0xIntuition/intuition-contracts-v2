@@ -131,7 +131,13 @@ contract MultiVaultMigrationMode is MultiVault {
         }
 
         for (uint256 i = 0; i < termIds.length; i++) {
-            _setVaultTotals(termIds[i], bondingCurveId, vaultTotals[i].totalAssets, vaultTotals[i].totalShares, getVaultType(termIds[i]));
+            _setVaultTotals(
+                termIds[i],
+                bondingCurveId,
+                vaultTotals[i].totalAssets,
+                vaultTotals[i].totalShares,
+                getVaultType(termIds[i])
+            );
         }
     }
 

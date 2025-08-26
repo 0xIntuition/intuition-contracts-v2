@@ -2,12 +2,9 @@
 pragma solidity ^0.8.27;
 
 import { Script, console2 } from "forge-std/src/Script.sol";
-import {
-    TransparentUpgradeableProxy
-} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { SetupScript } from "../SetupScript.s.sol";
 import { BaseEmissionsController } from "src/protocol/emissions/BaseEmissionsController.sol";
-
 
 /*
 LOCAL

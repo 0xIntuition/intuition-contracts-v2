@@ -110,7 +110,6 @@ abstract contract SetupScript is Script {
     address public wrappedTrustTokenAddress;
     address public atomWalletBeacon;
 
-
     /// @dev Initializes the transaction broadcaster like this:
     ///
     /// - If $ETH_FROM is defined, use it.
@@ -119,21 +118,21 @@ abstract contract SetupScript is Script {
     ///
     /// The use case for $ETH_FROM is to specify the broadcaster key and its address via the command line.
     constructor() {
-            if (block.chainid == vm.envUint("BASE_CHAIN_ID")) {
-                uint256 deployerKey = vm.envUint("DEPLOYER_MAINNET");
-                broadcaster = vm.rememberKey(deployerKey);
-            } else if (block.chainid == vm.envUint("ANVIL_CHAIN_ID")) {
-                uint256 deployerKey = vm.envUint("DEPLOYER_LOCAL");
-                broadcaster = vm.rememberKey(deployerKey);
-            } else if (block.chainid == vm.envUint("BASE_SEPOLIA_CHAIN_ID")) {
-                uint256 deployerKey = vm.envUint("DEPLOYER_TESTNET");
-                broadcaster = vm.rememberKey(deployerKey);
-            } else if (block.chainid == vm.envUint("INTUITION_SEPOLIA_CHAIN_ID")) {
-                uint256 deployerKey = vm.envUint("DEPLOYER_TESTNET");
-                broadcaster = vm.rememberKey(deployerKey);
-            } else {
-                revert("Unsupported chain for broadcasting");
-            }
+        if (block.chainid == vm.envUint("BASE_CHAIN_ID")) {
+            uint256 deployerKey = vm.envUint("DEPLOYER_MAINNET");
+            broadcaster = vm.rememberKey(deployerKey);
+        } else if (block.chainid == vm.envUint("ANVIL_CHAIN_ID")) {
+            uint256 deployerKey = vm.envUint("DEPLOYER_LOCAL");
+            broadcaster = vm.rememberKey(deployerKey);
+        } else if (block.chainid == vm.envUint("BASE_SEPOLIA_CHAIN_ID")) {
+            uint256 deployerKey = vm.envUint("DEPLOYER_TESTNET");
+            broadcaster = vm.rememberKey(deployerKey);
+        } else if (block.chainid == vm.envUint("INTUITION_SEPOLIA_CHAIN_ID")) {
+            uint256 deployerKey = vm.envUint("DEPLOYER_TESTNET");
+            broadcaster = vm.rememberKey(deployerKey);
+        } else {
+            revert("Unsupported chain for broadcasting");
+        }
     }
 
     modifier broadcast() {
@@ -175,11 +174,13 @@ abstract contract SetupScript is Script {
         // Atom Config
         ATOM_CREATION_PROTOCOL_FEE = vm.envOr("ATOM_CREATION_PROTOCOL_FEE", ATOM_CREATION_PROTOCOL_FEE);
         ATOM_WALLET_DEPOSIT_FEE = vm.envOr("ATOM_WALLET_DEPOSIT_FEE", ATOM_WALLET_DEPOSIT_FEE);
-        
+
         // Triple Config
         TRIPLE_CREATION_PROTOCOL_FEE = vm.envOr("TRIPLE_CREATION_PROTOCOL_FEE", TRIPLE_CREATION_PROTOCOL_FEE);
-        TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = vm.envOr("TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION", TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION);
-        ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = vm.envOr("ATOM_DEPOSIT_FRACTION_FOR_TRIPLE", ATOM_DEPOSIT_FRACTION_FOR_TRIPLE);
+        TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION =
+            vm.envOr("TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION", TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION);
+        ATOM_DEPOSIT_FRACTION_FOR_TRIPLE =
+            vm.envOr("ATOM_DEPOSIT_FRACTION_FOR_TRIPLE", ATOM_DEPOSIT_FRACTION_FOR_TRIPLE);
 
         // Vault Config
         ENTRY_FEE = vm.envOr("ENTRY_FEE", ENTRY_FEE);
@@ -188,14 +189,17 @@ abstract contract SetupScript is Script {
 
         // TrustBonding Config
         BONDING_EPOCH_LENGTH = vm.envOr("BONDING_EPOCH_LENGTH", BONDING_EPOCH_LENGTH);
-        BONDING_SYSTEM_UTILIZATION_LOWER_BOUND = vm.envOr("BONDING_SYSTEM_UTILIZATION_LOWER_BOUND", BONDING_SYSTEM_UTILIZATION_LOWER_BOUND);
-        BONDING_PERSONAL_UTILIZATION_LOWER_BOUND = vm.envOr("BONDING_PERSONAL_UTILIZATION_LOWER_BOUND", BONDING_PERSONAL_UTILIZATION_LOWER_BOUND);
+        BONDING_SYSTEM_UTILIZATION_LOWER_BOUND =
+            vm.envOr("BONDING_SYSTEM_UTILIZATION_LOWER_BOUND", BONDING_SYSTEM_UTILIZATION_LOWER_BOUND);
+        BONDING_PERSONAL_UTILIZATION_LOWER_BOUND =
+            vm.envOr("BONDING_PERSONAL_UTILIZATION_LOWER_BOUND", BONDING_PERSONAL_UTILIZATION_LOWER_BOUND);
 
         // CoreEmissionsController Config
         EMISSIONS_LENGTH = vm.envOr("EMISSIONS_LENGTH", EMISSIONS_LENGTH);
         EMISSIONS_PER_EPOCH = vm.envOr("EMISSIONS_PER_EPOCH", EMISSIONS_PER_EPOCH);
         EMISSIONS_REDUCTION_CLIFF = vm.envOr("EMISSIONS_REDUCTION_CLIFF", EMISSIONS_REDUCTION_CLIFF);
-        EMISSIONS_REDUCTION_BASIS_POINTS = vm.envOr("EMISSIONS_REDUCTION_BASIS_POINTS", EMISSIONS_REDUCTION_BASIS_POINTS);
+        EMISSIONS_REDUCTION_BASIS_POINTS =
+            vm.envOr("EMISSIONS_REDUCTION_BASIS_POINTS", EMISSIONS_REDUCTION_BASIS_POINTS);
 
         // Curve Configurations
         PROGRESSIVE_CURVE_SLOPE = vm.envOr("PROGRESSIVE_CURVE_SLOPE", PROGRESSIVE_CURVE_SLOPE);
@@ -320,9 +324,13 @@ abstract contract SetupScript is Script {
         console2.log("");
         console2.log("SDK JSON: =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=");
         console2.log("{");
-        console2.log(string.concat("  Trust: { [", vm.toString(block.chainid), "]: '", vm.toString(address(trust)), "' },"));
         console2.log(
-            string.concat("  MultiVault: { [", vm.toString(block.chainid), "]: '", vm.toString(address(multiVault)), "' },")
+            string.concat("  Trust: { [", vm.toString(block.chainid), "]: '", vm.toString(address(trust)), "' },")
+        );
+        console2.log(
+            string.concat(
+                "  MultiVault: { [", vm.toString(block.chainid), "]: '", vm.toString(address(multiVault)), "' },"
+            )
         );
         console2.log(
             string.concat(
@@ -363,7 +371,11 @@ abstract contract SetupScript is Script {
         );
         console2.log(
             string.concat(
-                "  ProgressiveCurve: { [", vm.toString(block.chainid), "]: '", vm.toString(address(progressiveCurve)), "' }"
+                "  ProgressiveCurve: { [",
+                vm.toString(block.chainid),
+                "]: '",
+                vm.toString(address(progressiveCurve)),
+                "' }"
             )
         );
         console2.log("}");

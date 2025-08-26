@@ -62,7 +62,7 @@ contract MultiVaultMigrationModeTest is BaseTest {
         uint256 totalShares,
         IMultiVault.VaultType vaultType
     );
-    
+
     event Deposited(
         address indexed sender,
         address indexed receiver,
@@ -74,7 +74,7 @@ contract MultiVaultMigrationModeTest is BaseTest {
         uint256 totalShares,
         IMultiVault.VaultType vaultType
     );
-    
+
     event TripleCreated(
         address indexed creator, bytes32 indexed termId, bytes32 subjectId, bytes32 predicateId, bytes32 objectId
     );
@@ -184,7 +184,8 @@ contract MultiVaultMigrationModeTest is BaseTest {
         termIds[0] = keccak256("test");
         userBalances[0] = 1e18;
 
-        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode.BatchSetUserBalancesParams({
+        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
+            .BatchSetUserBalancesParams({
             termIds: termIds,
             bondingCurveId: 1,
             user: users.alice,
@@ -407,7 +408,8 @@ contract MultiVaultMigrationModeTest is BaseTest {
             IMultiVault.VaultType.ATOM
         );
 
-        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode.BatchSetUserBalancesParams({
+        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
+            .BatchSetUserBalancesParams({
             termIds: atomIds,
             bondingCurveId: 1,
             user: users.alice,
@@ -429,7 +431,8 @@ contract MultiVaultMigrationModeTest is BaseTest {
         termIds[0] = keccak256("test");
         userBalances[0] = 1e18;
 
-        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode.BatchSetUserBalancesParams({
+        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
+            .BatchSetUserBalancesParams({
             termIds: termIds,
             bondingCurveId: 0,
             user: users.alice,
@@ -448,12 +451,8 @@ contract MultiVaultMigrationModeTest is BaseTest {
         termIds[0] = keccak256("test");
         userBalances[0] = 1e18;
 
-        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode.BatchSetUserBalancesParams({
-            termIds: termIds,
-            bondingCurveId: 1,
-            user: address(0),
-            userBalances: userBalances
-        });
+        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
+            .BatchSetUserBalancesParams({ termIds: termIds, bondingCurveId: 1, user: address(0), userBalances: userBalances });
 
         vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_ZeroAddress.selector));
         vm.prank(users.admin);
@@ -468,7 +467,8 @@ contract MultiVaultMigrationModeTest is BaseTest {
         termIds[1] = keccak256("test2");
         userBalances[0] = 1e18;
 
-        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode.BatchSetUserBalancesParams({
+        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
+            .BatchSetUserBalancesParams({
             termIds: termIds,
             bondingCurveId: 1,
             user: users.alice,
@@ -699,7 +699,8 @@ contract MultiVaultMigrationModeTest is BaseTest {
         userBalances[2] = 15e18;
         userBalances[3] = 50e18;
 
-        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode.BatchSetUserBalancesParams({
+        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
+            .BatchSetUserBalancesParams({
             termIds: allTermIds,
             bondingCurveId: 1,
             user: users.alice,

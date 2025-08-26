@@ -6,7 +6,6 @@ import { console2 } from "forge-std/src/Script.sol";
 import { SetupScript } from "../SetupScript.s.sol";
 
 contract DeployEntryPoint is SetupScript {
-
     function run() external broadcast {
         EntryPoint entryPoint = new EntryPoint();
         console2.log("EntryPoint: ", address(entryPoint));

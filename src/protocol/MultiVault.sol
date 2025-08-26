@@ -890,7 +890,10 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     }
 
     /// @notice returns the bonding curve configuration struct
-    function setBondingCurveConfig(BondingCurveConfig memory _bondingCurveConfig) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setBondingCurveConfig(BondingCurveConfig memory _bondingCurveConfig)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
         bondingCurveConfig = _bondingCurveConfig;
     }
 

@@ -21,8 +21,8 @@ forge script script/BaseEmissionsControllerSetup.s.sol:BaseEmissionsControllerSe
 */
 contract BaseEmissionsControllerSetup is SetupScript {
     /// @notice Chain ID for the Intuition Testnet
-    uint32 internal SATELLITE_METALAYER_RECIPIENT_DOMAIN = 13579;
-    
+    uint32 internal SATELLITE_METALAYER_RECIPIENT_DOMAIN = 13_579;
+
     address public BASE_EMISSIONS_CONTROLLER;
     address public SATELLITE_EMISSIONS_CONTROLLER;
 
@@ -63,12 +63,7 @@ contract BaseEmissionsControllerSetup is SetupScript {
         });
 
         BaseEmissionsController(BASE_EMISSIONS_CONTROLLER).initialize(
-            ADMIN,
-            ADMIN,
-            address(trust),
-            SATELLITE_EMISSIONS_CONTROLLER,
-            metaERC20DispatchInit,
-            coreEmissionsInit
+            ADMIN, ADMIN, address(trust), SATELLITE_EMISSIONS_CONTROLLER, metaERC20DispatchInit, coreEmissionsInit
         );
     }
 }

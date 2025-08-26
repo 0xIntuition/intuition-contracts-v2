@@ -43,7 +43,6 @@ forge script script/intuition/IntuitionDeployAndSetup.s.sol:IntuitionDeployAndSe
 */
 
 contract IntuitionDeployAndSetup is SetupScript {
-
     uint32 internal BASE_METALAYER_RECIPIENT_DOMAIN = 8453;
 
     address public MULTI_VAULT_MIGRATION_MODE;
@@ -61,7 +60,6 @@ contract IntuitionDeployAndSetup is SetupScript {
         } else {
             revert("Unsupported chain for broadcasting");
         }
-
     }
 
     function run() public broadcast {
@@ -168,11 +166,7 @@ contract IntuitionDeployAndSetup is SetupScript {
         });
 
         satelliteEmissionsController.initialize(
-            ADMIN,
-            address(trustBonding),
-            BASE_EMISSIONS_CONTROLLER,
-            metaERC20DispatchInit,
-            coreEmissionsInit
+            ADMIN, address(trustBonding), BASE_EMISSIONS_CONTROLLER, metaERC20DispatchInit, coreEmissionsInit
         );
 
         // Initialize TrustBonding
@@ -226,5 +220,4 @@ contract IntuitionDeployAndSetup is SetupScript {
         // Initialize MultiVault
         multiVault.initialize(generalConfig, atomConfig, tripleConfig, walletConfig, vaultFees, bondingCurveConfig);
     }
-
 }

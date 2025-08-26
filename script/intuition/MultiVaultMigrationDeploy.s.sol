@@ -53,7 +53,7 @@ contract MultiVaultMigrationDeploy is SetupScript {
         // 2. Deploy the TransparentUpgradeableProxy with the MultiVaultMigrationMode implementation
         multiVaultMigrationModeProxy = new TransparentUpgradeableProxy(address(multiVaultMigrationModeImpl), ADMIN, "");
     }
-    
+
     function _setupContracts() internal {
         // 12. Grant MIGRATOR_ROLE to the migrator address
         IAccessControl(address(multiVaultMigrationMode)).grantRole(MIGRATOR_ROLE, MIGRATOR);
