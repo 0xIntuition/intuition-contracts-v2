@@ -11,13 +11,15 @@ LOCAL
 forge script script/base/BaseEmissionsControllerDeploy.s.sol:BaseEmissionsControllerDeploy \
 --optimizer-runs 10000 \
 --rpc-url anvil \
---broadcast
+--broadcast \
+--slow
 
 TESTNET
 forge script script/base/BaseEmissionsControllerDeploy.s.sol:BaseEmissionsControllerDeploy \
 --optimizer-runs 10000 \
 --rpc-url intuition_sepolia \
---broadcast
+--broadcast \
+--slow
 */
 contract BaseEmissionsControllerDeploy is SetupScript {
     BaseEmissionsController public baseEmissionsControllerImpl;

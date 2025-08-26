@@ -10,14 +10,18 @@ import { BaseEmissionsController } from "src/protocol/emissions/BaseEmissionsCon
 
 /*
 LOCAL
-forge script script/BaseEmissionsControllerSetup.s.sol:BaseEmissionsControllerSetup \
+forge script script/base/BaseEmissionsControllerSetup.s.sol:BaseEmissionsControllerSetup \
+--optimizer-runs 10000 \
 --rpc-url anvil \
---broadcast
+--broadcast \
+--slow
 
 TESTNET
-forge script script/BaseEmissionsControllerSetup.s.sol:BaseEmissionsControllerSetup \
+forge script script/base/BaseEmissionsControllerSetup.s.sol:BaseEmissionsControllerSetup \
+--optimizer-runs 10000 \
 --rpc-url intuition_sepolia \
---broadcast
+--broadcast \
+--slow
 */
 contract BaseEmissionsControllerSetup is SetupScript {
     /// @notice Chain ID for the Intuition Testnet

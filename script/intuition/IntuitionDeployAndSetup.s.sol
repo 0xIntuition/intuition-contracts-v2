@@ -7,6 +7,7 @@ import { SetupScript } from "../SetupScript.s.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IPermit2 } from "src/interfaces/IPermit2.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 
 import { Trust } from "src/Trust.sol";
 import { TestTrust } from "tests/mocks/TestTrust.sol";
@@ -33,16 +34,22 @@ LOCAL
 forge script script/intuition/IntuitionDeployAndSetup.s.sol:IntuitionDeployAndSetup \
 --optimizer-runs 10000 \
 --rpc-url anvil \
---broadcast
+--broadcast \
+--slow
 
 TESTNET
 forge script script/intuition/IntuitionDeployAndSetup.s.sol:IntuitionDeployAndSetup \
 --optimizer-runs 10000 \
 --rpc-url intuition_sepolia \
---broadcast
+--broadcast \
+--slow
 */
 
 contract IntuitionDeployAndSetup is SetupScript {
+    bytes32 public constant MIGRATOR_ROLE = keccak256("MIGRATOR_ROLE");
+
+    address public MIGRATOR;
+
     uint32 internal BASE_METALAYER_RECIPIENT_DOMAIN = 8453;
 
     address public MULTI_VAULT_MIGRATION_MODE;
@@ -57,6 +64,14 @@ contract IntuitionDeployAndSetup is SetupScript {
         } else if (block.chainid == vm.envUint("INTUITION_SEPOLIA_CHAIN_ID")) {
             MULTI_VAULT_MIGRATION_MODE = vm.envAddress("INTUITION_SEPOLIA_MULTI_VAULT_MIGRATION_MODE");
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("INTUITION_SEPOLIA_BASE_EMISSIONS_CONTROLLER");
+        } else {
+            revert("Unsupported chain for broadcasting");
+        }
+
+        if (block.chainid == vm.envUint("ANVIL_CHAIN_ID")) {
+            MIGRATOR = vm.envAddress("ANVIL_MULTI_VAULT_ROLE_MIGRATOR");
+        } else if (block.chainid == vm.envUint("INTUITION_SEPOLIA_CHAIN_ID")) {
+            MIGRATOR = vm.envAddress("INTUITION_SEPOLIA_MULTI_VAULT_ROLE_MIGRATOR");
         } else {
             revert("Unsupported chain for broadcasting");
         }
@@ -219,5 +234,15 @@ contract IntuitionDeployAndSetup is SetupScript {
 
         // Initialize MultiVault
         multiVault.initialize(generalConfig, atomConfig, tripleConfig, walletConfig, vaultFees, bondingCurveConfig);
+
+        if (vm.envBool("IS_MIGRATION_MODE")) {
+            _setupMigratorRole();
+        }
+    }
+
+    function _setupMigratorRole() internal {
+        // Grant MIGRATOR_ROLE to the migrator address
+        IAccessControl(address(multiVault)).grantRole(MIGRATOR_ROLE, MIGRATOR);
+        console2.log("MIGRATOR_ROLE granted to:", MIGRATOR);
     }
 }
