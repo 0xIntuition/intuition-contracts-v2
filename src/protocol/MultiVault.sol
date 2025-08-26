@@ -846,7 +846,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /*                       Wallet                        */
     /* =================================================== */
     /// @inheritdoc IMultiVault
-    function claimAtomWalletDepositFees(bytes32 termId) external {
+    function claimAtomWalletDepositFees(bytes32 termId) external nonReentrant {
         address atomWalletAddress = computeAtomWalletAddr(termId);
 
         // Restrict access to the associated atom wallet
