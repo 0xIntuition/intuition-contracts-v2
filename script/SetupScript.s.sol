@@ -161,7 +161,7 @@ abstract contract SetupScript is Script {
             PROTOCOL_MULTISIG = vm.envOr("BASE_SEPOLIA_PROTOCOL_MULTISIG", ADMIN);
         } else if (block.chainid == vm.envUint("INTUITION_SEPOLIA_CHAIN_ID")) {
             ADMIN = vm.envAddress("INTUITION_SEPOLIA_ADMIN_ADDRESS");
-            TRUST_TOKEN = vm.envOr("INTUITION_SEPOLIA_TRUST_TOKEN", address(0));
+            TRUST_TOKEN = vm.envOr("INTUITION_SEPOLIA_WRAPPED_TRUST_TOKEN", address(0));
             PROTOCOL_MULTISIG = vm.envOr("INTUITION_SEPOLIA_PROTOCOL_MULTISIG", ADMIN);
         } else {
             revert("Unsupported chain for broadcasting");
