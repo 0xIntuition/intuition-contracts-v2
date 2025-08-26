@@ -120,7 +120,7 @@ contract SatelliteEmissionsController is
         );
 
         if (msg.value > gasLimit) {
-            payable(msg.sender).transfer(msg.value - gasLimit);
+            Address.sendValue(payable(msg.sender), msg.value - gasLimit);
         }
     }
 
@@ -173,7 +173,7 @@ contract SatelliteEmissionsController is
         );
 
         if (msg.value > gasLimit) {
-            payable(msg.sender).transfer(msg.value - gasLimit);
+            Address.sendValue(payable(msg.sender), msg.value - gasLimit);
         }
     }
 }
