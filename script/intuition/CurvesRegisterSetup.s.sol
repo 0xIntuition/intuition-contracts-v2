@@ -48,7 +48,9 @@ contract CurvesRegisterSetup is SetupScript {
         // Deploy bonding curves
         LinearCurve linearCurve = new LinearCurve("Linear Bonding Curve");
         ProgressiveCurve progressiveCurve = new ProgressiveCurve("Progressive Bonding Curve", PROGRESSIVE_CURVE_SLOPE);
-        OffsetProgressiveCurve offsetProgressiveCurve = new OffsetProgressiveCurve("Offset Progressive Bonding Curve", PROGRESSIVE_CURVE_SLOPE, OFFSET_PROGRESSIVE_CURVE_OFFSET);
+        OffsetProgressiveCurve offsetProgressiveCurve = new OffsetProgressiveCurve(
+            "Offset Progressive Bonding Curve", PROGRESSIVE_CURVE_SLOPE, OFFSET_PROGRESSIVE_CURVE_OFFSET
+        );
         info("LinearCurve", address(linearCurve));
         info("ProgressiveCurve", address(progressiveCurve));
         info("OffsetProgressiveCurve", address(offsetProgressiveCurve));

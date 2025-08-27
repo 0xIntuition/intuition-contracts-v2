@@ -47,6 +47,10 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
     uint256 public constant MAX_BATCH_SIZE = 150;
 
+    /// @notice Dust threshold for handling precision loss in redemptions
+    /// @dev If remaining shares after redemption would be less than this, give all remaining assets
+    uint256 public constant DUST_THRESHOLD = 1e6; // 0.000000000001 shares (1e-12)
+
     /// @notice Constant representing the burn address, which receives the "ghost shares"
     address public constant BURN_ADDRESS = address(0x000000000000000000000000000000000000dEaD);
 
@@ -1178,13 +1182,15 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     }
 
     function _convertToAssets(bytes32 termId, uint256 bondingCurveId, uint256 shares) internal view returns (uint256) {
+        uint256 totalShares = _vaults[termId][bondingCurveId].totalShares;
+        uint256 totalAssets = _vaults[termId][bondingCurveId].totalAssets;
+
+        if (totalShares > 0 && shares > 0 && shares <= totalShares && totalShares - shares <= DUST_THRESHOLD) {
+            return totalAssets;
+        }
+
         IBondingCurveRegistry bcRegistry = IBondingCurveRegistry(bondingCurveConfig.registry);
-        return bcRegistry.previewRedeem(
-            shares,
-            _vaults[termId][bondingCurveId].totalShares,
-            _vaults[termId][bondingCurveId].totalAssets,
-            bondingCurveId
-        );
+        return bcRegistry.previewRedeem(shares, totalShares, totalAssets, bondingCurveId);
     }
 
     /// @dev Initializes the counter triple vault with ghost shares for the admin
