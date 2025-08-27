@@ -105,14 +105,19 @@ contract IntuitionDeployAndSetup is SetupScript {
     }
 
     function _deployMultiVaultSystem() internal {
-        // Deploy MultiVault implementation and proxy
-        MultiVault multiVaultImpl = new MultiVault();
-        info("MultiVault Implementation", address(multiVaultImpl));
+        if (MULTI_VAULT_MIGRATION_MODE == address(0)) {
+            // Deploy new MultiVault implementation and proxy
+            MultiVault multiVaultImpl = new MultiVault();
+            info("MultiVault Implementation", address(multiVaultImpl));
 
-        TransparentUpgradeableProxy multiVaultProxy =
-            new TransparentUpgradeableProxy(address(multiVaultImpl), ADMIN, "");
-        multiVault = MultiVault(address(multiVaultProxy));
-        info("MultiVault Proxy", address(multiVaultProxy));
+            TransparentUpgradeableProxy multiVaultProxy =
+                new TransparentUpgradeableProxy(address(multiVaultImpl), ADMIN, "");
+            multiVault = MultiVault(address(multiVaultProxy));
+        } else {
+            // Use existing MultiVaultMigrationMode proxy as MultiVault
+            multiVault = MultiVault(address(MULTI_VAULT_MIGRATION_MODE));
+            info("MultiVault Proxy", address(multiVault));
+        }
 
         // Deploy AtomWalletFactory implementation and proxy
         AtomWalletFactory atomWalletFactoryImpl = new AtomWalletFactory();
@@ -236,6 +241,7 @@ contract IntuitionDeployAndSetup is SetupScript {
 
         // Initialize MultiVault
         multiVault.initialize(generalConfig, atomConfig, tripleConfig, walletConfig, vaultFees, bondingCurveConfig);
+
         // Grant MIGRATOR_ROLE to the migrator address
         IAccessControl(address(multiVault)).grantRole(MIGRATOR_ROLE, MIGRATOR);
         console2.log("MIGRATOR_ROLE granted to:", MIGRATOR);
