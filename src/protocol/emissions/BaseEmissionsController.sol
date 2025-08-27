@@ -5,6 +5,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
+import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 
 import { ITrust } from "src/interfaces/ITrust.sol";
 import { MetaERC20DispatchInit } from "src/interfaces/IMetaLayer.sol";
@@ -191,7 +192,7 @@ contract BaseEmissionsController is
             _finalityState
         );
         if (msg.value > gasLimit) {
-            payable(msg.sender).transfer(msg.value - gasLimit);
+            Address.sendValue(payable(msg.sender), msg.value - gasLimit);
         }
     }
 

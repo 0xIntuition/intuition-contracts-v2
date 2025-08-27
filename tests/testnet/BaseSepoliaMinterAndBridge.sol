@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.29;
 
-import { console2 } from "forge-std/src/console2.sol";
 import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
 import { MetaERC20Dispatcher, FinalityState, IMetaERC20Hub } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
+import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 
 interface IERC20 {
     function mint(address to, uint256 amount) external;
@@ -42,7 +42,7 @@ contract BaseSepoliaMinterAndBridge is MetaERC20Dispatcher, AccessControl {
         _bridgeTokens(metaERC20Hub, domain, bytes32(uint256(uint160(to))), amount, gasLimit, FinalityState.INSTANT);
 
         if (msg.value > gasLimit) {
-            payable(msg.sender).transfer(msg.value - gasLimit);
+            Address.sendValue(payable(msg.sender), msg.value - gasLimit);
         }
     }
 }
