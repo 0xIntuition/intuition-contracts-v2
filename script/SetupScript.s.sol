@@ -22,6 +22,7 @@ import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
 import { ProgressiveCurve } from "src/protocol/curves/ProgressiveCurve.sol";
+import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCurve.sol";
 import {
     GeneralConfig,
     AtomConfig,
@@ -85,7 +86,8 @@ abstract contract SetupScript is Script {
     uint256 internal EMISSIONS_REDUCTION_BASIS_POINTS = 1000; // 10%
 
     // Curve Configurations
-    uint256 internal PROGRESSIVE_CURVE_SLOPE = 1e15; // 0.001 slope
+    uint256 internal PROGRESSIVE_CURVE_SLOPE = 2; // 0.001 slope
+    uint256 internal OFFSET_PROGRESSIVE_CURVE_OFFSET = 5e35; // 0.001 slope
 
     // MetaLayer Configurations
     address internal METALAYER_HUB_OR_SPOKE = 0x007700aa28A331B91219Ffa4A444711F0D9E57B5;
@@ -100,6 +102,7 @@ abstract contract SetupScript is Script {
     BondingCurveRegistry public bondingCurveRegistry;
     LinearCurve public linearCurve;
     ProgressiveCurve public progressiveCurve;
+    OffsetProgressiveCurve public offsetProgressiveCurve;
 
     address public proxyAdminOwner;
     address public multiVaultAdmin;
