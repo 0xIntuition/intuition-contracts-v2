@@ -18,6 +18,7 @@ import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
 import { ProgressiveCurve } from "src/protocol/curves/ProgressiveCurve.sol";
+import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCurve.sol";
 import {
     GeneralConfig,
     AtomConfig,
@@ -61,16 +62,10 @@ contract IntuitionDeployAndSetup is SetupScript {
         if (block.chainid == vm.envUint("ANVIL_CHAIN_ID")) {
             MULTI_VAULT_MIGRATION_MODE = vm.envAddress("ANVIL_MULTI_VAULT_MIGRATION_MODE");
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("ANVIL_BASE_EMISSIONS_CONTROLLER");
+            MIGRATOR = vm.envAddress("ANVIL_MULTI_VAULT_ROLE_MIGRATOR");
         } else if (block.chainid == vm.envUint("INTUITION_SEPOLIA_CHAIN_ID")) {
             MULTI_VAULT_MIGRATION_MODE = vm.envAddress("INTUITION_SEPOLIA_MULTI_VAULT_MIGRATION_MODE");
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("INTUITION_SEPOLIA_BASE_EMISSIONS_CONTROLLER");
-        } else {
-            revert("Unsupported chain for broadcasting");
-        }
-
-        if (block.chainid == vm.envUint("ANVIL_CHAIN_ID")) {
-            MIGRATOR = vm.envAddress("ANVIL_MULTI_VAULT_ROLE_MIGRATOR");
-        } else if (block.chainid == vm.envUint("INTUITION_SEPOLIA_CHAIN_ID")) {
             MIGRATOR = vm.envAddress("INTUITION_SEPOLIA_MULTI_VAULT_ROLE_MIGRATOR");
         } else {
             revert("Unsupported chain for broadcasting");
@@ -148,12 +143,15 @@ contract IntuitionDeployAndSetup is SetupScript {
         // Deploy bonding curves
         linearCurve = new LinearCurve("Linear Bonding Curve");
         progressiveCurve = new ProgressiveCurve("Progressive Bonding Curve", PROGRESSIVE_CURVE_SLOPE);
+        offsetProgressiveCurve = new OffsetProgressiveCurve("Offset Progressive Bonding Curve", PROGRESSIVE_CURVE_SLOPE, OFFSET_PROGRESSIVE_CURVE_OFFSET);
         info("LinearCurve", address(linearCurve));
         info("ProgressiveCurve", address(progressiveCurve));
+        info("OffsetProgressiveCurve", address(offsetProgressiveCurve));
 
         // Add curves to registry
         bondingCurveRegistry.addBondingCurve(address(linearCurve));
         bondingCurveRegistry.addBondingCurve(address(progressiveCurve));
+        bondingCurveRegistry.addBondingCurve(address(offsetProgressiveCurve));
 
         // Initialize contracts
         _initializeContracts();
