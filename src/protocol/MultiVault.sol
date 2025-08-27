@@ -107,6 +107,8 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
     error MultiVault_DepositOrRedeemZeroShares();
 
+    error MultiVault_HasCounterStake();
+
     error MultiVault_InvalidArrayLength();
 
     error MultiVault_InsufficientAssets();
@@ -130,6 +132,8 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     error MultiVault_TripleExists(bytes32 termId, bytes32 subjectId, bytes32 predicateId, bytes32 objectId);
 
     error MultiVault_TermDoesNotExist();
+
+    error MultiVault_TermNotTriple();
 
     error MultiVault_ZeroAddress();
 
@@ -692,6 +696,12 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
         (bool _isAtom, VaultType _vaultType) = _requireVaultType(termId);
 
+        if (!_isAtom) {
+            if (_hasCounterStake(termId, curveId, receiver)) {
+                revert MultiVault_HasCounterStake();
+            }
+        }
+
         (uint256 sharesForReceiver, uint256 assetsAfterFees) = _calculateDeposit(termId, curveId, assets, _isAtom);
 
         /* --- Accumulate fees for all vault types --- */
@@ -1145,6 +1155,19 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         if (_triples[termId][0] != bytes32(0)) {
             revert MultiVault_TripleExists(termId, subjectId, predicateId, objectId);
         }
+    }
+
+    function _hasCounterStake(bytes32 tripleId, uint256 curveId, address receiver) internal view returns (bool) {
+        if (!isTriple(tripleId)) {
+            revert MultiVault_TermNotTriple();
+        }
+
+        // Find the "other side" of this triple
+        bytes32 oppositeId = isCounterTriple(tripleId)
+            ? getTripleIdFromCounterId(tripleId) // we were given a counter triple -> check positive triple balance
+            : getCounterIdFromTripleId(tripleId); // we were given a positive triple -> check counter triple balance
+
+        return _vaults[oppositeId][curveId].balanceOf[receiver] > 0;
     }
 
     function _convertToShares(bytes32 termId, uint256 curveId, uint256 assets) internal view returns (uint256) {
