@@ -242,8 +242,13 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         return _currentEpoch();
     }
 
+    /**
+     * @notice Returns the previous epoch
+     * @return Previous epoch
+     */
     function previousEpoch() public view returns (uint256) {
-        return _currentEpoch() - 1;
+        uint256 curr = _currentEpoch();
+        return curr == 0 ? 0 : curr - 1;
     }
 
     /**
