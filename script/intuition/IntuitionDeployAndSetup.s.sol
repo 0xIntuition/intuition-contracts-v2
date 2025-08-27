@@ -17,7 +17,7 @@ import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEm
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
-import { ProgressiveCurve } from "src/protocol/curves/ProgressiveCurve.sol";
+import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCurve.sol";
 import {
     GeneralConfig,
     AtomConfig,
@@ -100,7 +100,7 @@ contract IntuitionDeployAndSetup is SetupScript {
         contractInfo("TrustBonding", address(trustBonding));
         contractInfo("BondingCurveRegistry", address(bondingCurveRegistry));
         contractInfo("LinearCurve", address(linearCurve));
-        contractInfo("ProgressiveCurve", address(progressiveCurve));
+        contractInfo("OffsetProgressiveCurve", address(offsetProgressiveCurve));
         _exportContractAddresses();
     }
 
@@ -147,13 +147,15 @@ contract IntuitionDeployAndSetup is SetupScript {
 
         // Deploy bonding curves
         linearCurve = new LinearCurve("Linear Bonding Curve");
-        progressiveCurve = new ProgressiveCurve("Progressive Bonding Curve", PROGRESSIVE_CURVE_SLOPE);
+        offsetProgressiveCurve = new OffsetProgressiveCurve(
+            "Offset Progressive Bonding Curve", OFFSET_PROGRESSIVE_CURVE_SLOPE, OFFSET_PROGRESSIVE_CURVE_OFFSET
+        );
         info("LinearCurve", address(linearCurve));
-        info("ProgressiveCurve", address(progressiveCurve));
+        info("OffsetProgressiveCurve", address(offsetProgressiveCurve));
 
         // Add curves to registry
         bondingCurveRegistry.addBondingCurve(address(linearCurve));
-        bondingCurveRegistry.addBondingCurve(address(progressiveCurve));
+        bondingCurveRegistry.addBondingCurve(address(offsetProgressiveCurve));
 
         // Initialize contracts
         _initializeContracts();
