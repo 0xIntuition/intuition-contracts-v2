@@ -176,6 +176,9 @@ contract TrustUnlock is IUnlock, ReentrancyGuard, Ownable {
         multiVault = unlockParams.multiVault;
     }
 
+    /// @notice Allow the contract to receive TRUST directly
+    receive() external payable { }
+
     /*//////////////////////////////////////////////////////////////
                             OWNER ACTIONS
     //////////////////////////////////////////////////////////////*/
@@ -246,7 +249,7 @@ contract TrustUnlock is IUnlock, ReentrancyGuard, Ownable {
         // Decrease internal accounting of bonded amount and withdraw Trust from TrustBonding to this contract
         bondedAmount = 0;
         TrustBonding(trustBonding).withdraw();
-        _unwrapTrustTokens(address(this).balance);
+        _unwrapTrustTokens(IERC20(trustToken).balanceOf(address(this)));
         emit BondedAmountUpdated(bondedAmount);
     }
 
