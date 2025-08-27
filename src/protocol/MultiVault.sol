@@ -1241,6 +1241,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /// @param amountToRemove the amount of utilization to remove
     function _removeUtilization(address user, int256 amountToRemove) internal {
         // First, roll the user's old epoch usage forward so we adjust the current epoch’s usage
+        _rollover(user);
 
         uint256 epoch = currentEpoch();
 
