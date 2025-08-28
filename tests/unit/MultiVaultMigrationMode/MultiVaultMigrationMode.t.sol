@@ -402,7 +402,7 @@ contract MultiVaultMigrationModeTest is BaseTest {
             atomIds[0],
             1,
             multiVaultMigrationMode.convertToAssets(atomIds[0], 1, userBalances[0]),
-            0, // assetsAfterFees
+            multiVaultMigrationMode.convertToAssets(atomIds[0], 1, userBalances[0]),
             userBalances[0],
             userBalances[0], // totalShares after deposit is the user balance since it's migration
             IMultiVault.VaultType.ATOM
@@ -415,7 +415,7 @@ contract MultiVaultMigrationModeTest is BaseTest {
             atomIds[1],
             1,
             multiVaultMigrationMode.convertToAssets(atomIds[1], 1, userBalances[1]),
-            0, // assetsAfterFees
+            multiVaultMigrationMode.convertToAssets(atomIds[1], 1, userBalances[1]),
             userBalances[1],
             userBalances[1], // totalShares after deposit is the user balance since it's migration
             IMultiVault.VaultType.ATOM
