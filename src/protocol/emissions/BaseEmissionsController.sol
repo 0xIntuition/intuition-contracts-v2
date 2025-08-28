@@ -84,16 +84,12 @@ contract BaseEmissionsController is
     /*                       ERRORS                        */
     /* =================================================== */
 
-    error BaseEmissionsController_ZeroAddress();
-    error BaseEmissionsController_InvalidMaxAnnualEmission();
-    error BaseEmissionsController_InvalidMaxEmissionPerEpochBasisPoints();
-    error BaseEmissionsController_InvalidAnnualReductionBasisPoints();
-    error BaseEmissionsController_InvalidStartTimestamp();
-    error BaseEmissionsController_InvalidEpochDuration();
     error BaseEmissionsController_InvalidEpoch();
+
     error BaseEmissionsController_InsufficientGasPayment();
-    error BaseEmissionsController_AnnualMintingLimitExceeded();
+    
     error BaseEmissionsController_EpochMintingLimitExceeded();
+    
     error BaseEmissionsController_InsufficientBurnableBalance();
 
     /* =================================================== */
@@ -221,6 +217,22 @@ contract BaseEmissionsController is
 
     function setRecipientDomain(uint32 newRecipientDomain) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setRecipientDomain(newRecipientDomain);
+    }
+
+    function createCheckpoint(
+        uint256 startTimestamp,
+        uint256 emissionsLength,
+        uint256 emissionsReductionCliff,
+        uint256 emissionsPerEpoch,
+        uint256 emissionsReductionBasisPoints
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _createCheckpoint(
+            startTimestamp,
+            emissionsLength,
+            emissionsReductionCliff,
+            emissionsPerEpoch,
+            emissionsReductionBasisPoints
+        );
     }
 
     /* =================================================== */
