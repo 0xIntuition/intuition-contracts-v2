@@ -84,20 +84,12 @@ contract IntuitionDeployAndSetup is SetupScript {
             trust = Trust(TRUST_TOKEN);
         }
 
-        // Deploy WrappedTrust token if not provided
-        if (WRAPPED_TRUST_TOKEN == address(0)) {
-            wrappedTrust = WrappedTrust(payable(_deployWrappedTrustToken()));
-        } else {
-            wrappedTrust = WrappedTrust(payable(WRAPPED_TRUST_TOKEN));
-        }
-
         // Deploy the complete MultiVault system
         _deployMultiVaultSystem();
 
         console2.log("");
         console2.log("DEPLOYMENT COMPLETE: =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+");
         contractInfo("Trust", address(trust));
-        contractInfo("WrappedTrust", address(wrappedTrust));
         contractInfo("MultiVault", address(multiVault));
         contractInfo("AtomWalletFactory", address(atomWalletFactory));
         contractInfo("SatelliteEmissionsController", address(satelliteEmissionsController));
@@ -202,7 +194,7 @@ contract IntuitionDeployAndSetup is SetupScript {
         // Initialize TrustBonding
         trustBonding.initialize(
             ADMIN, // owner
-            address(wrappedTrust), // wrappedTrust
+            address(trust), // WTRUST token if deploying on Intuition Sepolia
             BONDING_EPOCH_LENGTH, // epochLength
             BONDING_START_TIMESTAMP, // startTimestamp
             address(multiVault), // multiVault

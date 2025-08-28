@@ -32,7 +32,6 @@ import {
     BondingCurveConfig,
     IPermit2
 } from "src/interfaces/IMultiVaultCore.sol";
-import { WrappedTrust } from "src/WrappedTrust.sol";
 
 abstract contract SetupScript is Script {
     /// @dev Included to enable compilation of the script without a $MNEMONIC environment variable.
@@ -51,7 +50,6 @@ abstract contract SetupScript is Script {
     address internal ADMIN;
     address internal PROTOCOL_MULTISIG;
     address internal TRUST_TOKEN;
-    address internal WRAPPED_TRUST_TOKEN;
 
     uint8 internal DECIMAL_PRECISION = 18;
     uint256 internal FEE_DENOMINATOR = 10_000;
@@ -97,7 +95,6 @@ abstract contract SetupScript is Script {
 
     // Deployed contracts
     Trust public trust;
-    WrappedTrust public wrappedTrust;
     MultiVault public multiVault;
     AtomWalletFactory public atomWalletFactory;
     SatelliteEmissionsController public satelliteEmissionsController;
@@ -113,7 +110,6 @@ abstract contract SetupScript is Script {
     address public migrator;
     address public permit2; // should be deployed separately
     address public atomWarden;
-    address public wrappedTrustTokenAddress;
     address public atomWalletBeacon;
 
     /// @dev Initializes the transaction broadcaster like this:
@@ -167,7 +163,7 @@ abstract contract SetupScript is Script {
             PROTOCOL_MULTISIG = vm.envOr("BASE_SEPOLIA_PROTOCOL_MULTISIG", ADMIN);
         } else if (block.chainid == vm.envUint("INTUITION_SEPOLIA_CHAIN_ID")) {
             ADMIN = vm.envAddress("INTUITION_SEPOLIA_ADMIN_ADDRESS");
-            TRUST_TOKEN = vm.envOr("INTUITION_SEPOLIA_WRAPPED_TRUST_TOKEN", address(0));
+            TRUST_TOKEN = vm.envOr("INTUITION_SEPOLIA_WRAPPED_TRUST_TOKEN", address(0)); // WTRUST token
             PROTOCOL_MULTISIG = vm.envOr("INTUITION_SEPOLIA_PROTOCOL_MULTISIG", ADMIN);
         } else {
             revert("Unsupported chain for broadcasting");
@@ -241,13 +237,6 @@ abstract contract SetupScript is Script {
             ADMIN // initial controller
         );
         return address(trustToken);
-    }
-
-    function _deployWrappedTrustToken() internal returns (address) {
-        // Deploy WrappedTrust token
-        wrappedTrust = new WrappedTrust();
-        info("WrappedTrust", address(wrappedTrust));
-        return address(wrappedTrust);
     }
 
     function _getGeneralConfig() internal view returns (GeneralConfig memory) {
