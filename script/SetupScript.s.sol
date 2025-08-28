@@ -51,6 +51,7 @@ abstract contract SetupScript is Script {
     address internal ADMIN;
     address internal PROTOCOL_MULTISIG;
     address internal TRUST_TOKEN;
+    address internal WRAPPED_TRUST_TOKEN;
 
     uint8 internal DECIMAL_PRECISION = 18;
     uint256 internal FEE_DENOMINATOR = 10_000;
@@ -86,8 +87,9 @@ abstract contract SetupScript is Script {
     uint256 internal EMISSIONS_REDUCTION_BASIS_POINTS = 1000; // 10%
 
     // Curve Configurations
-    uint256 internal PROGRESSIVE_CURVE_SLOPE = 2; // 0.001 slope
-    uint256 internal OFFSET_PROGRESSIVE_CURVE_OFFSET = 5e35; // 0.001 slope
+    uint256 internal PROGRESSIVE_CURVE_SLOPE = 1e15; // 0.001 slope
+    uint256 internal OFFSET_PROGRESSIVE_CURVE_SLOPE = 2;
+    uint256 internal OFFSET_PROGRESSIVE_CURVE_OFFSET = 5e35;
 
     // MetaLayer Configurations
     address internal METALAYER_HUB_OR_SPOKE = 0x007700aa28A331B91219Ffa4A444711F0D9E57B5;
@@ -95,6 +97,7 @@ abstract contract SetupScript is Script {
 
     // Deployed contracts
     Trust public trust;
+    WrappedTrust public wrappedTrust;
     MultiVault public multiVault;
     AtomWalletFactory public atomWalletFactory;
     SatelliteEmissionsController public satelliteEmissionsController;
@@ -108,7 +111,7 @@ abstract contract SetupScript is Script {
     address public multiVaultAdmin;
     address public protocolMultisig;
     address public migrator;
-    address permit2; // should be deployed separately
+    address public permit2; // should be deployed separately
     address public atomWarden;
     address public wrappedTrustTokenAddress;
     address public atomWalletBeacon;
@@ -205,6 +208,8 @@ abstract contract SetupScript is Script {
             vm.envOr("EMISSIONS_REDUCTION_BASIS_POINTS", EMISSIONS_REDUCTION_BASIS_POINTS);
 
         // Curve Configurations
+        OFFSET_PROGRESSIVE_CURVE_SLOPE = vm.envOr("OFFSET_PROGRESSIVE_CURVE_SLOPE", OFFSET_PROGRESSIVE_CURVE_SLOPE);
+        OFFSET_PROGRESSIVE_CURVE_OFFSET = vm.envOr("OFFSET_PROGRESSIVE_CURVE_OFFSET", OFFSET_PROGRESSIVE_CURVE_OFFSET);
         PROGRESSIVE_CURVE_SLOPE = vm.envOr("PROGRESSIVE_CURVE_SLOPE", PROGRESSIVE_CURVE_SLOPE);
 
         console2.log("");
@@ -236,6 +241,13 @@ abstract contract SetupScript is Script {
             ADMIN // initial controller
         );
         return address(trustToken);
+    }
+
+    function _deployWrappedTrustToken() internal returns (address) {
+        // Deploy WrappedTrust token
+        wrappedTrust = new WrappedTrust();
+        info("WrappedTrust", address(wrappedTrust));
+        return address(wrappedTrust);
     }
 
     function _getGeneralConfig() internal view returns (GeneralConfig memory) {
@@ -370,6 +382,15 @@ abstract contract SetupScript is Script {
         console2.log(
             string.concat(
                 "  LinearCurve: { [", vm.toString(block.chainid), "]: '", vm.toString(address(linearCurve)), "' },"
+            )
+        );
+        console2.log(
+            string.concat(
+                "  OffsetProgressiveCurve: { [",
+                vm.toString(block.chainid),
+                "]: '",
+                vm.toString(address(offsetProgressiveCurve)),
+                "' }"
             )
         );
         console2.log(
