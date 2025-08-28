@@ -143,7 +143,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
     /**
      * @notice Initializes the TrustBonding contract
      * @param _owner The owner of the contract
-     * @param _trustToken The address of the TRUST token
+     * @param _trustToken The address of the WTRUST token
      * @param _epochLength The length of an epoch in seconds
      * @param _startTimestamp The starting timestamp of the first epoch
      */
