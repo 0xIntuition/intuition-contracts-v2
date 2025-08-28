@@ -87,7 +87,7 @@ abstract contract SetupScript is Script {
     uint256 internal EMISSIONS_REDUCTION_BASIS_POINTS = 1000; // 10%
 
     // Curve Configurations
-    uint256 internal PROGRESSIVE_CURVE_SLOPE = 1e15; // 0.001 slope
+    uint256 internal PROGRESSIVE_CURVE_SLOPE = 2;
     uint256 internal OFFSET_PROGRESSIVE_CURVE_SLOPE = 2;
     uint256 internal OFFSET_PROGRESSIVE_CURVE_OFFSET = 5e35;
 
