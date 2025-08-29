@@ -34,7 +34,7 @@ contract ClaimTest is BaseTest {
 
         _addToWhiteList(_users);
         _createLocksForUsers(_users, stakeAmount, THREE_YEARS);
-        _nextCliff(users.alice, 1, DEFAULT_EMISSIONS_PER_EPOCH);
+        _nextCliff(users.alice, 1, EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH);
         _nextCliff(users.alice, 2, (900_000 * 1e18));
         _nextCliff(users.alice, 3, (121_500 * 1e18)); // Dramatic reduction after 2nd epoch without full utilization.
         _nextCliff(users.alice, 4, (109_350 * 1e18));
@@ -49,7 +49,7 @@ contract ClaimTest is BaseTest {
 
         _addToWhiteList(_users);
         _createLocksForUsers(_users, stakeAmount, THREE_YEARS);
-        _nextCliff(users.alice, 1, DEFAULT_EMISSIONS_PER_EPOCH / _users.length);
+        _nextCliff(users.alice, 1, EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH / _users.length);
         _nextCliff(users.alice, 2, (900_000 * 1e18) / _users.length);
         _nextCliff(users.alice, 3, (121_500 * 1e18) / _users.length); // Dramatic reduction after 2nd epoch without full
             // utilization.
@@ -66,7 +66,7 @@ contract ClaimTest is BaseTest {
 
         _addToWhiteList(_users);
         _createLocksForUsers(_users, stakeAmount, THREE_YEARS);
-        _nextCliff(users.alice, 1, DEFAULT_EMISSIONS_PER_EPOCH / _users.length);
+        _nextCliff(users.alice, 1, EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH / _users.length);
         _nextCliff(users.alice, 2, (900_000 * 1e18) / _users.length);
         _nextCliff(users.alice, 3, (121_500 * 1e18) / _users.length); // Dramatic reduction after 2nd epoch without
             // full// utilization.
@@ -81,7 +81,7 @@ contract ClaimTest is BaseTest {
 
         _addToWhiteList(_users);
         _createLocksForUsers(_users, stakeAmount, THREE_YEARS);
-        _nextCliffWithRewardsDeposit(_users, 1, DEFAULT_EMISSIONS_PER_EPOCH);
+        _nextCliffWithRewardsDeposit(_users, 1, EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH);
         _nextCliffWithRewardsDeposit(_users, 2, (900_000 * 1e18));
         _nextCliffWithRewardsDeposit(_users, 3, (810_000 * 1e18));
         _nextCliffWithRewardsDeposit(_users, 4, (729_000 * 1e18));
@@ -96,7 +96,7 @@ contract ClaimTest is BaseTest {
 
         _addToWhiteList(_users);
         _createLocksForUsers(_users, stakeAmount, THREE_YEARS);
-        _nextCliffWithRewardsDeposit(_users, 1, DEFAULT_EMISSIONS_PER_EPOCH / _users.length);
+        _nextCliffWithRewardsDeposit(_users, 1, EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH / _users.length);
         _nextCliffWithRewardsDeposit(_users, 2, (900_000 * 1e18) / _users.length);
         _nextCliffWithRewardsDeposit(_users, 3, (810_000 * 1e18) / _users.length);
         _nextCliffWithRewardsDeposit(_users, 4, (729_000 * 1e18) / _users.length);
@@ -112,7 +112,7 @@ contract ClaimTest is BaseTest {
 
         _addToWhiteList(_users);
         _createLocksForUsers(_users, stakeAmount, THREE_YEARS);
-        _nextCliffWithRewardsDeposit(_users, 1, DEFAULT_EMISSIONS_PER_EPOCH / _users.length);
+        _nextCliffWithRewardsDeposit(_users, 1, EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH / _users.length);
         _nextCliffWithRewardsDeposit(_users, 2, (900_000 * 1e18) / _users.length);
         _nextCliffWithRewardsDeposit(_users, 3, (810_000 * 1e18) / _users.length);
         _nextCliffWithRewardsDeposit(_users, 4, (729_000 * 1e18) / _users.length);
@@ -132,7 +132,7 @@ contract ClaimTest is BaseTest {
         _addToWhiteList(_users2);
         _createLocksForUsers(_users1, stakeAmount, THREE_YEARS);
         _createLocksForUsers(_users2, stakeAmount, THREE_YEARS);
-        _nextCliffWithRewardsDeposit(_users1, 1, DEFAULT_EMISSIONS_PER_EPOCH / 3);
+        _nextCliffWithRewardsDeposit(_users1, 1, EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH / 3);
         resetPrank({ msgSender: users.charlie });
         protocol.trustBonding.claimRewards(users.charlie);
         _nextCliffWithRewardsDeposit(_users1, 2, (900_000 * 1e18) / 3);
@@ -161,7 +161,7 @@ contract ClaimTest is BaseTest {
     }
 
     function _nextCliff(address user, uint256 epoch, uint256 rewardAmount) internal {
-        vm.warp(block.timestamp + DEFAULT_EPOCH_LENGTH);
+        vm.warp(block.timestamp + EMISSIONS_CONTROLLER_EPOCH_LENGTH);
         assertEq(protocol.trustBonding.currentEpoch(), epoch);
         assertEq(protocol.trustBonding.eligibleRewards(user), rewardAmount);
         uint256 balanceBefore = address(user).balance;
@@ -171,7 +171,7 @@ contract ClaimTest is BaseTest {
     }
 
     function _nextCliffForUsers(address[] memory users, uint256 epoch, uint256 rewardAmount) internal {
-        vm.warp(block.timestamp + DEFAULT_EPOCH_LENGTH);
+        vm.warp(block.timestamp + EMISSIONS_CONTROLLER_EPOCH_LENGTH);
         for (uint256 i = 0; i < users.length; i++) {
             address user = users[i];
             assertEq(protocol.trustBonding.currentEpoch(), epoch);
@@ -184,7 +184,7 @@ contract ClaimTest is BaseTest {
     }
 
     function _nextCliffWithRewardsDeposit(address user, uint256 epoch, uint256 rewardAmount) internal {
-        vm.warp(block.timestamp + DEFAULT_EPOCH_LENGTH);
+        vm.warp(block.timestamp + EMISSIONS_CONTROLLER_EPOCH_LENGTH);
         resetPrank({ msgSender: user });
         assertEq(protocol.trustBonding.currentEpoch(), epoch);
         assertEq(protocol.trustBonding.eligibleRewards(user), rewardAmount);
@@ -196,7 +196,7 @@ contract ClaimTest is BaseTest {
     }
 
     function _nextCliffWithRewardsDeposit(address[] memory users, uint256 epoch, uint256 rewardAmount) internal {
-        vm.warp(block.timestamp + DEFAULT_EPOCH_LENGTH);
+        vm.warp(block.timestamp + EMISSIONS_CONTROLLER_EPOCH_LENGTH);
         for (uint256 i = 0; i < users.length; i++) {
             address user = users[i];
             resetPrank({ msgSender: user });

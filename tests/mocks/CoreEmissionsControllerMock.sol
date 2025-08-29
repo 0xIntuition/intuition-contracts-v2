@@ -8,6 +8,21 @@ import "src/protocol/emissions/CoreEmissionsController.sol";
  * @notice Mock contract exposing internal functions for testing
  */
 contract CoreEmissionsControllerMock is CoreEmissionsController {
+    // Common test parameters
+    uint256 internal constant DEFAULT_START_TIMESTAMP = 1;
+    uint256 internal constant DEFAULT_EPOCH_LENGTH = 2 weeks;
+    uint256 internal constant DEFAULT_EMISSIONS_PER_EPOCH = 1_000_000 * 1e18; // 1M tokens
+    uint256 internal constant DEFAULT_REDUCTION_CLIFF = 26; // 26 epochs = ~1 year
+    uint256 internal constant DEFAULT_REDUCTION_BASIS_POINTS = 1000; // 10%
+
+    // Time constants for easier reading
+    uint256 internal constant ONE_HOUR = 1 hours;
+    uint256 internal constant ONE_DAY = 1 days;
+    uint256 internal constant ONE_WEEK = 7 * ONE_DAY;
+    uint256 internal constant TWO_WEEKS = 2 * ONE_WEEK;
+    uint256 internal constant ONE_YEAR = 365 * ONE_DAY;
+    uint256 internal constant TWO_YEARS = 2 * ONE_YEAR;
+
     /* =================================================== */
     /*            EXPOSED INTERNAL FUNCTIONS              */
     /* =================================================== */
@@ -26,49 +41,16 @@ contract CoreEmissionsControllerMock is CoreEmissionsController {
         );
     }
 
-    function createCheckpoint(
-        uint256 startTimestamp,
-        uint256 emissionsLength,
-        uint256 emissionsReductionCliff,
-        uint256 emissionsPerEpoch,
-        uint256 emissionsReductionBasisPoints
-    )
-        external
-    {
-        _createCheckpoint(
-            startTimestamp, emissionsLength, emissionsReductionCliff, emissionsPerEpoch, emissionsReductionBasisPoints
-        );
-    }
-
     function calculateEpochEmissionsAt(uint256 timestamp) external view returns (uint256) {
         return _calculateEpochEmissionsAt(timestamp);
-    }
-
-    function findCheckpointForTimestamp(uint256 timestamp) external view returns (EmissionsCheckpoint memory) {
-        return _findCheckpointForTimestamp(timestamp);
     }
 
     function calculateTotalEpochsToTimestamp(uint256 timestamp) external view returns (uint256) {
         return _calculateTotalEpochsToTimestamp(timestamp);
     }
 
-    function calculateTimestampForEpoch(uint256 epochNumber) external view returns (uint256) {
-        return _calculateTimestampForEpoch(epochNumber);
-    }
-
     function calculateEmissionsAtEpoch(uint256 epochNumber) external view returns (uint256) {
         return _emissionsAtEpoch(epochNumber);
-    }
-
-    function calculateEpochNumber(
-        uint256 timestamp,
-        EmissionsCheckpoint memory checkpoint
-    )
-        external
-        pure
-        returns (uint256)
-    {
-        return _calculateEpoch(timestamp, checkpoint);
     }
 
     function applyCliffReductions(
@@ -95,87 +77,9 @@ contract CoreEmissionsControllerMock is CoreEmissionsController {
         _validateCliff(emissionsReductionCliff);
     }
 
-    function calculateExpectedCheckpointStartTimestamp(uint256 targetEpoch) external view returns (uint256) {
-        return _calculateExpectedCheckpointStartTimestamp(targetEpoch);
-    }
-
-    function getEpochEndTimestamp(uint256 epoch) external view returns (uint256) {
-        return _getEpochEndTimestamp(epoch);
-    }
-
-    function validateCheckpointStartTimestamp(uint256 proposedStartTimestamp) external view {
-        _validateCheckpointStartTimestamp(proposedStartTimestamp);
-    }
-
-    function getCurrentEpochAtTimestamp(uint256 timestamp) external view returns (uint256) {
-        return _getCurrentEpochAtTimestamp(timestamp);
-    }
-
     /* =================================================== */
     /*                TESTING UTILITIES                    */
     /* =================================================== */
-
-    function getEmissionsStartTimestamp() external view returns (uint256) {
-        return EMISSIONS_START_TIMESTAMP;
-    }
-
-    function setEmissionsStartTimestamp(uint256 timestamp) external {
-        EMISSIONS_START_TIMESTAMP = timestamp;
-    }
-
-    function clearCheckpoints() external {
-        delete checkpoints;
-    }
-
-    function getCheckpointsLength() external view returns (uint256) {
-        return checkpoints.length;
-    }
-
-    function addMockCheckpoint(
-        uint256 startTimestamp,
-        uint256 emissionsLength,
-        uint256 emissionsPerEpoch,
-        uint256 emissionsReductionCliff,
-        uint256 emissionsReductionBasisPoints,
-        uint256 retentionFactor
-    )
-        external
-    {
-        checkpoints.push(
-            EmissionsCheckpoint({
-                startTimestamp: startTimestamp,
-                emissionsLength: emissionsLength,
-                emissionsPerEpoch: emissionsPerEpoch,
-                emissionsReductionCliff: emissionsReductionCliff,
-                emissionsReductionBasisPoints: emissionsReductionBasisPoints,
-                retentionFactor: retentionFactor
-            })
-        );
-    }
-
-    /* =================================================== */
-    /*            EPOCH UTILITY FUNCTIONS                 */
-    /* =================================================== */
-
-    function getEpochStartTimestamp(uint256 epochNumber) external view returns (uint256) {
-        return _calculateTimestampForEpoch(epochNumber);
-    }
-
-    function getCurrentEpochStartTimestamp() external view returns (uint256) {
-        uint256 currentEpoch = _currentEpoch();
-        return _calculateTimestampForEpoch(currentEpoch);
-    }
-
-    function getCurrentEpochEndTimestamp() external view returns (uint256) {
-        uint256 currentEpoch = _currentEpoch();
-        return this.epochEndTimestamp(currentEpoch);
-    }
-
-    function getEpochDuration(uint256 epochNumber) external view returns (uint256) {
-        uint256 start = _calculateTimestampForEpoch(epochNumber);
-        uint256 end = this.epochEndTimestamp(epochNumber);
-        return end - start;
-    }
 
     /* =================================================== */
     /*               SCENARIO HELPERS                      */
@@ -184,9 +88,9 @@ contract CoreEmissionsControllerMock is CoreEmissionsController {
     function setupBiWeeklyScenario() external {
         // 2-week epochs, 26 epochs = 1 year, 10% reduction
         __CoreEmissionsController_init({
-            startTimestamp: uint256(block.timestamp),
-            emissionsLength: 2 weeks,
-            emissionsPerEpoch: 2_884_615 * 1e18, // ~2.88M tokens per epoch
+            startTimestamp: DEFAULT_START_TIMESTAMP,
+            emissionsLength: TWO_WEEKS,
+            emissionsPerEpoch: 1_000_000 * 1e18, // 1M tokens
             emissionsReductionCliff: 26, // 26 * 2 weeks = 52 weeks = 1 year
             emissionsReductionBasisPoints: 1000 // 10%
          });
@@ -195,9 +99,9 @@ contract CoreEmissionsControllerMock is CoreEmissionsController {
     function setupWeeklyScenario() external {
         // 1-week epochs, 52 epochs = 1 year, 10% reduction
         __CoreEmissionsController_init({
-            startTimestamp: uint256(block.timestamp),
-            emissionsLength: 1 weeks,
-            emissionsPerEpoch: 1_442_307 * 1e18, // ~1.44M tokens per epoch
+            startTimestamp: DEFAULT_START_TIMESTAMP,
+            emissionsLength: ONE_WEEK,
+            emissionsPerEpoch: 1_000_000 * 1e18, // 1M tokens
             emissionsReductionCliff: 52, // 52 * 1 week = 52 weeks = 1 year
             emissionsReductionBasisPoints: 1000 // 10%
          });
@@ -206,9 +110,9 @@ contract CoreEmissionsControllerMock is CoreEmissionsController {
     function setupDailyScenario() external {
         // 1-day epochs, 365 epochs = 1 year, 10% reduction
         __CoreEmissionsController_init({
-            startTimestamp: uint256(block.timestamp),
+            startTimestamp: DEFAULT_START_TIMESTAMP,
             emissionsLength: 1 days,
-            emissionsPerEpoch: 205_479 * 1e18, // ~205K tokens per epoch
+            emissionsPerEpoch: 1_000_000 * 1e18, // 1M tokens
             emissionsReductionCliff: 365, // 365 * 1 day = 365 days = 1 year
             emissionsReductionBasisPoints: 1000 // 10%
          });
@@ -223,9 +127,9 @@ contract CoreEmissionsControllerMock is CoreEmissionsController {
         external
     {
         __CoreEmissionsController_init({
-            startTimestamp: uint256(block.timestamp),
+            startTimestamp: DEFAULT_START_TIMESTAMP,
             emissionsLength: emissionsLength,
-            emissionsPerEpoch: emissionsPerEpoch,
+            emissionsPerEpoch: 1_000_000 * 1e18, // 1M tokens
             emissionsReductionCliff: emissionsReductionCliff,
             emissionsReductionBasisPoints: emissionsReductionBasisPoints
         });

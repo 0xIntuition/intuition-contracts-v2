@@ -200,7 +200,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
      * @return The length of an epoch in seconds
      */
     function epochLength() public view returns (uint256) {
-        return ICoreEmissionsController(satelliteEmissionsController).epochLength();
+        return ICoreEmissionsController(satelliteEmissionsController).getEpochLength();
     }
 
     /**
@@ -208,7 +208,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
      * @return The number of epochs in a year
      */
     function epochsPerYear() public view returns (uint256) {
-        return YEAR / epochLength();
+        return YEAR / ICoreEmissionsController(satelliteEmissionsController).getEpochLength();
     }
 
     /**
@@ -216,8 +216,8 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
      * @param epoch The epoch to get the end timestamp for
      * @return The timestamp at the end of the given epoch
      */
-    function epochEndTimestamp(uint256 epoch) public view returns (uint256) {
-        return _epochEndTimestamp(epoch);
+    function epochTimestampEnd(uint256 epoch) public view returns (uint256) {
+        return _epochTimestampEnd(epoch);
     }
 
     /**
@@ -280,7 +280,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
             revert TrustBonding_InvalidEpoch();
         }
 
-        return _totalSupply(_epochEndTimestamp(epoch));
+        return _totalSupply(_epochTimestampEnd(epoch));
     }
 
     /**
@@ -298,7 +298,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
             revert TrustBonding_InvalidEpoch();
         }
 
-        return _balanceOf(_account, _epochEndTimestamp(_epoch));
+        return _balanceOf(_account, _epochTimestampEnd(_epoch));
     }
 
     /**
@@ -541,12 +541,12 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
         return _epochAtTimestamp(block.timestamp);
     }
 
-    function _epochEndTimestamp(uint256 epoch) internal view returns (uint256) {
-        return ICoreEmissionsController(satelliteEmissionsController).epochEndTimestamp(epoch);
+    function _epochTimestampEnd(uint256 epoch) internal view returns (uint256) {
+        return ICoreEmissionsController(satelliteEmissionsController).getEpochTimestampEnd(epoch);
     }
 
     function _epochAtTimestamp(uint256 timestamp) internal view returns (uint256) {
-        return ICoreEmissionsController(satelliteEmissionsController).epochAtTimestamp(timestamp);
+        return ICoreEmissionsController(satelliteEmissionsController).getEpochAtTimestamp(timestamp);
     }
 
     function _emissionsForEpoch(uint256 epoch) internal view returns (uint256) {
@@ -554,7 +554,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
             revert TrustBonding_InvalidEpoch();
         }
 
-        uint256 maxEpochEmissions = ICoreEmissionsController(satelliteEmissionsController).emissionsAtEpoch(epoch);
+        uint256 maxEpochEmissions = ICoreEmissionsController(satelliteEmissionsController).getEmissionsAtEpoch(epoch);
 
         if (epoch < 2) {
             return maxEpochEmissions;

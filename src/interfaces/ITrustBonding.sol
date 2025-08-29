@@ -85,7 +85,7 @@ interface ITrustBonding {
 
     function epochsPerYear() external view returns (uint256);
 
-    function epochEndTimestamp(uint256 _epoch) external view returns (uint256);
+    function epochTimestampEnd(uint256 _epoch) external view returns (uint256);
 
     function epochAtTimestamp(uint256 timestamp) external view returns (uint256);
 
