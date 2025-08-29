@@ -1,41 +1,16 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.19;
 
-import { ERC20Upgradeable } from "@openzeppelinV4/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
-import { Initializable } from "@openzeppelinV4/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { AccessControlUpgradeable } from "@openzeppelinV4/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+
+import { TrustToken } from "src/legacy/TrustToken.sol";
 
 /**
  * @title  Trust
  * @author 0xIntuition
  * @notice The Intuition TRUST token.
  */
-contract Trust is Initializable, ERC20Upgradeable, AccessControlUpgradeable {
-    /*//////////////////////////////////////////////////////////////
-                        LEGACY CONSTANTS & VARIABLES
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Legacy variable - maximum supply of Trust tokens (this now represents the initial supply)
-    uint256 public constant LEGACY_MAX_SUPPLY = 1e9 * 1e18;
-
-    /// @notice Legacy variables - initial minter addresses
-    address public constant LEGACY_MINTER_A = 0xBc01aB3839bE8933f6B93163d129a823684f4CDF;
-    address public constant LEGACY_MINTER_B = 0xA4Df56842887cF52C9ad59C97Ec0C058e96Af533;
-
-    /**
-     * @notice Legacy variable - total amount of Trust tokens minted initially, equals the LEGACY_MAX_SUPPLY and
-     * INITIAL_SUPPLY
-     * @dev This variable is kept here in order to make sure storage layout is the same as the original contract
-     */
-    uint256 public legacyTotalMinted;
-
-    /**
-     * @notice Legacy variable - mapping of minter addresses to the amount of Trust tokens minted by them when
-     *         the initial supply was minted
-     * @dev This variable is kept here in order to make sure storage layout is the same as the original contract
-     */
-    mapping(address minter => uint256 amountMinted) public legacyMinterAmountMinted;
-
+contract Trust is TrustToken, AccessControlUpgradeable {
     /*//////////////////////////////////////////////////////////////
                             V2 CONSTANTS
     //////////////////////////////////////////////////////////////*/
@@ -46,9 +21,8 @@ contract Trust is Initializable, ERC20Upgradeable, AccessControlUpgradeable {
     /// @notice Role for pausing/unpausing the contract
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
-    /// @notice Role for initializing the contract
-    /// WARNING: UPDATE TO BASE ADMIN BEFORE DEPLOY
-    address public constant INITIAL_ADMIN = address(0);
+    /// @notice Address of the initial admin, which is allowed to perform the contract reinitialization
+    address public constant INITIAL_ADMIN = 0xa28d4AAcA48bE54824dA53a19b05121DE71Ef480;
 
     /*//////////////////////////////////////////////////////////////
                                  STATE
@@ -57,7 +31,14 @@ contract Trust is Initializable, ERC20Upgradeable, AccessControlUpgradeable {
     /// @dev Gap for upgrade safety (reduced to account for AccessControl storage)
     uint256[50] private __gap;
 
+    /*//////////////////////////////////////////////////////////////
+                                 CUSTOM ERRORS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Custom error for when a zero address is provided
     error Trust_ZeroAddress();
+
+    /// @notice Custom error for when the caller is not the initial admin
     error Trust_OnlyInitialAdmin();
 
     /*//////////////////////////////////////////////////////////////
@@ -79,11 +60,8 @@ contract Trust is Initializable, ERC20Upgradeable, AccessControlUpgradeable {
      * @param _controller Initial minter address
      */
     function reinitialize(address _admin, address _controller) external reinitializer(2) {
-        // WARNING: UPDATE TO BASE ADMIN BEFORE DEPLOY
-        if (INITIAL_ADMIN != address(0)) {
-            if (msg.sender != INITIAL_ADMIN) {
-                revert Trust_OnlyInitialAdmin();
-            }
+        if (msg.sender != INITIAL_ADMIN) {
+            revert Trust_OnlyInitialAdmin();
         }
 
         if (_admin == address(0) || _controller == address(0)) {
@@ -116,11 +94,11 @@ contract Trust is Initializable, ERC20Upgradeable, AccessControlUpgradeable {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @notice Mint new energy tokens to an address
+     * @notice Mint new TRUST tokens to an address
      * @param to Address to mint to
      * @param amount Amount to mint
      */
-    function mint(address to, uint256 amount) external onlyRole(CONTROLLER_ROLE) {
+    function mint(address to, uint256 amount) public override onlyRole(CONTROLLER_ROLE) {
         _mint(to, amount);
     }
 

@@ -153,17 +153,14 @@ contract IntuitionDeployAndSetup is SetupScript {
             "Offset Progressive Bonding Curve", OFFSET_PROGRESSIVE_CURVE_SLOPE, OFFSET_PROGRESSIVE_CURVE_OFFSET
         );
         progressiveCurve = new ProgressiveCurve("Progressive Bonding Curve", PROGRESSIVE_CURVE_SLOPE);
-        offsetProgressiveCurve = new OffsetProgressiveCurve("Offset Progressive Bonding Curve", PROGRESSIVE_CURVE_SLOPE, OFFSET_PROGRESSIVE_CURVE_OFFSET);
         info("LinearCurve", address(linearCurve));
         info("OffsetProgressiveCurve", address(offsetProgressiveCurve));
         info("ProgressiveCurve", address(progressiveCurve));
-        info("OffsetProgressiveCurve", address(offsetProgressiveCurve));
 
         // Add curves to registry
         bondingCurveRegistry.addBondingCurve(address(linearCurve));
         bondingCurveRegistry.addBondingCurve(address(offsetProgressiveCurve));
         bondingCurveRegistry.addBondingCurve(address(progressiveCurve));
-        bondingCurveRegistry.addBondingCurve(address(offsetProgressiveCurve));
 
         // Initialize contracts
         _initializeContracts();
