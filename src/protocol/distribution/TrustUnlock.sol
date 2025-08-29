@@ -215,7 +215,8 @@ contract TrustUnlock is IUnlock, ReentrancyGuard, Ownable {
     /**
      * @notice Bonds Trust tokens to the TrustBonding contract
      * @param amount The amount of Trust tokens to bond
-     * @param unlockTime The timestamp at which the bonding lock will end
+     * @param unlockTime The time at which the bonded Trust tokens will unlock
+     * @dev The `unlockTime` gets rounded down to the nearest whole week
      */
     function create_lock(uint256 amount, uint256 unlockTime) external nonReentrant onlyOwner {
         bondedAmount += amount;
@@ -238,6 +239,7 @@ contract TrustUnlock is IUnlock, ReentrancyGuard, Ownable {
     /**
      * @notice Increase the unlock time of an existing bonding lock
      * @param newUnlockTime The new unlock time for the existing bonding lock
+     * @dev The `newUnlockTime` gets rounded down to the nearest whole week
      */
     function increase_unlock_time(uint256 newUnlockTime) external nonReentrant onlyOwner {
         TrustBonding(trustBonding).increase_unlock_time(newUnlockTime);
