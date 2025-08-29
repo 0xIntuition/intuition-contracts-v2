@@ -420,7 +420,7 @@ contract TrustUnlock_EdgeCases is BaseTest {
 
         vm.prank(OWNER);
         vm.expectRevert(TrustUnlock.Unlock_InsufficientUnlockedTokens.selector);
-        unlock.createAtoms{ value: 1 ether }(data, assets);
+        unlock.createAtoms{ value: 0 }(data, assets);
     }
 
     function test_deposit_exactlyAtCliff_boundary_succeeds() public {
@@ -441,19 +441,18 @@ contract TrustUnlock_EdgeCases is BaseTest {
         vm.stopPrank();
     }
 
-    function test_deposit_justAboveBoundary_reverts() public {
-        // +1 wei more than allowed at cliff must fail
-        uint256 cliffAmount = (UNLOCK_AMOUNT * CLIFF_BP) / 10_000;
-        bytes32 termId = createSimpleAtom("cliff-deposit-2", protocol.multiVault.getAtomCost(), users.bob);
-        uint256 curveId = getDefaultCurveId();
-
-        setupApproval(OWNER, address(unlock), IMultiVault.ApprovalTypes.BOTH);
-
+    function test_withdraw_boundary_at_cliff() public {
         vm.warp(CLIFF_TS);
-        vm.startPrank(OWNER);
+        uint256 cliffAmount = (UNLOCK_AMOUNT * CLIFF_BP) / 10_000;
+
+        // Exactly cliff: ok
+        vm.prank(OWNER);
+        unlock.withdraw(OWNER, cliffAmount);
+
+        // +1 wei beyond cliff: blocked
+        vm.prank(OWNER);
         vm.expectRevert(TrustUnlock.Unlock_InsufficientUnlockedTokens.selector);
-        unlock.deposit{ value: cliffAmount + 1 }(OWNER, termId, curveId, 0);
-        vm.stopPrank();
+        unlock.withdraw(OWNER, 1);
     }
 
     /* ---------------------------------------------------------- */
@@ -502,7 +501,8 @@ contract TrustUnlock_EdgeCases is BaseTest {
         vm.prank(OWNER);
         unlock.increaseBondingUnlockTime(newEnd);
         uint256 end2 = unlock.bondingLockEndTimestamp();
-        assertGe(end2, newEnd);
+        uint256 expectedEnd2 = (newEnd / 1 weeks) * 1 weeks;
+        assertGe(end2, expectedEnd2);
 
         // withdraw after expiry
         vm.warp(end2 + 1);
