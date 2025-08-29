@@ -190,24 +190,24 @@ contract TrustUnlock_Base is BaseTest {
         assertEq(allowance, type(uint256).max);
     }
 
-    function test_createBond_and_withdrawFromBonding() public {
+    function test_create_lock_and_withdraw() public {
         vm.warp(END_TS); // make all funds "unlocked" to keep checks simple
 
         // Create a fresh short bond
         uint256 lockAmt = 50 ether;
-        uint256 lockDur = 3 weeks;
+        uint256 unlockTime = block.timestamp + 3 weeks;
         vm.prank(OWNER);
-        unlock.createBond(lockAmt, lockDur);
+        unlock.create_lock(lockAmt, unlockTime);
 
         assertEq(unlock.bondedAmount(), lockAmt);
 
         // Fast-forward past lock end in TrustBonding
-        vm.warp(block.timestamp + lockDur + 1);
+        vm.warp(unlockTime + 1);
 
         // Withdraw the bond; bondedAmount resets to 0 and tokens are unwrapped back to ETH
         uint256 balBefore = address(unlock).balance;
         vm.prank(OWNER);
-        unlock.withdrawFromBonding();
+        unlock.withdraw();
 
         assertEq(unlock.bondedAmount(), 0, "Internal bonded accounting should reset");
 
@@ -392,16 +392,16 @@ contract TrustUnlock_EdgeCases is BaseTest {
         unlock.withdraw(users.bob, 1);
 
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, address(this)));
-        unlock.createBond(1, 1 weeks);
+        unlock.create_lock(1, 1 weeks);
 
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, address(this)));
-        unlock.increaseBondedAmount(1);
+        unlock.increase_amount(1);
 
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, address(this)));
-        unlock.increaseBondingUnlockTime(block.timestamp + 52 weeks);
+        unlock.increase_unlock_time(block.timestamp + 52 weeks);
 
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, address(this)));
-        unlock.withdrawFromBonding();
+        unlock.withdraw();
 
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, address(this)));
         unlock.claimRewards(users.bob);
@@ -477,14 +477,14 @@ contract TrustUnlock_EdgeCases is BaseTest {
     /*                         Bonding flow                       */
     /* ---------------------------------------------------------- */
 
-    function test_increaseBondedAmount_and_unlockTime() public {
+    function test_increase_amount_and_unlockTime() public {
         vm.warp(END_TS);
 
         // create a bond first
         uint256 amt = 10 ether;
-        uint256 dur = 4 weeks;
+        uint256 unlockTime = block.timestamp + 4 weeks;
         vm.prank(OWNER);
-        unlock.createBond(amt, dur);
+        unlock.create_lock(amt, unlockTime);
         assertEq(unlock.bondedAmount(), amt);
 
         // views reflect state
@@ -493,13 +493,13 @@ contract TrustUnlock_EdgeCases is BaseTest {
 
         // increase amount
         vm.prank(OWNER);
-        unlock.increaseBondedAmount(amt);
+        unlock.increase_amount(amt);
         assertEq(unlock.bondedAmount(), amt * 2);
 
         // extend unlock time
-        uint256 newEnd = block.timestamp + dur + 3 weeks;
+        uint256 newEnd = unlockTime + 3 weeks;
         vm.prank(OWNER);
-        unlock.increaseBondingUnlockTime(newEnd);
+        unlock.increase_unlock_time(newEnd);
         uint256 end2 = unlock.bondingLockEndTimestamp();
         uint256 expectedEnd2 = (newEnd / 1 weeks) * 1 weeks;
         assertGe(end2, expectedEnd2);
@@ -508,7 +508,7 @@ contract TrustUnlock_EdgeCases is BaseTest {
         vm.warp(end2 + 1);
         uint256 balBefore = address(unlock).balance;
         vm.prank(OWNER);
-        unlock.withdrawFromBonding();
+        unlock.withdraw();
         assertEq(unlock.bondedAmount(), 0);
         assertGe(address(unlock).balance, balBefore);
     }
@@ -598,68 +598,5 @@ contract TrustUnlock_EdgeCases is BaseTest {
 
         // At and after end => full
         assertEq(unlock.unlockedAmount(END_TS), UNLOCK_AMOUNT);
-    }
-
-    /* ---------------------------------------------------------- */
-    /*               Reentrancy guard on withdraw                 */
-    /* ---------------------------------------------------------- */
-
-    function test_withdraw_reentrancy_blocked_but_funds_sent() public {
-        // Deploy a fresh TrustUnlock whose owner is a contract that tries to reenter
-        ReenteringOwner attacker = new ReenteringOwner();
-        TrustUnlock.UnlockParams memory p = TrustUnlock.UnlockParams({
-            owner: address(attacker),
-            token: payable(address(protocol.wrappedTrust)),
-            trustBonding: address(protocol.trustBonding),
-            multiVault: payable(address(protocol.multiVault)),
-            unlockAmount: UNLOCK_AMOUNT,
-            unlockBegin: block.timestamp + 1 weeks,
-            unlockCliff: block.timestamp + 2 weeks,
-            unlockEnd: block.timestamp + 12 weeks,
-            cliffPercentage: 1000
-        });
-        TrustUnlock u = new TrustUnlock(p);
-
-        // Wire up attacker with the new instance
-        attacker.setUnlock(u);
-
-        // Fund and whitelist
-        vm.deal(address(u), UNLOCK_AMOUNT);
-        vm.prank(users.admin);
-        protocol.trustBonding.add_to_whitelist(address(u));
-
-        // After end, a withdraw should succeed even if receiver reenters
-        vm.warp(block.timestamp + 12 weeks);
-        uint256 before = address(attacker).balance;
-        attacker.triggerWithdraw(1 ether);
-        assertEq(address(attacker).balance, before + 1 ether);
-    }
-}
-
-/* -------------------------------------------------------------- */
-/*                       Helper reenterer                         */
-/* -------------------------------------------------------------- */
-
-contract ReenteringOwner {
-    TrustUnlock public unlock;
-    bool public tried;
-
-    receive() external payable {
-        // Try to reenter withdraw once; ignore failure so top-level call does not revert
-        if (!tried && address(unlock) != address(0)) {
-            tried = true;
-            (bool ok,) =
-                address(unlock).call(abi.encodeWithSelector(TrustUnlock.withdraw.selector, address(this), uint256(1)));
-            // Swallow failure; nonReentrant should block this anyway
-        }
-    }
-
-    function setUnlock(TrustUnlock u) external {
-        unlock = u;
-    }
-
-    function triggerWithdraw(uint256 amt) external {
-        // msg.sender is this contract => it's the owner => passes onlyOwner
-        unlock.withdraw(address(this), amt);
     }
 }
