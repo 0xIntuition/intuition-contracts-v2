@@ -11,6 +11,7 @@ import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.so
 
 import { Trust } from "src/Trust.sol";
 import { TestTrust } from "tests/mocks/TestTrust.sol";
+import { WrappedTrust } from "src/WrappedTrust.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { AtomWalletFactory } from "src/protocol/wallet/AtomWalletFactory.sol";
 import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
@@ -95,19 +96,25 @@ contract IntuitionDeployAndSetup is SetupScript {
         contractInfo("TrustBonding", address(trustBonding));
         contractInfo("BondingCurveRegistry", address(bondingCurveRegistry));
         contractInfo("LinearCurve", address(linearCurve));
+        contractInfo("OffsetProgressiveCurve", address(offsetProgressiveCurve));
         contractInfo("ProgressiveCurve", address(progressiveCurve));
         _exportContractAddresses();
     }
 
     function _deployMultiVaultSystem() internal {
-        // Deploy MultiVault implementation and proxy
-        MultiVault multiVaultImpl = new MultiVault();
-        info("MultiVault Implementation", address(multiVaultImpl));
+        if (MULTI_VAULT_MIGRATION_MODE == address(0)) {
+            // Deploy new MultiVault implementation and proxy
+            MultiVault multiVaultImpl = new MultiVault();
+            info("MultiVault Implementation", address(multiVaultImpl));
 
-        TransparentUpgradeableProxy multiVaultProxy =
-            new TransparentUpgradeableProxy(address(multiVaultImpl), ADMIN, "");
-        multiVault = MultiVault(address(multiVaultProxy));
-        info("MultiVault Proxy", address(multiVaultProxy));
+            TransparentUpgradeableProxy multiVaultProxy =
+                new TransparentUpgradeableProxy(address(multiVaultImpl), ADMIN, "");
+            multiVault = MultiVault(address(multiVaultProxy));
+        } else {
+            // Use existing MultiVaultMigrationMode proxy as MultiVault
+            multiVault = MultiVault(address(MULTI_VAULT_MIGRATION_MODE));
+            info("MultiVault Proxy", address(multiVault));
+        }
 
         // Deploy AtomWalletFactory implementation and proxy
         AtomWalletFactory atomWalletFactoryImpl = new AtomWalletFactory();
@@ -142,18 +149,18 @@ contract IntuitionDeployAndSetup is SetupScript {
 
         // Deploy bonding curves
         linearCurve = new LinearCurve("Linear Bonding Curve");
-        progressiveCurve = new ProgressiveCurve("Progressive Bonding Curve", PROGRESSIVE_CURVE_SLOPE);
         offsetProgressiveCurve = new OffsetProgressiveCurve(
-            "Offset Progressive Bonding Curve", PROGRESSIVE_CURVE_SLOPE, OFFSET_PROGRESSIVE_CURVE_OFFSET
+            "Offset Progressive Bonding Curve", OFFSET_PROGRESSIVE_CURVE_SLOPE, OFFSET_PROGRESSIVE_CURVE_OFFSET
         );
+        progressiveCurve = new ProgressiveCurve("Progressive Bonding Curve", PROGRESSIVE_CURVE_SLOPE);
         info("LinearCurve", address(linearCurve));
-        info("ProgressiveCurve", address(progressiveCurve));
         info("OffsetProgressiveCurve", address(offsetProgressiveCurve));
+        info("ProgressiveCurve", address(progressiveCurve));
 
         // Add curves to registry
         bondingCurveRegistry.addBondingCurve(address(linearCurve));
-        bondingCurveRegistry.addBondingCurve(address(progressiveCurve));
         bondingCurveRegistry.addBondingCurve(address(offsetProgressiveCurve));
+        bondingCurveRegistry.addBondingCurve(address(progressiveCurve));
 
         // Initialize contracts
         _initializeContracts();
@@ -187,7 +194,7 @@ contract IntuitionDeployAndSetup is SetupScript {
         // Initialize TrustBonding
         trustBonding.initialize(
             ADMIN, // owner
-            address(trust), // trustToken
+            address(trust), // WTRUST token if deploying on Intuition Sepolia
             BONDING_EPOCH_LENGTH, // epochLength
             BONDING_START_TIMESTAMP, // startTimestamp
             address(multiVault), // multiVault
@@ -234,6 +241,7 @@ contract IntuitionDeployAndSetup is SetupScript {
 
         // Initialize MultiVault
         multiVault.initialize(generalConfig, atomConfig, tripleConfig, walletConfig, vaultFees, bondingCurveConfig);
+
         // Grant MIGRATOR_ROLE to the migrator address
         IAccessControl(address(multiVault)).grantRole(MIGRATOR_ROLE, MIGRATOR);
         console2.log("MIGRATOR_ROLE granted to:", MIGRATOR);

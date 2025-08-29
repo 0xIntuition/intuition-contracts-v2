@@ -32,7 +32,6 @@ import {
     BondingCurveConfig,
     IPermit2
 } from "src/interfaces/IMultiVaultCore.sol";
-import { WrappedTrust } from "src/WrappedTrust.sol";
 
 abstract contract SetupScript is Script {
     /// @dev Included to enable compilation of the script without a $MNEMONIC environment variable.
@@ -86,8 +85,9 @@ abstract contract SetupScript is Script {
     uint256 internal EMISSIONS_REDUCTION_BASIS_POINTS = 1000; // 10%
 
     // Curve Configurations
-    uint256 internal PROGRESSIVE_CURVE_SLOPE = 2; // 0.001 slope
-    uint256 internal OFFSET_PROGRESSIVE_CURVE_OFFSET = 5e35; // 0.001 slope
+    uint256 internal PROGRESSIVE_CURVE_SLOPE = 2;
+    uint256 internal OFFSET_PROGRESSIVE_CURVE_SLOPE = 2;
+    uint256 internal OFFSET_PROGRESSIVE_CURVE_OFFSET = 5e35;
 
     // MetaLayer Configurations
     address internal METALAYER_HUB_OR_SPOKE = 0x007700aa28A331B91219Ffa4A444711F0D9E57B5;
@@ -108,9 +108,8 @@ abstract contract SetupScript is Script {
     address public multiVaultAdmin;
     address public protocolMultisig;
     address public migrator;
-    address permit2; // should be deployed separately
+    address public permit2; // should be deployed separately
     address public atomWarden;
-    address public wrappedTrustTokenAddress;
     address public atomWalletBeacon;
 
     /// @dev Initializes the transaction broadcaster like this:
@@ -164,7 +163,7 @@ abstract contract SetupScript is Script {
             PROTOCOL_MULTISIG = vm.envOr("BASE_SEPOLIA_PROTOCOL_MULTISIG", ADMIN);
         } else if (block.chainid == vm.envUint("INTUITION_SEPOLIA_CHAIN_ID")) {
             ADMIN = vm.envAddress("INTUITION_SEPOLIA_ADMIN_ADDRESS");
-            TRUST_TOKEN = vm.envOr("INTUITION_SEPOLIA_WRAPPED_TRUST_TOKEN", address(0));
+            TRUST_TOKEN = vm.envOr("INTUITION_SEPOLIA_WRAPPED_TRUST_TOKEN", address(0)); // WTRUST token
             PROTOCOL_MULTISIG = vm.envOr("INTUITION_SEPOLIA_PROTOCOL_MULTISIG", ADMIN);
         } else {
             revert("Unsupported chain for broadcasting");
@@ -205,6 +204,8 @@ abstract contract SetupScript is Script {
             vm.envOr("EMISSIONS_REDUCTION_BASIS_POINTS", EMISSIONS_REDUCTION_BASIS_POINTS);
 
         // Curve Configurations
+        OFFSET_PROGRESSIVE_CURVE_SLOPE = vm.envOr("OFFSET_PROGRESSIVE_CURVE_SLOPE", OFFSET_PROGRESSIVE_CURVE_SLOPE);
+        OFFSET_PROGRESSIVE_CURVE_OFFSET = vm.envOr("OFFSET_PROGRESSIVE_CURVE_OFFSET", OFFSET_PROGRESSIVE_CURVE_OFFSET);
         PROGRESSIVE_CURVE_SLOPE = vm.envOr("PROGRESSIVE_CURVE_SLOPE", PROGRESSIVE_CURVE_SLOPE);
 
         console2.log("");
@@ -370,6 +371,15 @@ abstract contract SetupScript is Script {
         console2.log(
             string.concat(
                 "  LinearCurve: { [", vm.toString(block.chainid), "]: '", vm.toString(address(linearCurve)), "' },"
+            )
+        );
+        console2.log(
+            string.concat(
+                "  OffsetProgressiveCurve: { [",
+                vm.toString(block.chainid),
+                "]: '",
+                vm.toString(address(offsetProgressiveCurve)),
+                "' }"
             )
         );
         console2.log(

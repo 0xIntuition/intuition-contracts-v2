@@ -136,7 +136,7 @@ abstract contract BaseTest is Modifiers, Test {
         Trust trust = Trust(address(trustProxy));
 
         // Initialize Trust contract via proxy
-        // vm.prank(0x395867a085228940cA50a26166FDAD3f382aeB09); // admin address set on Base
+        vm.prank(0xa28d4AAcA48bE54824dA53a19b05121DE71Ef480); // admin address set on Base
         trust.reinitialize(
             users.admin, // admin
             users.admin // initial minter
@@ -194,6 +194,10 @@ abstract contract BaseTest is Modifiers, Test {
         AtomWalletFactory atomWalletFactory = AtomWalletFactory(address(atomWalletFactoryProxy));
         console2.log("AtomWalletFactory proxy address: ", address(atomWalletFactoryProxy));
 
+        WrappedTrust wtrust = new WrappedTrust();
+        protocol.wrappedTrust = wtrust;
+        console2.log("WrappedTrust address: ", address(wtrust));
+
         // Deploy TrustBonding implementation
         TrustBonding trustBondingImpl = new TrustBonding();
         protocol.trustBonding = TrustBonding(address(trustBondingImpl));
@@ -244,6 +248,7 @@ abstract contract BaseTest is Modifiers, Test {
         vm.label(address(bondingCurveRegistry), "BondingCurveRegistry");
         vm.label(address(linearCurve), "LinearCurve");
         vm.label(address(progressiveCurve), "ProgressiveCurve");
+        vm.label(address(wtrust), "WrappedTrust");
 
         protocol.satelliteEmissionsController.initialize(
             users.admin,
@@ -316,6 +321,7 @@ abstract contract BaseTest is Modifiers, Test {
             resetPrank({ msgSender: allUsers[i] });
             protocol.trust.approve({ spender: address(protocol.multiVault), amount: MAX_UINT256 });
             deal({ token: address(protocol.trust), to: allUsers[i], give: 1_000_000e18 });
+            deal({ token: address(protocol.wrappedTrust), to: allUsers[i], give: 1_000_000e18 });
         }
     }
 

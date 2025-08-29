@@ -160,14 +160,15 @@ contract MultiVaultMigrationMode is MultiVault {
 
         for (uint256 i = 0; i < params.termIds.length; i++) {
             _vaults[params.termIds[i]][params.bondingCurveId].balanceOf[params.user] = params.userBalances[i];
+            uint256 assets = _convertToAssets(params.termIds[i], params.bondingCurveId, params.userBalances[i]);
 
             emit Deposited(
                 address(this),
                 params.user,
                 params.termIds[i],
                 params.bondingCurveId,
-                _convertToAssets(params.termIds[i], params.bondingCurveId, params.userBalances[i]),
-                0, // assetsAfterFees are not set here, as this is a migration
+                assets,
+                assets,
                 params.userBalances[i],
                 getShares(params.user, params.termIds[i], params.bondingCurveId),
                 getVaultType(params.termIds[i])

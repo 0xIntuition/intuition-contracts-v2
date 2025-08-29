@@ -153,7 +153,7 @@ contract BaseEmissionsController is
     /* =================================================== */
 
     /**
-     * @notice Mint new energy tokens to an address
+     * @notice Mint new TRUST tokens to an address
      */
     function mintAndBridge(uint256 epoch) external payable nonReentrant onlyRole(CONTROLLER_ROLE) {
         uint256 currentEpoch = _currentEpoch();

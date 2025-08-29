@@ -156,7 +156,7 @@ contract ClaimTest is BaseTest {
 
     function _createLockForUser(address user, uint256 stakeAmount, uint256 duration) internal {
         resetPrank({ msgSender: user });
-        protocol.trust.approve(address(protocol.trustBonding), stakeAmount);
+        protocol.wrappedTrust.approve(address(protocol.trustBonding), stakeAmount);
         protocol.trustBonding.create_lock(stakeAmount, block.timestamp + duration);
     }
 
