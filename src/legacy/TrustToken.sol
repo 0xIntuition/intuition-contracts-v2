@@ -20,7 +20,7 @@ contract TrustToken is Initializable, ERC20Upgradeable {
         __ERC20_init("TRUST", "TRUST");
     }
 
-    function mint(address to, uint256 amount) public {
+    function mint(address to, uint256 amount) public virtual {
         require(msg.sender == MINTER_A || msg.sender == MINTER_B, "Not authorized to mint");
         uint256 minterCap = (msg.sender == MINTER_A) ? (MAX_SUPPLY * 49 / 100) : (MAX_SUPPLY * 51 / 100);
         require(totalMinted + amount <= MAX_SUPPLY, "Max supply exceeded");

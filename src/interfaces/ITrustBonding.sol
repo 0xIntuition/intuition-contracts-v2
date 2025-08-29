@@ -108,7 +108,7 @@ interface ITrustBonding {
     function getSystemUtilizationRatio(uint256 _epoch) external view returns (uint256);
 
     function getPersonalUtilizationRatio(address _account, uint256 _epoch) external view returns (uint256);
-    
+
     function getUnclaimedRewards() external view returns (uint256);
 
     function claimRewards(address recipient) external;
@@ -122,5 +122,4 @@ interface ITrustBonding {
     function updateSystemUtilizationLowerBound(uint256 newLowerBound) external;
 
     function updatePersonalUtilizationLowerBound(uint256 newLowerBound) external;
-
 }

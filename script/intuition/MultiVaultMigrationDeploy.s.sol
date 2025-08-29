@@ -10,14 +10,14 @@ import { MultiVaultMigrationMode } from "src/protocol/MultiVaultMigrationMode.so
 /*
 LOCAL
 forge script script/intuition/MultiVaultMigrationDeploy.s.sol:MultiVaultMigrationDeploy \
---optimizer-runs 400 \
+--optimizer-runs 200 \
 --rpc-url anvil \
 --broadcast \
 --slow
 
 TESTNET
 forge script script/intuition/MultiVaultMigrationDeploy.s.sol:MultiVaultMigrationDeploy \
---optimizer-runs 400 \
+--optimizer-runs 200 \
 --rpc-url intuition_sepolia \
 --broadcast \
 --slow
