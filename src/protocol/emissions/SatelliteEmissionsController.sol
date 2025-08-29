@@ -161,13 +161,12 @@ contract SatelliteEmissionsController is
         uint256 emissionsReductionCliff,
         uint256 emissionsPerEpoch,
         uint256 emissionsReductionBasisPoints
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    )
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
         _createCheckpoint(
-            startTimestamp,
-            emissionsLength,
-            emissionsReductionCliff,
-            emissionsPerEpoch,
-            emissionsReductionBasisPoints
+            startTimestamp, emissionsLength, emissionsReductionCliff, emissionsPerEpoch, emissionsReductionBasisPoints
         );
     }
 

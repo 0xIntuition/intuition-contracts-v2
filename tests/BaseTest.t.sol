@@ -123,7 +123,7 @@ abstract contract BaseTest is Modifiers, Test {
         Trust trust = Trust(address(trustProxy));
 
         // Initialize Trust contract via proxy
-        // vm.prank(0x395867a085228940cA50a26166FDAD3f382aeB09); // admin address set on Base
+        vm.prank(0xa28d4AAcA48bE54824dA53a19b05121DE71Ef480); // admin address set on Base
         trust.reinitialize(
             users.admin, // admin
             users.admin // initial minter

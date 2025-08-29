@@ -87,9 +87,9 @@ contract BaseEmissionsController is
     error BaseEmissionsController_InvalidEpoch();
 
     error BaseEmissionsController_InsufficientGasPayment();
-    
+
     error BaseEmissionsController_EpochMintingLimitExceeded();
-    
+
     error BaseEmissionsController_InsufficientBurnableBalance();
 
     /* =================================================== */
@@ -153,7 +153,7 @@ contract BaseEmissionsController is
     /* =================================================== */
 
     /**
-     * @notice Mint new energy tokens to an address
+     * @notice Mint new TRUST tokens to an address
      */
     function mintAndBridge(uint256 epoch) external payable nonReentrant onlyRole(CONTROLLER_ROLE) {
         uint256 currentEpoch = _currentEpoch();
@@ -225,13 +225,12 @@ contract BaseEmissionsController is
         uint256 emissionsReductionCliff,
         uint256 emissionsPerEpoch,
         uint256 emissionsReductionBasisPoints
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    )
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
         _createCheckpoint(
-            startTimestamp,
-            emissionsLength,
-            emissionsReductionCliff,
-            emissionsPerEpoch,
-            emissionsReductionBasisPoints
+            startTimestamp, emissionsLength, emissionsReductionCliff, emissionsPerEpoch, emissionsReductionBasisPoints
         );
     }
 
