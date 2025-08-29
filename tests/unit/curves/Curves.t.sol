@@ -18,8 +18,8 @@ contract BondingCurveRegistryTest is Test {
     address public admin = makeAddr("admin");
     address public nonAdmin = makeAddr("nonAdmin");
 
-    uint256 constant SLOPE = 0.001e18;
-    uint256 constant OFFSET = 0.0001e18;
+    uint256 constant SLOPE = 2;
+    uint256 constant OFFSET = 5e35;
 
     event BondingCurveAdded(uint256 indexed curveId, address indexed curveAddress, string indexed curveName);
 
