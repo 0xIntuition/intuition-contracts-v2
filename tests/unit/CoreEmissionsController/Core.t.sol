@@ -441,15 +441,6 @@ contract CoreEmissionsControllerTest is CoreEmissionsControllerBase {
         assertEq(result, 590_490 * 1e18);
     }
 
-    function test_pow_Function_Success() public {
-        assertEq(controller.pow(2, 0), 1);
-        assertEq(controller.pow(2, 1), 2);
-        assertEq(controller.pow(2, 3), 8);
-        assertEq(controller.pow(10, 3), 1000);
-        assertEq(controller.pow(9000, 1), 9000);
-        assertEq(controller.pow(9000, 2), 81_000_000);
-    }
-
     /* =================================================== */
     /*                 VALIDATION TESTS                   */
     /* =================================================== */

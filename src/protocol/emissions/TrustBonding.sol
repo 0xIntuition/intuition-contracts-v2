@@ -4,7 +4,6 @@ pragma solidity ^0.8.27;
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 
 import { ICoreEmissionsController } from "src/interfaces/ICoreEmissionsController.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
@@ -43,7 +42,7 @@ import { VotingEscrow } from "src/external/curve/VotingEscrow.sol";
  *         contract (originally written in Vyper), as used by the Stargate Finance protocol:
  *         https://github.com/stargate-protocol/stargate-dao/blob/main/contracts/VotingEscrow.sol
  */
-contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgradeable, VotingEscrow {
+contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     using SafeERC20 for IERC20;
 
     /*//////////////////////////////////////////////////////////////
@@ -62,9 +61,6 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
     /// @notice Minimum personal utilization lower bound in basis points
     uint256 public constant MINIMUM_PERSONAL_UTILIZATION_LOWER_BOUND = 2500;
 
-    /// @notice Role used for pausing the contract
-    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
-
     /// @notice Role used for the timelocked operations
     bytes32 public constant TIMELOCK_ROLE = keccak256("TIMELOCK_ROLE");
 
@@ -74,8 +70,6 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
 
     /// @notice Starting timestamp of the bonding contract's first epoch (epoch 0)
     uint256 public startTimestamp;
-
-    uint256 public maxAnnualEmission;
 
     /// @notice Mapping of epochs to the total claimed rewards for that epoch among all users
     mapping(uint256 epoch => uint256 totalClaimedRewards) public totalClaimedRewardsForEpoch;
@@ -159,7 +153,10 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
             revert TrustBonding_InvalidStartTimestamp();
         }
 
-        if (_multiVault == address(0)) {
+        if (
+            _owner == address(0) || _trustToken == address(0) || _multiVault == address(0)
+                || _satelliteEmissionsController == address(0)
+        ) {
             revert TrustBonding_ZeroAddress();
         }
 
@@ -177,12 +174,8 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
             revert TrustBonding_InvalidUtilizationLowerBound();
         }
 
-        __AccessControl_init();
         __Pausable_init();
         __VotingEscrow_init(_owner, _trustToken, _epochLength);
-
-        _grantRole(DEFAULT_ADMIN_ROLE, _owner);
-        _grantRole(PAUSER_ROLE, _owner);
 
         startTimestamp = _startTimestamp;
         multiVault = _multiVault;

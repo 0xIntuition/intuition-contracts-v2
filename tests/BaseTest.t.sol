@@ -211,7 +211,8 @@ abstract contract BaseTest is Modifiers, Test {
 
         TransparentUpgradeableProxy satelliteEmissionsControllerProxy =
             new TransparentUpgradeableProxy(address(satelliteEmissionsControllerImpl), users.admin, "");
-        protocol.satelliteEmissionsController = SatelliteEmissionsController(address(satelliteEmissionsControllerProxy));
+        protocol.satelliteEmissionsController =
+            SatelliteEmissionsController(payable(address(satelliteEmissionsControllerProxy)));
         console2.log("SatelliteEmissionsController Proxy", address(satelliteEmissionsControllerProxy));
 
         // Deploy BondingCurveRegistry
@@ -257,7 +258,7 @@ abstract contract BaseTest is Modifiers, Test {
                 finalityState: FinalityState.INSTANT
             }),
             CoreEmissionsControllerInit({
-                startTimestamp: block.timestamp,
+                startTimestamp: TRUST_BONDING_START_TIMESTAMP,
                 emissionsLength: EMISSIONS_CONTROLLER_EPOCH_LENGTH,
                 emissionsPerEpoch: EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH,
                 emissionsReductionCliff: EMISSIONS_CONTROLLER_CLIFF,
