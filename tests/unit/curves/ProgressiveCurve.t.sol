@@ -8,7 +8,7 @@ import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
 
 contract ProgressiveCurveTest is Test {
     ProgressiveCurve public curve;
-    uint256 constant SLOPE = 0.001e18;
+    uint256 constant SLOPE = 2;
 
     function setUp() public {
         curve = new ProgressiveCurve("Progressive Curve Test", SLOPE);

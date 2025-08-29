@@ -8,8 +8,8 @@ import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCur
 
 contract OffsetProgressiveCurveTest is Test {
     OffsetProgressiveCurve public curve;
-    uint256 constant SLOPE = 0.001e18;
-    uint256 constant OFFSET = 0.0001e18;
+    uint256 constant SLOPE = 2;
+    uint256 constant OFFSET = 5e35;
 
     function setUp() public {
         curve = new OffsetProgressiveCurve("Offset Progressive Curve Test", SLOPE, OFFSET);
