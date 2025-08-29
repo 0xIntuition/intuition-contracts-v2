@@ -3,6 +3,7 @@ pragma solidity ^0.8.27;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 
 import { ICoreEmissionsController } from "src/interfaces/ICoreEmissionsController.sol";
@@ -42,7 +43,7 @@ import { VotingEscrow } from "src/external/curve/VotingEscrow.sol";
  *         contract (originally written in Vyper), as used by the Stargate Finance protocol:
  *         https://github.com/stargate-protocol/stargate-dao/blob/main/contracts/VotingEscrow.sol
  */
-contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
+contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgradeable, VotingEscrow {
     using SafeERC20 for IERC20;
 
     /*//////////////////////////////////////////////////////////////
@@ -99,13 +100,6 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
     /// @notice The maximum claimable protocol fees for a specific epoch
     mapping(uint256 epoch => uint256 totalClaimableProtocolFees) public maxClaimableProtocolFeesForEpoch;
 
-    /// @notice Mapping of epochs to the total claimed protocol fees for that epoch among all users
-    mapping(uint256 epoch => uint256 totalClaimedProtocolFees) public totalClaimedProtocolFeesForEpoch;
-
-    /// @notice Mapping of users to their respective claimed protocol fees for a specific epoch
-    mapping(address user => mapping(uint256 epoch => uint256 claimedProtocolFees)) public
-        userClaimedProtocolFeesForEpoch;
-
     /// @dev Gap for upgrade safety
     uint256[50] private __gap;
 
@@ -143,7 +137,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
     /**
      * @notice Initializes the TrustBonding contract
      * @param _owner The owner of the contract
-     * @param _trustToken The address of the TRUST token
+     * @param _trustToken The address of the WTRUST token
      * @param _epochLength The length of an epoch in seconds
      * @param _startTimestamp The starting timestamp of the first epoch
      */
@@ -184,6 +178,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         }
 
         __AccessControl_init();
+        __Pausable_init();
         __VotingEscrow_init(_owner, _trustToken, _epochLength);
 
         _grantRole(DEFAULT_ADMIN_ROLE, _owner);
@@ -317,15 +312,6 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
     }
 
     /**
-     * @notice Returns the user's eligible protocol fee rewards for the previous epoch they can claim now
-     * @param account The user's address
-     * @return The user's eligible protocol fee rewards for the previous epoch they can claim now
-     */
-    function userEligibleProtocolFeeRewards(address account) public view returns (uint256) {
-        return _userEligibleProtocolFeeRewards(account);
-    }
-
-    /**
      * @notice Returns whether the user has claimed rewards for a specific epoch
      * @param account The user's address
      * @param epoch The epoch to check if the user has claimed rewards for
@@ -397,7 +383,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
      * choose.
      * @param recipient The address to receive the Trust rewards
      */
-    function claimRewards(address recipient) external nonReentrant {
+    function claimRewards(address recipient) external whenNotPaused nonReentrant {
         if (recipient == address(0)) {
             revert TrustBonding_ZeroAddress();
         }
@@ -410,8 +396,8 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         }
 
         // Fetch the raw (pro-rata) rewards for the previous epoch
-        uint256 previousEpoch = currentEpochLocal - 1;
-        uint256 rawUserRewards = _userEligibleRewardsForEpoch(msg.sender, previousEpoch);
+        uint256 prevEpoch = currentEpochLocal - 1;
+        uint256 rawUserRewards = _userEligibleRewardsForEpoch(msg.sender, prevEpoch);
 
         // Check if the user has any rewards to claim
         if (rawUserRewards == 0) {
@@ -419,7 +405,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         }
 
         // Apply the personal utilization ratio to the raw rewards
-        uint256 personalUtilizationRatio = _getPersonalUtilizationRatio(msg.sender, previousEpoch);
+        uint256 personalUtilizationRatio = _getPersonalUtilizationRatio(msg.sender, prevEpoch);
         uint256 userRewards = rawUserRewards * personalUtilizationRatio / BASIS_POINTS_DIVISOR;
 
         // Check if the user has any rewards to claim after applying the personal utilization ratio.
@@ -430,13 +416,13 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         }
 
         // Check if the user has already claimed rewards for the previous epoch
-        if (_hasClaimedRewardsForEpoch(msg.sender, previousEpoch)) {
+        if (_hasClaimedRewardsForEpoch(msg.sender, prevEpoch)) {
             revert TrustBonding_RewardsAlreadyClaimedForEpoch();
         }
 
         // Increment the total claimed inflationary rewards for the previous epoch and set the user's claimed rewards
-        totalClaimedRewardsForEpoch[previousEpoch] += userRewards;
-        userClaimedRewardsForEpoch[msg.sender][previousEpoch] = userRewards;
+        totalClaimedRewardsForEpoch[prevEpoch] += userRewards;
+        userClaimedRewardsForEpoch[msg.sender][prevEpoch] = userRewards;
 
         // Mint the rewards to the recipient address
         ISatelliteEmissionsController(satelliteEmissionsController).transfer(recipient, userRewards);
@@ -447,6 +433,20 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
     /*//////////////////////////////////////////////////////////////
                          ACCESS-RESTRICTED FUNCTIONS
     //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @notice Pauses the contract
+     */
+    function pause() external onlyRole(PAUSER_ROLE) {
+        _pause();
+    }
+
+    /**
+     * @notice Unpauses the contract
+     */
+    function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _unpause();
+    }
 
     /**
      * @notice Sets the MultiVault contract address
@@ -505,37 +505,6 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
     }
 
     /**
-     * @notice Sets the maximum claimable protocol fees for the previous epoch
-     * @dev This function can only be called by the MultiVault contract, which is only ever able to
-     *      set the maximum claimable protocol fees for the previous epoch (i.e. `currentEpoch() - 1`).
-     *      This function is called automatically as the part of the first action in the MultiVault contract
-     *      in the new epoch (i.e. current epoch). This function can only be called once per epoch.
-     * @param _maxClaimableProtocolFees The maximum claimable protocol fees for the epoch
-     */
-    function setMaxClaimableProtocolFeesForPreviousEpoch(uint256 _maxClaimableProtocolFees) external {
-        // Ensure that the caller is the MultiVault contract
-        if (msg.sender != address(multiVault)) {
-            revert TrustBonding_OnlyMultiVault();
-        }
-
-        // Sanity check to ensure that the max claimable protocol fees are not set during the first epoch
-        if (currentEpoch() == 0) {
-            return;
-        }
-
-        uint256 previousEpoch = currentEpoch() - 1;
-
-        // Ensure that the max claimable protocol fees are not set multiple times for the same epoch
-        if (maxClaimableProtocolFeesForEpoch[previousEpoch] > 0) {
-            revert TrustBonding_MaxClaimableProtocolFeesAlreadySet();
-        }
-
-        maxClaimableProtocolFeesForEpoch[previousEpoch] = _maxClaimableProtocolFees;
-
-        emit MaxClaimableProtocolFeesForPreviousEpochSet(previousEpoch, _maxClaimableProtocolFees);
-    }
-
-    /**
      * @notice Returns the amount of unclaimed rewards that can be reclaimed by admin/controller
      * @dev Calculates unclaimed rewards from past epochs, excluding rewards that can still be claimed
      *      for the previous epoch
@@ -562,40 +531,6 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         }
 
         return totalUnclaimedRewards;
-    }
-
-    /**
-     * @notice Withdraws all of the unclaimed protocol fees from the contract
-     * @dev This function withdraws all unclaimed protocol fees from the contract, except for the ones
-     *      that can still be claimed for the previous epoch, whose claim period is still open.
-     * @param recipient The address to which the unclaimed protocol fees will be sent
-     */
-    function withdrawUnclaimedProtocolFees(address recipient) external nonReentrant onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (recipient == address(0)) {
-            revert TrustBonding_ZeroAddress();
-        }
-
-        // There cannot be any unclaimed protocol fees during the first epoch as the first epoch is not claimable
-        if (currentEpoch() == 0) {
-            revert TrustBonding_NoClaimingDuringFirstEpoch();
-        }
-
-        uint256 previousEpoch = currentEpoch() - 1;
-
-        // Owner can withdraw all unclaimed protocol fees, except for the ones that can still be claimed for the
-        // previous epoch
-        uint256 currentlyClaimableProtocolFees =
-            maxClaimableProtocolFeesForEpoch[previousEpoch] - totalClaimedProtocolFeesForEpoch[previousEpoch];
-
-        // Calculate the withdrawable protocol fees
-        uint256 unclaimedProtocolFees = address(this).balance - currentlyClaimableProtocolFees;
-
-        if (unclaimedProtocolFees > 0) {
-            // Transfer the unclaimed protocol fees to the recipient address specified by the owner
-            Address.sendValue(payable(recipient), unclaimedProtocolFees);
-
-            emit UnclaimedProtocolFeesWithdrawn(recipient, unclaimedProtocolFees);
-        }
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -652,28 +587,6 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, VotingEscrow {
         }
 
         return userBalance * _emissionsForEpoch(epoch) / totalBalance;
-    }
-
-    function _userEligibleProtocolFeeRewards(address account) internal view returns (uint256) {
-        if (account == address(0)) {
-            revert TrustBonding_ZeroAddress();
-        }
-
-        uint256 previousEpoch = currentEpoch() - 1;
-        uint256 accumulatedProtocolFeesForPreviousEpoch = IMultiVault(multiVault).accumulatedProtocolFees(previousEpoch);
-
-        if (accumulatedProtocolFeesForPreviousEpoch == 0) {
-            return 0;
-        }
-
-        uint256 userBalance = userBondedBalanceAtEpochEnd(account, previousEpoch);
-        uint256 totalBalance = totalBondedBalanceAtEpochEnd(previousEpoch);
-
-        if (userBalance == 0 || totalBalance == 0) {
-            return 0;
-        }
-
-        return userBalance * accumulatedProtocolFeesForPreviousEpoch / totalBalance;
     }
 
     function _getPersonalUtilizationRatio(address _account, uint256 _epoch) internal view returns (uint256) {

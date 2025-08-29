@@ -101,8 +101,6 @@ interface ITrustBonding {
 
     function userEligibleRewardsForEpoch(address _account, uint256 _epoch) external view returns (uint256);
 
-    function userEligibleProtocolFeeRewards(address _account) external view returns (uint256);
-
     function hasClaimedRewardsForEpoch(address _account, uint256 _epoch) external view returns (bool);
 
     function getAprAtEpoch(uint256 _epoch) external view returns (uint256);
@@ -110,21 +108,18 @@ interface ITrustBonding {
     function getSystemUtilizationRatio(uint256 _epoch) external view returns (uint256);
 
     function getPersonalUtilizationRatio(address _account, uint256 _epoch) external view returns (uint256);
+
     function getUnclaimedRewards() external view returns (uint256);
 
     function claimRewards(address recipient) external;
 
-    // function pause() external;
+    function pause() external;
 
-    // function unpause() external;
+    function unpause() external;
 
     function setMultiVault(address _multiVault) external;
 
     function updateSystemUtilizationLowerBound(uint256 newLowerBound) external;
 
     function updatePersonalUtilizationLowerBound(uint256 newLowerBound) external;
-
-    function setMaxClaimableProtocolFeesForPreviousEpoch(uint256 _maxClaimableProtocolFees) external;
-
-    function withdrawUnclaimedProtocolFees(address recipient) external;
 }

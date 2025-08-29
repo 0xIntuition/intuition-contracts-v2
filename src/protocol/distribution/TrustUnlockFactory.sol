@@ -85,7 +85,7 @@ contract TrustUnlockFactory is Ownable2Step, ReentrancyGuard {
             revert Unlock_ZeroAddress();
         }
 
-        trustToken = payable(trustToken);
+        trustToken = payable(_trustToken);
         trustBonding = _trustBonding;
         multiVault = payable(_multiVault);
     }

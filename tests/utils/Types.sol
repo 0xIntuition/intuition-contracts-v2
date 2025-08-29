@@ -7,6 +7,7 @@ import { MultiVault } from "src/protocol/MultiVault.sol";
 import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
 import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
+import { WrappedTrust } from "src/WrappedTrust.sol";
 
 struct Protocol {
     Trust trust;
@@ -16,6 +17,7 @@ struct Protocol {
     MultiVault multiVault;
     SatelliteEmissionsController satelliteEmissionsController;
     address payable permit2;
+    WrappedTrust wrappedTrust;
 }
 
 struct Users {

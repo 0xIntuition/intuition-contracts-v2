@@ -84,16 +84,12 @@ contract BaseEmissionsController is
     /*                       ERRORS                        */
     /* =================================================== */
 
-    error BaseEmissionsController_ZeroAddress();
-    error BaseEmissionsController_InvalidMaxAnnualEmission();
-    error BaseEmissionsController_InvalidMaxEmissionPerEpochBasisPoints();
-    error BaseEmissionsController_InvalidAnnualReductionBasisPoints();
-    error BaseEmissionsController_InvalidStartTimestamp();
-    error BaseEmissionsController_InvalidEpochDuration();
     error BaseEmissionsController_InvalidEpoch();
+
     error BaseEmissionsController_InsufficientGasPayment();
-    error BaseEmissionsController_AnnualMintingLimitExceeded();
+
     error BaseEmissionsController_EpochMintingLimitExceeded();
+
     error BaseEmissionsController_InsufficientBurnableBalance();
 
     /* =================================================== */
@@ -157,7 +153,7 @@ contract BaseEmissionsController is
     /* =================================================== */
 
     /**
-     * @notice Mint new energy tokens to an address
+     * @notice Mint new TRUST tokens to an address
      */
     function mintAndBridge(uint256 epoch) external payable nonReentrant onlyRole(CONTROLLER_ROLE) {
         uint256 currentEpoch = _currentEpoch();
