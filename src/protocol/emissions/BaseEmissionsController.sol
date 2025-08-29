@@ -219,21 +219,6 @@ contract BaseEmissionsController is
         _setRecipientDomain(newRecipientDomain);
     }
 
-    function createCheckpoint(
-        uint256 startTimestamp,
-        uint256 emissionsLength,
-        uint256 emissionsReductionCliff,
-        uint256 emissionsPerEpoch,
-        uint256 emissionsReductionBasisPoints
-    )
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE)
-    {
-        _createCheckpoint(
-            startTimestamp, emissionsLength, emissionsReductionCliff, emissionsPerEpoch, emissionsReductionBasisPoints
-        );
-    }
-
     /* =================================================== */
     /*                      INTERNAL                       */
     /* =================================================== */

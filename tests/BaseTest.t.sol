@@ -29,6 +29,7 @@ import { ProgressiveCurve } from "src/protocol/curves/ProgressiveCurve.sol";
 import { ERC20Mock } from "./mocks/ERC20Mock.sol";
 import { Users } from "./utils/Types.sol";
 import { Trust } from "src/Trust.sol";
+import { WrappedTrust } from "src/WrappedTrust.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 
 import { Modifiers } from "./utils/Modifiers.sol";
@@ -175,6 +176,10 @@ abstract contract BaseTest is Modifiers, Test {
         AtomWalletFactory atomWalletFactory = AtomWalletFactory(address(atomWalletFactoryProxy));
         console2.log("AtomWalletFactory proxy address: ", address(atomWalletFactoryProxy));
 
+        WrappedTrust wtrust = new WrappedTrust();
+        protocol.wrappedTrust = wtrust;
+        console2.log("WrappedTrust address: ", address(wtrust));
+
         // Deploy TrustBonding implementation
         TrustBonding trustBondingImpl = new TrustBonding();
         protocol.trustBonding = TrustBonding(address(trustBondingImpl));
@@ -225,6 +230,7 @@ abstract contract BaseTest is Modifiers, Test {
         vm.label(address(bondingCurveRegistry), "BondingCurveRegistry");
         vm.label(address(linearCurve), "LinearCurve");
         vm.label(address(progressiveCurve), "ProgressiveCurve");
+        vm.label(address(wtrust), "WrappedTrust");
 
         protocol.satelliteEmissionsController.initialize(
             users.admin,
@@ -249,13 +255,10 @@ abstract contract BaseTest is Modifiers, Test {
         // Initialize AtomWalletFactory
         atomWalletFactory.initialize(address(protocol.multiVault));
 
-        // Note: TrustBonding contract has a bug where it calls __VotingEscrow_init twice,
-        // once with the passed epochLength and again with hardcoded 1 week.
-        // Since 1 week < 2 weeks minimum, we'll skip TrustBonding initialization for now.
-        // TODO: Fix TrustBonding contract initialization bug
+        // Initialize TrustBonding
         protocol.trustBonding.initialize(
             users.admin, // owner
-            address(protocol.trust), // trustToken
+            address(protocol.wrappedTrust), // wrappedTrust token
             2 weeks, // epochLength (minimum 2 weeks required)
             block.timestamp, // startTimestamp (future)
             address(protocol.multiVault), // multiVault
@@ -301,6 +304,7 @@ abstract contract BaseTest is Modifiers, Test {
             resetPrank({ msgSender: allUsers[i] });
             protocol.trust.approve({ spender: address(protocol.multiVault), amount: MAX_UINT256 });
             deal({ token: address(protocol.trust), to: allUsers[i], give: 1_000_000e18 });
+            deal({ token: address(protocol.wrappedTrust), to: allUsers[i], give: 1_000_000e18 });
         }
     }
 
