@@ -29,6 +29,7 @@ import { ProgressiveCurve } from "src/protocol/curves/ProgressiveCurve.sol";
 import { ERC20Mock } from "./mocks/ERC20Mock.sol";
 import { Users } from "./utils/Types.sol";
 import { Trust } from "src/Trust.sol";
+import { WrappedTrust } from "src/WrappedTrust.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 
 import { Modifiers } from "./utils/Modifiers.sol";
@@ -61,9 +62,10 @@ abstract contract BaseTest is Modifiers, Test {
     uint256 internal PROTOCOL_FEE = 1000; // 10% of assets deposited after fixed costs (Percentage Cost)
 
     // TrustBonding configuration
-    uint256 internal EPOCH_LENGTH = 2 weeks;
-    uint256 internal SYSTEM_UTILIZATION_LOWER_BOUND = 5000; // 50%
-    uint256 internal PERSONAL_UTILIZATION_LOWER_BOUND = 3000; // 25%
+    uint256 internal TRUST_BONDING_START_TIMESTAMP = block.timestamp + 20;
+    uint256 internal TRUST_BONDING_EPOCH_LENGTH = 1 days * 14;
+    uint256 internal TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND = 5000; // 50%
+    uint256 internal TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND = 3000; // 30%
 
     // Curve Configurations
     uint256 internal PROGRESSIVE_CURVE_SLOPE = 1e15; // 0.001 slope
@@ -71,11 +73,11 @@ abstract contract BaseTest is Modifiers, Test {
     // Emissions Configurations
     uint256 internal MAX_ANNUAL_EMISSION = 1_000_000e18;
 
-    // Common test parameters
-    uint256 internal constant DEFAULT_EPOCH_LENGTH = 1 days;
-    uint256 internal constant DEFAULT_EMISSIONS_PER_EPOCH = 1_000_000 * 1e18; // 1M tokens
-    uint256 internal constant DEFAULT_CLIFF = 1;
-    uint256 internal constant DEFAULT_REDUCTION_BP = 1000; // 10%
+    // CoreEmissions Controller
+    uint256 internal constant EMISSIONS_CONTROLLER_EPOCH_LENGTH = 1 days * 14;
+    uint256 internal constant EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH = 1_000_000 * 1e18; // 1M tokens
+    uint256 internal constant EMISSIONS_CONTROLLER_CLIFF = 1;
+    uint256 internal constant EMISSIONS_CONTROLLER_REDUCTION_BP = 1000; // 10%
 
     // Time constants for easier reading
     uint256 internal constant ONE_HOUR = 1 hours;
@@ -103,14 +105,25 @@ abstract contract BaseTest is Modifiers, Test {
         users.bob = createUser("bob");
         users.charlie = createUser("charlie");
         protocol.trust = createTrustToken();
+        protocol.wrappedTrust = createWrappedTrust();
         _deployMultiVaultSystem();
         _approveTokensForUsers();
+        _setupUserWrappedTokenAndTrustBonding(users.alice);
+        _setupUserWrappedTokenAndTrustBonding(users.bob);
+        _setupUserWrappedTokenAndTrustBonding(users.charlie);
 
         // setVariables(users, protocol);
         uint256 atomCost = protocol.multiVault.getAtomCost();
         ATOM_COST.push(atomCost);
         uint256 tripleCost = protocol.multiVault.getTripleCost();
         TRIPLE_COST.push(tripleCost);
+    }
+
+    function _setupUserWrappedTokenAndTrustBonding(address user) internal {
+        resetPrank({ msgSender: user });
+        protocol.wrappedTrust.deposit{ value: 5000 ether }();
+        protocol.wrappedTrust.approve(address(protocol.trustBonding), 5000 ether);
+        assertEq(protocol.wrappedTrust.balanceOf(user), 5000 ether);
     }
 
     function createTrustToken() internal returns (Trust) {
@@ -133,6 +146,12 @@ abstract contract BaseTest is Modifiers, Test {
         vm.label(address(trust), "Trust");
 
         return trust;
+    }
+
+    function createWrappedTrust() internal returns (WrappedTrust) {
+        WrappedTrust wrappedTrust = new WrappedTrust();
+        vm.label(address(wrappedTrust), "WrappedTrust");
+        return wrappedTrust;
     }
 
     /// @dev Creates a new ERC-20 token with `name`, `symbol` and `decimals`.
@@ -239,29 +258,25 @@ abstract contract BaseTest is Modifiers, Test {
             }),
             CoreEmissionsControllerInit({
                 startTimestamp: block.timestamp,
-                emissionsLength: DEFAULT_EPOCH_LENGTH,
-                emissionsPerEpoch: DEFAULT_EMISSIONS_PER_EPOCH,
-                emissionsReductionCliff: DEFAULT_CLIFF,
-                emissionsReductionBasisPoints: DEFAULT_REDUCTION_BP
+                emissionsLength: EMISSIONS_CONTROLLER_EPOCH_LENGTH,
+                emissionsPerEpoch: EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH,
+                emissionsReductionCliff: EMISSIONS_CONTROLLER_CLIFF,
+                emissionsReductionBasisPoints: EMISSIONS_CONTROLLER_REDUCTION_BP
             })
         );
 
         // Initialize AtomWalletFactory
         atomWalletFactory.initialize(address(protocol.multiVault));
 
-        // Note: TrustBonding contract has a bug where it calls __VotingEscrow_init twice,
-        // once with the passed epochLength and again with hardcoded 1 week.
-        // Since 1 week < 2 weeks minimum, we'll skip TrustBonding initialization for now.
-        // TODO: Fix TrustBonding contract initialization bug
         protocol.trustBonding.initialize(
             users.admin, // owner
-            address(protocol.trust), // trustToken
-            2 weeks, // epochLength (minimum 2 weeks required)
-            block.timestamp, // startTimestamp (future)
+            address(protocol.wrappedTrust), // trustToken
+            TRUST_BONDING_EPOCH_LENGTH, // epochLength (minimum 2 weeks required)
+            TRUST_BONDING_START_TIMESTAMP, // startTimestamp (future)
             address(protocol.multiVault), // multiVault
             address(protocol.satelliteEmissionsController), // satelliteEmissionsController
-            SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound (50%)
-            PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound (30%)
+            TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound (50%)
+            TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound (30%)
         );
 
         // Prepare configuration structs with deployed addresses

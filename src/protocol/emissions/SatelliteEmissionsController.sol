@@ -155,22 +155,6 @@ contract SatelliteEmissionsController is
         _setRecipientDomain(newRecipientDomain);
     }
 
-    function createCheckpoint(
-        uint256 startTimestamp,
-        uint256 emissionsLength,
-        uint256 emissionsReductionCliff,
-        uint256 emissionsPerEpoch,
-        uint256 emissionsReductionBasisPoints
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _createCheckpoint(
-            startTimestamp,
-            emissionsLength,
-            emissionsReductionCliff,
-            emissionsPerEpoch,
-            emissionsReductionBasisPoints
-        );
-    }
-
     function transferUnclaimedRewards(address to) external payable onlyRole(DEFAULT_ADMIN_ROLE) {
         uint256 unclaimedRewards = ITrustBonding(_trustBonding).getUnclaimedRewards();
         uint256 gasLimit = _quoteGasPayment(_recipientDomain, GAS_CONSTANT + _messageGasCost);
