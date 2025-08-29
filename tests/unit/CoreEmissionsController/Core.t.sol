@@ -189,8 +189,8 @@ contract CoreEmissionsControllerTest is CoreEmissionsControllerBase {
         _initializeController();
 
         // Test emissions after various numbers of cliffs
-        uint256[] memory testEpochs = new uint256[](6);
-        uint256[] memory expectedEmissions = new uint256[](6);
+        uint256[] memory testEpochs = new uint256[](8);
+        uint256[] memory expectedEmissions = new uint256[](8);
 
         testEpochs[0] = DEFAULT_REDUCTION_CLIFF; // Epoch 52 - 2 cliffs
         testEpochs[1] = DEFAULT_REDUCTION_CLIFF * 2; // Epoch 52 - 2 cliffs
@@ -198,6 +198,8 @@ contract CoreEmissionsControllerTest is CoreEmissionsControllerBase {
         testEpochs[3] = DEFAULT_REDUCTION_CLIFF * 4; // Epoch 104 - 4 cliffs
         testEpochs[4] = DEFAULT_REDUCTION_CLIFF * 5; // Epoch 130 - 5 cliffs
         testEpochs[5] = DEFAULT_REDUCTION_CLIFF * 10; // Epoch 130 - 10 cliffs
+        testEpochs[6] = DEFAULT_REDUCTION_CLIFF * 15; // Epoch 130 - 20 cliffs
+        testEpochs[7] = DEFAULT_REDUCTION_CLIFF * 16; // Epoch 130 - 30 cliffs
 
         expectedEmissions[0] = 900_000 * 1e18; // 1M * 0.9^2
         expectedEmissions[1] = 810_000 * 1e18; // 1M * 0.9^2
@@ -205,6 +207,8 @@ contract CoreEmissionsControllerTest is CoreEmissionsControllerBase {
         expectedEmissions[3] = 656_100 * 1e18; // 1M * 0.9^4
         expectedEmissions[4] = 590_490 * 1e18; // 1M * 0.9^5
         expectedEmissions[5] = 348_678_440_100 * 1e12; // 1M * 0.9^10
+        expectedEmissions[6] = 348_678_440_100 * 1e12; // 1M * 0.9^10
+        expectedEmissions[7] = 348_678_440_100 * 1e12; // 1M * 0.9^10
 
         for (uint256 i = 0; i < testEpochs.length; i++) {
             uint256 emissions = controller.getEmissionsAtEpoch(testEpochs[i]);
