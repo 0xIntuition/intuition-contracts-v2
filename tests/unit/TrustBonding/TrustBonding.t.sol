@@ -22,15 +22,23 @@ contract TrustBondingTest is BaseTest {
     uint256 public constant systemUtilizationLowerBound = 5000; // 50%
     uint256 public constant personalUtilizationLowerBound = 3000; // 30%
     uint256 public additionalTokens = 10_000 * 1e18;
+
     /* =================================================== */
     /*                       SETUP                         */
     /* =================================================== */
 
     function setUp() public override {
         super.setUp();
+
         vm.deal(users.alice, additionalTokens * 10);
-        vm.deal(address(protocol.satelliteEmissionsController), additionalTokens * 100);
+        vm.deal(users.bob, additionalTokens * 10);
+        vm.deal(users.charlie, additionalTokens * 10);
+
         _setupUserForTrustBonding(users.alice);
+        _setupUserForTrustBonding(users.bob);
+        _setupUserForTrustBonding(users.charlie);
+
+        vm.deal(address(protocol.satelliteEmissionsController), 10_000_000 ether);
     }
 
     function _deployNewTrustBondingContract() internal returns (TrustBonding) {
@@ -429,12 +437,12 @@ contract TrustBondingTest is BaseTest {
         // Case 1: Regular rewards claim
         resetPrank(users.alice);
 
-        uint256 aliceInitialBalance = protocol.wrappedTrust.balanceOf(users.alice);
+        uint256 aliceInitialBalance = users.alice.balance;
         uint256 expectedRewards =
             protocol.trustBonding.userEligibleRewardsForEpoch(users.alice, protocol.trustBonding.currentEpoch() - 1);
 
         protocol.trustBonding.claimRewards(users.alice);
-        uint256 aliceFinalBalance = protocol.wrappedTrust.balanceOf(users.alice);
+        uint256 aliceFinalBalance = users.alice.balance;
 
         uint256 totalClaimedRewardsForEpoch =
             protocol.trustBonding.totalClaimedRewardsForEpoch(protocol.trustBonding.currentEpoch() - 1);
@@ -453,13 +461,13 @@ contract TrustBondingTest is BaseTest {
 
         vm.startPrank(users.alice, users.alice);
 
-        aliceInitialBalance = protocol.wrappedTrust.balanceOf(users.alice);
+        aliceInitialBalance = users.alice.balance;
         uint256 rawRewards =
             protocol.trustBonding.userEligibleRewardsForEpoch(users.alice, protocol.trustBonding.currentEpoch() - 1);
         uint256 expectedRewards2 = rawRewards;
 
         protocol.trustBonding.claimRewards(users.alice);
-        aliceFinalBalance = protocol.wrappedTrust.balanceOf(users.alice);
+        aliceFinalBalance = users.alice.balance;
 
         assertEq(aliceFinalBalance, aliceInitialBalance + expectedRewards2);
         assertLt(expectedRewards2, expectedRewards);
@@ -468,7 +476,7 @@ contract TrustBondingTest is BaseTest {
         protocol.trustBonding.increase_amount(additionalTokens);
         _advanceEpochs(1);
 
-        aliceInitialBalance = protocol.wrappedTrust.balanceOf(users.alice);
+        aliceInitialBalance = users.alice.balance;
 
         // Get raw rewards for epoch 2
         uint256 rawRewards3 =
@@ -493,7 +501,7 @@ contract TrustBondingTest is BaseTest {
         assertGt(aliceShareBasisPoints, 5000); // Alice has more than 50% share
 
         protocol.trustBonding.claimRewards(users.alice);
-        aliceFinalBalance = protocol.wrappedTrust.balanceOf(users.alice);
+        aliceFinalBalance = users.alice.balance;
 
         assertEq(aliceFinalBalance, aliceInitialBalance + expectedRewards3);
 
@@ -515,14 +523,14 @@ contract TrustBondingTest is BaseTest {
 
         vm.startPrank(users.alice, users.alice);
 
-        uint256 aliceInitialBalance = protocol.wrappedTrust.balanceOf(users.alice);
+        uint256 aliceInitialBalance = users.alice.balance;
         uint256 rawRewards =
             protocol.trustBonding.userEligibleRewardsForEpoch(users.alice, protocol.trustBonding.currentEpoch() - 1);
         uint256 expectedRewards4 =
             rawRewards * personalUtilizationLowerBound / protocol.trustBonding.BASIS_POINTS_DIVISOR();
 
         protocol.trustBonding.claimRewards(users.alice);
-        uint256 aliceFinalBalance = protocol.wrappedTrust.balanceOf(users.alice);
+        uint256 aliceFinalBalance = users.alice.balance;
 
         assertEq(aliceFinalBalance, aliceInitialBalance + expectedRewards4);
 
@@ -536,7 +544,7 @@ contract TrustBondingTest is BaseTest {
     function _testCase5() internal {
         vm.startPrank(users.bob, users.bob);
 
-        uint256 bobInitialBalance = protocol.wrappedTrust.balanceOf(users.bob);
+        uint256 bobInitialBalance = users.bob.balance;
         uint256 bobRawRewards =
             protocol.trustBonding.userEligibleRewardsForEpoch(users.bob, protocol.trustBonding.currentEpoch() - 1);
         uint256 bobExpectedRewards =
@@ -551,7 +559,7 @@ contract TrustBondingTest is BaseTest {
         uint256 aliceClaimedRewardsForEpoch =
             protocol.trustBonding.userClaimedRewardsForEpoch(users.alice, protocol.trustBonding.currentEpoch() - 1);
 
-        assertEq(protocol.wrappedTrust.balanceOf(users.bob), bobInitialBalance + bobExpectedRewards);
+        assertEq(users.bob.balance, bobInitialBalance + bobExpectedRewards);
 
         // For epoch 3 (currentEpoch() - 1), only Alice and Bob claimed
         assertEq(totalClaimedRewardsForEpoch, aliceClaimedRewardsForEpoch + bobExpectedRewards);

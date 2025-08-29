@@ -265,15 +265,15 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
 
     /**
      * @notice Returns the total veTRUST balance at the end of a specific epoch
-     * @param epoch The epoch to get the total veTRUST balance for
+     * @param _epoch The epoch to get the total veTRUST balance for
      * @return The total amount of veTRUST at the end of the given epoch
      */
-    function totalBondedBalanceAtEpochEnd(uint256 epoch) public view returns (uint256) {
-        if (epoch > currentEpoch()) {
+    function totalBondedBalanceAtEpochEnd(uint256 _epoch) public view returns (uint256) {
+        if (_epoch > currentEpoch()) {
             revert TrustBonding_InvalidEpoch();
         }
 
-        return _totalSupply(_epochTimestampEnd(epoch));
+        return _totalSupply(_epochTimestampEnd(_epoch));
     }
 
     /**
@@ -296,32 +296,34 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
 
     /**
      * @notice Returns the user's raw eligible rewards for a specific epoch.
-     * @param account The user's address
-     * @param epoch The epoch to get the eligible rewards for
+     * @param _account The user's address
+     * @param _epoch The epoch to get the eligible rewards for
      * @return The user's eligible rewards for the given epoch
      */
-    function userEligibleRewardsForEpoch(address account, uint256 epoch) public view returns (uint256) {
-        return _userEligibleRewardsForEpoch(account, epoch);
+    function userEligibleRewardsForEpoch(address _account, uint256 _epoch) public view returns (uint256) {
+        return _userEligibleRewardsForEpoch(_account, _epoch);
     }
 
     /**
      * @notice Returns whether the user has claimed rewards for a specific epoch
-     * @param account The user's address
-     * @param epoch The epoch to check if the user has claimed rewards for
+     * @param _account The user's address
+     * @param _epoch The epoch to check if the user has claimed rewards for
      * @return Whether the user has claimed rewards for the given epoch
      */
-    function hasClaimedRewardsForEpoch(address account, uint256 epoch) public view returns (bool) {
-        return _hasClaimedRewardsForEpoch(account, epoch);
+    function hasClaimedRewardsForEpoch(address _account, uint256 _epoch) public view returns (bool) {
+        return _hasClaimedRewardsForEpoch(_account, _epoch);
     }
 
     /**
      * @notice Calculates the amount of TRUST tokens to be emitted per epoch, based on bonding percentage and max
      * emission
-     * @param epoch The epoch to calculate the TRUST emission for
+     * @param _epoch The epoch to calculate the TRUST emission for
      * @return The amount of TRUST emitted per epoch
      */
-    function trustPerEpoch(uint256 epoch) public view returns (uint256) {
-        return _emissionsForEpoch(epoch);
+    function trustPerEpoch(uint256 _epoch) public view returns (uint256) {
+        // If no bonded balance at epoch end, no rewards distributed
+        if (totalBondedBalanceAtEpochEnd(_epoch) == 0) return 0;
+        return _emissionsForEpoch(_epoch);
     }
 
     /**

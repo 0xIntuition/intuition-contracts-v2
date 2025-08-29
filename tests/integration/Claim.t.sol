@@ -161,7 +161,9 @@ contract ClaimTest is BaseTest {
     }
 
     function _nextCliff(address user, uint256 epoch, uint256 rewardAmount) internal {
-        vm.warp(block.timestamp + EMISSIONS_CONTROLLER_EPOCH_LENGTH);
+        uint256 curr = protocol.trustBonding.currentEpoch();
+        uint256 end = protocol.trustBonding.epochTimestampEnd(curr);
+        vm.warp(end + 1); // step into the next epoch
         assertEq(protocol.trustBonding.currentEpoch(), epoch);
         assertEq(protocol.trustBonding.eligibleRewards(user), rewardAmount);
         uint256 balanceBefore = address(user).balance;
@@ -171,7 +173,9 @@ contract ClaimTest is BaseTest {
     }
 
     function _nextCliffForUsers(address[] memory users, uint256 epoch, uint256 rewardAmount) internal {
-        vm.warp(block.timestamp + EMISSIONS_CONTROLLER_EPOCH_LENGTH);
+        uint256 curr = protocol.trustBonding.currentEpoch();
+        uint256 end = protocol.trustBonding.epochTimestampEnd(curr);
+        vm.warp(end + 1); // step into the next epoch
         for (uint256 i = 0; i < users.length; i++) {
             address user = users[i];
             assertEq(protocol.trustBonding.currentEpoch(), epoch);
@@ -184,7 +188,9 @@ contract ClaimTest is BaseTest {
     }
 
     function _nextCliffWithRewardsDeposit(address user, uint256 epoch, uint256 rewardAmount) internal {
-        vm.warp(block.timestamp + EMISSIONS_CONTROLLER_EPOCH_LENGTH);
+        uint256 curr = protocol.trustBonding.currentEpoch();
+        uint256 end = protocol.trustBonding.epochTimestampEnd(curr);
+        vm.warp(end + 1); // step into the next epoch
         resetPrank({ msgSender: user });
         assertEq(protocol.trustBonding.currentEpoch(), epoch);
         assertEq(protocol.trustBonding.eligibleRewards(user), rewardAmount);
@@ -196,7 +202,9 @@ contract ClaimTest is BaseTest {
     }
 
     function _nextCliffWithRewardsDeposit(address[] memory users, uint256 epoch, uint256 rewardAmount) internal {
-        vm.warp(block.timestamp + EMISSIONS_CONTROLLER_EPOCH_LENGTH);
+        uint256 curr = protocol.trustBonding.currentEpoch();
+        uint256 end = protocol.trustBonding.epochTimestampEnd(curr);
+        vm.warp(end + 1); // step into the next epoch
         for (uint256 i = 0; i < users.length; i++) {
             address user = users[i];
             resetPrank({ msgSender: user });
