@@ -765,7 +765,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
             }
 
             // ----- user accounting -----
-            _updateVaultOnDeposit(receiver, termId, curveId, assetsAfterFees, minShares, _vaultType);
+            _updateVaultOnDeposit(receiver, termId, curveId, assetsAfterFees, sharesForReceiver, _vaultType);
         }
 
         emit Deposited(
