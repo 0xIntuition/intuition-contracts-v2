@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.29;
 
-import "src/protocol/emissions/CoreEmissionsController.sol";
+import { CoreEmissionsController } from "src/protocol/emissions/CoreEmissionsController.sol";
 
 /**
  * @title CoreEmissionsControllerMock
@@ -63,10 +63,6 @@ contract CoreEmissionsControllerMock is CoreEmissionsController {
         returns (uint256)
     {
         return _applyCliffReductions(baseEmissions, retentionFactor, cliffsToApply);
-    }
-
-    function pow(uint256 base, uint256 exponent) external pure returns (uint256) {
-        return _pow(base, exponent);
     }
 
     function validateReductionBasisPoints(uint256 emissionsReductionBasisPoints) external pure {

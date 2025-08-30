@@ -96,21 +96,29 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     string public constant version = "1.0.0";
     uint8 public constant decimals = 18;
 
+    /// @notice Role used for pausing the contract
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+
     // Whitelisted (smart contract) wallets which are allowed to deposit
     // The goal is to prevent tokenizing the escrow
     mapping(address => bool) public contracts_whitelist;
 
     /// @dev Initialize the VotingEscrow contract and its dependencies
-    function __VotingEscrow_init(address _owner, address token_addr, uint256 min_time) internal onlyInitializing {
+    function __VotingEscrow_init(address _admin, address token_addr, uint256 min_time) internal onlyInitializing {
+        require(_admin != address(0), "Admin address cannot be 0");
         require(token_addr != address(0), "Token address cannot be 0");
         require(min_time >= 2 * WEEK, "Min lock time must be at least 2 weeks");
 
+        __AccessControl_init();
         __ReentrancyGuard_init();
+
+        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
+        _grantRole(PAUSER_ROLE, _admin);
 
         token = token_addr;
         point_history[0].blk = block.number;
         point_history[0].ts = block.timestamp;
-        controller = _owner;
+        controller = _admin;
         transfersEnabled = true;
         MINTIME = min_time;
     }

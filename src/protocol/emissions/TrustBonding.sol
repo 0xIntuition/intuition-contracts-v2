@@ -4,7 +4,6 @@ pragma solidity ^0.8.27;
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 
 import { ICoreEmissionsController } from "src/interfaces/ICoreEmissionsController.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
@@ -43,7 +42,7 @@ import { VotingEscrow } from "src/external/curve/VotingEscrow.sol";
  *         contract (originally written in Vyper), as used by the Stargate Finance protocol:
  *         https://github.com/stargate-protocol/stargate-dao/blob/main/contracts/VotingEscrow.sol
  */
-contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgradeable, VotingEscrow {
+contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     using SafeERC20 for IERC20;
 
     /*//////////////////////////////////////////////////////////////
@@ -62,9 +61,6 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
     /// @notice Minimum personal utilization lower bound in basis points
     uint256 public constant MINIMUM_PERSONAL_UTILIZATION_LOWER_BOUND = 2500;
 
-    /// @notice Role used for pausing the contract
-    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
-
     /// @notice Role used for the timelocked operations
     bytes32 public constant TIMELOCK_ROLE = keccak256("TIMELOCK_ROLE");
 
@@ -74,8 +70,6 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
 
     /// @notice Starting timestamp of the bonding contract's first epoch (epoch 0)
     uint256 public startTimestamp;
-
-    uint256 public maxAnnualEmission;
 
     /// @notice Mapping of epochs to the total claimed rewards for that epoch among all users
     mapping(uint256 epoch => uint256 totalClaimedRewards) public totalClaimedRewardsForEpoch;
@@ -159,7 +153,10 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
             revert TrustBonding_InvalidStartTimestamp();
         }
 
-        if (_multiVault == address(0)) {
+        if (
+            _owner == address(0) || _trustToken == address(0) || _multiVault == address(0)
+                || _satelliteEmissionsController == address(0)
+        ) {
             revert TrustBonding_ZeroAddress();
         }
 
@@ -177,12 +174,8 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
             revert TrustBonding_InvalidUtilizationLowerBound();
         }
 
-        __AccessControl_init();
         __Pausable_init();
         __VotingEscrow_init(_owner, _trustToken, _epochLength);
-
-        _grantRole(DEFAULT_ADMIN_ROLE, _owner);
-        _grantRole(PAUSER_ROLE, _owner);
 
         startTimestamp = _startTimestamp;
         multiVault = _multiVault;
@@ -272,15 +265,15 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
 
     /**
      * @notice Returns the total veTRUST balance at the end of a specific epoch
-     * @param epoch The epoch to get the total veTRUST balance for
+     * @param _epoch The epoch to get the total veTRUST balance for
      * @return The total amount of veTRUST at the end of the given epoch
      */
-    function totalBondedBalanceAtEpochEnd(uint256 epoch) public view returns (uint256) {
-        if (epoch > currentEpoch()) {
+    function totalBondedBalanceAtEpochEnd(uint256 _epoch) public view returns (uint256) {
+        if (_epoch > currentEpoch()) {
             revert TrustBonding_InvalidEpoch();
         }
 
-        return _totalSupply(_epochTimestampEnd(epoch));
+        return _totalSupply(_epochTimestampEnd(_epoch));
     }
 
     /**
@@ -303,32 +296,34 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
 
     /**
      * @notice Returns the user's raw eligible rewards for a specific epoch.
-     * @param account The user's address
-     * @param epoch The epoch to get the eligible rewards for
+     * @param _account The user's address
+     * @param _epoch The epoch to get the eligible rewards for
      * @return The user's eligible rewards for the given epoch
      */
-    function userEligibleRewardsForEpoch(address account, uint256 epoch) public view returns (uint256) {
-        return _userEligibleRewardsForEpoch(account, epoch);
+    function userEligibleRewardsForEpoch(address _account, uint256 _epoch) public view returns (uint256) {
+        return _userEligibleRewardsForEpoch(_account, _epoch);
     }
 
     /**
      * @notice Returns whether the user has claimed rewards for a specific epoch
-     * @param account The user's address
-     * @param epoch The epoch to check if the user has claimed rewards for
+     * @param _account The user's address
+     * @param _epoch The epoch to check if the user has claimed rewards for
      * @return Whether the user has claimed rewards for the given epoch
      */
-    function hasClaimedRewardsForEpoch(address account, uint256 epoch) public view returns (bool) {
-        return _hasClaimedRewardsForEpoch(account, epoch);
+    function hasClaimedRewardsForEpoch(address _account, uint256 _epoch) public view returns (bool) {
+        return _hasClaimedRewardsForEpoch(_account, _epoch);
     }
 
     /**
      * @notice Calculates the amount of TRUST tokens to be emitted per epoch, based on bonding percentage and max
      * emission
-     * @param epoch The epoch to calculate the TRUST emission for
+     * @param _epoch The epoch to calculate the TRUST emission for
      * @return The amount of TRUST emitted per epoch
      */
-    function trustPerEpoch(uint256 epoch) public view returns (uint256) {
-        return _emissionsForEpoch(epoch);
+    function trustPerEpoch(uint256 _epoch) public view returns (uint256) {
+        // If no bonded balance at epoch end, no rewards distributed
+        if (totalBondedBalanceAtEpochEnd(_epoch) == 0) return 0;
+        return _emissionsForEpoch(_epoch);
     }
 
     /**

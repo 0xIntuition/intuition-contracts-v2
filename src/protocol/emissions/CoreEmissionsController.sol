@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.29;
 
+import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
+
 import { ICoreEmissionsController } from "src/interfaces/ICoreEmissionsController.sol";
 
 contract CoreEmissionsController is ICoreEmissionsController {
+    using FixedPointMathLib for uint256;
+
     /* =================================================== */
     /*                     CONSTANTS                       */
     /* =================================================== */
@@ -244,40 +248,15 @@ contract CoreEmissionsController is ICoreEmissionsController {
         pure
         returns (uint256)
     {
-        if (cliffsToApply == 0) {
-            return baseEmissions;
-        }
+        if (cliffsToApply == 0) return baseEmissions;
 
-        // Apply compound reduction: emissions * (retentionFactor / 10000)^cliffs
-        uint256 numerator = _pow(retentionFactor, cliffsToApply);
-        uint256 denominator = _pow(BASIS_POINTS_DIVISOR, cliffsToApply);
+        // Convert retentionFactor to WAD (1e18) ratio
+        uint256 rWad = (retentionFactor * 1e18) / BASIS_POINTS_DIVISOR;
 
-        return (baseEmissions * numerator) / denominator;
-    }
+        // factorWad = rWad^cliffs (scaled by 1e18) - O(log n) time complexity thanks to FixedPointMathLib
+        uint256 factorWad = FixedPointMathLib.rpow(rWad, cliffsToApply, 1e18);
 
-    /**
-     * @notice Calculates base^exponent using binary exponentiation for O(log n) complexity
-     * @param base The base number
-     * @param exponent The exponent
-     * @return result The result of base^exponent
-     */
-    function _pow(uint256 base, uint256 exponent) internal pure returns (uint256) {
-        if (exponent == 0) {
-            return 1;
-        }
-
-        uint256 result = 1;
-        uint256 currentBase = base;
-
-        // Use binary exponentiation for O(log n) complexity
-        while (exponent > 0) {
-            if (exponent & 1 == 1) {
-                result = result * currentBase;
-            }
-            currentBase = currentBase * currentBase;
-            exponent >>= 1; // Right shift by 1 (divide by 2)
-        }
-
-        return result;
+        // baseEmissions * factorWad / 1e18
+        return FixedPointMathLib.mulWad(baseEmissions, factorWad);
     }
 }

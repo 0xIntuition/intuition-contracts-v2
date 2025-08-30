@@ -176,4 +176,6 @@ contract SatelliteEmissionsController is
             Address.sendValue(payable(msg.sender), msg.value - gasLimit);
         }
     }
+
+    receive() external payable { }
 }

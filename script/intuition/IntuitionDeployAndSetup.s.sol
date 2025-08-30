@@ -131,7 +131,7 @@ contract IntuitionDeployAndSetup is SetupScript {
 
         TransparentUpgradeableProxy satelliteEmissionsControllerProxy =
             new TransparentUpgradeableProxy(address(satelliteEmissionsControllerImpl), ADMIN, "");
-        satelliteEmissionsController = SatelliteEmissionsController(address(satelliteEmissionsControllerProxy));
+        satelliteEmissionsController = SatelliteEmissionsController(payable(address(satelliteEmissionsControllerProxy)));
         info("SatelliteEmissionsController Proxy", address(satelliteEmissionsControllerProxy));
 
         // Deploy TrustBonding implementation and proxy
