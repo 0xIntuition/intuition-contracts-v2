@@ -3,6 +3,7 @@ pragma solidity ^0.8.29;
 
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
+import { AtomWallet } from "src/protocol/wallet/AtomWallet.sol";
 import { AtomWalletFactory } from "src/protocol/wallet/AtomWalletFactory.sol";
 import { MultiVaultMigrationMode } from "src/protocol/MultiVaultMigrationMode.sol";
 import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
@@ -11,6 +12,8 @@ import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCur
 import { BondingCurveConfig } from "src/interfaces/IMultiVaultCore.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
+import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import { WalletConfig } from "src/interfaces/IMultiVaultCore.sol";
 
 import { BaseTest } from "tests/BaseTest.t.sol";
 
@@ -86,11 +89,13 @@ contract MultiVaultMigrationModeTest is BaseTest {
     function setUp() public override {
         super.setUp();
 
+        // Deploy AtomWallet implementation and beacon
+        AtomWallet atomWalletImpl = new AtomWallet();
+        atomWalletBeacon = new UpgradeableBeacon(address(atomWalletImpl), users.admin);
+
         // Deploy AtomWalletFactory
         atomWalletFactory = new AtomWalletFactory();
-
-        TransparentUpgradeableProxy atomWalletFactoryProxy =
-            new TransparentUpgradeableProxy(address(atomWalletFactory), users.admin, "");
+        atomWalletFactoryProxy = new TransparentUpgradeableProxy(address(atomWalletFactory), users.admin, "");
 
         // Cast the proxy to AtomWalletFactory
         atomWalletFactory = AtomWalletFactory(address(atomWalletFactoryProxy));
@@ -109,11 +114,15 @@ contract MultiVaultMigrationModeTest is BaseTest {
         // Deploy MultiVaultMigrationMode
         multiVaultMigrationMode = new MultiVaultMigrationMode();
 
-        TransparentUpgradeableProxy multiVaultProxy =
-            new TransparentUpgradeableProxy(address(multiVaultMigrationMode), users.admin, "");
+        multiVaultProxy = new TransparentUpgradeableProxy(address(multiVaultMigrationMode), users.admin, "");
 
         // Cast the proxy to MultiVaultMigrationMode
         multiVaultMigrationMode = MultiVaultMigrationMode(address(multiVaultProxy));
+
+        // Prepare wallet config
+        WalletConfig memory walletConfig = _getDefaultWalletConfig();
+        walletConfig.atomWalletFactory = address(atomWalletFactory);
+        walletConfig.atomWalletBeacon = address(atomWalletBeacon);
 
         // Initialize the migration mode contract
         vm.prank(users.admin);
@@ -121,7 +130,7 @@ contract MultiVaultMigrationModeTest is BaseTest {
             _getDefaultGeneralConfig(),
             _getDefaultAtomConfig(),
             _getDefaultTripleConfig(),
-            _getDefaultWalletConfig(address(atomWalletFactory)),
+            walletConfig,
             _getDefaultVaultFees(),
             _getTestBondingCurveConfig()
         );
@@ -139,6 +148,8 @@ contract MultiVaultMigrationModeTest is BaseTest {
         vm.label(address(testBondingCurveRegistry), "TestBondingCurveRegistry");
         vm.label(address(linearCurve), "LinearCurve");
         vm.label(address(offsetProgressiveCurve), "OffsetProgressiveCurve");
+        vm.label(address(atomWalletFactory), "AtomWalletFactory");
+        vm.label(address(atomWalletBeacon), "AtomWalletBeacon");
     }
 
     function _getTestBondingCurveConfig() internal view returns (BondingCurveConfig memory) {

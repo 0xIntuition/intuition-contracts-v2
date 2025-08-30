@@ -443,6 +443,13 @@ interface IMultiVault {
     function isTermCreated(bytes32 id) external view returns (bool);
 
     /**
+     * @notice Checks if a term ID corresponds to a triple vault
+     * @param id The term ID to check
+     * @return True if the term ID is a triple, false otherwise
+     */
+    function isTriple(bytes32 id) external view returns (bool);
+
+    /**
      * @notice Returns the wallet configuration for ERC-4337 compatibility
      * @return permit2 The Permit2 contract instance
      * @return entryPoint The EntryPoint contract address for ERC-4337
@@ -460,6 +467,4 @@ interface IMultiVault {
             address atomWalletBeacon,
             address atomWalletFactory
         );
-
-    // function termCount() external view returns (uint256);
 }

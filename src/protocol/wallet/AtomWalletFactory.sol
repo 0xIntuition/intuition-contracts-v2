@@ -21,7 +21,8 @@ contract AtomWalletFactory is IAtomWalletFactory, Initializable {
 
     error AtomWalletFactory_ZeroAddress();
     error AtomWalletFactory_DeployAtomWalletFailed();
-    error MultiVault_TermDoesNotExist();
+    error AtomWalletFactory_TermDoesNotExist();
+    error AtomWalletFactory_TermNotAtom();
 
     /* =================================================== */
     /*                  STATE VARIABLES                    */
@@ -67,12 +68,12 @@ contract AtomWalletFactory is IAtomWalletFactory, Initializable {
     /// @return atomWallet the address of the atom wallet
     function deployAtomWallet(bytes32 atomId) external returns (address) {
         if (!multiVault.isTermCreated(atomId)) {
-            revert MultiVault_TermDoesNotExist();
+            revert AtomWalletFactory_TermDoesNotExist();
         }
 
-        // if (multiVault.isTripleId(atomId)) {
-        //     revert Errors.MultiVault_TermNotAtom();
-        // }
+        if (multiVault.isTriple(atomId)) {
+            revert AtomWalletFactory_TermNotAtom();
+        }
 
         // get contract deployment data
         bytes memory data = _getDeploymentData(atomId);
