@@ -425,6 +425,10 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
             ids[i] = _createAtom(msg.sender, _data[i], _assets[i]);
         }
 
+        // Add the static portion of the fee that is yet to be accounted for
+        uint256 atomCreationProtocolFees = atomConfig.atomCreationProtocolFee * length;
+        _accumulateStaticProtocolFees(atomCreationProtocolFees);
+
         _addUtilization(msg.sender, int256(_payment));
 
         return ids;
@@ -550,7 +554,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
         // Add the static portion of the fee that is yet to be accounted for
         uint256 tripleCreationProtocolFees = tripleConfig.tripleCreationProtocolFee * length;
-        _accumulateVaultProtocolFees(tripleCreationProtocolFees);
+        _accumulateStaticProtocolFees(tripleCreationProtocolFees);
 
         /* --- Increase the users utilization ratio to calculate rewards --- */
         _addUtilization(msg.sender, int256(_amount));
@@ -775,7 +779,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
             curveId,
             assets,
             assetsAfterFees,
-            minShares,
+            sharesForReceiver,
             _vaults[termId][curveId].totalShares,
             _vaultType
         );
@@ -970,11 +974,19 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /*                    Accumulators                     */
     /* =================================================== */
 
+    /// @dev Increase the accumulated protocol fees in a given epoch by a percentage of the raw assets
     function _accumulateVaultProtocolFees(uint256 _assets) internal {
         uint256 _fees = _feeOnRaw(_assets, vaultFees.protocolFee);
         uint256 epoch = currentEpoch();
         accumulatedProtocolFees[epoch] += _fees;
         emit ProtocolFeeAccrued(epoch, _fees);
+    }
+
+    /// @dev Increase the accumulated protocol fees in a given epoch by an absolute amount
+    function _accumulateStaticProtocolFees(uint256 _assets) internal {
+        uint256 epoch = currentEpoch();
+        accumulatedProtocolFees[epoch] += _assets;
+        emit ProtocolFeeAccrued(epoch, _assets);
     }
 
     /// @dev Increase the accumulated atom wallet fees
@@ -1388,8 +1400,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         lastActiveEpoch[user] = currentEpochLocal;
     }
 
-    /// @dev collects the accumulated protocol fees and transfers them to the TrustBonding contract for claiming by the
-    /// users
+    /// @dev collects the accumulated protocol fees and transfers them to the protocol multisig
     /// @param epoch the epoch to claim the protocol fees for
     function _claimAccumulatedProtocolFees(uint256 epoch) internal {
         uint256 protocolFees = accumulatedProtocolFees[epoch];
