@@ -16,6 +16,13 @@ import { MultiVault } from "src/protocol/MultiVault.sol";
  */
 contract MultiVaultMigrationMode is MultiVault {
     /*//////////////////////////////////////////////////////////////
+                                 CONSTANTS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Role used for the state migration
+    bytes32 public constant MIGRATOR_ROLE = keccak256("MIGRATOR_ROLE");
+
+    /*//////////////////////////////////////////////////////////////
                                  STRUCTS
     //////////////////////////////////////////////////////////////*/
 
@@ -48,6 +55,8 @@ contract MultiVaultMigrationMode is MultiVault {
     //////////////////////////////////////////////////////////////*/
 
     error MultiVault_InvalidBondingCurveId();
+
+    error MultiVault_ZeroAddress();
 
     /*//////////////////////////////////////////////////////////////
                              MIGRATION FUNCTIONS

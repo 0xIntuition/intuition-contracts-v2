@@ -467,7 +467,7 @@ contract MultiVaultMigrationModeTest is BaseTest {
         MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
             .BatchSetUserBalancesParams({ termIds: termIds, bondingCurveId: 1, user: address(0), userBalances: userBalances });
 
-        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_ZeroAddress.selector));
+        vm.expectRevert(abi.encodeWithSelector(MultiVaultMigrationMode.MultiVault_ZeroAddress.selector));
         vm.prank(users.admin);
         multiVaultMigrationMode.batchSetUserBalances(params);
     }
