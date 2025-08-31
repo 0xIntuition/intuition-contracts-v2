@@ -901,7 +901,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         _increaseProRataVaultAssets(termId, _feeOnRaw(rawAssetsBeforeFees, vaultFees.exitFee), _vaultType);
 
         /* --- Release user assets after fees from vault (User Owned) --- */
-        uint256 sharesTotal = _updateVaultOnRedeem(receiver, termId, curveId, assetsAfterFees, shares, _vaultType);
+        uint256 userSharesAfter = _updateVaultOnRedeem(receiver, termId, curveId, rawAssetsBeforeFees, shares, _vaultType);
 
         Address.sendValue(payable(receiver), assetsAfterFees);
 
@@ -911,9 +911,9 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
             termId,
             curveId,
             shares,
-            sharesTotal,
-            rawAssetsBeforeFees,
-            rawAssetsBeforeFees - assetsAfterFees,
+            userSharesAfter,
+            assetsAfterFees, // net assets sent to user
+            rawAssetsBeforeFees - assetsAfterFees, // total fees charged
             _vaultType
         );
 

@@ -168,7 +168,7 @@ interface IMultiVault {
     /// @param sender address of the sender
     /// @param receiver address of the receiver
     /// @param shares amount of shares redeemed
-    /// @param totalShares balance of the user in the vault after the redemption
+    /// @param userSharesAfter balance of the user in the vault after the redemption
     /// @param assets amount of assets withdrawn (net assets received by the receiver)
     /// @param fees amount of fees charged
     /// @param vaultType type of the vault (ATOM, TRIPLE, COUNTER_TRIPLE)
@@ -178,7 +178,7 @@ interface IMultiVault {
         bytes32 indexed termId,
         uint256 curveId,
         uint256 shares,
-        uint256 totalShares,
+        uint256 userSharesAfter,
         uint256 assets,
         uint256 fees,
         VaultType vaultType
