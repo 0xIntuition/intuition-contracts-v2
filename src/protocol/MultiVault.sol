@@ -990,6 +990,14 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         walletConfig = _walletConfig;
     }
 
+    /// @notice Permissionless function to sweep the accumulated protocol fees for a given epoch to the protocol
+    /// multisig
+    /// @dev This function serves as a fallback in case `_claimAccumulatedProtocolFees` is not called automatically
+    /// during utilization rollover, or in case of an extended period of inactivity in the protocol
+    function sweepAccumulatedProtocolFees(uint256 epoch) external {
+        _claimAccumulatedProtocolFees(epoch);
+    }
+
     /* =================================================== */
     /*                    Accumulators                     */
     /* =================================================== */
@@ -1425,7 +1433,11 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     function _claimAccumulatedProtocolFees(uint256 epoch) internal {
         uint256 protocolFees = accumulatedProtocolFees[epoch];
         if (protocolFees == 0) return;
+
+        accumulatedProtocolFees[epoch] = 0;
+
         Address.sendValue(payable(generalConfig.protocolMultisig), protocolFees);
+
         emit ProtocolFeeTransferred(epoch, generalConfig.protocolMultisig, protocolFees);
     }
 
