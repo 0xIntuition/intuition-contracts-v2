@@ -901,7 +901,8 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         _increaseProRataVaultAssets(termId, _feeOnRaw(rawAssetsBeforeFees, vaultFees.exitFee), _vaultType);
 
         /* --- Release user assets after fees from vault (User Owned) --- */
-        uint256 userSharesAfter = _updateVaultOnRedeem(receiver, termId, curveId, rawAssetsBeforeFees, shares, _vaultType);
+        uint256 userSharesAfter =
+            _updateVaultOnRedeem(receiver, termId, curveId, rawAssetsBeforeFees, shares, _vaultType);
 
         Address.sendValue(payable(receiver), assetsAfterFees);
 
@@ -1640,15 +1641,16 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
     function _validateMinShares(bytes32 _termId, uint256 _curveId, uint256 _assets, uint256 _minShares) internal view {
         uint256 maxAssets = IBondingCurveRegistry(bondingCurveConfig.registry).getCurveMaxAssets(_curveId);
-        if (_assets + _vaults[_termId][_curveId].totalAssets > maxAssets) {
-            revert MultiVault_ActionExceedsMaxAssets();
-        }
 
-        (uint256 expectedShares,) = previewDeposit(_termId, _curveId, _assets);
+        (uint256 expectedShares, uint256 netAssetsToVault) = previewDeposit(_termId, _curveId, _assets);
+        if (expectedShares == 0) revert MultiVault_DepositOrRedeemZeroShares();
 
-        if (expectedShares == 0) {
-            revert MultiVault_DepositOrRedeemZeroShares();
-        }
+        bool isNew = _isNewVault(_termId, _curveId);
+        bool isDefault = _curveId == bondingCurveConfig.defaultCurveId;
+        uint256 ghostCost = (isNew && !isDefault) ? generalConfig.minShare : 0;
+
+        uint256 projectedAssets = _vaults[_termId][_curveId].totalAssets + netAssetsToVault + ghostCost;
+        if (projectedAssets > maxAssets) revert MultiVault_ActionExceedsMaxAssets();
 
         if (expectedShares < _minShares) {
             revert MultiVault_SlippageExceeded();
