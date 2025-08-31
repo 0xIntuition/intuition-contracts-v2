@@ -305,13 +305,13 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         return _calculateTripleCreate(termId, curveId, assets);
     }
 
-    /// @notice simulates the effects of the deposited amount of 'assets' and returns the estimated
-    ///         amount of shares that would be minted from the deposit of `assets`
-    /// @param assets amount of assets to calculate shares on
-    /// @param termId atom or triple (term) id to get corresponding shares for
-    /// @param curveId bonding curve ID to get corresponding shares for
-    ///
-    /// @return shares amount of shares that would be minted from the deposit of `assets`
+    /// @notice Simulates a deposit of `assets`.
+    /// @dev Returns the expected shares to be minted and the net assets credited after fees.
+    /// @param termId Atom or triple ID
+    /// @param curveId Bonding curve ID
+    /// @param assets Assets the user would send
+    /// @return shares Expected shares minted for the user
+    /// @return assetsAfterFees Net assets that will be added to the vault (post all fees)
     function previewDeposit(
         bytes32 termId,
         uint256 curveId,
@@ -325,17 +325,24 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         return _calculateDeposit(termId, curveId, assets, _isAtom);
     }
 
+    /// @notice Simulates a redemption of `shares`.
+    /// @dev Returns the net assets the user would receive after fees, and the shares burned (i.e. used for redemption).
+    /// @param termId Atom or triple ID
+    /// @param curveId Bonding curve ID
+    /// @param shares Shares the user would redeem
+    /// @return assetsAfterFees Net assets that would be sent to the user (post protocol + exit fees)
+    /// @return sharesUsed The shares that would be burned (echo of the input for convenience)
     function previewRedeem(
         bytes32 termId,
         uint256 curveId,
-        uint256 assets
+        uint256 shares
     )
         public
         view
-        returns (uint256 shares, uint256 assetsAfterFees)
+        returns (uint256 assetsAfterFees, uint256 sharesUsed)
     {
         bool _isAtom = isAtom(termId);
-        return _calculateRedeem(termId, curveId, assets, _isAtom);
+        return _calculateRedeem(termId, curveId, shares, _isAtom);
     }
 
     /// @notice returns amount of shares that would be exchanged by vault given amount of 'assets' provided
@@ -1630,7 +1637,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
             revert MultiVault_DepositOrRedeemZeroShares();
         }
 
-        (, uint256 expectedAssets) = previewRedeem(_termId, _curveId, _shares);
+        (uint256 expectedAssets,) = previewRedeem(_termId, _curveId, _shares);
 
         if (expectedAssets < _minAssets) {
             revert MultiVault_SlippageExceeded();
