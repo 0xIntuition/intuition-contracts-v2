@@ -484,19 +484,23 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
         /* --- Emit Events --- */
         emit AtomCreated(sender, atomId, data, atomWallet);
-        emit Deposited(
-            sender,
-            sender,
-            atomId,
-            curveId,
-            assets,
-            assetsAfterFees,
-            sharesForReceiver,
-            _vaults[atomId][curveId].totalShares,
-            VaultType.ATOM
-        );
 
+        DepositedEvent memory d;
+        d.sender = sender;
+        d.receiver = sender;
+        d.termId = atomId;
+        d.curveId = curveId;
+        d.assets = assets;
+        d.assetsAfterFees = assetsAfterFees;
+        d.shares = sharesForReceiver;
+        d.totalShares = _vaults[atomId][curveId].totalShares;
+        d.vaultType = VaultType.ATOM;
+
+        _emitDeposited(d);
+
+        // Increment total terms created
         ++totalTermsCreated;
+
         return atomId;
     }
 
@@ -624,19 +628,23 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
         /* --- Emit events --- */
         emit TripleCreated(sender, tripleId, subjectId, predicateId, objectId);
-        emit Deposited(
-            sender,
-            sender,
-            tripleId,
-            curveId,
-            assets,
-            assetsAfterFees,
-            sharesForReceiver,
-            _vaults[tripleId][curveId].totalShares,
-            VaultType.TRIPLE
-        );
 
+        DepositedEvent memory d;
+        d.sender = sender;
+        d.receiver = sender;
+        d.termId = tripleId;
+        d.curveId = curveId;
+        d.assets = assets;
+        d.assetsAfterFees = assetsAfterFees;
+        d.shares = sharesForReceiver;
+        d.totalShares = _vaults[tripleId][curveId].totalShares;
+        d.vaultType = VaultType.TRIPLE;
+
+        _emitDeposited(d);
+
+        // Increment total terms created
         ++totalTermsCreated;
+
         return tripleId;
     }
 
@@ -779,17 +787,18 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
             _updateVaultOnDeposit(receiver, termId, curveId, assetsAfterFees, sharesForReceiver, _vaultType);
         }
 
-        emit Deposited(
-            sender,
-            receiver,
-            termId,
-            curveId,
-            assets,
-            assetsAfterFees,
-            sharesForReceiver,
-            _vaults[termId][curveId].totalShares,
-            _vaultType
-        );
+        DepositedEvent memory d;
+        d.sender = sender;
+        d.receiver = receiver;
+        d.termId = termId;
+        d.curveId = curveId;
+        d.assets = assets;
+        d.assetsAfterFees = assetsAfterFees;
+        d.shares = sharesForReceiver;
+        d.totalShares = _vaults[termId][curveId].totalShares;
+        d.vaultType = _vaultType;
+
+        _emitDeposited(d);
 
         return sharesForReceiver;
     }
@@ -1576,6 +1585,13 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         }
 
         emit SharePriceChanged(termId, curveId, price, totalAssets, totalShares, vaultType);
+    }
+
+    /// @dev Emit a Deposited event from an in-memory struct to avoid stack-too-deep errors
+    function _emitDeposited(DepositedEvent memory d) internal {
+        emit Deposited(
+            d.sender, d.receiver, d.termId, d.curveId, d.assets, d.assetsAfterFees, d.shares, d.totalShares, d.vaultType
+        );
     }
 
     function _sumAmounts(uint256[] memory amounts) internal pure returns (uint256 total) {
