@@ -6,6 +6,7 @@ import { Test } from "forge-std/src/Test.sol";
 
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
+import { MultiVaultCore } from "src/protocol/MultiVaultCore.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 
 contract DepositBatchTest is BaseTest {
@@ -228,7 +229,7 @@ contract DepositBatchTest is BaseTest {
         uint256[] memory minShares = createUniformArray(1e4, 1);
 
         resetPrank(users.alice);
-        vm.expectRevert(MultiVault.MultiVault_TermDoesNotExist.selector);
+        vm.expectRevert(abi.encodeWithSelector(MultiVaultCore.MultiVaultCore_TermDoesNotExist.selector, nonExistentId));
         protocol.multiVault.depositBatch{ value: 10e18 }(users.alice, termIds, curveIds, amounts, minShares);
     }
 

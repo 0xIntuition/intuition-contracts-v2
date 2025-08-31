@@ -6,6 +6,7 @@ import { Test } from "forge-std/src/Test.sol";
 
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
+import { MultiVaultCore } from "src/protocol/MultiVaultCore.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 
 contract RedeemTest is BaseTest {
@@ -103,7 +104,7 @@ contract RedeemTest is BaseTest {
         bytes32 nonExistentId = keccak256("non-existent");
 
         resetPrank(users.alice);
-        vm.expectRevert(MultiVault.MultiVault_TermDoesNotExist.selector);
+        vm.expectRevert(abi.encodeWithSelector(MultiVaultCore.MultiVaultCore_TermDoesNotExist.selector, nonExistentId));
         protocol.multiVault.redeem(users.alice, nonExistentId, CURVE_ID, 1000e18, 0);
     }
 
