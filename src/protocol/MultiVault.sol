@@ -593,7 +593,13 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         return tripleId;
     }
 
-    function _initializeTripleState(bytes32 tripleId, bytes32 counterTripleId, bytes32[3] memory _atomsArray) internal {
+    function _initializeTripleState(
+        bytes32 tripleId,
+        bytes32 counterTripleId,
+        bytes32[3] memory _atomsArray
+    )
+        internal
+    {
         _triples[tripleId] = _atomsArray;
         _isTriple[tripleId] = true;
 
@@ -1172,10 +1178,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     function _convertToAssets(bytes32 termId, uint256 curveId, uint256 shares) internal view returns (uint256) {
         IBondingCurveRegistry bcRegistry = IBondingCurveRegistry(bondingCurveConfig.registry);
         return bcRegistry.previewRedeem(
-            shares,
-            _vaults[termId][curveId].totalShares,
-            _vaults[termId][curveId].totalAssets,
-            curveId
+            shares, _vaults[termId][curveId].totalShares, _vaults[termId][curveId].totalAssets, curveId
         );
     }
 
