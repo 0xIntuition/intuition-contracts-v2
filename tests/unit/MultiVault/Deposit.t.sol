@@ -6,6 +6,7 @@ import { Test } from "forge-std/src/Test.sol";
 
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
+import { MultiVaultCore } from "src/protocol/MultiVaultCore.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 
 contract DepositTest is BaseTest {
@@ -88,7 +89,7 @@ contract DepositTest is BaseTest {
         uint256 depositAmount = 1000e18;
 
         resetPrank(users.alice);
-        vm.expectRevert(MultiVault.MultiVault_TermDoesNotExist.selector);
+        vm.expectRevert(abi.encodeWithSelector(MultiVaultCore.MultiVaultCore_TermDoesNotExist.selector, nonExistentId));
         protocol.multiVault.deposit{ value: depositAmount }(users.alice, nonExistentId, CURVE_ID, 0);
     }
 
