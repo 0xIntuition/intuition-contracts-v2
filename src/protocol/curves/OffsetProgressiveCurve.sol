@@ -165,7 +165,9 @@ contract OffsetProgressiveCurve is BaseCurve {
         override
         returns (uint256 assets)
     {
-        return convert(_convertToAssets(convert(totalShares), convert(totalShares + shares).add(OFFSET)));
+        UD60x18 currentSupplyOfShares = convert(totalShares).add(OFFSET);
+        UD60x18 supplyOfSharesAfterMint = convert(totalShares + shares).add(OFFSET);
+        return convert(_convertToAssets(currentSupplyOfShares, supplyOfSharesAfterMint));
     }
 
     /// @inheritdoc BaseCurve

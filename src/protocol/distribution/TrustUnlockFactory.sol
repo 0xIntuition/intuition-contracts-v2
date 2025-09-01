@@ -48,13 +48,6 @@ contract TrustUnlockFactory is Ownable2Step, ReentrancyGuard {
     event TrustUnlockCreated(address indexed recipient, address indexed trustUnlock);
 
     /**
-     * @notice Emitted when a TrustUnlock contract is funded
-     * @param trustUnlock The address of the TrustUnlock contract that was funded
-     * @param unlockAmount The amount of tokens that were unlocked
-     */
-    event TrustUnlockFunded(address indexed trustUnlock, uint256 unlockAmount);
-
-    /**
      * @notice Emitted when tokens are recovered from the TrustUnlockFactory contract
      * @param token The address of the token that was recovered
      * @param recipient The address of the recipient of the recovered tokens
@@ -95,8 +88,7 @@ contract TrustUnlockFactory is Ownable2Step, ReentrancyGuard {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @notice Creates a new TrustUnlock contract for a recipient and funds it with the specified amount
-     *         (unlockAmount) in one atomic operation.
+     * @notice Creates a new TrustUnlock contract for a recipient
      *  @param recipient The address of the recipient of the TrustUnlock
      * @param unlockAmount The amount of tokens to be unlocked
      * @param unlockBegin The timestamp when the unlock period begins
@@ -116,13 +108,12 @@ contract TrustUnlockFactory is Ownable2Step, ReentrancyGuard {
         onlyOwner
         nonReentrant
     {
-        // Deploy and fund a TrustUnlock contract for the recipient
+        // Deploy a TrustUnlock contract for the recipient
         _createTrustUnlock(recipient, unlockAmount, unlockBegin, unlockCliff, unlockEnd, cliffPercentage);
     }
 
     /**
-     * @notice Creates multiple TrustUnlock contracts for a list of recipients and funds them with the specified amounts
-     *        (unlockAmounts) in one atomic operation for each recipient.
+     * @notice Creates multiple TrustUnlock contracts for a list of recipients in a single transaction
      * @dev Only recipients and unlockAmounts vary for each TrustUnlock contract - the rest of the parameters are the
      * same
      *      and assume that multiple recipients are subject to the same unlock schedule.
@@ -154,7 +145,7 @@ contract TrustUnlockFactory is Ownable2Step, ReentrancyGuard {
             revert Unlock_ArrayLengthMismatch();
         }
 
-        // Deploy and fund TrustUnlock contracts for each recipient
+        // Deploy TrustUnlock contracts for each recipient
         for (uint256 i; i < recipients.length;) {
             _createTrustUnlock(recipients[i], unlockAmounts[i], unlockBegin, unlockCliff, unlockEnd, cliffPercentage);
 
@@ -186,10 +177,7 @@ contract TrustUnlockFactory is Ownable2Step, ReentrancyGuard {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @notice Internal function to create a new TrustUnlock contract for a recipient and fund it with the specified
-     * amount
-     * @dev Assumes that the TrustUnlockFactory contract is funded with enough TRUST tokens to fund the newly created
-     * TrustUnlock contract
+     * @notice Internal function to create a new TrustUnlock contract for a recipient with the specified parameters
      * @param recipient The address of the recipient of the TrustUnlock
      * @param unlockAmount The amount of tokens to be unlocked
      * @param unlockBegin The timestamp when the unlock period begins

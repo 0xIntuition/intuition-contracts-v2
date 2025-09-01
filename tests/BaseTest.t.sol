@@ -403,7 +403,7 @@ abstract contract BaseTest is Modifiers, Test {
     }
 
     function getAtomCreationCost() internal view returns (uint256) {
-        return protocol.multiVault.getAtomCreationCost();
+        return protocol.multiVault.getAtomCost();
     }
 
     function convertToShares(uint256 assets, bytes32 termId, uint256 bondingCurveId) internal view returns (uint256) {
@@ -509,8 +509,8 @@ abstract contract BaseTest is Modifiers, Test {
     }
 
     // Helper function to get default curve ID
-    function getDefaultCurveId() internal view returns (uint256) {
-        return protocol.multiVault.getDefaultCurveId();
+    function getDefaultCurveId() internal view returns (uint256 defaultCurveId) {
+        (, defaultCurveId) = protocol.multiVault.bondingCurveConfig();
     }
 
     // Helper to set up approval for another user

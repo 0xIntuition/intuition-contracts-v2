@@ -16,11 +16,10 @@ interface ITrust is IERC20 {
      */
     function mint(address to, uint256 amount) external;
 
-    function burn(address from, uint256 amount) external;
-
     /**
-     * @notice Maximum annual emission of Trust token
-     * @return The maximum annual emission of Trust token
+     * @notice Burns the Trust token from the specified address
+     * @param from The address to burn the Trust token from
+     * @param amount The amount of Trust token to burn
      */
-    // function maxAnnualEmission() external view returns (uint256);
+    function burn(address from, uint256 amount) external;
 }

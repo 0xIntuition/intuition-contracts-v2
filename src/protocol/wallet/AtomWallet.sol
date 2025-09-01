@@ -126,49 +126,55 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
     /*                MUTATIVE FUNCTIONS                   */
     /* =================================================== */
 
-    //// @notice Execute a transaction (called directly from owner, or by entryPoint)
+    /// @notice Execute a transaction (called directly from owner, or by entryPoint)
     ///
     /// @param dest the target address
     /// @param value the value to send
-    /// @param func the function calldata
+    /// @param data the function calldata
     function execute(
         address dest,
         uint256 value,
-        bytes calldata func
+        bytes calldata data
     )
         external
         override
         onlyOwnerOrEntryPoint
         nonReentrant
     {
-        _call(dest, value, func);
+        _call(dest, value, data);
     }
 
     /// @notice Execute a sequence (batch) of transactions
     ///
     /// @param dest the target addresses array
-    /// @param func the function calldata array
+    /// @param values the values to send array
+    /// @param data the function calldata array
     function executeBatch(
         address[] calldata dest,
         uint256[] calldata values,
-        bytes[] calldata func
+        bytes[] calldata data
     )
         external
         payable
         onlyOwnerOrEntryPoint
         nonReentrant
     {
-        if (dest.length != values.length || values.length != func.length) {
+        uint256 length = dest.length;
+
+        if (length != values.length || values.length != data.length) {
             revert AtomWallet_WrongArrayLengths();
         }
 
-        for (uint256 i = 0; i < dest.length; i++) {
-            _call(dest[i], values[i], func[i]);
+        for (uint256 i = 0; i < length;) {
+            _call(dest[i], values[i], data[i]);
+            unchecked {
+                ++i;
+            }
         }
     }
 
     /// @notice Add deposit to the account in the entry point contract
-    function addDeposit() public payable {
+    function addDeposit() external payable {
         entryPoint().depositTo{ value: msg.value }(address(this));
     }
 
@@ -176,7 +182,7 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
     ///
     /// @param withdrawAddress target to send to
     /// @param amount to withdraw
-    function withdrawDepositTo(address payable withdrawAddress, uint256 amount) public {
+    function withdrawDepositTo(address payable withdrawAddress, uint256 amount) external {
         if (!(msg.sender == owner() || msg.sender == address(this))) {
             revert AtomWallet_OnlyOwner();
         }
@@ -225,7 +231,7 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
     /* =================================================== */
 
     /// @notice Returns the deposit of the account in the entry point contract
-    function getDeposit() public view returns (uint256) {
+    function getDeposit() external view returns (uint256) {
         return entryPoint().balanceOf(address(this));
     }
 

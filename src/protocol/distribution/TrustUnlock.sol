@@ -7,7 +7,7 @@ import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import { IUnlock } from "src/interfaces/IUnlock.sol";
+import { ITrustUnlock } from "src/interfaces/ITrustUnlock.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 import { WrappedTrust } from "src/WrappedTrust.sol";
@@ -20,7 +20,7 @@ import { WrappedTrust } from "src/WrappedTrust.sol";
  * @dev    Inspired by the Uniswap's TreasuryVester.sol contract
  * (https://github.com/Uniswap/governance/blob/master/contracts/TreasuryVester.sol)
  */
-contract TrustUnlock is IUnlock, ReentrancyGuard, Ownable {
+contract TrustUnlock is ITrustUnlock, ReentrancyGuard, Ownable {
     using SafeERC20 for IERC20;
 
     /*//////////////////////////////////////////////////////////////
@@ -272,6 +272,7 @@ contract TrustUnlock is IUnlock, ReentrancyGuard, Ownable {
      * @notice Creates new atoms in the MultiVault contract
      * @param atomDataArray An array of bytes containing the data for each atom to be created
      * @param assets The amount of Trust tokens to use for creating each atom
+     * @return atomIds An array of IDs for the newly created atoms
      */
     function createAtoms(
         bytes[] calldata atomDataArray,
@@ -284,8 +285,7 @@ contract TrustUnlock is IUnlock, ReentrancyGuard, Ownable {
         onlyNonLockedTokens(_sum(assets))
         returns (bytes32[] memory atomIds)
     {
-        uint256 _totalAssets = _sum(assets);
-        atomIds = IMultiVault(multiVault).createAtoms{ value: _totalAssets }(atomDataArray, assets);
+        atomIds = IMultiVault(multiVault).createAtoms{ value: _sum(assets) }(atomDataArray, assets);
     }
 
     /**
@@ -294,6 +294,7 @@ contract TrustUnlock is IUnlock, ReentrancyGuard, Ownable {
      * @param predicateIds An array of predicate IDs for the triples
      * @param objectIds An array of object IDs for the triples
      * @param assets The amount of Trust tokens to use for creating each triple
+     * @return tripleIds An array of IDs for the newly created triples
      */
     function createTriples(
         bytes32[] calldata subjectIds,
@@ -309,7 +310,7 @@ contract TrustUnlock is IUnlock, ReentrancyGuard, Ownable {
         returns (bytes32[] memory tripleIds)
     {
         tripleIds =
-            IMultiVault(multiVault).createTriples{ value: msg.value }(subjectIds, predicateIds, objectIds, assets);
+            IMultiVault(multiVault).createTriples{ value: _sum(assets) }(subjectIds, predicateIds, objectIds, assets);
     }
 
     /**
@@ -318,6 +319,7 @@ contract TrustUnlock is IUnlock, ReentrancyGuard, Ownable {
      * @param termId The ID of the term to deposit into
      * @param curveId The ID of the bonding curve to use for the deposit
      * @param minShares The minimum number of shares to receive in return for the deposit
+     * @return shares The number of shares received in return for the deposit
      */
     function deposit(
         address receiver,
@@ -342,6 +344,7 @@ contract TrustUnlock is IUnlock, ReentrancyGuard, Ownable {
      * @param curveIds An array of bonding curve IDs to use for the deposits
      * @param assets An array of assets of Trust tokens to deposit for each term
      * @param minShares An array of minimum shares to receive in return for each deposit
+     * @return shares An array of shares received in return for each deposit
      */
     function depositBatch(
         address receiver,
@@ -358,7 +361,7 @@ contract TrustUnlock is IUnlock, ReentrancyGuard, Ownable {
         returns (uint256[] memory shares)
     {
         shares =
-            IMultiVault(multiVault).depositBatch{ value: msg.value }(receiver, termIds, curveIds, assets, minShares);
+            IMultiVault(multiVault).depositBatch{ value: _sum(assets) }(receiver, termIds, curveIds, assets, minShares);
     }
 
     /**
@@ -368,6 +371,7 @@ contract TrustUnlock is IUnlock, ReentrancyGuard, Ownable {
      * @param curveId The ID of the bonding curve to use for the redemption
      * @param shares The number of shares to redeem
      * @param minAssets The minimum amount of Trust tokens to receive in return for the redemption
+     * @return assets The amount of Trust tokens received in return for the redemption
      */
     function redeem(
         address receiver,
@@ -391,6 +395,7 @@ contract TrustUnlock is IUnlock, ReentrancyGuard, Ownable {
      * @param curveIds An array of bonding curve IDs to use for the redemptions
      * @param shares An array of numbers of shares to redeem
      * @param minAssets An array of minimum amounts of Trust tokens to receive in return for the redemptions
+     * @return assets An array of amounts of Trust tokens received in return for the redemptions
      */
     function redeemBatch(
         address receiver,
