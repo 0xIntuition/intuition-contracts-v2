@@ -24,6 +24,11 @@ import {
 import { MultiVaultCore } from "src/protocol/MultiVaultCore.sol";
 
 /**
+ * @dev Common forge commands for testing
+ * forge inspect MultiVault storage-layout
+ */
+
+/**
  * @title  MultiVault
  * @author 0xIntuition
  * @notice Core contract of the Intuition protocol. Manages the creation and management of vaults

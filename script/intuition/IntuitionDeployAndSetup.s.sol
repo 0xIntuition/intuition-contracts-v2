@@ -131,7 +131,7 @@ contract IntuitionDeployAndSetup is SetupScript {
 
         TransparentUpgradeableProxy satelliteEmissionsControllerProxy =
             new TransparentUpgradeableProxy(address(satelliteEmissionsControllerImpl), ADMIN, "");
-        satelliteEmissionsController = SatelliteEmissionsController(address(satelliteEmissionsControllerProxy));
+        satelliteEmissionsController = SatelliteEmissionsController(payable(satelliteEmissionsControllerProxy));
         info("SatelliteEmissionsController Proxy", address(satelliteEmissionsControllerProxy));
 
         // Deploy TrustBonding implementation and proxy
@@ -196,7 +196,6 @@ contract IntuitionDeployAndSetup is SetupScript {
             ADMIN, // owner
             address(trust), // WTRUST token if deploying on Intuition Sepolia
             BONDING_EPOCH_LENGTH, // epochLength
-            BONDING_START_TIMESTAMP, // startTimestamp
             address(multiVault), // multiVault
             address(satelliteEmissionsController),
             BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound

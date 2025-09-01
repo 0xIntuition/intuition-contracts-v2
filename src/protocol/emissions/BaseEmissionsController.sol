@@ -7,31 +7,12 @@ import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/ac
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 
+import { IBaseEmissionsController } from "src/interfaces/IBaseEmissionsController.sol";
 import { ITrust } from "src/interfaces/ITrust.sol";
 import { MetaERC20DispatchInit } from "src/interfaces/IMetaLayer.sol";
 import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";
 import { CoreEmissionsController } from "src/protocol/emissions/CoreEmissionsController.sol";
-import {
-    MetaERC20Dispatcher,
-    FinalityState,
-    IMetaERC20Hub,
-    IIGP,
-    IMetalayerRouter
-} from "src/protocol/emissions/MetaERC20Dispatcher.sol";
-
-struct BaseEmissionsControllerInitializeParams {
-    address admin;
-    address minter;
-    address trustToken;
-    address metaERC20Hub;
-    address satelliteEmissionsController;
-    uint32 recipientDomain;
-    uint256 maxAnnualEmission;
-    uint256 maxEmissionPerEpochBasisPoints;
-    uint256 annualReductionBasisPoints;
-    uint256 startTimestamp;
-    uint256 epochDuration;
-}
+import { FinalityState, MetaERC20Dispatcher } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
 
 /**
  * @title  BaseEmissionsController
@@ -39,10 +20,11 @@ struct BaseEmissionsControllerInitializeParams {
  * @notice Controls the release of TRUST tokens by sending mint requests to the TRUST token.
  */
 contract BaseEmissionsController is
+    IBaseEmissionsController,
     AccessControlUpgradeable,
     ReentrancyGuardUpgradeable,
-    MetaERC20Dispatcher,
-    CoreEmissionsController
+    CoreEmissionsController,
+    MetaERC20Dispatcher
 {
     /* =================================================== */
     /*                     CONSTANTS                       */
@@ -56,10 +38,10 @@ contract BaseEmissionsController is
     /* =================================================== */
 
     /// @notice Trust token contract address
-    address public trustToken;
+    address internal _TRUST_TOKEN;
 
     /// @notice Address of the emissions controller on the satellite chain
-    address public satelliteEmissionsController;
+    address internal _SATELLITE_EMISSIONS_CONTROLLER;
 
     /// @notice Total amount of Trust tokens minted
     uint256 internal _totalMintedAmount;
@@ -68,29 +50,6 @@ contract BaseEmissionsController is
 
     /// @dev Gap for upgrade safety
     uint256[50] private __gap;
-
-    /* =================================================== */
-    /*                       EVENTS                        */
-    /* =================================================== */
-
-    /**
-     * @notice Event emitted when Trust tokens are minted
-     * @param to Address that received the minted Trust tokens
-     * @param amount Amount of Trust tokens minted
-     */
-    event TrustMinted(address indexed to, uint256 amount);
-
-    /* =================================================== */
-    /*                       ERRORS                        */
-    /* =================================================== */
-
-    error BaseEmissionsController_InvalidEpoch();
-
-    error BaseEmissionsController_InsufficientGasPayment();
-
-    error BaseEmissionsController_EpochMintingLimitExceeded();
-
-    error BaseEmissionsController_InsufficientBurnableBalance();
 
     /* =================================================== */
     /*                    CONSTRUCTOR                      */
@@ -136,14 +95,30 @@ contract BaseEmissionsController is
         _grantRole(CONTROLLER_ROLE, controller);
 
         // Set the Trust token contract address
-        trustToken = token;
-        satellite = satellite;
+        _TRUST_TOKEN = token;
+        _SATELLITE_EMISSIONS_CONTROLLER = satellite;
     }
 
+    /* =================================================== */
+    /*                      GETTERS                        */
+    /* =================================================== */
+
+    /// @inheritdoc IBaseEmissionsController
+    function getTrustToken() external view returns (address) {
+        return _TRUST_TOKEN;
+    }
+
+    /// @inheritdoc IBaseEmissionsController
+    function getSatelliteEmissionsController() external view returns (address) {
+        return _SATELLITE_EMISSIONS_CONTROLLER;
+    }
+
+    /// @inheritdoc IBaseEmissionsController
     function getTotalMinted() external view returns (uint256) {
         return _totalMintedAmount;
     }
 
+    /// @inheritdoc IBaseEmissionsController
     function getEpochMintedAmount(uint256 epoch) external view returns (uint256) {
         return _epochToMintedAmount[epoch];
     }
@@ -152,9 +127,7 @@ contract BaseEmissionsController is
     /*                    CONTROLLER                       */
     /* =================================================== */
 
-    /**
-     * @notice Mint new TRUST tokens to an address
-     */
+    /// @inheritdoc IBaseEmissionsController
     function mintAndBridge(uint256 epoch) external payable nonReentrant onlyRole(CONTROLLER_ROLE) {
         uint256 currentEpoch = _currentEpoch();
 
@@ -166,57 +139,65 @@ contract BaseEmissionsController is
             revert BaseEmissionsController_EpochMintingLimitExceeded();
         }
 
-        uint256 emissionsAmount = _emissionsAtEpoch(epoch);
-        _totalMintedAmount += emissionsAmount;
-        _epochToMintedAmount[epoch] = emissionsAmount;
+        uint256 amount = _emissionsAtEpoch(epoch);
+        _totalMintedAmount += amount;
+        _epochToMintedAmount[epoch] = amount;
 
         // Mint new TRUST using the calculated epoch emissions
-        ITrust(trustToken).mint(address(this), emissionsAmount);
-        ITrust(trustToken).approve(_metaERC20SpokeOrHub, emissionsAmount);
+        ITrust(_TRUST_TOKEN).mint(address(this), amount);
+        ITrust(_TRUST_TOKEN).approve(_metaERC20SpokeOrHub, amount);
 
         // Bridge new emissions to the Satellite Emissions Controller
         uint256 gasLimit = _quoteGasPayment(_recipientDomain, GAS_CONSTANT + _messageGasCost);
         if (msg.value < gasLimit) {
             revert BaseEmissionsController_InsufficientGasPayment();
         }
-        _bridgeTokens(
+
+        _bridgeTokensViaERC20(
             _metaERC20SpokeOrHub,
             _recipientDomain,
-            bytes32(uint256(uint160(satelliteEmissionsController))),
-            emissionsAmount,
+            bytes32(uint256(uint160(_SATELLITE_EMISSIONS_CONTROLLER))),
+            amount,
             gasLimit,
             _finalityState
         );
         if (msg.value > gasLimit) {
             Address.sendValue(payable(msg.sender), msg.value - gasLimit);
         }
-    }
 
-    function burn(uint256 amount) external onlyRole(CONTROLLER_ROLE) {
-        if (amount > _balanceBurnable()) {
-            revert BaseEmissionsController_InsufficientBurnableBalance();
-        }
-        ITrust(trustToken).burn(address(this), amount);
+        emit TrustMintedAndBridged(address(this), amount, epoch);
     }
 
     /* =================================================== */
     /*                       ADMIN                         */
     /* =================================================== */
 
+    /// @inheritdoc IBaseEmissionsController
     function setMessageGasCost(uint256 newGasCost) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setMessageGasCost(newGasCost);
     }
 
+    /// @inheritdoc IBaseEmissionsController
     function setFinalityState(FinalityState newFinalityState) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setFinalityState(newFinalityState);
     }
 
+    /// @inheritdoc IBaseEmissionsController
     function setMetaERC20SpokeOrHub(address newMetaERC20SpokeOrHub) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setMetaERC20SpokeOrHub(newMetaERC20SpokeOrHub);
     }
 
+    /// @inheritdoc IBaseEmissionsController
     function setRecipientDomain(uint32 newRecipientDomain) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setRecipientDomain(newRecipientDomain);
+    }
+
+    /// @inheritdoc IBaseEmissionsController
+    function burn(uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (amount > _balanceBurnable()) {
+            revert BaseEmissionsController_InsufficientBurnableBalance();
+        }
+        ITrust(_TRUST_TOKEN).burn(address(this), amount);
     }
 
     /* =================================================== */
@@ -224,6 +205,6 @@ contract BaseEmissionsController is
     /* =================================================== */
 
     function _balanceBurnable() internal view returns (uint256) {
-        return ITrust(trustToken).balanceOf(address(this));
+        return ITrust(_TRUST_TOKEN).balanceOf(address(this));
     }
 }
