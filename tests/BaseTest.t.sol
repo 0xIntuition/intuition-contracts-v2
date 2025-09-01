@@ -128,6 +128,7 @@ abstract contract BaseTest is Modifiers, Test {
         // Deploy Trust proxy
         TransparentUpgradeableProxy trustProxy = new TransparentUpgradeableProxy(address(trustImpl), users.admin, "");
         Trust trust = Trust(address(trustProxy));
+        trust.init(); // Run initializer
 
         // Initialize Trust contract via proxy
         vm.prank(0xa28d4AAcA48bE54824dA53a19b05121DE71Ef480); // admin address set on Base
