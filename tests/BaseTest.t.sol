@@ -285,7 +285,6 @@ abstract contract BaseTest is Modifiers, Test {
         GeneralConfig memory generalConfig = _getDefaultGeneralConfig();
         generalConfig.trustBonding = address(protocol.trustBonding);
 
-
         WalletConfig memory walletConfig = _getDefaultWalletConfig(address(atomWalletFactory));
         walletConfig.atomWalletFactory = address(atomWalletFactory);
 
@@ -294,7 +293,12 @@ abstract contract BaseTest is Modifiers, Test {
 
         // Initialize MultiVault
         protocol.multiVault.initialize(
-            generalConfig, _getDefaultAtomConfig(), _getDefaultTripleConfig(), walletConfig, _getDefaultVaultFees(), bondingCurveConfig
+            generalConfig,
+            _getDefaultAtomConfig(),
+            _getDefaultTripleConfig(),
+            walletConfig,
+            _getDefaultVaultFees(),
+            bondingCurveConfig
         );
 
         // Approve tokens for all users after deployment

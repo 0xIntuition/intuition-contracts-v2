@@ -46,28 +46,28 @@ interface ITrustBonding {
     /* =================================================== */
     /*                       ERRORS                        */
     /* =================================================== */
-    
+
     /// @dev Thrown when attempting to claim protocol fees that exceed the available balance
     error TrustBonding_ClaimableProtocolFeesExceedBalance();
-    
+
     /// @dev Thrown when an invalid epoch number is provided
     error TrustBonding_InvalidEpoch();
-    
+
     /// @dev Thrown when an invalid utilization lower bound is provided (must be between 0 and 1e18)
     error TrustBonding_InvalidUtilizationLowerBound();
-    
+
     /// @dev Thrown when an invalid start timestamp is provided during initialization
     error TrustBonding_InvalidStartTimestamp();
-    
+
     /// @dev Thrown when attempting to claim rewards during the first epoch
     error TrustBonding_NoClaimingDuringFirstEpoch();
-    
+
     /// @dev Thrown when a user has no rewards to claim
     error TrustBonding_NoRewardsToClaim();
-    
+
     /// @dev Thrown when attempting to claim rewards for an epoch that has already been claimed
     error TrustBonding_RewardsAlreadyClaimedForEpoch();
-    
+
     /// @dev Thrown when a zero address is provided where a valid address is required
     error TrustBonding_ZeroAddress();
 
@@ -217,10 +217,11 @@ interface ITrustBonding {
      */
     function getUnclaimedRewardsForEpoch(uint256 epoch) external view returns (uint256);
 
-     /**
+    /**
      * @notice Claims eligible Trust token rewards. Claims are always for the previous epoch (`currentEpoch() - 1`)
      * @dev Rewards for epoch `n` are claimable in epoch `n + 1`. If the user forgets to claim their rewards for epoch
-     * `n`, they are effectively forfeited. Note that the user is free to claim their rewards to any address they choose.
+     * `n`, they are effectively forfeited. Note that the user is free to claim their rewards to any address they
+     * choose.
      * @param recipient The address to receive the Trust rewards
      */
     function claimRewards(address recipient) external;

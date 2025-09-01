@@ -42,9 +42,7 @@ contract AccessControlTest is BaseTest {
         protocol.satelliteEmissionsController.setMessageGasCost(newGasCost);
 
         assertEq(
-            protocol.satelliteEmissionsController.getMessageGasCost(),
-            newGasCost,
-            "Message gas cost should be updated"
+            protocol.satelliteEmissionsController.getMessageGasCost(), newGasCost, "Message gas cost should be updated"
         );
         assertNotEq(originalGasCost, newGasCost, "Should be different from original");
     }
@@ -201,7 +199,7 @@ contract AccessControlTest is BaseTest {
     //////////////////////////////////////////////////////////////*/
 
     function test_setRecipientDomain_shouldSucceedWithAdminRole() external {
-        uint32 newDomain = 12345;
+        uint32 newDomain = 12_345;
         uint32 originalDomain = protocol.satelliteEmissionsController.getRecipientDomain();
 
         vm.expectEmit(true, false, false, true);
@@ -211,9 +209,7 @@ contract AccessControlTest is BaseTest {
         protocol.satelliteEmissionsController.setRecipientDomain(newDomain);
 
         assertEq(
-            protocol.satelliteEmissionsController.getRecipientDomain(),
-            newDomain,
-            "Recipient domain should be updated"
+            protocol.satelliteEmissionsController.getRecipientDomain(), newDomain, "Recipient domain should be updated"
         );
         assertNotEq(originalDomain, newDomain, "Should be different from original");
     }
@@ -245,7 +241,7 @@ contract AccessControlTest is BaseTest {
     }
 
     function test_setRecipientDomain_shouldRevertWithUnauthorizedUser() external {
-        uint32 newDomain = 12345;
+        uint32 newDomain = 12_345;
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -265,7 +261,7 @@ contract AccessControlTest is BaseTest {
         uint256 newGasCost = 75_000;
         FinalityState newState = FinalityState.ESPRESSO;
         address newSpokeOrHub = address(0x987654);
-        uint32 newDomain = 54321;
+        uint32 newDomain = 54_321;
 
         resetPrank(users.admin);
 
@@ -344,7 +340,7 @@ contract AccessControlTest is BaseTest {
         uint256 newGasCost = 60_000;
         FinalityState newState = FinalityState.FINALIZED;
         address newSpokeOrHub = address(0xABCDEF);
-        uint32 newDomain = 99999;
+        uint32 newDomain = 99_999;
 
         resetPrank(users.admin);
 
@@ -398,7 +394,7 @@ contract AccessControlTest is BaseTest {
     function test_boundaryValues_recipientDomain() external {
         uint32[] memory testValues = new uint32[](3);
         testValues[0] = 0; // Minimum
-        testValues[1] = 2147483647; // Large value
+        testValues[1] = 2_147_483_647; // Large value
         testValues[2] = type(uint32).max; // Maximum
 
         resetPrank(users.admin);
@@ -426,7 +422,7 @@ contract AccessControlTest is BaseTest {
         uint256 newGasCost = 80_000;
         FinalityState newState = FinalityState.FINALIZED;
         address newSpokeOrHub = address(0x111111);
-        uint32 newDomain = 11111;
+        uint32 newDomain = 11_111;
 
         resetPrank(users.admin);
 
@@ -439,9 +435,7 @@ contract AccessControlTest is BaseTest {
 
         // Verify all updates took effect and are consistent
         assertEq(
-            protocol.satelliteEmissionsController.getMessageGasCost(),
-            newGasCost,
-            "Message gas cost should be updated"
+            protocol.satelliteEmissionsController.getMessageGasCost(), newGasCost, "Message gas cost should be updated"
         );
         assertEq(
             uint8(protocol.satelliteEmissionsController.getFinalityState()),
@@ -454,9 +448,7 @@ contract AccessControlTest is BaseTest {
             "MetaERC20SpokeOrHub should be updated"
         );
         assertEq(
-            protocol.satelliteEmissionsController.getRecipientDomain(),
-            newDomain,
-            "Recipient domain should be updated"
+            protocol.satelliteEmissionsController.getRecipientDomain(), newDomain, "Recipient domain should be updated"
         );
 
         // Verify changes from original values
@@ -470,7 +462,7 @@ contract AccessControlTest is BaseTest {
         uint256 newGasCost = 90_000;
         FinalityState newState = FinalityState.FINALIZED;
         address newSpokeOrHub = address(0x222222);
-        uint32 newDomain = 22222;
+        uint32 newDomain = 22_222;
 
         // Test all functions fail with unauthorized user
         resetPrank(unauthorizedUser);

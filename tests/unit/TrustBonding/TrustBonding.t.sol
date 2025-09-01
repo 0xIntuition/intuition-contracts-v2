@@ -115,7 +115,6 @@ contract TrustBondingTest is BaseTest {
         vm.stopPrank();
     }
 
-
     function test_epochLength() external view {
         assertEq(protocol.trustBonding.epochLength(), TRUST_BONDING_EPOCH_LENGTH);
     }

@@ -41,7 +41,6 @@ struct EmissionsCheckpoint {
  * @notice Interface for the CoreEmissionsController that manages TRUST token emissions
  */
 interface ICoreEmissionsController {
-
     /* =================================================== */
     /*                       EVENTS                        */
     /* =================================================== */
@@ -68,7 +67,7 @@ interface ICoreEmissionsController {
 
     /// @dev Thrown when reduction basis points exceed the maximum allowed value
     error CoreEmissionsController_InvalidReductionBasisPoints();
-    
+
     /// @dev Thrown when cliff value is zero or exceeds 365 epochs
     error CoreEmissionsController_InvalidCliff();
 

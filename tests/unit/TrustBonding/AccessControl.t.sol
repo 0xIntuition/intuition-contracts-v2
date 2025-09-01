@@ -37,6 +37,7 @@ contract AccessControlTest is BaseTest {
 
         // Grant roles for testing
         vm.startPrank(users.admin);
+        protocol.trustBonding.grantRole(TIMELOCK_ROLE, users.admin);
         protocol.trustBonding.grantRole(TIMELOCK_ROLE, timelockUser);
         protocol.trustBonding.grantRole(PAUSER_ROLE, pauserUser);
         vm.stopPrank();

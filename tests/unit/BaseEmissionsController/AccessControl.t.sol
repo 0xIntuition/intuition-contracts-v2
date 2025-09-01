@@ -103,11 +103,7 @@ contract AccessControlTest is BaseTest {
         resetPrank(users.admin);
         baseEmissionsController.setMessageGasCost(newGasCost);
 
-        assertEq(
-            baseEmissionsController.getMessageGasCost(),
-            newGasCost,
-            "Message gas cost should be updated"
-        );
+        assertEq(baseEmissionsController.getMessageGasCost(), newGasCost, "Message gas cost should be updated");
         assertNotEq(originalGasCost, newGasCost, "Should be different from original");
     }
 
@@ -143,11 +139,7 @@ contract AccessControlTest is BaseTest {
         resetPrank(users.admin);
         baseEmissionsController.setMessageGasCost(zeroGasCost);
 
-        assertEq(
-            baseEmissionsController.getMessageGasCost(),
-            zeroGasCost,
-            "Message gas cost should accept zero value"
-        );
+        assertEq(baseEmissionsController.getMessageGasCost(), zeroGasCost, "Message gas cost should accept zero value");
     }
 
     function test_setMessageGasCost_shouldAllowLargeValue() external {
@@ -157,9 +149,7 @@ contract AccessControlTest is BaseTest {
         baseEmissionsController.setMessageGasCost(largeGasCost);
 
         assertEq(
-            baseEmissionsController.getMessageGasCost(),
-            largeGasCost,
-            "Message gas cost should accept large values"
+            baseEmissionsController.getMessageGasCost(), largeGasCost, "Message gas cost should accept large values"
         );
     }
 
@@ -250,9 +240,7 @@ contract AccessControlTest is BaseTest {
         baseEmissionsController.setMetaERC20SpokeOrHub(newSpokeOrHub);
 
         assertEq(
-            baseEmissionsController.getMetaERC20SpokeOrHub(),
-            newSpokeOrHub,
-            "MetaERC20SpokeOrHub should be updated"
+            baseEmissionsController.getMetaERC20SpokeOrHub(), newSpokeOrHub, "MetaERC20SpokeOrHub should be updated"
         );
         assertNotEq(originalSpokeOrHub, newSpokeOrHub, "Should be different from original");
     }
@@ -301,7 +289,7 @@ contract AccessControlTest is BaseTest {
     //////////////////////////////////////////////////////////////*/
 
     function test_setRecipientDomain_shouldSucceedWithAdminRole() external {
-        uint32 newDomain = 12345;
+        uint32 newDomain = 12_345;
         uint32 originalDomain = baseEmissionsController.getRecipientDomain();
 
         vm.expectEmit(true, false, false, true);
@@ -310,11 +298,7 @@ contract AccessControlTest is BaseTest {
         resetPrank(users.admin);
         baseEmissionsController.setRecipientDomain(newDomain);
 
-        assertEq(
-            baseEmissionsController.getRecipientDomain(),
-            newDomain,
-            "Recipient domain should be updated"
-        );
+        assertEq(baseEmissionsController.getRecipientDomain(), newDomain, "Recipient domain should be updated");
         assertNotEq(originalDomain, newDomain, "Should be different from original");
     }
 
@@ -324,11 +308,7 @@ contract AccessControlTest is BaseTest {
         resetPrank(users.admin);
         baseEmissionsController.setRecipientDomain(zeroDomain);
 
-        assertEq(
-            baseEmissionsController.getRecipientDomain(),
-            zeroDomain,
-            "Recipient domain should accept zero value"
-        );
+        assertEq(baseEmissionsController.getRecipientDomain(), zeroDomain, "Recipient domain should accept zero value");
     }
 
     function test_setRecipientDomain_shouldAllowMaxUint32() external {
@@ -338,14 +318,12 @@ contract AccessControlTest is BaseTest {
         baseEmissionsController.setRecipientDomain(maxDomain);
 
         assertEq(
-            baseEmissionsController.getRecipientDomain(),
-            maxDomain,
-            "Recipient domain should accept max uint32 value"
+            baseEmissionsController.getRecipientDomain(), maxDomain, "Recipient domain should accept max uint32 value"
         );
     }
 
     function test_setRecipientDomain_shouldRevertWithUnauthorizedUser() external {
-        uint32 newDomain = 12345;
+        uint32 newDomain = 12_345;
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -358,7 +336,7 @@ contract AccessControlTest is BaseTest {
     }
 
     function test_setRecipientDomain_shouldRevertWithControllerRole() external {
-        uint32 newDomain = 12345;
+        uint32 newDomain = 12_345;
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -378,16 +356,14 @@ contract AccessControlTest is BaseTest {
         uint256 newGasCost = 75_000;
         FinalityState newState = FinalityState.ESPRESSO;
         address newSpokeOrHub = address(0x987654);
-        uint32 newDomain = 54321;
+        uint32 newDomain = 54_321;
 
         vm.startPrank(users.admin);
 
         // Admin should be able to set message gas cost
         baseEmissionsController.setMessageGasCost(newGasCost);
         assertEq(
-            baseEmissionsController.getMessageGasCost(),
-            newGasCost,
-            "Admin should be able to set message gas cost"
+            baseEmissionsController.getMessageGasCost(), newGasCost, "Admin should be able to set message gas cost"
         );
 
         // Admin should be able to set finality state
@@ -409,9 +385,7 @@ contract AccessControlTest is BaseTest {
         // Admin should be able to set recipient domain
         baseEmissionsController.setRecipientDomain(newDomain);
         assertEq(
-            baseEmissionsController.getRecipientDomain(),
-            newDomain,
-            "Admin should be able to set recipient domain"
+            baseEmissionsController.getRecipientDomain(), newDomain, "Admin should be able to set recipient domain"
         );
 
         vm.stopPrank();
@@ -421,7 +395,7 @@ contract AccessControlTest is BaseTest {
         uint256 newGasCost = 90_000;
         FinalityState newState = FinalityState.FINALIZED;
         address newSpokeOrHub = address(0x222222);
-        uint32 newDomain = 22222;
+        uint32 newDomain = 22_222;
 
         // Test all functions fail with controller role
         vm.startPrank(users.controller);
@@ -469,9 +443,7 @@ contract AccessControlTest is BaseTest {
         for (uint256 i = 0; i < gasCosts.length; i++) {
             baseEmissionsController.setMessageGasCost(gasCosts[i]);
             assertEq(
-                baseEmissionsController.getMessageGasCost(),
-                gasCosts[i],
-                "Each gas cost update should take effect"
+                baseEmissionsController.getMessageGasCost(), gasCosts[i], "Each gas cost update should take effect"
             );
         }
 
@@ -497,7 +469,7 @@ contract AccessControlTest is BaseTest {
         uint256 newGasCost = 60_000;
         FinalityState newState = FinalityState.FINALIZED;
         address newSpokeOrHub = address(0xABCDEF);
-        uint32 newDomain = 99999;
+        uint32 newDomain = 99_999;
 
         vm.startPrank(users.admin);
 
@@ -551,7 +523,7 @@ contract AccessControlTest is BaseTest {
     function test_boundaryValues_recipientDomain() external {
         uint32[] memory testValues = new uint32[](3);
         testValues[0] = 0; // Minimum
-        testValues[1] = 2147483647; // Large value
+        testValues[1] = 2_147_483_647; // Large value
         testValues[2] = type(uint32).max; // Maximum
 
         vm.startPrank(users.admin);
@@ -579,7 +551,7 @@ contract AccessControlTest is BaseTest {
         uint256 newGasCost = 80_000;
         FinalityState newState = FinalityState.FINALIZED;
         address newSpokeOrHub = address(0x111111);
-        uint32 newDomain = 11111;
+        uint32 newDomain = 11_111;
 
         vm.startPrank(users.admin);
 
@@ -591,26 +563,12 @@ contract AccessControlTest is BaseTest {
         vm.stopPrank();
 
         // Verify all updates took effect and are consistent
+        assertEq(baseEmissionsController.getMessageGasCost(), newGasCost, "Message gas cost should be updated");
+        assertEq(uint8(baseEmissionsController.getFinalityState()), uint8(newState), "Finality state should be updated");
         assertEq(
-            baseEmissionsController.getMessageGasCost(),
-            newGasCost,
-            "Message gas cost should be updated"
+            baseEmissionsController.getMetaERC20SpokeOrHub(), newSpokeOrHub, "MetaERC20SpokeOrHub should be updated"
         );
-        assertEq(
-            uint8(baseEmissionsController.getFinalityState()),
-            uint8(newState),
-            "Finality state should be updated"
-        );
-        assertEq(
-            baseEmissionsController.getMetaERC20SpokeOrHub(),
-            newSpokeOrHub,
-            "MetaERC20SpokeOrHub should be updated"
-        );
-        assertEq(
-            baseEmissionsController.getRecipientDomain(),
-            newDomain,
-            "Recipient domain should be updated"
-        );
+        assertEq(baseEmissionsController.getRecipientDomain(), newDomain, "Recipient domain should be updated");
 
         // Verify changes from original values
         assertNotEq(originalGasCost, newGasCost, "Gas cost should be different from original");
@@ -623,7 +581,7 @@ contract AccessControlTest is BaseTest {
         uint256 newGasCost = 90_000;
         FinalityState newState = FinalityState.FINALIZED;
         address newSpokeOrHub = address(0x222222);
-        uint32 newDomain = 22222;
+        uint32 newDomain = 22_222;
 
         // Test all functions fail with unauthorized user
         vm.startPrank(unauthorizedUser);
@@ -676,12 +634,10 @@ contract AccessControlTest is BaseTest {
         for (uint256 i = 0; i < testUsers.length; i++) {
             vm.expectRevert(
                 abi.encodeWithSelector(
-                    IAccessControl.AccessControlUnauthorizedAccount.selector,
-                    testUsers[i],
-                    DEFAULT_ADMIN_ROLE
+                    IAccessControl.AccessControlUnauthorizedAccount.selector, testUsers[i], DEFAULT_ADMIN_ROLE
                 )
             );
-            
+
             resetPrank(testUsers[i]);
             baseEmissionsController.setMessageGasCost(newGasCost);
         }
@@ -690,11 +646,7 @@ contract AccessControlTest is BaseTest {
         resetPrank(users.admin);
         baseEmissionsController.setMessageGasCost(newGasCost);
 
-        assertEq(
-            baseEmissionsController.getMessageGasCost(),
-            newGasCost,
-            "Admin should successfully update gas cost"
-        );
+        assertEq(baseEmissionsController.getMessageGasCost(), newGasCost, "Admin should successfully update gas cost");
     }
 
     function test_gettersRemainAccessible() external {
@@ -707,13 +659,13 @@ contract AccessControlTest is BaseTest {
 
         for (uint256 i = 0; i < testUsers.length; i++) {
             resetPrank(testUsers[i]);
-            
+
             // All these should succeed without reverting
             uint256 gasCost = baseEmissionsController.getMessageGasCost();
             FinalityState state = baseEmissionsController.getFinalityState();
             address spokeOrHub = baseEmissionsController.getMetaERC20SpokeOrHub();
             uint32 domain = baseEmissionsController.getRecipientDomain();
-            
+
             // Basic sanity checks
             assertTrue(gasCost >= 0, "Gas cost should be readable");
             assertTrue(uint8(state) <= 2, "Finality state should be valid enum value");

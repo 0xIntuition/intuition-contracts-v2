@@ -48,7 +48,7 @@ import { VotingEscrow } from "src/external/curve/VotingEscrow.sol";
  *         contract (originally written in Vyper), as used by the Stargate Finance protocol:
  *         https://github.com/stargate-protocol/stargate-dao/blob/main/contracts/VotingEscrow.sol
  */
-contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgradeable, VotingEscrow {
+contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     using SafeERC20 for IERC20;
 
     /*//////////////////////////////////////////////////////////////
@@ -155,7 +155,6 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
 
         _grantRole(DEFAULT_ADMIN_ROLE, _owner);
         _grantRole(PAUSER_ROLE, _owner);
-        _grantRole(TIMELOCK_ROLE, _owner);
 
         multiVault = _multiVault;
         satelliteEmissionsController = _satelliteEmissionsController;
@@ -186,7 +185,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
     function epochAtTimestamp(uint256 timestamp) public view returns (uint256) {
         return _epochAtTimestamp(timestamp);
     }
-    
+
     /// @inheritdoc ITrustBonding
     function currentEpoch() public view returns (uint256) {
         return _currentEpoch();
@@ -381,7 +380,10 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
     }
 
     /// @inheritdoc ITrustBonding
-    function updateSatelliteEmissionsController(address _satelliteEmissionsController) external onlyRole(TIMELOCK_ROLE) {
+    function updateSatelliteEmissionsController(address _satelliteEmissionsController)
+        external
+        onlyRole(TIMELOCK_ROLE)
+    {
         if (_satelliteEmissionsController == address(0)) {
             revert TrustBonding_ZeroAddress();
         }
