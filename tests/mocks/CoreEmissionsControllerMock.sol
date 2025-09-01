@@ -65,10 +65,6 @@ contract CoreEmissionsControllerMock is CoreEmissionsController {
         return _applyCliffReductions(baseEmissions, retentionFactor, cliffsToApply);
     }
 
-    function pow(uint256 base, uint256 exponent) external pure returns (uint256) {
-        return _pow(base, exponent);
-    }
-
     function validateReductionBasisPoints(uint256 emissionsReductionBasisPoints) external pure {
         _validateReductionBasisPoints(emissionsReductionBasisPoints);
     }

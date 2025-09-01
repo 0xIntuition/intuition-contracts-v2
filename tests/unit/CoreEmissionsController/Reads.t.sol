@@ -179,9 +179,6 @@ contract CoreEmissionsControllerTest is CoreEmissionsControllerBase {
 
         uint256 emissions = controller.getEmissionsAtEpoch(DEFAULT_REDUCTION_CLIFF);
         // Expected: 1M * 0.9^1 = 900,000
-        uint256 expected =
-            _calculateExpectedEmissionsAfterCliffs(DEFAULT_EMISSIONS_PER_EPOCH, DEFAULT_REDUCTION_BASIS_POINTS, 1);
-        assertEq(emissions, expected);
         assertEq(emissions, 900_000 * 1e18);
     }
 
@@ -206,9 +203,9 @@ contract CoreEmissionsControllerTest is CoreEmissionsControllerBase {
         expectedEmissions[2] = 729_000 * 1e18; // 1M * 0.9^3
         expectedEmissions[3] = 656_100 * 1e18; // 1M * 0.9^4
         expectedEmissions[4] = 590_490 * 1e18; // 1M * 0.9^5
-        expectedEmissions[5] = 348_678_440_100 * 1e12; // 1M * 0.9^10
-        expectedEmissions[6] = 348_678_440_100 * 1e12; // 1M * 0.9^10
-        expectedEmissions[7] = 348_678_440_100 * 1e12; // 1M * 0.9^10
+        expectedEmissions[5] = 348_678_440_100_000_000_000_000; // 1M * 0.9^10
+        expectedEmissions[6] = 205_891_132_094_649_000_000_000; // 1M * 0.9^10
+        expectedEmissions[7] = 185_302_018_885_184_100_000_000; // 1M * 0.9^10
 
         for (uint256 i = 0; i < testEpochs.length; i++) {
             uint256 emissions = controller.getEmissionsAtEpoch(testEpochs[i]);
@@ -443,15 +440,6 @@ contract CoreEmissionsControllerTest is CoreEmissionsControllerBase {
 
         result = controller.applyCliffReductions(1_000_000 * 1e18, 9000, 5);
         assertEq(result, 590_490 * 1e18);
-    }
-
-    function test_pow_Function_Success() public {
-        assertEq(controller.pow(2, 0), 1);
-        assertEq(controller.pow(2, 1), 2);
-        assertEq(controller.pow(2, 3), 8);
-        assertEq(controller.pow(10, 3), 1000);
-        assertEq(controller.pow(9000, 1), 9000);
-        assertEq(controller.pow(9000, 2), 81_000_000);
     }
 
     /* =================================================== */

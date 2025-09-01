@@ -15,6 +15,11 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import { VotingEscrow } from "src/external/curve/VotingEscrow.sol";
 
 /**
+ * @dev Common forge commands for testing
+ * forge inspect TrustBonding storage-layout
+ */
+
+/**
  * @title  TrustBonding
  * @author 0xIntuition
  * @notice Core contract of the Intuition protocol. This contract manages the locking of TRUST tokens
@@ -72,9 +77,6 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
                                  STATE
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Starting timestamp of the bonding contract's first epoch (epoch 0)
-    uint256 public startTimestamp;
-
     uint256 public maxAnnualEmission;
 
     /// @notice Mapping of epochs to the total claimed rewards for that epoch among all users
@@ -104,24 +106,6 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
     uint256[50] private __gap;
 
     /*//////////////////////////////////////////////////////////////
-                                 ERRORS
-    //////////////////////////////////////////////////////////////*/
-    error TrustBonding_ClaimableProtocolFeesExceedBalance();
-    error TrustBonding_InvalidEpoch();
-    error TrustBonding_InvalidUtilizationLowerBound();
-    error TrustBonding_InvalidStartTimestamp();
-    error TrustBonding_ProtocolFeesNotSentToTrustBondingYet();
-    error TrustBonding_MaxClaimableProtocolFeesAlreadySet();
-    error TrustBonding_NoClaimingDuringFirstEpoch();
-    error TrustBonding_NoRewardsToClaim();
-    error TrustBonding_OnlyMultiVault();
-    error TrustBonding_ProtocolFeesAlreadyClaimedForEpoch();
-    error TrustBonding_ProtocolFeesExceedMaxClaimable();
-    error TrustBonding_RewardsAlreadyClaimedForEpoch();
-    error TrustBonding_ZeroAddress();
-    error TrustBonding_InsufficientBalanceForRewards();
-
-    /*//////////////////////////////////////////////////////////////
                                  CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
 
@@ -130,22 +114,11 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
         _disableInitializers();
     }
 
-    /*//////////////////////////////////////////////////////////////
-                             INITIALIZER
-    //////////////////////////////////////////////////////////////*/
-
-    /**
-     * @notice Initializes the TrustBonding contract
-     * @param _owner The owner of the contract
-     * @param _trustToken The address of the WTRUST token
-     * @param _epochLength The length of an epoch in seconds
-     * @param _startTimestamp The starting timestamp of the first epoch
-     */
+    /// @inheritdoc ITrustBonding
     function initialize(
         address _owner,
         address _trustToken,
         uint256 _epochLength,
-        uint256 _startTimestamp,
         address _multiVault,
         address _satelliteEmissionsController,
         uint256 _systemUtilizationLowerBound,
@@ -154,9 +127,8 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
         external
         initializer
     {
-        // Ensure the start timestamp is in the future
-        if (_startTimestamp < block.timestamp) {
-            revert TrustBonding_InvalidStartTimestamp();
+        if (_owner == address(0)) {
+            revert TrustBonding_ZeroAddress();
         }
 
         if (_multiVault == address(0)) {
@@ -183,8 +155,8 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
 
         _grantRole(DEFAULT_ADMIN_ROLE, _owner);
         _grantRole(PAUSER_ROLE, _owner);
+        _grantRole(TIMELOCK_ROLE, _owner);
 
-        startTimestamp = _startTimestamp;
         multiVault = _multiVault;
         satelliteEmissionsController = _satelliteEmissionsController;
         systemUtilizationLowerBound = _systemUtilizationLowerBound;
@@ -195,86 +167,59 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
                                  VIEW FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    /**
-     * @notice Returns the length of an epoch in seconds
-     * @return The length of an epoch in seconds
-     */
+    /// @inheritdoc ITrustBonding
     function epochLength() public view returns (uint256) {
         return ICoreEmissionsController(satelliteEmissionsController).getEpochLength();
     }
 
-    /**
-     * @notice Returns the number of epochs in a year
-     * @return The number of epochs in a year
-     */
+    /// @inheritdoc ITrustBonding
     function epochsPerYear() public view returns (uint256) {
-        return YEAR / ICoreEmissionsController(satelliteEmissionsController).getEpochLength();
+        return _epochsPerYear();
     }
 
-    /**
-     * @notice Returns the timestamp at the end of a specific epoch
-     * @param epoch The epoch to get the end timestamp for
-     * @return The timestamp at the end of the given epoch
-     */
+    /// @inheritdoc ITrustBonding
     function epochTimestampEnd(uint256 epoch) public view returns (uint256) {
         return _epochTimestampEnd(epoch);
     }
 
-    /**
-     * @notice Get the epoch at a given timestamp
-     * @param timestamp Timestamp to get the epoch of
-     * @return Epoch at the given timestamp
-     */
+    /// @inheritdoc ITrustBonding
     function epochAtTimestamp(uint256 timestamp) public view returns (uint256) {
         return _epochAtTimestamp(timestamp);
     }
-    /**
-     * @notice Returns the current epoch
-     * @return Current epoch
-     */
-
+    
+    /// @inheritdoc ITrustBonding
     function currentEpoch() public view returns (uint256) {
         return _currentEpoch();
     }
 
-    /**
-     * @notice Returns the previous epoch
-     * @return Previous epoch
-     */
+    /// @inheritdoc ITrustBonding
     function previousEpoch() public view returns (uint256) {
         uint256 curr = _currentEpoch();
         return curr == 0 ? 0 : curr - 1;
     }
 
-    /**
-     * @notice Returns the total amount of TRUST tokens locked in the contract
-     * @return The total amount of TRUST tokens locked in the contract
-     */
+    /// @inheritdoc ITrustBonding
     function totalLocked() public view returns (uint256) {
         return supply;
     }
 
-    /**
-     * @notice Returns the total bonded balance (i.e. the sum of all users’ veTRUST)
-     *         at the current block timestamp
-     * @return The total amount of veTRUST at the current block timestamp
-     */
+    /// @inheritdoc ITrustBonding
     function totalBondedBalance() external view returns (uint256) {
         return _totalSupply(block.timestamp);
     }
 
+    /// @inheritdoc ITrustBonding
     function eligibleRewards(address account) public view returns (uint256) {
-        uint256 currentEpoch = _currentEpoch();
-        uint256 prevEpoch = currentEpoch > 1 ? currentEpoch - 1 : 0;
+        uint256 currentEpochLocal = _currentEpoch();
+        if (currentEpochLocal == 0) {
+            return 0;
+        }
+        uint256 prevEpoch = currentEpochLocal == 1 ? currentEpochLocal - 1 : 0;
         return _userEligibleRewardsForEpoch(account, prevEpoch) * _getPersonalUtilizationRatio(account, prevEpoch)
             / BASIS_POINTS_DIVISOR;
     }
 
-    /**
-     * @notice Returns the total veTRUST balance at the end of a specific epoch
-     * @param epoch The epoch to get the total veTRUST balance for
-     * @return The total amount of veTRUST at the end of the given epoch
-     */
+    /// @inheritdoc ITrustBonding
     function totalBondedBalanceAtEpochEnd(uint256 epoch) public view returns (uint256) {
         if (epoch > currentEpoch()) {
             revert TrustBonding_InvalidEpoch();
@@ -283,80 +228,47 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
         return _totalSupply(_epochTimestampEnd(epoch));
     }
 
-    /**
-     * @notice Returns the user's veTRUST balance at the end of a specific epoch
-     * @param _account The user's address
-     * @param _epoch The epoch to get the user's veTRUST balance for
-     * @return The user's veTRUST balance at the end of the given epoch
-     */
-    function userBondedBalanceAtEpochEnd(address _account, uint256 _epoch) public view returns (uint256) {
-        if (_account == address(0)) {
+    /// @inheritdoc ITrustBonding
+    function userBondedBalanceAtEpochEnd(address account, uint256 epoch) public view returns (uint256) {
+        if (account == address(0)) {
             revert TrustBonding_ZeroAddress();
         }
 
-        if (_epoch > currentEpoch()) {
+        if (epoch > currentEpoch()) {
             revert TrustBonding_InvalidEpoch();
         }
 
-        return _balanceOf(_account, _epochTimestampEnd(_epoch));
+        return _balanceOf(account, _epochTimestampEnd(epoch));
     }
 
-    /**
-     * @notice Returns the user's raw eligible rewards for a specific epoch.
-     * @param account The user's address
-     * @param epoch The epoch to get the eligible rewards for
-     * @return The user's eligible rewards for the given epoch
-     */
+    /// @inheritdoc ITrustBonding
     function userEligibleRewardsForEpoch(address account, uint256 epoch) public view returns (uint256) {
         return _userEligibleRewardsForEpoch(account, epoch);
     }
 
-    /**
-     * @notice Returns whether the user has claimed rewards for a specific epoch
-     * @param account The user's address
-     * @param epoch The epoch to check if the user has claimed rewards for
-     * @return Whether the user has claimed rewards for the given epoch
-     */
+    /// @inheritdoc ITrustBonding
     function hasClaimedRewardsForEpoch(address account, uint256 epoch) public view returns (bool) {
         return _hasClaimedRewardsForEpoch(account, epoch);
     }
 
-    /**
-     * @notice Calculates the amount of TRUST tokens to be emitted per epoch, based on bonding percentage and max
-     * emission
-     * @param epoch The epoch to calculate the TRUST emission for
-     * @return The amount of TRUST emitted per epoch
-     */
+    /// @inheritdoc ITrustBonding
     function trustPerEpoch(uint256 epoch) public view returns (uint256) {
         return _emissionsForEpoch(epoch);
     }
 
-    /**
-     * @notice Returns the system utilization ratio for a specific epoch
-     * @param _epoch The epoch to calculate the system utilization ratio for
-     * @return The system utilization ratio for the given epoch
-     */
-    function getSystemUtilizationRatio(uint256 _epoch) public view returns (uint256) {
-        return _getSystemUtilizationRatio(_epoch);
+    /// @inheritdoc ITrustBonding
+    function getSystemUtilizationRatio(uint256 epoch) public view returns (uint256) {
+        return _getSystemUtilizationRatio(epoch);
     }
 
-    /**
-     * @notice Returns the user's personal utilization ratio for a specific epoch
-     * @param _account The user's address
-     * @param _epoch The epoch to calculate the personal utilization ratio for
-     * @return The personal utilization ratio for the given epoch
-     */
-    function getPersonalUtilizationRatio(address _account, uint256 _epoch) public view returns (uint256) {
-        return _getPersonalUtilizationRatio(_account, _epoch);
+    /// @inheritdoc ITrustBonding
+    function getPersonalUtilizationRatio(address account, uint256 epoch) public view returns (uint256) {
+        return _getPersonalUtilizationRatio(account, epoch);
     }
 
-    /**
-     * @notice Returns the current APR (annual percentage rate) for bonding TRUST tokens
-     * @param _epoch The epoch to calculate the APR for
-     * @return The current APR in basis points for bonding TRUST tokens
-     */
-    function getAprAtEpoch(uint256 _epoch) external view returns (uint256) {
-        if (_epoch > currentEpoch()) {
+    /// @inheritdoc ITrustBonding
+    function getAprAtEpoch(uint256 epoch) external view returns (uint256) {
+        if (epoch > currentEpoch()) {
             revert TrustBonding_InvalidEpoch();
         }
 
@@ -366,23 +278,36 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
             return 0;
         }
 
-        uint256 trustPerYear = trustPerEpoch(_epoch) * epochsPerYear();
+        uint256 trustPerYear = _emissionsForEpoch(epoch) * epochsPerYear();
 
         return trustPerYear * BASIS_POINTS_DIVISOR / totalLockedAmount;
+    }
+
+    /// @inheritdoc ITrustBonding
+    function getUnclaimedRewardsForEpoch(uint256 epoch) external view returns (uint256) {
+        uint256 currentEpochLocal = currentEpoch();
+        // There cannot be any unclaimed rewards during the first two epochs, so we return 0.
+        if (currentEpochLocal < 2) {
+            return 0;
+        }
+
+        // We only want unclaimed rewards from epochs that are no longer claimable.
+        // For epochs that are still claimable, we return 0.
+        // This means we only consider epochs that are at least two epochs old.
+        if (epoch > currentEpochLocal - 2) {
+            return 0;
+        }
+
+        uint256 epochRewards = _emissionsForEpoch(epoch);
+        uint256 claimedRewards = totalClaimedRewardsForEpoch[epoch];
+        return epochRewards - claimedRewards;
     }
 
     /*//////////////////////////////////////////////////////////////
                             USER ACTIONS
     //////////////////////////////////////////////////////////////*/
 
-    /**
-     * @notice Claims eligible Trust token rewards. Claims are always for the previous epoch (`currentEpoch() - 1`)
-     * @dev Rewards for epoch `n` are claimable in epoch `n + 1`. If the user forgets to claim their rewards for epoch
-     * `n`,
-     *      they are effectively forfeited. Note that the user is free to claim their rewards to any address they
-     * choose.
-     * @param recipient The address to receive the Trust rewards
-     */
+    /// @inheritdoc ITrustBonding
     function claimRewards(address recipient) external whenNotPaused nonReentrant {
         if (recipient == address(0)) {
             revert TrustBonding_ZeroAddress();
@@ -434,24 +359,17 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
                          ACCESS-RESTRICTED FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    /**
-     * @notice Pauses the contract
-     */
+    /// @inheritdoc ITrustBonding
     function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
     }
 
-    /**
-     * @notice Unpauses the contract
-     */
+    /// @inheritdoc ITrustBonding
     function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
         _unpause();
     }
 
-    /**
-     * @notice Sets the MultiVault contract address
-     * @param _multiVault The address of the MultiVault contract
-     */
+    /// @inheritdoc ITrustBonding
     function setMultiVault(address _multiVault) external onlyRole(TIMELOCK_ROLE) {
         if (_multiVault == address(0)) {
             revert TrustBonding_ZeroAddress();
@@ -462,11 +380,8 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
         emit MultiVaultSet(_multiVault);
     }
 
-    /**
-     * @notice Sets the SatelliteEmissionsController contract address
-     * @param _satelliteEmissionsController The address of the SatelliteEmissionsController contract
-     */
-    function setSatelliteEmissionsController(address _satelliteEmissionsController) external onlyRole(TIMELOCK_ROLE) {
+    /// @inheritdoc ITrustBonding
+    function updateSatelliteEmissionsController(address _satelliteEmissionsController) external onlyRole(TIMELOCK_ROLE) {
         if (_satelliteEmissionsController == address(0)) {
             revert TrustBonding_ZeroAddress();
         }
@@ -476,10 +391,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
         emit SatelliteEmissionsControllerSet(_satelliteEmissionsController);
     }
 
-    /**
-     * @notice Updates the lower bound for the system utilization ratio
-     * @param newLowerBound The new lower bound for the system utilization ratio
-     */
+    /// @inheritdoc ITrustBonding
     function updateSystemUtilizationLowerBound(uint256 newLowerBound) external onlyRole(TIMELOCK_ROLE) {
         if (newLowerBound > BASIS_POINTS_DIVISOR || newLowerBound < MINIMUM_SYSTEM_UTILIZATION_LOWER_BOUND) {
             revert TrustBonding_InvalidUtilizationLowerBound();
@@ -490,10 +402,7 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
         emit SystemUtilizationLowerBoundUpdated(newLowerBound);
     }
 
-    /**
-     * @notice Updates the lower bound for the personal utilization ratio
-     * @param newLowerBound The new lower bound for the personal utilization ratio
-     */
+    /// @inheritdoc ITrustBonding
     function updatePersonalUtilizationLowerBound(uint256 newLowerBound) external onlyRole(TIMELOCK_ROLE) {
         if (newLowerBound > BASIS_POINTS_DIVISOR || newLowerBound < MINIMUM_PERSONAL_UTILIZATION_LOWER_BOUND) {
             revert TrustBonding_InvalidUtilizationLowerBound();
@@ -504,41 +413,16 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
         emit PersonalUtilizationLowerBoundUpdated(newLowerBound);
     }
 
-    /**
-     * @notice Returns the amount of unclaimed rewards that can be reclaimed by admin/controller
-     * @dev Calculates unclaimed rewards from past epochs, excluding rewards that can still be claimed
-     *      for the previous epoch
-     * @return The amount of unclaimed rewards available for reclaiming
-     */
-    function getUnclaimedRewards() external view returns (uint256) {
-        // There cannot be any unclaimed rewards during the first epoch as the first epoch is not claimable
-        if (currentEpoch() == 0) {
-            return 0;
-        }
-
-        uint256 previousEpoch = currentEpoch() - 1;
-        uint256 totalUnclaimedRewards = 0;
-
-        // Sum up all unclaimed rewards from all past epochs except the previous epoch
-        // The previous epoch's rewards can still be claimed, so we exclude them
-        for (uint256 epoch = 1; epoch < previousEpoch; epoch++) {
-            uint256 epochRewards = trustPerEpoch(epoch);
-            uint256 claimedRewards = totalClaimedRewardsForEpoch[epoch];
-
-            if (epochRewards > claimedRewards) {
-                totalUnclaimedRewards += epochRewards - claimedRewards;
-            }
-        }
-
-        return totalUnclaimedRewards;
-    }
-
     /*//////////////////////////////////////////////////////////////
                             INTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
     function _currentEpoch() internal view returns (uint256) {
         return _epochAtTimestamp(block.timestamp);
+    }
+
+    function _epochsPerYear() public view returns (uint256) {
+        return YEAR / ICoreEmissionsController(satelliteEmissionsController).getEpochLength();
     }
 
     function _epochTimestampEnd(uint256 epoch) internal view returns (uint256) {
@@ -590,19 +474,18 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
     }
 
     function _getPersonalUtilizationRatio(address _account, uint256 _epoch) internal view returns (uint256) {
-        // In epochs 0 and 1, the utilization ratio is set to the maximum value (100%)
         if (_account == address(0)) {
             revert TrustBonding_ZeroAddress();
         }
 
         // If the epoch is in the future, return 0 and exit early
-        if (_epoch < 2) {
-            return BASIS_POINTS_DIVISOR;
-        }
-
-        // If the epoch is in the future, return 0 and exit early
         if (_epoch > currentEpoch()) {
             return 0;
+        }
+
+        // In epochs 0 and 1, the utilization ratio is set to the maximum value (100%)
+        if (_epoch < 2) {
+            return BASIS_POINTS_DIVISOR;
         }
 
         // Fetch the personal utilization before and after the epoch
@@ -636,37 +519,15 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
             _getNormalizedUtilizationRatio(userUtilizationDelta, userUtilizationTarget, personalUtilizationLowerBound);
     }
 
-    /**
-     * @notice Returns the normalized utilization ratio, adjusted for the desired range (lowerBound,
-     * BASIS_POINTS_DIVISOR)
-     * @param delta The change in utilization from the previous epoch
-     * @param target The target utilization for the previous epoch
-     * @param lowerBound The lower bound for the utilization ratio
-     * @return The normalized utilization ratio for the given parameters
-     */
-    function _getNormalizedUtilizationRatio(
-        uint256 delta,
-        uint256 target,
-        uint256 lowerBound
-    )
-        internal
-        pure
-        returns (uint256)
-    {
-        uint256 ratioRange = BASIS_POINTS_DIVISOR - lowerBound;
-        uint256 utilizationRatio = lowerBound + (delta * ratioRange) / target;
-        return utilizationRatio;
-    }
-
     function _getSystemUtilizationRatio(uint256 _epoch) internal view returns (uint256) {
-        // In epochs 0 and 1, the utilization ratio is set to the maximum value (100%)
-        if (_epoch < 2) {
-            return BASIS_POINTS_DIVISOR;
-        }
-
         // If the epoch is in the future, return 0 and exit early
         if (_epoch > currentEpoch()) {
             return 0;
+        }
+
+        // In epochs 0 and 1, the utilization ratio is set to the maximum value (100%)
+        if (_epoch < 2) {
+            return BASIS_POINTS_DIVISOR;
         }
 
         // Fetch the system utilization before and after the epoch
@@ -697,5 +558,27 @@ contract TrustBonding is ITrustBonding, AccessControlUpgradeable, PausableUpgrad
         // Normalize the final utilizationRatio to be within the bounds of the systemUtilizationLowerBound and
         // BASIS_POINTS_DIVISOR
         return _getNormalizedUtilizationRatio(utilizationDelta, utilizationTarget, systemUtilizationLowerBound);
+    }
+
+    /**
+     * @notice Returns the normalized utilization ratio, adjusted for the desired range (lowerBound,
+     * BASIS_POINTS_DIVISOR)
+     * @param delta The change in utilization from the previous epoch
+     * @param target The target utilization for the previous epoch
+     * @param lowerBound The lower bound for the utilization ratio
+     * @return The normalized utilization ratio for the given parameters
+     */
+    function _getNormalizedUtilizationRatio(
+        uint256 delta,
+        uint256 target,
+        uint256 lowerBound
+    )
+        internal
+        pure
+        returns (uint256)
+    {
+        uint256 ratioRange = BASIS_POINTS_DIVISOR - lowerBound;
+        uint256 utilizationRatio = lowerBound + (delta * ratioRange) / target;
+        return utilizationRatio;
     }
 }

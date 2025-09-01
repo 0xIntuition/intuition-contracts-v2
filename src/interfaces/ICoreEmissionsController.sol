@@ -41,23 +41,52 @@ struct EmissionsCheckpoint {
  * @notice Interface for the CoreEmissionsController that manages TRUST token emissions
  */
 interface ICoreEmissionsController {
-    /**
-     * @notice Returns the length of each epoch in seconds
-     * @return The epoch length in seconds
-     */
-    function getEpochLength() external view returns (uint256);
+
+    /* =================================================== */
+    /*                       EVENTS                        */
+    /* =================================================== */
 
     /**
-     * @notice Returns the length of each epoch in seconds (alternative getter)
-     * @return The epoch length in seconds
+     * @dev Emitted when the CoreEmissionsController is initialized
+     * @param startTimestamp The timestamp when emissions begin
+     * @param emissionsLength The length of each epoch in seconds
+     * @param emissionsPerEpoch The base amount of TRUST tokens emitted per epoch
+     * @param emissionsReductionCliff The number of epochs between emissions reductions
+     * @param emissionsReductionBasisPoints The reduction percentage in basis points
      */
-    function epochLength() external view returns (uint256);
+    event Initialized(
+        uint256 startTimestamp,
+        uint256 emissionsLength,
+        uint256 emissionsPerEpoch,
+        uint256 emissionsReductionCliff,
+        uint256 emissionsReductionBasisPoints
+    );
+
+    /* =================================================== */
+    /*                       ERRORS                        */
+    /* =================================================== */
+
+    /// @dev Thrown when reduction basis points exceed the maximum allowed value
+    error CoreEmissionsController_InvalidReductionBasisPoints();
+    
+    /// @dev Thrown when cliff value is zero or exceeds 365 epochs
+    error CoreEmissionsController_InvalidCliff();
+
+    /* =================================================== */
+    /*                      GETTERS                        */
+    /* =================================================== */
 
     /**
      * @notice Returns the timestamp when emissions started
      * @return The start timestamp of the emissions schedule
      */
     function getStartTimestamp() external view returns (uint256);
+
+    /**
+     * @notice Returns the length of each epoch in seconds
+     * @return The epoch length in seconds
+     */
+    function getEpochLength() external view returns (uint256);
 
     /**
      * @notice Returns the current epoch number based on the current block timestamp

@@ -1,15 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.29;
 
-enum FinalityState {
-    INSTANT,
-    FINALIZED,
-    ESPRESSO
-}
+import { FinalityState } from "src/interfaces/IMetaLayer.sol";
 
 contract IIGPMock {
     function quoteGasPayment(uint32 domain, uint256 gasLimit) external view returns (uint256) {
-        return 0 ether; // Return a fixed gas quote for testing
+        return 0.025 ether; // Return a fixed gas quote for testing
     }
 }
 
@@ -25,7 +21,7 @@ contract MetalayerRouterMock {
     }
 }
 
-contract MetaERC20HubMock {
+contract MetaERC20HubOrSpokeMock {
     address public router;
 
     constructor(address _router) {

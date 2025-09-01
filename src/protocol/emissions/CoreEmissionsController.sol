@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.29;
 
+import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 import { ICoreEmissionsController } from "src/interfaces/ICoreEmissionsController.sol";
 
 contract CoreEmissionsController is ICoreEmissionsController {
+    using FixedPointMathLib for uint256;
+
     /* =================================================== */
     /*                     CONSTANTS                       */
     /* =================================================== */
 
     /// @dev Divisor for basis point calculations (100% = 10,000 basis points)
     uint256 internal constant BASIS_POINTS_DIVISOR = 10_000;
-
-    /// @dev Initial supply of TRUST tokens (1 billion tokens with 18 decimals)
-    uint256 internal constant INITIAL_SUPPLY = 1_000_000_000 * 1e18;
 
     /// @dev Maximum allowed cliff reduction in basis points (10% = 1000 basis points)
     uint256 internal constant MAX_CLIFF_REDUCTION_BASIS_POINTS = 1000;
@@ -22,51 +22,19 @@ contract CoreEmissionsController is ICoreEmissionsController {
     /* =================================================== */
 
     /// @dev Timestamp when emissions schedule begins
-    uint256 internal START_TIMESTAMP;
+    uint256 internal _START_TIMESTAMP;
 
     /// @dev Duration of each epoch in seconds
-    uint256 internal EPOCH_LENGTH;
+    uint256 internal _EPOCH_LENGTH;
 
     /// @dev Base amount of TRUST tokens emitted per epoch
-    uint256 internal EMISSIONS_PER_EPOCH;
+    uint256 internal _EMISSIONS_PER_EPOCH;
 
     /// @dev Number of epochs between emissions reductions
-    uint256 internal EMISSIONS_REDUCTION_CLIFF;
-
-    /// @dev Percentage reduction applied at each cliff in basis points
-    uint256 internal EMISSIONS_REDUCTION_BASIS_POINTS;
+    uint256 internal _EMISSIONS_REDUCTION_CLIFF;
 
     /// @dev Factor used to calculate retained emissions after reduction (10000 - reduction_basis_points)
-    uint256 internal EMISSIONS_RETENTION_FACTOR;
-
-    /* =================================================== */
-    /*                       ERRORS                        */
-    /* =================================================== */
-
-    /// @dev Thrown when reduction basis points exceed the maximum allowed value
-    error CoreEmissionsController_InvalidReductionBasisPoints();
-    /// @dev Thrown when cliff value is zero or exceeds 365 epochs
-    error CoreEmissionsController_InvalidCliff();
-
-    /* =================================================== */
-    /*                       EVENTS                        */
-    /* =================================================== */
-
-    /**
-     * @dev Emitted when the CoreEmissionsController is initialized
-     * @param startTimestamp The timestamp when emissions begin
-     * @param emissionsLength The length of each epoch in seconds
-     * @param emissionsPerEpoch The base amount of TRUST tokens emitted per epoch
-     * @param emissionsReductionCliff The number of epochs between emissions reductions
-     * @param emissionsReductionBasisPoints The reduction percentage in basis points
-     */
-    event Initialized(
-        uint256 startTimestamp,
-        uint256 emissionsLength,
-        uint256 emissionsPerEpoch,
-        uint256 emissionsReductionCliff,
-        uint256 emissionsReductionBasisPoints
-    );
+    uint256 internal _EMISSIONS_RETENTION_FACTOR;
 
     /* =================================================== */
     /*                 INITIALIZATION                      */
@@ -84,12 +52,11 @@ contract CoreEmissionsController is ICoreEmissionsController {
         _validateReductionBasisPoints(emissionsReductionBasisPoints);
         _validateCliff(emissionsReductionCliff);
 
-        START_TIMESTAMP = startTimestamp;
-        EPOCH_LENGTH = emissionsLength;
-        EMISSIONS_PER_EPOCH = emissionsPerEpoch;
-        EMISSIONS_REDUCTION_CLIFF = emissionsReductionCliff;
-        EMISSIONS_REDUCTION_BASIS_POINTS = emissionsReductionBasisPoints;
-        EMISSIONS_RETENTION_FACTOR = BASIS_POINTS_DIVISOR - emissionsReductionBasisPoints;
+        _START_TIMESTAMP = startTimestamp;
+        _EPOCH_LENGTH = emissionsLength;
+        _EMISSIONS_PER_EPOCH = emissionsPerEpoch;
+        _EMISSIONS_REDUCTION_CLIFF = emissionsReductionCliff;
+        _EMISSIONS_RETENTION_FACTOR = BASIS_POINTS_DIVISOR - emissionsReductionBasisPoints;
 
         emit Initialized(
             startTimestamp, emissionsLength, emissionsPerEpoch, emissionsReductionCliff, emissionsReductionBasisPoints
@@ -97,22 +64,17 @@ contract CoreEmissionsController is ICoreEmissionsController {
     }
 
     /* =================================================== */
-    /*                   VIEW FUNCTIONS                    */
+    /*                      GETTERS                        */
     /* =================================================== */
 
     /// @inheritdoc ICoreEmissionsController
     function getStartTimestamp() external view returns (uint256) {
-        return START_TIMESTAMP;
+        return _START_TIMESTAMP;
     }
 
     /// @inheritdoc ICoreEmissionsController
     function getEpochLength() external view returns (uint256) {
-        return EPOCH_LENGTH;
-    }
-
-    /// @inheritdoc ICoreEmissionsController
-    function epochLength() external view returns (uint256) {
-        return EPOCH_LENGTH;
+        return _EPOCH_LENGTH;
     }
 
     /// @inheritdoc ICoreEmissionsController
@@ -178,14 +140,14 @@ contract CoreEmissionsController is ICoreEmissionsController {
 
     function _emissionsAtEpoch(uint256 epoch) internal view returns (uint256) {
         // Calculate how many complete cliff periods have passed
-        uint256 cliffsPassed = epoch / EMISSIONS_REDUCTION_CLIFF;
+        uint256 cliffsPassed = epoch / _EMISSIONS_REDUCTION_CLIFF;
 
         // Apply cliff reductions to base emissions
-        return _applyCliffReductions(EMISSIONS_PER_EPOCH, EMISSIONS_RETENTION_FACTOR, cliffsPassed);
+        return _applyCliffReductions(_EMISSIONS_PER_EPOCH, _EMISSIONS_RETENTION_FACTOR, cliffsPassed);
     }
 
     function _currentEpoch() internal view returns (uint256) {
-        if (block.timestamp < START_TIMESTAMP) {
+        if (block.timestamp < _START_TIMESTAMP) {
             return 0;
         }
 
@@ -193,11 +155,11 @@ contract CoreEmissionsController is ICoreEmissionsController {
     }
 
     function _calculateEpochTimestampStart(uint256 epoch) internal view returns (uint256) {
-        return START_TIMESTAMP + (epoch * EPOCH_LENGTH);
+        return _START_TIMESTAMP + (epoch * _EPOCH_LENGTH);
     }
 
     function _calculateEpochTimestampEnd(uint256 epoch) internal view returns (uint256) {
-        return START_TIMESTAMP + (epoch * EPOCH_LENGTH) + EPOCH_LENGTH;
+        return _START_TIMESTAMP + (epoch * _EPOCH_LENGTH) + _EPOCH_LENGTH;
     }
 
     /**
@@ -206,26 +168,26 @@ contract CoreEmissionsController is ICoreEmissionsController {
      * @return Emissions amount for the epoch containing the timestamp
      */
     function _calculateEpochEmissionsAt(uint256 timestamp) internal view returns (uint256) {
-        if (timestamp < START_TIMESTAMP) {
+        if (timestamp < _START_TIMESTAMP) {
             return 0;
         }
 
         // Calculate current epoch number
-        uint256 currentEpochNumber = (timestamp - START_TIMESTAMP) / EPOCH_LENGTH;
+        uint256 currentEpochNumber = (timestamp - _START_TIMESTAMP) / _EPOCH_LENGTH;
 
         // Calculate how many complete cliff periods have passed
-        uint256 cliffsPassed = currentEpochNumber / EMISSIONS_REDUCTION_CLIFF;
+        uint256 cliffsPassed = currentEpochNumber / _EMISSIONS_REDUCTION_CLIFF;
 
         // Apply cliff reductions to base emissions
-        return _applyCliffReductions(EMISSIONS_PER_EPOCH, EMISSIONS_RETENTION_FACTOR, cliffsPassed);
+        return _applyCliffReductions(_EMISSIONS_PER_EPOCH, _EMISSIONS_RETENTION_FACTOR, cliffsPassed);
     }
 
     function _calculateTotalEpochsToTimestamp(uint256 timestamp) internal view returns (uint256) {
-        if (timestamp < START_TIMESTAMP) {
+        if (timestamp < _START_TIMESTAMP) {
             return 0;
         }
 
-        return (timestamp - START_TIMESTAMP) / EPOCH_LENGTH;
+        return (timestamp - _START_TIMESTAMP) / _EPOCH_LENGTH;
     }
 
     /**
@@ -244,40 +206,15 @@ contract CoreEmissionsController is ICoreEmissionsController {
         pure
         returns (uint256)
     {
-        if (cliffsToApply == 0) {
-            return baseEmissions;
-        }
+        if (cliffsToApply == 0) return baseEmissions;
 
-        // Apply compound reduction: emissions * (retentionFactor / 10000)^cliffs
-        uint256 numerator = _pow(retentionFactor, cliffsToApply);
-        uint256 denominator = _pow(BASIS_POINTS_DIVISOR, cliffsToApply);
+        // Convert retentionFactor to WAD (1e18) ratio
+        uint256 rWad = (retentionFactor * 1e18) / BASIS_POINTS_DIVISOR;
 
-        return (baseEmissions * numerator) / denominator;
-    }
+        // factorWad = rWad^cliffs (scaled by 1e18) - O(log n) time complexity thanks to FixedPointMathLib
+        uint256 factorWad = FixedPointMathLib.rpow(rWad, cliffsToApply, 1e18);
 
-    /**
-     * @notice Calculates base^exponent using binary exponentiation for O(log n) complexity
-     * @param base The base number
-     * @param exponent The exponent
-     * @return result The result of base^exponent
-     */
-    function _pow(uint256 base, uint256 exponent) internal pure returns (uint256) {
-        if (exponent == 0) {
-            return 1;
-        }
-
-        uint256 result = 1;
-        uint256 currentBase = base;
-
-        // Use binary exponentiation for O(log n) complexity
-        while (exponent > 0) {
-            if (exponent & 1 == 1) {
-                result = result * currentBase;
-            }
-            currentBase = currentBase * currentBase;
-            exponent >>= 1; // Right shift by 1 (divide by 2)
-        }
-
-        return result;
+        // baseEmissions * factorWad / 1e18
+        return FixedPointMathLib.mulWad(baseEmissions, factorWad);
     }
 }

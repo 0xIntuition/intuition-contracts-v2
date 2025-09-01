@@ -7,17 +7,12 @@ import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+import { ISatelliteEmissionsController } from "src/interfaces/ISatelliteEmissionsController.sol";
 import { ITrustBonding } from "src/interfaces/ITrustBonding.sol";
 import { MetaERC20DispatchInit } from "src/interfaces/IMetaLayer.sol";
 import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";
 import { CoreEmissionsController } from "src/protocol/emissions/CoreEmissionsController.sol";
-import {
-    MetaERC20Dispatcher,
-    FinalityState,
-    IMetaERC20Hub,
-    IIGP,
-    IMetalayerRouter
-} from "src/protocol/emissions/MetaERC20Dispatcher.sol";
+import { FinalityState, MetaERC20Dispatcher } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
 
 /**
  * @title  SatelliteEmissionsController
@@ -25,6 +20,7 @@ import {
  * @notice Controls the transfers of TRUST tokens from the TrustBonding contract.
  */
 contract SatelliteEmissionsController is
+    ISatelliteEmissionsController,
     AccessControlUpgradeable,
     ReentrancyGuardUpgradeable,
     MetaERC20Dispatcher,
@@ -41,18 +37,15 @@ contract SatelliteEmissionsController is
     /* =================================================== */
     /*                  INTERNAL STATE                     */
     /* =================================================== */
-    address internal _trustBonding;
-    address internal _baseEmissionsController;
 
-    /* =================================================== */
-    /*                       ERRORS                        */
-    /* =================================================== */
+    /// @notice Address of the TrustBonding contract
+    address internal _TRUST_BONDING;
 
-    error Unauthorized();
-    error SatelliteEmissionsController_InvalidAddress();
-    error SatelliteEmissionsController_InvalidAmount();
-    error SatelliteEmissionsController_InsufficientBalance();
-    error SatelliteEmissionsController_InsufficientGasPayment();
+    /// @notice Address of the BaseEmissionsController contract
+    address internal _BASE_EMISSIONS_CONTROLLER;
+
+    /// @notice Mapping of bridged rewards for each epoch
+    mapping(uint256 epoch => uint256 amount) internal _bridgedRewards;
 
     /* =================================================== */
     /*                    CONSTRUCTOR                      */
@@ -94,40 +87,26 @@ contract SatelliteEmissionsController is
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(CONTROLLER_ROLE, trustBonding);
 
-        _trustBonding = trustBonding;
-        _baseEmissionsController = baseEmissionsController;
+        _TRUST_BONDING = trustBonding;
+        _BASE_EMISSIONS_CONTROLLER = baseEmissionsController;
     }
 
     /* =================================================== */
-    /*                       PUBLIC                        */
+    /*                      RECEIVE                        */
     /* =================================================== */
 
-    function bridgeUnclaimedRewards() external payable nonReentrant {
-        uint256 unclaimedRewards = ITrustBonding(_trustBonding).getUnclaimedRewards();
-        uint256 gasLimit = _quoteGasPayment(_recipientDomain, GAS_CONSTANT + _messageGasCost);
-
-        if (msg.value < gasLimit) {
-            revert SatelliteEmissionsController_InsufficientGasPayment();
-        }
-
-        _bridgeTokens(
-            _metaERC20SpokeOrHub,
-            _recipientDomain,
-            bytes32(uint256(uint160(_baseEmissionsController))),
-            unclaimedRewards,
-            gasLimit,
-            _finalityState
-        );
-
-        if (msg.value > gasLimit) {
-            Address.sendValue(payable(msg.sender), msg.value - gasLimit);
-        }
-    }
+    /**
+     * @notice The SatelliteEmissionsController will receive TRUST tokens from the BaseEmissionsController and hold
+     * those tokens until a user claims their rewards or until they are bridged back to the BaseEmissionsController to
+     * be burned.
+     */
+    receive() external payable { }
 
     /* =================================================== */
     /*                    CONTROLLER                       */
     /* =================================================== */
 
+    /// @inheritdoc ISatelliteEmissionsController
     function transfer(address recipient, uint256 amount) external nonReentrant onlyRole(CONTROLLER_ROLE) {
         if (recipient == address(0)) revert SatelliteEmissionsController_InvalidAddress();
         if (amount == 0) revert SatelliteEmissionsController_InvalidAmount();
@@ -139,35 +118,56 @@ contract SatelliteEmissionsController is
     /*                       ADMIN                         */
     /* =================================================== */
 
+    /// @inheritdoc ISatelliteEmissionsController
     function setMessageGasCost(uint256 newGasCost) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setMessageGasCost(newGasCost);
     }
 
+    /// @inheritdoc ISatelliteEmissionsController
     function setFinalityState(FinalityState newFinalityState) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setFinalityState(newFinalityState);
     }
 
+    /// @inheritdoc ISatelliteEmissionsController
     function setMetaERC20SpokeOrHub(address newMetaERC20SpokeOrHub) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setMetaERC20SpokeOrHub(newMetaERC20SpokeOrHub);
     }
 
+    /// @inheritdoc ISatelliteEmissionsController
     function setRecipientDomain(uint32 newRecipientDomain) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setRecipientDomain(newRecipientDomain);
     }
 
-    function transferUnclaimedRewards(address to) external payable onlyRole(DEFAULT_ADMIN_ROLE) {
-        uint256 unclaimedRewards = ITrustBonding(_trustBonding).getUnclaimedRewards();
-        uint256 gasLimit = _quoteGasPayment(_recipientDomain, GAS_CONSTANT + _messageGasCost);
+    /// @inheritdoc ISatelliteEmissionsController
+    function bridgeUnclaimedRewards(uint256 epoch) external payable onlyRole(DEFAULT_ADMIN_ROLE) {
 
+        // Prevent bridging of zero amount if no unclaimed rewards are available.
+        uint256 amount = ITrustBonding(_TRUST_BONDING).getUnclaimedRewardsForEpoch(epoch);
+        if (amount == 0) {
+            revert SatelliteEmissionsController_InvalidBridgeAmount();
+        }
+
+        // Check if rewards for this epoch have already been reclaimed and bridged.
+        if (_bridgedRewards[epoch] > 0) {
+            revert SatelliteEmissionsController_PreviouslyBridgedUnclaimedRewards();
+        }
+
+        // Mark the unclaimed rewards as bridged and prevent from being claimed again.
+        _bridgedRewards[epoch] = amount;
+
+        // Calculate gas limit for the bridge transfer using the MetaLayer router.
+        uint256 gasLimit = _quoteGasPayment(_recipientDomain, GAS_CONSTANT + _messageGasCost);
         if (msg.value < gasLimit) {
             revert SatelliteEmissionsController_InsufficientGasPayment();
         }
 
-        _bridgeTokens(
+        // Bridge the unclaimed rewards back to the base emissions controller.
+        // Reference the MetaERC20Dispatcher smart contract for more details.
+        _bridgeTokensViaNativeToken(
             _metaERC20SpokeOrHub,
             _recipientDomain,
-            bytes32(uint256(uint160(to))),
-            unclaimedRewards,
+            bytes32(uint256(uint160(_BASE_EMISSIONS_CONTROLLER))),
+            amount,
             gasLimit,
             _finalityState
         );

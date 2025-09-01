@@ -19,7 +19,6 @@ struct Protocol {
     MultiVault multiVault;
     SatelliteEmissionsController satelliteEmissionsController;
     address payable permit2;
-    WrappedTrust wrappedTrust;
 }
 
 struct Users {
