@@ -49,8 +49,10 @@ contract CoreEmissionsController is ICoreEmissionsController {
     )
         internal
     {
-        _validateReductionBasisPoints(emissionsReductionBasisPoints);
+        _validateTimestampStart(startTimestamp);
+        _validateEmissionsPerEpoch(emissionsPerEpoch);
         _validateCliff(emissionsReductionCliff);
+        _validateReductionBasisPoints(emissionsReductionBasisPoints);
 
         _START_TIMESTAMP = startTimestamp;
         _EPOCH_LENGTH = emissionsLength;
@@ -121,6 +123,18 @@ contract CoreEmissionsController is ICoreEmissionsController {
     /* =================================================== */
     /*                   VALIDATION                        */
     /* =================================================== */
+
+    function _validateEmissionsPerEpoch(uint256 emissionsPerEpoch) internal view {
+        if (emissionsPerEpoch == 0) {
+            revert CoreEmissionsController_InvalidEmissionsPerEpoch();
+        }
+    }
+
+    function _validateTimestampStart(uint256 timestampStart) internal view {
+        if (timestampStart < block.timestamp) {
+            revert CoreEmissionsController_InvalidTimestampStart();
+        }
+    }
 
     function _validateReductionBasisPoints(uint256 emissionsReductionBasisPoints) internal pure {
         if (emissionsReductionBasisPoints > MAX_CLIFF_REDUCTION_BASIS_POINTS) {

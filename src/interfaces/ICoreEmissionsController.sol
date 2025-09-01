@@ -65,11 +65,17 @@ interface ICoreEmissionsController {
     /*                       ERRORS                        */
     /* =================================================== */
 
-    /// @dev Thrown when reduction basis points exceed the maximum allowed value
+    /// @notice Thrown when reduction basis points exceed the maximum allowed value
     error CoreEmissionsController_InvalidReductionBasisPoints();
 
-    /// @dev Thrown when cliff value is zero or exceeds 365 epochs
+    /// @notice Thrown when cliff value is zero or exceeds 365 epochs
     error CoreEmissionsController_InvalidCliff();
+
+    /// @notice Thrown when the start timestamp is in the past
+    error CoreEmissionsController_InvalidTimestampStart();
+
+    /// @notice Thrown when emissions per epoch is zero
+    error CoreEmissionsController_InvalidEmissionsPerEpoch();
 
     /* =================================================== */
     /*                      GETTERS                        */
