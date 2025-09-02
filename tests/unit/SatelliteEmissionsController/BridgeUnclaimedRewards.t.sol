@@ -41,7 +41,7 @@ contract BridgeUnclaimedRewardsTest is TrustBondingBase {
         // Advance to epoch 4 so epoch 2 rewards are bridgeable (2 epochs old)
         _advanceToEpoch(4);
 
-        uint256 unclaimedRewardsBefore = protocol.trustBonding.getUnclaimedRewardsForEpoch(2);
+        uint256 unclaimedRewardsBefore = protocol.satelliteEmissionsController.getUnclaimedRewardsForEpoch(2);
         assertGt(unclaimedRewardsBefore, 0, "Should have unclaimed rewards to bridge");
 
         uint256 satelliteBalanceBefore = address(protocol.satelliteEmissionsController).balance;
@@ -71,7 +71,7 @@ contract BridgeUnclaimedRewardsTest is TrustBondingBase {
         // Advance to epoch 5 so epoch 3 rewards are bridgeable
         _advanceToEpoch(5);
 
-        uint256 unclaimedRewardsBefore = protocol.trustBonding.getUnclaimedRewardsForEpoch(3);
+        uint256 unclaimedRewardsBefore = protocol.satelliteEmissionsController.getUnclaimedRewardsForEpoch(3);
         assertGt(unclaimedRewardsBefore, 0, "Should have unclaimed rewards from Bob");
 
         uint256 satelliteBalanceBefore = address(protocol.satelliteEmissionsController).balance;
@@ -93,7 +93,7 @@ contract BridgeUnclaimedRewardsTest is TrustBondingBase {
         _advanceToEpoch(4);
 
         uint256 totalEpochRewards = protocol.trustBonding.trustPerEpoch(2);
-        uint256 unclaimedRewards = protocol.trustBonding.getUnclaimedRewardsForEpoch(2);
+        uint256 unclaimedRewards = protocol.satelliteEmissionsController.getUnclaimedRewardsForEpoch(2);
 
         assertEq(unclaimedRewards, totalEpochRewards, "All rewards should be unclaimed");
 
@@ -120,7 +120,7 @@ contract BridgeUnclaimedRewardsTest is TrustBondingBase {
         _advanceToEpoch(4);
 
         // Ensure there are unclaimed rewards to bridge
-        uint256 unclaimedRewards = protocol.trustBonding.getUnclaimedRewardsForEpoch(2);
+        uint256 unclaimedRewards = protocol.satelliteEmissionsController.getUnclaimedRewardsForEpoch(2);
         assertGt(unclaimedRewards, 0, "Should have unclaimed rewards");
 
         resetPrank(users.admin);
@@ -138,7 +138,7 @@ contract BridgeUnclaimedRewardsTest is TrustBondingBase {
         _advanceToEpoch(4);
 
         // Ensure there are unclaimed rewards to bridge
-        uint256 unclaimedRewards = protocol.trustBonding.getUnclaimedRewardsForEpoch(2);
+        uint256 unclaimedRewards = protocol.satelliteEmissionsController.getUnclaimedRewardsForEpoch(2);
         assertGt(unclaimedRewards, 0, "Should have unclaimed rewards");
 
         resetPrank(users.admin);
@@ -168,7 +168,7 @@ contract BridgeUnclaimedRewardsTest is TrustBondingBase {
         _advanceToEpoch(4);
 
         // Try to bridge epoch 3 rewards (only 1 epoch old, should fail)
-        uint256 unclaimedRewards = protocol.trustBonding.getUnclaimedRewardsForEpoch(3);
+        uint256 unclaimedRewards = protocol.satelliteEmissionsController.getUnclaimedRewardsForEpoch(3);
         assertEq(unclaimedRewards, 0, "Should have no bridgeable rewards for epoch 3 (too recent)");
 
         resetPrank(users.admin);
@@ -207,14 +207,14 @@ contract BridgeUnclaimedRewardsTest is TrustBondingBase {
         _advanceToEpoch(5);
 
         // Bridge epoch 2 rewards (should have Bob's unclaimed rewards)
-        uint256 unclaimedEpoch2 = protocol.trustBonding.getUnclaimedRewardsForEpoch(2);
+        uint256 unclaimedEpoch2 = protocol.satelliteEmissionsController.getUnclaimedRewardsForEpoch(2);
         assertGt(unclaimedEpoch2, 0, "Should have Bob's unclaimed epoch 2 rewards");
 
         resetPrank(users.admin);
         protocol.satelliteEmissionsController.bridgeUnclaimedRewards{ value: GAS_QUOTE }(2);
 
         // Bridge epoch 3 rewards (should have Bob's unclaimed rewards)
-        uint256 unclaimedEpoch3 = protocol.trustBonding.getUnclaimedRewardsForEpoch(3);
+        uint256 unclaimedEpoch3 = protocol.satelliteEmissionsController.getUnclaimedRewardsForEpoch(3);
         assertGt(unclaimedEpoch3, 0, "Should have Bob's unclaimed epoch 3 rewards");
 
         protocol.satelliteEmissionsController.bridgeUnclaimedRewards{ value: GAS_QUOTE }(3);
@@ -229,17 +229,17 @@ contract BridgeUnclaimedRewardsTest is TrustBondingBase {
         _createLock(users.alice, initialTokens);
 
         // In epoch 0: no rewards can be bridged
-        uint256 unclaimedEpoch0 = protocol.trustBonding.getUnclaimedRewardsForEpoch(0);
+        uint256 unclaimedEpoch0 = protocol.satelliteEmissionsController.getUnclaimedRewardsForEpoch(0);
         assertEq(unclaimedEpoch0, 0, "Epoch 0 should have no bridgeable rewards");
 
         // Advance to epoch 1: still no rewards can be bridged
         _advanceToEpoch(1);
-        uint256 unclaimedEpoch0InEpoch1 = protocol.trustBonding.getUnclaimedRewardsForEpoch(0);
+        uint256 unclaimedEpoch0InEpoch1 = protocol.satelliteEmissionsController.getUnclaimedRewardsForEpoch(0);
         assertEq(unclaimedEpoch0InEpoch1, 0, "Epoch 0 should have no bridgeable rewards in epoch 1");
 
         // Advance to epoch 2: the full emissions for epoch 0 are now bridgeable
         _advanceToEpoch(2);
-        uint256 unclaimedEpoch0InEpoch2 = protocol.trustBonding.getUnclaimedRewardsForEpoch(0);
+        uint256 unclaimedEpoch0InEpoch2 = protocol.satelliteEmissionsController.getUnclaimedRewardsForEpoch(0);
         assertEq(unclaimedEpoch0InEpoch2, 1_000_000 * 1e18, "Epoch 0 should now release the full 1,000,000 emissions");
     }
 
@@ -281,7 +281,7 @@ contract BridgeUnclaimedRewardsTest is TrustBondingBase {
         uint256 aliceClaimedRewards = protocol.trustBonding.userClaimedRewardsForEpoch(users.alice, 2);
         uint256 expectedUnclaimed = totalEpoch2Rewards - aliceClaimedRewards;
 
-        uint256 actualUnclaimed = protocol.trustBonding.getUnclaimedRewardsForEpoch(2);
+        uint256 actualUnclaimed = protocol.satelliteEmissionsController.getUnclaimedRewardsForEpoch(2);
         assertEq(actualUnclaimed, expectedUnclaimed, "Unclaimed should equal total minus Alice's claim");
 
         // Bridge the unclaimed rewards

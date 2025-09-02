@@ -15,11 +15,6 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import { VotingEscrow } from "src/external/curve/VotingEscrow.sol";
 
 /**
- * @dev Common forge commands for testing
- * forge inspect TrustBonding storage-layout
- */
-
-/**
  * @title  TrustBonding
  * @author 0xIntuition
  * @notice Core contract of the Intuition protocol. This contract manages the locking of TRUST tokens
@@ -275,28 +270,6 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         uint256 trustPerYear = _emissionsForEpoch(epoch) * epochsPerYear();
 
         return trustPerYear * BASIS_POINTS_DIVISOR / totalLockedAmount;
-    }
-
-    /// @inheritdoc ITrustBonding
-    function getUnclaimedRewardsForEpoch(uint256 epoch) external view returns (uint256) {
-        uint256 currentEpochLocal = currentEpoch();
-        // There cannot be any unclaimed rewards during the first two epochs, so we return 0.
-        if (currentEpochLocal < 2) {
-            return 0;
-        }
-
-        // We only want unclaimed rewards from epochs that are no longer claimable.
-        // For epochs that are still claimable, we return 0.
-        // This means we only consider epochs that are at least two epochs old.
-        if (epoch > currentEpochLocal - 2) {
-            return 0;
-        }
-
-        uint256 epochRewards = _emissionsForEpoch(epoch);
-        uint256 claimedRewards = totalClaimedRewardsForEpoch[epoch];
-        uint256 unclaimedRewards = epochRewards > claimedRewards ? epochRewards - claimedRewards : 0;
-
-        return unclaimedRewards;
     }
 
     /*//////////////////////////////////////////////////////////////

@@ -71,4 +71,14 @@ interface ISatelliteEmissionsController {
      * @param epoch The epoch for which to bridge unclaimed rewards
      */
     function bridgeUnclaimedRewards(uint256 epoch) external payable;
+
+    /**
+     * @notice Calculates the amount of unclaimed rewards for a specific epoch.
+     * @dev Can be called by anyone to determine unclaimed rewards, but used specifically by the
+     * SatelliteEmissionsController to determine how much TRUST should be bridged back to the BaseEmissionsController
+     * and burned.
+     * @param epoch The epoch to calculate the unclaimed rewards for
+     * @return Amount of unclaimed rewards available for reclaiming
+     */
+    function getUnclaimedRewardsForEpoch(uint256 epoch) external view returns (uint256);
 }

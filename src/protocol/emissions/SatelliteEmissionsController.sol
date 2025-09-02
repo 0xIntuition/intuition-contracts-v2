@@ -12,6 +12,7 @@ import { ITrustBonding } from "src/interfaces/ITrustBonding.sol";
 import { MetaERC20DispatchInit } from "src/interfaces/IMetaLayer.sol";
 import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";
 import { CoreEmissionsController } from "src/protocol/emissions/CoreEmissionsController.sol";
+import { ICoreEmissionsController } from "src/interfaces/ICoreEmissionsController.sol";
 import { FinalityState, MetaERC20Dispatcher } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
 
 /**
@@ -119,6 +120,32 @@ contract SatelliteEmissionsController is
     }
 
     /* =================================================== */
+    /*                       VIEW                          */
+    /* =================================================== */
+
+    /// @inheritdoc ISatelliteEmissionsController
+    function getUnclaimedRewardsForEpoch(uint256 epoch) public view returns (uint256) {
+        uint256 currentEpochLocal = ITrustBonding(_TRUST_BONDING).currentEpoch();
+        // There cannot be any unclaimed rewards during the first two epochs, so we return 0.
+        if (currentEpochLocal < 2) {
+            return 0;
+        }
+
+        // We only want unclaimed rewards from epochs that are no longer claimable.
+        // For epochs that are still claimable, we return 0.
+        // This means we only consider epochs that are at least two epochs old.
+        if (epoch > currentEpochLocal - 2) {
+            return 0;
+        }
+
+        uint256 epochRewards = ICoreEmissionsController(address(this)).getEmissionsAtEpoch(epoch);
+        uint256 claimedRewards = ITrustBonding(_TRUST_BONDING).totalClaimedRewardsForEpoch(epoch);
+        uint256 unclaimedRewards = epochRewards > claimedRewards ? epochRewards - claimedRewards : 0;
+
+        return unclaimedRewards;
+    }
+
+    /* =================================================== */
     /*                       ADMIN                         */
     /* =================================================== */
 
@@ -145,7 +172,7 @@ contract SatelliteEmissionsController is
     /// @inheritdoc ISatelliteEmissionsController
     function bridgeUnclaimedRewards(uint256 epoch) external payable onlyRole(DEFAULT_ADMIN_ROLE) {
         // Prevent bridging of zero amount if no unclaimed rewards are available.
-        uint256 amount = ITrustBonding(_TRUST_BONDING).getUnclaimedRewardsForEpoch(epoch);
+        uint256 amount = getUnclaimedRewardsForEpoch(epoch);
         if (amount == 0) {
             revert SatelliteEmissionsController_InvalidBridgeAmount();
         }

@@ -97,6 +97,13 @@ interface ITrustBonding {
         external;
 
     /**
+     * @notice Returns the total claimed rewards for a specific epoch
+     * @param epoch The epoch number
+     * @return The total amount of TRUST tokens claimed in the specified epoch
+     */
+    function totalClaimedRewardsForEpoch(uint256 epoch) external view returns (uint256);
+
+    /**
      * @notice Returns the length of an epoch in seconds
      * @return The epoch length in seconds
      */
@@ -206,16 +213,6 @@ interface ITrustBonding {
      * @return The personal utilization ratio for the user (scaled by 1e18)
      */
     function getPersonalUtilizationRatio(address _account, uint256 _epoch) external view returns (uint256);
-
-    /**
-     * @notice Calculates the amount of unclaimed rewards for a specific epoch.
-     * @dev Can be called by anyone to determine unclaimed rewards, but used specifically by the
-     * SatelliteEmissionsController to determine how much TRUST should be bridged back to the BaseEmissionsController
-     * and burned.
-     * @param epoch The epoch to calculate the unclaimed rewards for
-     * @return Amount of unclaimed rewards available for reclaiming
-     */
-    function getUnclaimedRewardsForEpoch(uint256 epoch) external view returns (uint256);
 
     /**
      * @notice Claims eligible Trust token rewards. Claims are always for the previous epoch (`currentEpoch() - 1`)

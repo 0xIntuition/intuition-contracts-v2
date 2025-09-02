@@ -142,8 +142,10 @@ interface ICoreEmissionsController {
      */
     function getEmissionsAtEpoch(uint256 epochNumber) external view returns (uint256);
 
-    /// @notice Returns the number of TRUST tokens to be emitted at a given timestamp
-    /// @param timestamp The timestamp to query
-    /// @return The amount of TRUST tokens to emit at the timestamp
+    /**
+     * @notice Returns the number of TRUST tokens to be emitted at a given timestamp
+     * @param timestamp The timestamp to query
+     * @return The amount of TRUST tokens to emit at the timestamp
+     */
     function getEmissionsAtTimestamp(uint256 timestamp) external view returns (uint256);
 }

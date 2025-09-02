@@ -428,14 +428,14 @@ contract TrustBondingReadsTest is TrustBondingBase {
     /* =================================================== */
 
     function test_getUnclaimedRewards_epoch0() external view {
-        uint256 unclaimed = protocol.trustBonding.getUnclaimedRewardsForEpoch(0);
+        uint256 unclaimed = protocol.satelliteEmissionsController.getUnclaimedRewardsForEpoch(0);
         assertEq(unclaimed, 0); // No unclaimed rewards in epoch 0
     }
 
     function test_getUnclaimedRewards_epoch1() external {
         vm.warp(TRUST_BONDING_START_TIMESTAMP + TRUST_BONDING_EPOCH_LENGTH);
 
-        uint256 unclaimed = protocol.trustBonding.getUnclaimedRewardsForEpoch(1);
+        uint256 unclaimed = protocol.satelliteEmissionsController.getUnclaimedRewardsForEpoch(1);
         assertEq(unclaimed, 0); // No unclaimed rewards in epoch 1
     }
 
@@ -445,7 +445,7 @@ contract TrustBondingReadsTest is TrustBondingBase {
         // Advance multiple epochs without claiming
         vm.warp(TRUST_BONDING_START_TIMESTAMP + TRUST_BONDING_EPOCH_LENGTH * 3);
 
-        uint256 unclaimed = protocol.trustBonding.getUnclaimedRewardsForEpoch(1);
+        uint256 unclaimed = protocol.satelliteEmissionsController.getUnclaimedRewardsForEpoch(1);
         // Should have unclaimed rewards from epoch 1 (epoch 2 is still claimable)
         assertGt(unclaimed, 0);
     }
@@ -464,7 +464,7 @@ contract TrustBondingReadsTest is TrustBondingBase {
         // Move to epoch 3
         vm.warp(TRUST_BONDING_START_TIMESTAMP + TRUST_BONDING_EPOCH_LENGTH * 3);
 
-        uint256 unclaimed = protocol.trustBonding.getUnclaimedRewardsForEpoch(1);
+        uint256 unclaimed = protocol.satelliteEmissionsController.getUnclaimedRewardsForEpoch(1);
         // Should have Bob's unclaimed rewards from epoch 1
         assertGt(unclaimed, 0);
     }
