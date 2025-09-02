@@ -77,8 +77,6 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
                                  STATE
     //////////////////////////////////////////////////////////////*/
 
-    uint256 public maxAnnualEmission;
-
     /// @notice Mapping of epochs to the total claimed rewards for that epoch among all users
     mapping(uint256 epoch => uint256 totalClaimedRewards) public totalClaimedRewardsForEpoch;
 
@@ -98,9 +96,6 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     /// @notice The personal utilization lower bound in basis points (represents the minimum possible personal
     /// utilization ratio)
     uint256 public personalUtilizationLowerBound;
-
-    /// @notice The maximum claimable protocol fees for a specific epoch
-    mapping(uint256 epoch => uint256 totalClaimableProtocolFees) public maxClaimableProtocolFeesForEpoch;
 
     /// @dev Gap for upgrade safety
     uint256[50] private __gap;
@@ -213,7 +208,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         if (currentEpochLocal == 0) {
             return 0;
         }
-        uint256 prevEpoch = currentEpochLocal == 1 ? currentEpochLocal - 1 : 0;
+        uint256 prevEpoch = currentEpochLocal > 1 ? currentEpochLocal - 1 : 0;
         return _userEligibleRewardsForEpoch(account, prevEpoch) * _getPersonalUtilizationRatio(account, prevEpoch)
             / BASIS_POINTS_DIVISOR;
     }
@@ -299,7 +294,9 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
 
         uint256 epochRewards = _emissionsForEpoch(epoch);
         uint256 claimedRewards = totalClaimedRewardsForEpoch[epoch];
-        return epochRewards - claimedRewards;
+        uint256 unclaimedRewards = epochRewards > claimedRewards ? epochRewards - claimedRewards : 0;
+
+        return unclaimedRewards;
     }
 
     /*//////////////////////////////////////////////////////////////

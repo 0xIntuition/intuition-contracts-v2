@@ -6,6 +6,7 @@ import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { Address } from "@openzeppelin/contracts/utils/Address.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import { IBaseEmissionsController } from "src/interfaces/IBaseEmissionsController.sol";
 import { ITrust } from "src/interfaces/ITrust.sol";
@@ -26,6 +27,8 @@ contract BaseEmissionsController is
     CoreEmissionsController,
     MetaERC20Dispatcher
 {
+    using SafeERC20 for IERC20;
+
     /* =================================================== */
     /*                     CONSTANTS                       */
     /* =================================================== */
@@ -71,6 +74,10 @@ contract BaseEmissionsController is
         external
         initializer
     {
+        if (admin == address(0) || controller == address(0) || token == address(0) || satellite == address(0)) {
+            revert BaseEmissionsController_InvalidAddress();
+        }
+
         // Initialize the AccessControl and ReentrancyGuard contracts
         __AccessControl_init();
         __ReentrancyGuard_init();
@@ -140,12 +147,14 @@ contract BaseEmissionsController is
         }
 
         uint256 amount = _emissionsAtEpoch(epoch);
+        if (amount == 0) return; // No emissions for this epoch, nothing to mint or bridge
+
         _totalMintedAmount += amount;
         _epochToMintedAmount[epoch] = amount;
 
         // Mint new TRUST using the calculated epoch emissions
         ITrust(_TRUST_TOKEN).mint(address(this), amount);
-        ITrust(_TRUST_TOKEN).approve(_metaERC20SpokeOrHub, amount);
+        IERC20(_TRUST_TOKEN).safeIncreaseAllowance(_metaERC20SpokeOrHub, amount);
 
         // Bridge new emissions to the Satellite Emissions Controller
         uint256 gasLimit = _quoteGasPayment(_recipientDomain, GAS_CONSTANT + _messageGasCost);

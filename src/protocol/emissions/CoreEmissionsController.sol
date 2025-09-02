@@ -14,6 +14,9 @@ contract CoreEmissionsController is ICoreEmissionsController {
     /// @dev Divisor for basis point calculations (100% = 10,000 basis points)
     uint256 internal constant BASIS_POINTS_DIVISOR = 10_000;
 
+    /// @dev Maximum allowed cliff duration in epochs
+    uint256 internal constant MAX_EMISSIONS_REDUCTION_CLIFF = 365;
+
     /// @dev Maximum allowed cliff reduction in basis points (10% = 1000 basis points)
     uint256 internal constant MAX_CLIFF_REDUCTION_BASIS_POINTS = 1000;
 
@@ -50,6 +53,7 @@ contract CoreEmissionsController is ICoreEmissionsController {
         internal
     {
         _validateTimestampStart(startTimestamp);
+        _validateEmissionsLength(emissionsLength);
         _validateEmissionsPerEpoch(emissionsPerEpoch);
         _validateCliff(emissionsReductionCliff);
         _validateReductionBasisPoints(emissionsReductionBasisPoints);
@@ -124,27 +128,33 @@ contract CoreEmissionsController is ICoreEmissionsController {
     /*                   VALIDATION                        */
     /* =================================================== */
 
-    function _validateEmissionsPerEpoch(uint256 emissionsPerEpoch) internal view {
-        if (emissionsPerEpoch == 0) {
-            revert CoreEmissionsController_InvalidEmissionsPerEpoch();
-        }
-    }
-
     function _validateTimestampStart(uint256 timestampStart) internal view {
         if (timestampStart < block.timestamp) {
             revert CoreEmissionsController_InvalidTimestampStart();
         }
     }
 
-    function _validateReductionBasisPoints(uint256 emissionsReductionBasisPoints) internal pure {
-        if (emissionsReductionBasisPoints > MAX_CLIFF_REDUCTION_BASIS_POINTS) {
-            revert CoreEmissionsController_InvalidReductionBasisPoints();
+    function _validateEmissionsLength(uint256 emissionsLength) internal pure {
+        if (emissionsLength == 0) {
+            revert CoreEmissionsController_InvalidEpochLength();
+        }
+    }
+
+    function _validateEmissionsPerEpoch(uint256 emissionsPerEpoch) internal view {
+        if (emissionsPerEpoch == 0) {
+            revert CoreEmissionsController_InvalidEmissionsPerEpoch();
         }
     }
 
     function _validateCliff(uint256 emissionsReductionCliff) internal pure {
-        if (emissionsReductionCliff == 0 || emissionsReductionCliff > 365) {
+        if (emissionsReductionCliff == 0 || emissionsReductionCliff > MAX_EMISSIONS_REDUCTION_CLIFF) {
             revert CoreEmissionsController_InvalidCliff();
+        }
+    }
+
+    function _validateReductionBasisPoints(uint256 emissionsReductionBasisPoints) internal pure {
+        if (emissionsReductionBasisPoints > MAX_CLIFF_REDUCTION_BASIS_POINTS) {
+            revert CoreEmissionsController_InvalidReductionBasisPoints();
         }
     }
 

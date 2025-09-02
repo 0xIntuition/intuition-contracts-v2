@@ -529,11 +529,6 @@ contract TrustBondingReadsTest is TrustBondingBase {
         assertGt(claimed, 0);
     }
 
-    function test_maxClaimableProtocolFeesForEpoch() external view {
-        uint256 fees = protocol.trustBonding.maxClaimableProtocolFeesForEpoch(0);
-        assertEq(fees, 0); // Should be 0 by default
-    }
-
     /* =================================================== */
     /*                   CONSTANTS                         */
     /* =================================================== */

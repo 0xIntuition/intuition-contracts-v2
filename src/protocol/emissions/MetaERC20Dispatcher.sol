@@ -31,6 +31,16 @@ contract MetaERC20Dispatcher {
     event MetaERC20SpokeOrHubUpdated(address newMetaERC20SpokeOrHub);
 
     /* =================================================== */
+    /*                      ERRORS                         */
+    /* =================================================== */
+
+    error MetaERC20Dispatcher__InvalidAddress();
+
+    error MetaERC20Dispatcher__InvalidRecipientDomain();
+
+    error MetaERC20Dispatcher__InvalidGasCost();
+
+    /* =================================================== */
     /*                    INITIALIZER                      */
     /* =================================================== */
 
@@ -74,6 +84,9 @@ contract MetaERC20Dispatcher {
     /* =================================================== */
 
     function _setMessageGasCost(uint256 newGasCost) internal {
+        if (newGasCost == 0) {
+            revert MetaERC20Dispatcher__InvalidGasCost();
+        }
         _messageGasCost = newGasCost;
         emit MessageGasCostUpdated(newGasCost);
     }
@@ -84,11 +97,17 @@ contract MetaERC20Dispatcher {
     }
 
     function _setRecipientDomain(uint32 newDomain) internal {
+        if (newDomain == 0) {
+            revert MetaERC20Dispatcher__InvalidRecipientDomain();
+        }
         _recipientDomain = newDomain;
         emit RecipientDomainUpdated(newDomain);
     }
 
     function _setMetaERC20SpokeOrHub(address newMetaERC20SpokeOrHub) internal {
+        if (newMetaERC20SpokeOrHub == address(0)) {
+            revert MetaERC20Dispatcher__InvalidAddress();
+        }
         _metaERC20SpokeOrHub = newMetaERC20SpokeOrHub;
         emit MetaERC20SpokeOrHubUpdated(newMetaERC20SpokeOrHub);
     }

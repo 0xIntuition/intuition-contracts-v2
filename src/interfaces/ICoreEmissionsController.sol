@@ -77,6 +77,9 @@ interface ICoreEmissionsController {
     /// @notice Thrown when emissions per epoch is zero
     error CoreEmissionsController_InvalidEmissionsPerEpoch();
 
+    /// @notice Thrown when epoch length is zero
+    error CoreEmissionsController_InvalidEpochLength();
+
     /* =================================================== */
     /*                      GETTERS                        */
     /* =================================================== */
