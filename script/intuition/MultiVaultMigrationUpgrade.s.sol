@@ -53,12 +53,18 @@ contract MultiVaultMigrationUpgrade is SetupScript {
     }
 
     function run() public broadcast {
-        // 1) Deploy the target MultiVault implementation
+        // 1) Deploy target MultiVault implementation
         multiVaultImpl = new MultiVault();
 
-        // 2) Upgrade proxy -> MultiVault & revoke MIGRATOR_ROLE from ADMIN in the same tx
-        bytes memory data = abi.encodeWithSignature("revokeRole(bytes32,address)", MIGRATOR_ROLE, ADMIN);
-        proxyAdmin.upgradeAndCall(multiVaultProxy, address(multiVaultImpl), data);
+        // 2) Upgrade proxy -> MultiVault (we pass the empty data arg since we don't need to init anything)
+        proxyAdmin.upgradeAndCall(multiVaultProxy, address(multiVaultImpl), "");
+
+        // 3) Revoke MIGRATOR_ROLE from the admin EOA
+        MultiVault(address(multiVaultProxy)).revokeRole(MIGRATOR_ROLE, ADMIN);
+
+        // 4) Sanity check
+        bool revoked = !MultiVault(address(multiVaultProxy)).hasRole(MIGRATOR_ROLE, ADMIN);
+        require(revoked, "MIGRATOR_ROLE revoke failed");
 
         console2.log("");
         console2.log("UPGRADE COMPLETE: =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+");
