@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.29;
 
-import { IBondingCurveRegistry } from "src/interfaces/IBondingCurveRegistry.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 
 /**
@@ -15,6 +14,13 @@ import { MultiVault } from "src/protocol/MultiVault.sol";
  *         upgraded to the standard MultiVault contract.
  */
 contract MultiVaultMigrationMode is MultiVault {
+    /*//////////////////////////////////////////////////////////////
+                                 CONSTANTS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Role used for the state migration
+    bytes32 public constant MIGRATOR_ROLE = keccak256("MIGRATOR_ROLE");
+
     /*//////////////////////////////////////////////////////////////
                                  STRUCTS
     //////////////////////////////////////////////////////////////*/
@@ -49,6 +55,8 @@ contract MultiVaultMigrationMode is MultiVault {
 
     error MultiVault_InvalidBondingCurveId();
 
+    error MultiVault_ZeroAddress();
+
     /*//////////////////////////////////////////////////////////////
                              MIGRATION FUNCTIONS
     //////////////////////////////////////////////////////////////*/
@@ -73,14 +81,18 @@ contract MultiVaultMigrationMode is MultiVault {
         external
         onlyRole(MIGRATOR_ROLE)
     {
-        if (atomDataArray.length != creators.length) {
+        uint256 length = atomDataArray.length;
+        if (length != creators.length) {
             revert MultiVault_ArraysNotSameLength();
         }
 
-        for (uint256 i = 0; i < atomDataArray.length; i++) {
+        for (uint256 i = 0; i < length;) {
             bytes32 atomId = calculateAtomId(atomDataArray[i]);
             _atoms[atomId] = atomDataArray[i];
             emit AtomCreated(creators[i], atomId, atomDataArray[i], computeAtomWalletAddr(atomId));
+            unchecked {
+                ++i;
+            }
         }
     }
 
@@ -96,15 +108,20 @@ contract MultiVaultMigrationMode is MultiVault {
         external
         onlyRole(MIGRATOR_ROLE)
     {
-        if (tripleAtomIds.length != creators.length) {
+        uint256 length = tripleAtomIds.length;
+
+        if (length != creators.length) {
             revert MultiVault_ArraysNotSameLength();
         }
 
-        for (uint256 i = 0; i < tripleAtomIds.length; i++) {
+        for (uint256 i = 0; i < length;) {
             bytes32 tripleId = calculateTripleId(tripleAtomIds[i][0], tripleAtomIds[i][1], tripleAtomIds[i][2]);
             bytes32 counterTripleId = getCounterIdFromTripleId(tripleId);
             _initializeTripleState(tripleId, counterTripleId, tripleAtomIds[i]);
             emit TripleCreated(creators[i], tripleId, tripleAtomIds[i][0], tripleAtomIds[i][1], tripleAtomIds[i][2]);
+            unchecked {
+                ++i;
+            }
         }
     }
 
@@ -126,11 +143,13 @@ contract MultiVaultMigrationMode is MultiVault {
             revert MultiVault_InvalidBondingCurveId();
         }
 
-        if (termIds.length != vaultTotals.length) {
+        uint256 length = termIds.length;
+
+        if (length != vaultTotals.length) {
             revert MultiVault_ArraysNotSameLength();
         }
 
-        for (uint256 i = 0; i < termIds.length; i++) {
+        for (uint256 i = 0; i < length;) {
             _setVaultTotals(
                 termIds[i],
                 bondingCurveId,
@@ -138,6 +157,9 @@ contract MultiVaultMigrationMode is MultiVault {
                 vaultTotals[i].totalShares,
                 getVaultType(termIds[i])
             );
+            unchecked {
+                ++i;
+            }
         }
     }
 
@@ -154,11 +176,13 @@ contract MultiVaultMigrationMode is MultiVault {
             revert MultiVault_ZeroAddress();
         }
 
-        if (params.termIds.length != params.userBalances.length) {
+        uint256 length = params.termIds.length;
+
+        if (length != params.userBalances.length) {
             revert MultiVault_ArraysNotSameLength();
         }
 
-        for (uint256 i = 0; i < params.termIds.length; i++) {
+        for (uint256 i = 0; i < length;) {
             _vaults[params.termIds[i]][params.bondingCurveId].balanceOf[params.user] = params.userBalances[i];
             uint256 assets = _convertToAssets(params.termIds[i], params.bondingCurveId, params.userBalances[i]);
 
@@ -173,6 +197,9 @@ contract MultiVaultMigrationMode is MultiVault {
                 getShares(params.user, params.termIds[i], params.bondingCurveId),
                 getVaultType(params.termIds[i])
             );
+            unchecked {
+                ++i;
+            }
         }
     }
 }

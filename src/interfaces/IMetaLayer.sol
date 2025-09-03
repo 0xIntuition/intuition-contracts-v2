@@ -15,7 +15,7 @@ enum FinalityState {
     ESPRESSO
 }
 
-interface IMetaERC20Hub {
+interface IMetaERC20HubOrSpoke {
     function transferRemote(
         uint32 _recipientDomain,
         bytes32 _recipientAddress,

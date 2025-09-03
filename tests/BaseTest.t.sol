@@ -33,13 +33,14 @@ import { Users } from "./utils/Types.sol";
 import { Trust } from "src/Trust.sol";
 import { WrappedTrust } from "src/WrappedTrust.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
-
+import { MetalayerRouterMock, IIGPMock, MetaERC20HubOrSpokeMock } from "tests/mocks/MetalayerRouterMock.sol";
 import { Modifiers } from "./utils/Modifiers.sol";
 
 abstract contract BaseTest is Modifiers, Test {
     /*//////////////////////////////////////////////////////////////////////////
                                      VARIABLES
     //////////////////////////////////////////////////////////////////////////*/
+    uint256 internal BASIS_POINTS_DIVISOR = 10_000;
 
     uint256[] internal ATOM_COST;
     uint256[] internal TRIPLE_COST;
@@ -67,9 +68,10 @@ abstract contract BaseTest is Modifiers, Test {
     uint256 internal PROTOCOL_FEE = 1000; // 10% of assets deposited after fixed costs (Percentage Cost)
 
     // TrustBonding configuration
-    uint256 internal EPOCH_LENGTH = 2 weeks;
-    uint256 internal SYSTEM_UTILIZATION_LOWER_BOUND = 5000; // 50%
-    uint256 internal PERSONAL_UTILIZATION_LOWER_BOUND = 3000; // 25%
+    uint256 internal TRUST_BONDING_START_TIMESTAMP = block.timestamp + 20;
+    uint256 internal TRUST_BONDING_EPOCH_LENGTH = 1 days * 14;
+    uint256 internal TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND = 5000; // 50%
+    uint256 internal TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND = 3000; // 30%
 
     // Curve Configurations
     uint256 internal PROGRESSIVE_CURVE_SLOPE = 1e15; // 0.001 slope
@@ -77,11 +79,11 @@ abstract contract BaseTest is Modifiers, Test {
     // Emissions Configurations
     uint256 internal MAX_ANNUAL_EMISSION = 1_000_000e18;
 
-    // Common test parameters
-    uint256 internal constant DEFAULT_EPOCH_LENGTH = 1 days;
-    uint256 internal constant DEFAULT_EMISSIONS_PER_EPOCH = 1_000_000 * 1e18; // 1M tokens
-    uint256 internal constant DEFAULT_CLIFF = 1;
-    uint256 internal constant DEFAULT_REDUCTION_BP = 1000; // 10%
+    // CoreEmissions Controller
+    uint256 internal constant EMISSIONS_CONTROLLER_EPOCH_LENGTH = 1 days * 14;
+    uint256 internal constant EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH = 1_000_000 * 1e18; // 1M tokens
+    uint256 internal constant EMISSIONS_CONTROLLER_CLIFF = 3;
+    uint256 internal constant EMISSIONS_CONTROLLER_REDUCTION_BP = 1000; // 10%
 
     // Time constants for easier reading
     uint256 internal constant ONE_HOUR = 1 hours;
@@ -104,8 +106,12 @@ abstract contract BaseTest is Modifiers, Test {
         users.bob = createUser("bob");
         users.charlie = createUser("charlie");
         protocol.trust = createTrustToken();
+        protocol.wrappedTrust = createWrappedTrust();
         _deployMultiVaultSystem();
         _approveTokensForUsers();
+        _setupUserWrappedTokenAndTrustBonding(users.alice);
+        _setupUserWrappedTokenAndTrustBonding(users.bob);
+        _setupUserWrappedTokenAndTrustBonding(users.charlie);
 
         // setVariables(users, protocol);
         uint256 atomCost = protocol.multiVault.getAtomCost();
@@ -122,6 +128,7 @@ abstract contract BaseTest is Modifiers, Test {
         // Deploy Trust proxy
         TransparentUpgradeableProxy trustProxy = new TransparentUpgradeableProxy(address(trustImpl), users.admin, "");
         Trust trust = Trust(address(trustProxy));
+        trust.init(); // Run initializer
 
         // Initialize Trust contract via proxy
         vm.prank(0xa28d4AAcA48bE54824dA53a19b05121DE71Ef480); // admin address set on Base
@@ -134,6 +141,12 @@ abstract contract BaseTest is Modifiers, Test {
         vm.label(address(trust), "Trust");
 
         return trust;
+    }
+
+    function createWrappedTrust() internal returns (WrappedTrust) {
+        WrappedTrust wrappedTrust = new WrappedTrust();
+        vm.label(address(wrappedTrust), "WrappedTrust");
+        return wrappedTrust;
     }
 
     /// @dev Creates a new ERC-20 token with `name`, `symbol` and `decimals`.
@@ -211,7 +224,7 @@ abstract contract BaseTest is Modifiers, Test {
 
         satelliteEmissionsControllerProxy =
             new TransparentUpgradeableProxy(address(satelliteEmissionsControllerImpl), users.admin, "");
-        protocol.satelliteEmissionsController = SatelliteEmissionsController(address(satelliteEmissionsControllerProxy));
+        protocol.satelliteEmissionsController = SatelliteEmissionsController(payable(satelliteEmissionsControllerProxy));
         console2.log("SatelliteEmissionsController Proxy", address(satelliteEmissionsControllerProxy));
 
         // Deploy BondingCurveRegistry
@@ -247,12 +260,16 @@ abstract contract BaseTest is Modifiers, Test {
         vm.label(address(progressiveCurve), "ProgressiveCurve");
         vm.label(address(wtrust), "WrappedTrust");
 
+        IIGPMock IIGP = new IIGPMock();
+        MetalayerRouterMock metaERC20Router = new MetalayerRouterMock(address(IIGP));
+        MetaERC20HubOrSpokeMock metaERC20HubOrSpoke = new MetaERC20HubOrSpokeMock(address(metaERC20Router));
+
         protocol.satelliteEmissionsController.initialize(
             users.admin,
             address(protocol.trustBonding),
-            address(1), // metaERC20Hub
+            address(1), // BaseEmissionsController
             MetaERC20DispatchInit({
-                hubOrSpoke: address(1),
+                hubOrSpoke: address(metaERC20HubOrSpoke),
                 recipientDomain: 1,
                 recipientAddress: address(1),
                 gasLimit: 125_000,
@@ -260,26 +277,24 @@ abstract contract BaseTest is Modifiers, Test {
             }),
             CoreEmissionsControllerInit({
                 startTimestamp: block.timestamp,
-                emissionsLength: DEFAULT_EPOCH_LENGTH,
-                emissionsPerEpoch: DEFAULT_EMISSIONS_PER_EPOCH,
-                emissionsReductionCliff: DEFAULT_CLIFF,
-                emissionsReductionBasisPoints: DEFAULT_REDUCTION_BP
+                emissionsLength: EMISSIONS_CONTROLLER_EPOCH_LENGTH,
+                emissionsPerEpoch: EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH,
+                emissionsReductionCliff: EMISSIONS_CONTROLLER_CLIFF,
+                emissionsReductionBasisPoints: EMISSIONS_CONTROLLER_REDUCTION_BP
             })
         );
 
         // Initialize AtomWalletFactory
         atomWalletFactory.initialize(address(protocol.multiVault));
 
-        // Initialize TrustBonding
         protocol.trustBonding.initialize(
             users.admin, // owner
-            address(protocol.wrappedTrust), // wrappedTrust token
-            2 weeks, // epochLength (minimum 2 weeks required)
-            block.timestamp, // startTimestamp (future)
+            address(protocol.wrappedTrust), // trustToken
+            TRUST_BONDING_EPOCH_LENGTH, // epochLength (minimum 2 weeks required)
             address(protocol.multiVault), // multiVault
             address(protocol.satelliteEmissionsController), // satelliteEmissionsController
-            SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound (50%)
-            PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound (30%)
+            TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound (50%)
+            TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound (30%)
         );
 
         // Prepare configuration structs with deployed addresses
@@ -290,17 +305,21 @@ abstract contract BaseTest is Modifiers, Test {
         TripleConfig memory tripleConfig = _getDefaultTripleConfig();
 
         WalletConfig memory walletConfig = _getDefaultWalletConfig();
+
         walletConfig.atomWalletFactory = address(atomWalletFactory);
         walletConfig.atomWalletBeacon = address(atomWalletBeacon);
-
-        VaultFees memory vaultFees = _getDefaultVaultFees();
 
         BondingCurveConfig memory bondingCurveConfig = _getDefaultBondingCurveConfig();
         bondingCurveConfig.registry = address(bondingCurveRegistry);
 
         // Initialize MultiVault
         protocol.multiVault.initialize(
-            generalConfig, atomConfig, tripleConfig, walletConfig, vaultFees, bondingCurveConfig
+            generalConfig,
+            _getDefaultAtomConfig(),
+            _getDefaultTripleConfig(),
+            walletConfig,
+            _getDefaultVaultFees(),
+            bondingCurveConfig
         );
 
         // Approve tokens for all users after deployment
@@ -404,7 +423,7 @@ abstract contract BaseTest is Modifiers, Test {
     }
 
     function getAtomCreationCost() internal view returns (uint256) {
-        return protocol.multiVault.getAtomCreationCost();
+        return protocol.multiVault.getAtomCost();
     }
 
     function convertToShares(uint256 assets, bytes32 termId, uint256 bondingCurveId) internal view returns (uint256) {
@@ -510,8 +529,8 @@ abstract contract BaseTest is Modifiers, Test {
     }
 
     // Helper function to get default curve ID
-    function getDefaultCurveId() internal view returns (uint256) {
-        return protocol.multiVault.getDefaultCurveId();
+    function getDefaultCurveId() internal view returns (uint256 defaultCurveId) {
+        (, defaultCurveId) = protocol.multiVault.bondingCurveConfig();
     }
 
     // Helper to set up approval for another user
@@ -595,4 +614,17 @@ abstract contract BaseTest is Modifiers, Test {
 
     // Event declarations for test helpers
     event AtomCreated(address indexed creator, bytes32 indexed atomId, bytes data, address atomWallet);
+
+    function _setupUserWrappedTokenAndTrustBonding(address user) internal {
+        vm.deal({ account: user, newBalance: 10_000_000_000 ether });
+        resetPrank({ msgSender: user });
+        protocol.wrappedTrust.deposit{ value: 10_000 ether }();
+        protocol.wrappedTrust.approve(address(protocol.trustBonding), 10_000 ether);
+        _addToTrustBondingWhiteList(user);
+    }
+
+    function _addToTrustBondingWhiteList(address _user) internal {
+        resetPrank({ msgSender: users.admin });
+        protocol.trustBonding.add_to_whitelist(_user);
+    }
 }
