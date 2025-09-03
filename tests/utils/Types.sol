@@ -9,6 +9,9 @@ import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.s
 import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 import { WrappedTrust } from "src/WrappedTrust.sol";
+import { AtomWallet } from "src/protocol/wallet/AtomWallet.sol";
+import { AtomWalletFactory } from "src/protocol/wallet/AtomWalletFactory.sol";
+import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 
 struct Protocol {
     Trust trust;
@@ -19,6 +22,9 @@ struct Protocol {
     MultiVault multiVault;
     SatelliteEmissionsController satelliteEmissionsController;
     address payable permit2;
+    WrappedTrust wrappedTrust;
+    AtomWalletFactory atomWalletFactory;
+    UpgradeableBeacon atomWalletBeacon;
 }
 
 struct Users {

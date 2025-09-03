@@ -120,6 +120,7 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
     /*                     RECEIVE                         */
     /* =================================================== */
 
+    /// @notice Receive function to accept native TRUST transfers
     receive() external payable { }
 
     /* =================================================== */
