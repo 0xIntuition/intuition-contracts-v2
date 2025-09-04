@@ -21,6 +21,19 @@ interface IMultiVault {
         mapping(address account => uint256 balance) balanceOf;
     }
 
+    /// @notice Struct to hold data for the deposited event to avoid "stack too deep" errors
+    struct DepositedEvent {
+        address sender;
+        address receiver;
+        bytes32 termId;
+        uint256 curveId;
+        uint256 assets;
+        uint256 assetsAfterFees;
+        uint256 shares;
+        uint256 totalShares;
+        VaultType vaultType;
+    }
+
     /* =================================================== */
     /*                        ENUMS                        */
     /* =================================================== */
@@ -105,7 +118,7 @@ interface IMultiVault {
     /// where applicable)
     /// @param assetsAfterFees amount of assets after all fees for the deposit are deducted
     /// @param shares amount of shares minted to the receiver
-    /// @param totalShares total shares in the vault after the deposit
+    /// @param totalShares balance of the user in the vault after the deposit
     /// @param vaultType type of the vault (ATOM, TRIPLE, COUNTER_TRIPLE)
     event Deposited(
         address indexed sender,
