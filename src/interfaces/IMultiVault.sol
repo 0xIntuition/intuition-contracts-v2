@@ -147,7 +147,7 @@ interface IMultiVault {
     /// where applicable)
     /// @param assetsAfterFees amount of assets after all fees for the deposit are deducted
     /// @param shares amount of shares minted to the receiver
-    /// @param totalShares total shares in the vault after the deposit
+    /// @param totalShares balance of the user in the vault after the deposit
     /// @param vaultType type of the vault (ATOM, TRIPLE, COUNTER_TRIPLE)
     event Deposited(
         address indexed sender,
@@ -168,7 +168,7 @@ interface IMultiVault {
     /// @param sender address of the sender
     /// @param receiver address of the receiver
     /// @param shares amount of shares redeemed
-    /// @param userSharesAfter balance of the user in the vault after the redemption
+    /// @param totalShares balance of the user in the vault after the redemption
     /// @param assets amount of assets withdrawn (net assets received by the receiver)
     /// @param fees amount of fees charged
     /// @param vaultType type of the vault (ATOM, TRIPLE, COUNTER_TRIPLE)
@@ -178,7 +178,7 @@ interface IMultiVault {
         bytes32 indexed termId,
         uint256 curveId,
         uint256 shares,
-        uint256 userSharesAfter,
+        uint256 totalShares,
         uint256 assets,
         uint256 fees,
         VaultType vaultType

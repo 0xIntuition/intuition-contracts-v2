@@ -477,7 +477,8 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         address atomWallet = _accumulateAtomWalletFees(atomId, assetsAfterFixedFees);
 
         /* --- Add assets after fees to Atom Vault (User Owned) --- */
-        _updateVaultOnCreation(sender, atomId, curveId, assetsAfterFees, sharesForReceiver, VaultType.ATOM);
+        uint256 userSharesAfter =
+            _updateVaultOnCreation(sender, atomId, curveId, assetsAfterFees, sharesForReceiver, VaultType.ATOM);
 
         /* --- Add entry fee to Atom Vault (Protocol Owned) --- */
         _increaseProRataVaultAssets(atomId, _feeOnRaw(assetsAfterFixedFees, vaultFees.entryFee), VaultType.ATOM);
@@ -485,18 +486,9 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         /* --- Emit Events --- */
         emit AtomCreated(sender, atomId, data, atomWallet);
 
-        DepositedEvent memory d;
-        d.sender = sender;
-        d.receiver = sender;
-        d.termId = atomId;
-        d.curveId = curveId;
-        d.assets = assets;
-        d.assetsAfterFees = assetsAfterFees;
-        d.shares = sharesForReceiver;
-        d.totalShares = _vaults[atomId][curveId].totalShares;
-        d.vaultType = VaultType.ATOM;
-
-        _emitDeposited(d);
+        emit Deposited(
+            sender, sender, atomId, curveId, assets, assetsAfterFees, sharesForReceiver, userSharesAfter, VaultType.ATOM
+        );
 
         // Increment total terms created
         ++totalTermsCreated;
@@ -615,7 +607,8 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         _accumulateVaultProtocolFees(assetsAfterFixedFees);
 
         /* --- Add user assets after fees to vault (User Owned) --- */
-        _updateVaultOnCreation(sender, tripleId, curveId, assetsAfterFees, sharesForReceiver, VaultType.TRIPLE);
+        uint256 userSharesAfter =
+            _updateVaultOnCreation(sender, tripleId, curveId, assetsAfterFees, sharesForReceiver, VaultType.TRIPLE);
 
         /* --- Add vault and triple fees to vault (Protocol Owned) --- */
         _increaseProRataVaultAssets(tripleId, _feeOnRaw(assetsAfterFixedFees, vaultFees.entryFee), VaultType.TRIPLE);
@@ -633,18 +626,17 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         /* --- Emit events --- */
         emit TripleCreated(sender, tripleId, subjectId, predicateId, objectId);
 
-        DepositedEvent memory d;
-        d.sender = sender;
-        d.receiver = sender;
-        d.termId = tripleId;
-        d.curveId = curveId;
-        d.assets = assets;
-        d.assetsAfterFees = assetsAfterFees;
-        d.shares = sharesForReceiver;
-        d.totalShares = _vaults[tripleId][curveId].totalShares;
-        d.vaultType = VaultType.TRIPLE;
-
-        _emitDeposited(d);
+        emit Deposited(
+            sender,
+            sender,
+            tripleId,
+            curveId,
+            assets,
+            assetsAfterFees,
+            sharesForReceiver,
+            userSharesAfter,
+            VaultType.TRIPLE
+        );
 
         // Increment total terms created
         ++totalTermsCreated;
@@ -773,9 +765,9 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
             uint256 base = assets;
 
             if (isNew && !isDefault) {
-                uint256 ghostCost = _ghostCostFor(_vaultType);
-                if (assets <= ghostCost) revert MultiVault_DepositTooSmallToCoverGhostShares();
-                base = assets - ghostCost;
+                uint256 minShareCost = _minShareCostFor(_vaultType);
+                if (assets <= minShareCost) revert MultiVault_DepositTooSmallToCoverGhostShares();
+                base = assets - minShareCost;
             }
 
             // ----- fee math + side effects -----
@@ -1091,9 +1083,9 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
         // Lazy init only for non-default curve
         if (isNew && !isDefault) {
-            uint256 ghostCost = generalConfig.minShare;
-            if (assets <= ghostCost) revert MultiVault_DepositTooSmallToCoverGhostShares();
-            base = assets - ghostCost;
+            uint256 minShareCost = generalConfig.minShare;
+            if (assets <= minShareCost) revert MultiVault_DepositTooSmallToCoverGhostShares();
+            base = assets - minShareCost;
         }
 
         uint256 protocolFee = _feeOnRaw(base, vaultFees.protocolFee);
@@ -1151,9 +1143,9 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
         // Lazy init only for non-default curve
         if (isNew && !isDefault) {
-            uint256 ghostCost = generalConfig.minShare * 2; // positive + counter triple ghost shares
-            if (assets <= ghostCost) revert MultiVault_DepositTooSmallToCoverGhostShares();
-            base = assets - ghostCost;
+            uint256 minShareCost = generalConfig.minShare * 2; // positive + counter triple ghost shares
+            if (assets <= minShareCost) revert MultiVault_DepositTooSmallToCoverGhostShares();
+            base = assets - minShareCost;
         }
 
         uint256 protocolFee = _feeOnRaw(base, vaultFees.protocolFee);
@@ -1416,9 +1408,6 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         if (totalUtilization[currentEpochLocal] == 0) {
             totalUtilization[currentEpochLocal] = totalUtilization[oldEpoch];
             uint256 previousEpoch = currentEpochLocal - 1;
-            if (currentEpochLocal > 0) {
-                _claimAccumulatedProtocolFees(previousEpoch);
-            }
         }
 
         if (personalUtilization[user][currentEpochLocal] == 0) {
@@ -1647,9 +1636,9 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
         bool isNew = _isNewVault(_termId, _curveId);
         bool isDefault = _curveId == bondingCurveConfig.defaultCurveId;
-        uint256 ghostCost = (isNew && !isDefault) ? generalConfig.minShare : 0;
+        uint256 minShareCost = (isNew && !isDefault) ? generalConfig.minShare : 0;
 
-        uint256 projectedAssets = _vaults[_termId][_curveId].totalAssets + netAssetsToVault + ghostCost;
+        uint256 projectedAssets = _vaults[_termId][_curveId].totalAssets + netAssetsToVault + minShareCost;
         if (projectedAssets > maxAssets) revert MultiVault_ActionExceedsMaxAssets();
 
         if (expectedShares < _minShares) {
@@ -1723,7 +1712,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /// @notice Get the ghost shares cost for creating an atom or triple vault
     /// @param vaultType The type of vault
     /// @return uint256 The ghost shares cost for a given vault
-    function _ghostCostFor(VaultType vaultType) internal view returns (uint256) {
+    function _minShareCostFor(VaultType vaultType) internal view returns (uint256) {
         uint256 minShare = generalConfig.minShare;
         return vaultType == VaultType.ATOM ? minShare : minShare * 2;
     }
