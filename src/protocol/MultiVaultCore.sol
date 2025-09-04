@@ -20,11 +20,15 @@ import {
  */
 abstract contract MultiVaultCore is IMultiVault, IMultiVaultCore {
     /* =================================================== */
-    /*                  STATE VARIABLES                    */
+    /*                       CONSTANTS                     */
     /* =================================================== */
 
     /// @notice Salt used for counterfactual triples
     bytes32 public constant COUNTER_SALT = keccak256("COUNTER_SALT");
+
+    /* =================================================== */
+    /*                  STATE VARIABLES                    */
+    /* =================================================== */
 
     /// @notice Total number of terms created
     uint256 public totalTermsCreated;
@@ -124,10 +128,6 @@ abstract contract MultiVaultCore is IMultiVault, IMultiVaultCore {
         return bondingCurveConfig;
     }
 
-    function getDefaultCurveId() public view returns (uint256) {
-        return bondingCurveConfig.defaultCurveId;
-    }
-
     /* =================================================== */
     /*                     Atom Getters                    */
     /* =================================================== */
@@ -148,8 +148,8 @@ abstract contract MultiVaultCore is IMultiVault, IMultiVaultCore {
         return _data;
     }
 
-    /// @notice the total cost of creating an atom
-    /// @return atomCost the cost of creating an atom
+    /// @notice Returns the static costs that go into creating an atom
+    /// @return atomCost the static costs of creating an atom
     function getAtomCost() public view returns (uint256) {
         return atomConfig.atomCreationProtocolFee + generalConfig.minShare;
     }
@@ -162,14 +162,14 @@ abstract contract MultiVaultCore is IMultiVault, IMultiVaultCore {
     /*                   Triple Getters                    */
     /* =================================================== */
 
-    function triple(bytes32 tripleId) public view returns (bytes32, bytes32, bytes32) {
+    function triple(bytes32 tripleId) external view returns (bytes32, bytes32, bytes32) {
         bytes32[3] memory atomIds =
             isCounterTriple(tripleId) ? _triples[getTripleIdFromCounterId(tripleId)] : _triples[tripleId];
         return (atomIds[0], atomIds[1], atomIds[2]);
     }
 
-    /// @notice returns the cost of creating a triple
-    /// @return tripleCost the cost of creating a triple
+    /// @notice Returns the static costs that go into creating a triple
+    /// @return tripleCost the static costs of creating a triple
     function getTripleCost() public view returns (uint256) {
         return tripleConfig.tripleCreationProtocolFee + tripleConfig.totalAtomDepositsOnTripleCreation
             + generalConfig.minShare * 2;

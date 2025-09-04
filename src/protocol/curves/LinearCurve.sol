@@ -131,7 +131,7 @@ contract LinearCurve is BaseCurve {
         return 1e18;
     }
 
-    /// @notice In a linear curve, the base price will always be 1.  Pool ratio adjustments are dealt with in the
+    /// @notice In a linear curve, the base price will always be 1. Pool ratio adjustments are dealt with in the
     /// MultiVault itself.
     function currentPrice(uint256 totalShares, uint256 totalAssets) public pure returns (uint256 sharePrice) {
         return convertToAssets(ONE_SHARE, totalShares, totalAssets);
