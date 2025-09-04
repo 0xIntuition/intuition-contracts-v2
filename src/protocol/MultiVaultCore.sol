@@ -185,8 +185,7 @@ abstract contract MultiVaultCore is Initializable, IMultiVault, IMultiVaultCore 
     /// bytes32(0))
     /// @param tripleId term id of the triple
     function triple(bytes32 tripleId) public view returns (bytes32, bytes32, bytes32) {
-        bytes32[3] memory atomIds =
-            isCounterTriple(tripleId) ? _triples[getTripleIdFromCounterId(tripleId)] : _triples[tripleId];
+        bytes32[3] memory atomIds = _triples[tripleId];
         return (atomIds[0], atomIds[1], atomIds[2]);
     }
 
