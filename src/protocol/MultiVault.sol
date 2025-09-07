@@ -311,14 +311,15 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     function previewRedeem(
         bytes32 termId,
         uint256 curveId,
-        uint256 assets
+        uint256 shares
     )
         public
         view
-        returns (uint256 shares, uint256 assetsAfterFees)
+        returns (uint256 sharesOut, uint256 assetsAfterFees)
     {
         bool _isAtom = isAtom(termId);
-        return _calculateRedeem(termId, curveId, assets, _isAtom);
+        (uint256 _assetsAfterFees, uint256 _sharesOut) = _calculateRedeem(termId, curveId, shares, _isAtom);
+        return (_sharesOut, _assetsAfterFees);
     }
 
     /// @notice returns amount of assets that would be exchanged by vault given amount of 'shares' provided
@@ -1182,9 +1183,19 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
     function _convertToAssets(bytes32 termId, uint256 curveId, uint256 shares) internal view returns (uint256) {
         IBondingCurveRegistry bcRegistry = IBondingCurveRegistry(bondingCurveConfig.registry);
-        return bcRegistry.previewRedeem(
-            shares, _vaults[termId][curveId].totalShares, _vaults[termId][curveId].totalAssets, curveId
-        );
+        uint256 totalShares = _vaults[termId][curveId].totalShares;
+        uint256 totalAssets = _vaults[termId][curveId].totalAssets;
+
+        // if this redemption would leave <= minShare remaining, pay out all assets to the redeemer
+        // this avoids precision traps on non-linear curves for last-user exits
+        if (totalShares > 0 && shares > 0 && shares <= totalShares) {
+            uint256 remaining = totalShares - shares;
+            if (remaining == 0 || remaining <= generalConfig.minShare) {
+                return totalAssets;
+            }
+        }
+
+        return bcRegistry.previewRedeem(shares, totalShares, totalAssets, curveId);
     }
 
     /// @dev Initializes the counter triple vault with ghost shares for the admin
@@ -1487,7 +1498,8 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         }
 
         uint256 remainingShares = _vaults[_termId][_curveId].totalShares - _shares;
-        if (remainingShares < generalConfig.minShare) {
+        // allow draining to zero supply; otherwise enforce minimum live supply
+        if (remainingShares != 0 && remainingShares < generalConfig.minShare) {
             revert MultiVault_InsufficientRemainingSharesInVault(remainingShares);
         }
     }
