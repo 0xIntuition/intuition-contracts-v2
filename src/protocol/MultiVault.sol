@@ -756,17 +756,21 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
             revert MultiVault_DefaultCurveMustBeInitializedViaCreatePaths();
         }
 
-        // --- compute fee base (after minShare cost if new and non-default) ---
-        uint256 base = assets;
-        if (isNew && !isDefault) {
-            uint256 minShareCost = _minShareCostFor(_vaultType);
-            if (assets <= minShareCost) revert MultiVault_DepositTooSmallToCoverMinShares();
-            base -= minShareCost;
-        }
+        uint256 assetsAfterFees;
 
-        // --- apply fees/accumulators (side-effects) ---
-        uint256 assetsAfterFees =
-            _applyDepositFeesAndAccumulators(termId, curveId, base, isAtomVault, _vaultType, isNew);
+        // use scoped block to avoid stack too deep
+        {
+            // --- compute fee base (after minShare cost if new and non-default) ---
+            uint256 base = assets;
+            if (isNew && !isDefault) {
+                uint256 minShareCost = _minShareCostFor(_vaultType);
+                if (assets <= minShareCost) revert MultiVault_DepositTooSmallToCoverMinShares();
+                base -= minShareCost;
+            }
+
+            // --- apply fees/accumulators (side-effects) ---
+            assetsAfterFees = _applyDepositFeesAndAccumulators(termId, curveId, base, isAtomVault, _vaultType, isNew);
+        }
 
         // --- bootstrap min shares for brand-new non-default curve vaults ---
         _bootstrapMinShares(termId, curveId, _vaultType, isNew, isDefault);
@@ -1392,7 +1396,6 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         // first action in the new epoch automatically rolls over the totalUtilization
         if (totalUtilization[currentEpochLocal] == 0) {
             totalUtilization[currentEpochLocal] = totalUtilization[oldEpoch];
-            uint256 previousEpoch = currentEpochLocal - 1;
         }
 
         if (personalUtilization[user][currentEpochLocal] == 0) {
