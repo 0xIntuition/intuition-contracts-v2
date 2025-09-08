@@ -21,19 +21,6 @@ interface IMultiVault {
         mapping(address account => uint256 balance) balanceOf;
     }
 
-    /// @notice Struct to hold data for the deposited event to avoid "stack too deep" errors
-    struct DepositedEvent {
-        address sender;
-        address receiver;
-        bytes32 termId;
-        uint256 curveId;
-        uint256 assets;
-        uint256 assetsAfterFees;
-        uint256 shares;
-        uint256 totalShares;
-        VaultType vaultType;
-    }
-
     /* =================================================== */
     /*                        ENUMS                        */
     /* =================================================== */
