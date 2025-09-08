@@ -132,4 +132,18 @@ contract CreateTriplesTest is BaseTest {
         vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_AtomDoesNotExist.selector, subjectIds[0]));
         protocol.multiVault.createTriples{ value: requiredPayment }(subjectIds, predicateIds, objectIds, assets);
     }
+
+    function test_createTriples_RevertsWhen_ArrayLengthIsZero() public {
+        bytes32[] memory subjectIds = new bytes32[](0);
+        bytes32[] memory predicateIds = new bytes32[](1);
+        predicateIds[0] = keccak256("predicate");
+        bytes32[] memory objectIds = new bytes32[](1);
+        objectIds[0] = keccak256("object");
+        uint256[] memory assets = new uint256[](1);
+        assets[0] = TRIPLE_COST[0];
+
+        resetPrank(users.alice);
+        vm.expectRevert(MultiVault.MultiVault_InvalidArrayLength.selector);
+        protocol.multiVault.createTriples{ value: TRIPLE_COST[0] }(subjectIds, predicateIds, objectIds, assets);
+    }
 }

@@ -153,12 +153,12 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
 
     function testSetGeneralConfig_RevertWhen_NonAdmin() public {
         // Craft a dummy config
-        GeneralConfig memory gc = _getDefaultGeneralConfig();
-        gc.protocolMultisig = users.bob;
+        GeneralConfig memory generalConfig = _getDefaultGeneralConfig();
+        generalConfig.protocolMultisig = users.bob;
 
         resetPrank({ msgSender: users.alice });
         _expectUnauthorized(users.alice);
-        protocol.multiVault.setGeneralConfig(gc);
+        protocol.multiVault.setGeneralConfig(generalConfig);
     }
 
     /*////////////////////////////////////////////////////////////////////
