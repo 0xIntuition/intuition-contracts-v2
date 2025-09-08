@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: MIT
-pragma solidity >=0.8.29 <0.9.0;
+// SPDX-License-Identifier: BUSL-1.1
+pragma solidity ^0.8.29;
 
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { IPermit2 } from "src/interfaces/IPermit2.sol";

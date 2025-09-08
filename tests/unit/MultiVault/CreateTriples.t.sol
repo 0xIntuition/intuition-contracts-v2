@@ -68,6 +68,72 @@ contract CreateTriplesTest is BaseTest {
     }
 
     /*//////////////////////////////////////////////////////////////
+                       EXTRA ERROR BRANCHES (TRIPLES)
+    //////////////////////////////////////////////////////////////*/
+
+    function test_createTriples_PerTriple_InsufficientAssets_Revert() public {
+        // Create 6 atoms for two distinct triples
+        bytes[] memory atomDataArray = new bytes[](6);
+        atomDataArray[0] = "S1";
+        atomDataArray[1] = "P1";
+        atomDataArray[2] = "O1";
+        atomDataArray[3] = "S2";
+        atomDataArray[4] = "P2";
+        atomDataArray[5] = "O2";
+
+        bytes32[] memory atomIds = createAtomsWithUniformCost(atomDataArray, ATOM_COST[0], users.alice);
+
+        // Build two triples
+        bytes32[] memory subjectIds = new bytes32[](2);
+        bytes32[] memory predicateIds = new bytes32[](2);
+        bytes32[] memory objectIds = new bytes32[](2);
+        uint256[] memory assets = new uint256[](2);
+
+        subjectIds[0] = atomIds[0];
+        predicateIds[0] = atomIds[1];
+        objectIds[0] = atomIds[2];
+
+        subjectIds[1] = atomIds[3];
+        predicateIds[1] = atomIds[4];
+        objectIds[1] = atomIds[5];
+
+        // Per-triple funding: first is short by 1 wei, second overfunded by 1 wei.
+        // Sum == 2 * TRIPLE_COST => aggregate check passes, loop hits i=0 and reverts with InsufficientAssets.
+        assets[0] = TRIPLE_COST[0] - 1;
+        assets[1] = TRIPLE_COST[0] + 1;
+        uint256 total = assets[0] + assets[1];
+
+        resetPrank(users.alice);
+        vm.expectRevert(MultiVault.MultiVault_InsufficientAssets.selector);
+        protocol.multiVault.createTriples{ value: total }(subjectIds, predicateIds, objectIds, assets);
+    }
+
+    function test_createTriples_TripleAlreadyExists_Revert() public {
+        // First creation
+        (bytes32 tripleId, bytes32[] memory ids) =
+            createTripleWithAtoms("Sdup", "Pdup", "Odup", ATOM_COST[0], TRIPLE_COST[0], users.alice);
+
+        // Attempt to create the same triple again
+        bytes32[] memory subjectIds = new bytes32[](1);
+        bytes32[] memory predicateIds = new bytes32[](1);
+        bytes32[] memory objectIds = new bytes32[](1);
+        uint256[] memory assets = new uint256[](1);
+
+        subjectIds[0] = ids[0];
+        predicateIds[0] = ids[1];
+        objectIds[0] = ids[2];
+        assets[0] = TRIPLE_COST[0];
+
+        resetPrank(users.alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                MultiVault.MultiVault_TripleExists.selector, tripleId, subjectIds[0], predicateIds[0], objectIds[0]
+            )
+        );
+        protocol.multiVault.createTriples{ value: assets[0] }(subjectIds, predicateIds, objectIds, assets);
+    }
+
+    /*//////////////////////////////////////////////////////////////
                             EDGE CASES
     //////////////////////////////////////////////////////////////*/
 
