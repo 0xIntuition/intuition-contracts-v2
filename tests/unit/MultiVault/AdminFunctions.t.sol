@@ -19,6 +19,9 @@ import {
 import { BaseTest } from "tests/BaseTest.t.sol";
 
 contract MultiVaultAdminFunctionsTest is BaseTest {
+    /// @dev Define a reusable GeneralConfig struct for tests to avoid stack too deep
+    GeneralConfig public gc;
+
     /*////////////////////////////////////////////////////////////////////
                                 INTERNAL HELPERS
     ////////////////////////////////////////////////////////////////////*/
@@ -113,7 +116,7 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
         ) = protocol.multiVault.generalConfig();
 
         // Prepare a new config with changed values (keep admin same to not disturb roles)
-        GeneralConfig memory gc = GeneralConfig({
+        gc = GeneralConfig({
             admin: admin,
             protocolMultisig: users.controller,
             feeDenominator: feeDenominator + 1,

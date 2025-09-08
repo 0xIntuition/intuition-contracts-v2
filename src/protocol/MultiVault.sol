@@ -1587,13 +1587,6 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         emit SharePriceChanged(termId, curveId, price, totalAssets, totalShares, vaultType);
     }
 
-    function _sumAmounts(uint256[] memory amounts) internal pure returns (uint256 total) {
-        uint256 length = amounts.length;
-        for (uint256 i = 0; i < length; i++) {
-            total += amounts[i];
-        }
-    }
-
     function _validateMinDeposit(uint256 _assets) internal view {
         if (_assets < generalConfig.minDeposit) {
             revert MultiVault_DepositBelowMinimumDeposit();
