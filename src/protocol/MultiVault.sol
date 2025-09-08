@@ -762,7 +762,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         _accumulateVaultProtocolFees(assets);
 
         /* --- Add entry fee to vault (Protocol Owned) --- */
-        _increaseProRataVaultAssets(termId, _feeOnRaw(assets, vaultFees.entryFee), _vaultType);
+        if (!isNew) _increaseProRataVaultAssets(termId, _feeOnRaw(assets, vaultFees.entryFee), _vaultType);
 
         /* --- Apply atom or triple specific fees --- */
         if (isAtomVault) {
