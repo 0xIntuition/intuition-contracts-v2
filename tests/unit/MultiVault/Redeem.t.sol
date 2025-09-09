@@ -64,6 +64,10 @@ contract MultiVaultHarness is MultiVault {
         bondingCurveConfig.registry = reg;
     }
 
+    function setFeeDenominatorForTest(uint256 den) external {
+        generalConfig.feeDenominator = den;
+    }
+
     // Expose the internal functions we want to hit
     function burnForTest(address from, bytes32 termId, uint256 curveId, uint256 amount) external returns (uint256) {
         return _burn(from, termId, curveId, amount);
@@ -245,8 +249,6 @@ contract RedeemTest is BaseTest {
     }
 
     function test_redeem_ValidateRedeem_RevertWhen_InsufficientRemainingShares() public {
-        vm.skip(true);
-
         MultiVaultHarness h = new MultiVaultHarness();
         BondingCurveRegistryMock reg = new BondingCurveRegistryMock();
         h.setBondingCurveRegistryForTest(address(reg));
@@ -266,6 +268,7 @@ contract RedeemTest is BaseTest {
         h.setMinShareForTest(minShare);
         h.setTotalSharesForTest(termId, curveId, totalShares);
         h.setBalanceForTest(termId, curveId, users.alice, sharesToRedeem);
+        h.setFeeDenominatorForTest(1e18);
 
         // Expect the precise custom error with the computed remainingShares = 99
         vm.expectRevert(

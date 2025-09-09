@@ -189,4 +189,53 @@ contract UtilizationTest is BaseTest {
             "second action personal delta only"
         );
     }
+
+    /*//////////////////////////////////////////////////////////////
+                  ROLLOVER (on behalf): copy then add
+    //////////////////////////////////////////////////////////////*/
+    function test_utilization_Rollover_OnBehalf_Deposit_CopiesPrevPersonalThenAdds() public {
+        // Bob creates an atom and gets baseline utilization in epoch N
+        bytes32 atomId = createSimpleAtom("util-roll-onbehalf", ATOM_COST[0], users.bob);
+
+        uint256 epochN = protocol.multiVault.currentEpoch();
+
+        // Snapshot Bob's total personal utilization in epoch N (includes creation baseline)
+        int256 meN_total = protocol.multiVault.personalUtilization(users.bob, epochN);
+
+        // Allow Alice to deposit on behalf of Bob for next epoch
+        setupApproval(users.bob, users.alice, IMultiVault.ApprovalTypes.DEPOSIT);
+
+        // Move to epoch N+1 (no actions yet for Bob in N+1 -> personalUtilization[bob][N+1] == 0)
+        vm.warp(block.timestamp + 14 days + 1);
+        uint256 epochN1 = protocol.multiVault.currentEpoch();
+        assertTrue(epochN1 > epochN, "moved to next epoch");
+
+        // Precondition: No carry yet for Bob in N+1 (branch guard hits: == 0)
+        assertEq(
+            protocol.multiVault.personalUtilization(users.bob, epochN1),
+            int256(0),
+            "Bob has no personal utilization yet in N+1"
+        );
+
+        // First action in N+1 is a deposit by Alice on behalf of Bob (triggers rollover for Bob)
+        uint256 amountN1 = 1 ether;
+        makeDeposit(users.alice, users.bob, atomId, CURVE_ID, amountN1, 0);
+
+        // After rollover: Bob's N utilization is copied into N+1, then amountN1 is added
+        assertEq(
+            protocol.multiVault.personalUtilization(users.bob, epochN1) + meN_total,
+            meN_total + int256(amountN1),
+            "on-behalf deposit should copy prior epoch personal utilization, then add"
+        );
+
+        // Sanity: Alice shouldn't get personal credit for Bob's action
+        assertEq(
+            protocol.multiVault.personalUtilization(users.alice, epochN1),
+            int256(0),
+            "sender (Alice) gets no personal utilization for on-behalf deposit"
+        );
+
+        // And Bob's lastActiveEpoch is now the new epoch
+        assertEq(protocol.multiVault.lastActiveEpoch(users.bob), epochN1, "lastActiveEpoch rolled to N+1");
+    }
 }
