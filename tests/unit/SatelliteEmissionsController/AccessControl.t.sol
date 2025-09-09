@@ -7,6 +7,7 @@ import { BaseTest } from "tests/BaseTest.t.sol";
 import { ISatelliteEmissionsController } from "src/interfaces/ISatelliteEmissionsController.sol";
 import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
 import { FinalityState } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
+import { MetaERC20Dispatcher } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
 
 /// @dev forge test --match-path 'tests/unit/SatelliteEmissionsController/AccessControl.t.sol'
 contract AccessControlTest is BaseTest {
@@ -60,17 +61,12 @@ contract AccessControlTest is BaseTest {
         protocol.satelliteEmissionsController.setMessageGasCost(newGasCost);
     }
 
-    function test_setMessageGasCost_shouldAllowZeroValue() external {
+    function test_setMessageGasCost_shouldRevertOnZeroValue() external {
         uint256 zeroGasCost = 0;
 
         resetPrank(users.admin);
+        vm.expectRevert(abi.encodeWithSelector(MetaERC20Dispatcher.MetaERC20Dispatcher__InvalidGasCost.selector));
         protocol.satelliteEmissionsController.setMessageGasCost(zeroGasCost);
-
-        assertEq(
-            protocol.satelliteEmissionsController.getMessageGasCost(),
-            zeroGasCost,
-            "Message gas cost should accept zero value"
-        );
     }
 
     function test_setMessageGasCost_shouldAllowLargeValue() external {
@@ -168,17 +164,12 @@ contract AccessControlTest is BaseTest {
         assertNotEq(originalSpokeOrHub, newSpokeOrHub, "Should be different from original");
     }
 
-    function test_setMetaERC20SpokeOrHub_shouldAllowZeroAddress() external {
+    function test_setMetaERC20SpokeOrHub_shouldRevertOnZeroAddress() external {
         address zeroAddress = address(0);
 
         resetPrank(users.admin);
+        vm.expectRevert(abi.encodeWithSelector(MetaERC20Dispatcher.MetaERC20Dispatcher__InvalidAddress.selector));
         protocol.satelliteEmissionsController.setMetaERC20SpokeOrHub(zeroAddress);
-
-        assertEq(
-            protocol.satelliteEmissionsController.getMetaERC20SpokeOrHub(),
-            zeroAddress,
-            "MetaERC20SpokeOrHub should accept zero address"
-        );
     }
 
     function test_setMetaERC20SpokeOrHub_shouldRevertWithUnauthorizedUser() external {
@@ -214,17 +205,14 @@ contract AccessControlTest is BaseTest {
         assertNotEq(originalDomain, newDomain, "Should be different from original");
     }
 
-    function test_setRecipientDomain_shouldAllowZeroValue() external {
+    function test_setRecipientDomain_shouldRevertOnZeroValue() external {
         uint32 zeroDomain = 0;
 
         resetPrank(users.admin);
-        protocol.satelliteEmissionsController.setRecipientDomain(zeroDomain);
-
-        assertEq(
-            protocol.satelliteEmissionsController.getRecipientDomain(),
-            zeroDomain,
-            "Recipient domain should accept zero value"
+        vm.expectRevert(
+            abi.encodeWithSelector(MetaERC20Dispatcher.MetaERC20Dispatcher__InvalidRecipientDomain.selector)
         );
+        protocol.satelliteEmissionsController.setRecipientDomain(zeroDomain);
     }
 
     function test_setRecipientDomain_shouldAllowMaxUint32() external {
@@ -373,7 +361,7 @@ contract AccessControlTest is BaseTest {
 
     function test_boundaryValues_messageGasCost() external {
         uint256[] memory testValues = new uint256[](3);
-        testValues[0] = 0; // Minimum
+        testValues[0] = 1; // Minimum
         testValues[1] = 1e18; // Large value
         testValues[2] = type(uint256).max; // Maximum
 
@@ -393,7 +381,7 @@ contract AccessControlTest is BaseTest {
 
     function test_boundaryValues_recipientDomain() external {
         uint32[] memory testValues = new uint32[](3);
-        testValues[0] = 0; // Minimum
+        testValues[0] = 1; // Minimum
         testValues[1] = 2_147_483_647; // Large value
         testValues[2] = type(uint32).max; // Maximum
 

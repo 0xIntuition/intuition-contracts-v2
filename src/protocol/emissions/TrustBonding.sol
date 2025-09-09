@@ -15,11 +15,6 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import { VotingEscrow } from "src/external/curve/VotingEscrow.sol";
 
 /**
- * @dev Common forge commands for testing
- * forge inspect TrustBonding storage-layout
- */
-
-/**
  * @title  TrustBonding
  * @author 0xIntuition
  * @notice Core contract of the Intuition protocol. This contract manages the locking of TRUST tokens
@@ -77,8 +72,6 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
                                  STATE
     //////////////////////////////////////////////////////////////*/
 
-    uint256 public maxAnnualEmission;
-
     /// @notice Mapping of epochs to the total claimed rewards for that epoch among all users
     mapping(uint256 epoch => uint256 totalClaimedRewards) public totalClaimedRewardsForEpoch;
 
@@ -98,9 +91,6 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     /// @notice The personal utilization lower bound in basis points (represents the minimum possible personal
     /// utilization ratio)
     uint256 public personalUtilizationLowerBound;
-
-    /// @notice The maximum claimable protocol fees for a specific epoch
-    mapping(uint256 epoch => uint256 totalClaimableProtocolFees) public maxClaimableProtocolFeesForEpoch;
 
     /// @dev Gap for upgrade safety
     uint256[50] private __gap;
@@ -213,7 +203,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         if (currentEpochLocal == 0) {
             return 0;
         }
-        uint256 prevEpoch = currentEpochLocal == 1 ? currentEpochLocal - 1 : 0;
+        uint256 prevEpoch = currentEpochLocal > 1 ? currentEpochLocal - 1 : 0;
         return _userEligibleRewardsForEpoch(account, prevEpoch) * _getPersonalUtilizationRatio(account, prevEpoch)
             / BASIS_POINTS_DIVISOR;
     }
@@ -280,26 +270,6 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         uint256 trustPerYear = _emissionsForEpoch(epoch) * epochsPerYear();
 
         return trustPerYear * BASIS_POINTS_DIVISOR / totalLockedAmount;
-    }
-
-    /// @inheritdoc ITrustBonding
-    function getUnclaimedRewardsForEpoch(uint256 epoch) external view returns (uint256) {
-        uint256 currentEpochLocal = currentEpoch();
-        // There cannot be any unclaimed rewards during the first two epochs, so we return 0.
-        if (currentEpochLocal < 2) {
-            return 0;
-        }
-
-        // We only want unclaimed rewards from epochs that are no longer claimable.
-        // For epochs that are still claimable, we return 0.
-        // This means we only consider epochs that are at least two epochs old.
-        if (epoch > currentEpochLocal - 2) {
-            return 0;
-        }
-
-        uint256 epochRewards = _emissionsForEpoch(epoch);
-        uint256 claimedRewards = totalClaimedRewardsForEpoch[epoch];
-        return epochRewards - claimedRewards;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -508,11 +478,19 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         // Fetch the target utilization for the previous epoch
         uint256 userUtilizationTarget = userClaimedRewardsForEpoch[_account][_epoch - 1];
 
-        // If there was no target utilization in the previous epoch, any increase in utilization is rewarded with the
-        // max ratio.
-        // Similarly, if the userUtilizationDelta is greater than the target, we also return the max ratio.
-        if (userUtilizationTarget == 0 || userUtilizationDelta >= userUtilizationTarget) {
-            return BASIS_POINTS_DIVISOR;
+        if (userUtilizationTarget == 0) {
+            // If the user had nothing claimable last epoch, don't penalize them as it's their first ever claim
+            if (_userEligibleRewardsForEpoch(_account, _epoch - 1) == 0) {
+                return BASIS_POINTS_DIVISOR; // 100%
+            }
+
+            // They did have eligibility last epoch but chose not to claim --> give them only the floor allocation
+            return personalUtilizationLowerBound;
+        }
+
+        // If the userUtilizationDelta is greater than the target, we also return the max ratio.
+        if (userUtilizationDelta >= userUtilizationTarget) {
+            return BASIS_POINTS_DIVISOR; // 100%
         }
 
         // Normalize the final utilizationRatio to be within the bounds of the personalUtilizationLowerBound and
