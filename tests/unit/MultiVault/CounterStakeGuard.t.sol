@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.21;
 
-import {console} from "forge-std/src/console.sol";
-import {MultiVault} from "src/protocol/MultiVault.sol";
-import {IBondingCurveRegistry} from "src/interfaces/IBondingCurveRegistry.sol";
-import {BaseTest} from "tests/BaseTest.t.sol";
+import { console } from "forge-std/src/console.sol";
+import { MultiVault } from "src/protocol/MultiVault.sol";
+import { IBondingCurveRegistry } from "src/interfaces/IBondingCurveRegistry.sol";
+import { BaseTest } from "tests/BaseTest.t.sol";
 
 contract CounterStakeGuardTest is BaseTest {
     bytes32 private tripleId;
@@ -18,14 +18,8 @@ contract CounterStakeGuardTest is BaseTest {
         uint256 minDeposit = protocol.multiVault.getGeneralConfig().minDeposit;
         if (minDeposit == 0) minDeposit = 1;
 
-        (bytes32 _tripleId, ) = createTripleWithAtoms(
-            "S:Local",
-            "P:Local",
-            "O:Local",
-            atomCost,
-            tripleCost + minDeposit,
-            users.alice
-        );
+        (bytes32 _tripleId,) =
+            createTripleWithAtoms("S:Local", "P:Local", "O:Local", atomCost, tripleCost + minDeposit, users.alice);
         tripleId = _tripleId;
         counterTripleId = protocol.multiVault.getCounterIdFromTripleId(tripleId);
 
@@ -61,8 +55,9 @@ contract CounterStakeGuardTest is BaseTest {
     function test_CrossCurveDepositsAllowed() public {
         (address registryAddr, uint256 defaultCurveId) = protocol.multiVault.bondingCurveConfig();
         IBondingCurveRegistry reg = IBondingCurveRegistry(registryAddr);
-        uint256 count = reg.count();
+
         uint256 otherCurveId;
+        uint256 count = reg.count();
         for (uint256 i = 1; i <= count; i++) {
             if (i != defaultCurveId && reg.curveAddresses(i) != address(0)) {
                 otherCurveId = i;
@@ -73,8 +68,14 @@ contract CounterStakeGuardTest is BaseTest {
 
         uint256 assets = protocol.multiVault.getGeneralConfig().minDeposit;
         if (assets == 0) assets = 1;
-        vm.deal(users.alice, assets);
 
+        // 1) Bob initializes the non-default curve on the POSITIVE side.
+        vm.deal(users.bob, assets);
+        uint256 sharesPos = makeDeposit(users.bob, users.bob, tripleId, otherCurveId, assets, 0);
+        assertGt(sharesPos, 0, "positive deposit should mint shares on other curve");
+
+        // 2) Now Alice can deposit to the COUNTER side on that curve (she has no positive shares on this curve).
+        vm.deal(users.alice, assets);
         uint256 sharesNeg = makeDeposit(users.alice, users.alice, counterTripleId, otherCurveId, assets, 0);
         assertGt(sharesNeg, 0, "cross-curve counter deposit should mint shares");
     }
