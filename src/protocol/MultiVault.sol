@@ -24,15 +24,10 @@ import {
 import { MultiVaultCore } from "src/protocol/MultiVaultCore.sol";
 
 /**
- * @dev Common forge commands for testing
- * forge inspect MultiVault storage-layout
- */
-
-/**
  * @title  MultiVault
  * @author 0xIntuition
  * @notice Core contract of the Intuition protocol. Manages the creation and management of vaults
- *         associated with atoms & triples using Trust as the base asset.
+ *         associated with atoms & triples using TRUST as the base asset.
  */
 contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuardUpgradeable, PausableUpgradeable {
     using FixedPointMathLib for uint256;
@@ -46,7 +41,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
     uint256 public constant MAX_BATCH_SIZE = 150;
 
-    /// @notice Constant representing the burn address, which receives the "ghost shares"
+    /// @notice Constant representing the burn address, which receives the "ghost (min) shares"
     address public constant BURN_ADDRESS = address(0x000000000000000000000000000000000000dEaD);
 
     /* =================================================== */
@@ -135,6 +130,12 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     error MultiVault_TermNotTriple();
 
     error MultiVault_ActionExceedsMaxAssets();
+
+    error MultiVault_DefaultCurveMustBeInitializedViaCreatePaths();
+
+    error MultiVault_DepositTooSmallToCoverMinShares();
+
+    error MultiVault_CannotDirectlyInitializeCounterTriple();
 
     /* =================================================== */
     /*                    CONSTRUCTOR                      */
@@ -288,13 +289,13 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         return _calculateTripleCreate(termId, curveId, assets);
     }
 
-    /// @notice simulates the effects of the deposited amount of 'assets' and returns the estimated
-    ///         amount of shares that would be minted from the deposit of `assets`
-    /// @param assets amount of assets to calculate shares on
-    /// @param termId atom or triple (term) id to get corresponding shares for
-    /// @param curveId bonding curve ID to get corresponding shares for
-    ///
-    /// @return shares amount of shares that would be minted from the deposit of `assets`
+    /// @notice Simulates a deposit of `assets`.
+    /// @dev Returns the expected shares to be minted and the net assets credited after fees.
+    /// @param termId Atom or triple ID
+    /// @param curveId Bonding curve ID
+    /// @param assets Assets the user would send
+    /// @return shares Expected shares minted for the user
+    /// @return assetsAfterFees Net assets that will be added to the vault (post all fees)
     function previewDeposit(
         bytes32 termId,
         uint256 curveId,
@@ -308,20 +309,27 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         return _calculateDeposit(termId, curveId, assets, _isAtom);
     }
 
+    /// @notice Simulates a redemption of `shares`.
+    /// @dev Returns the net assets the user would receive after fees, and the shares burned (i.e. used for redemption).
+    /// @param termId Atom or triple ID
+    /// @param curveId Bonding curve ID
+    /// @param shares Shares the user would redeem
+    /// @return assetsAfterFees Net assets that would be sent to the user (post protocol + exit fees)
+    /// @return sharesUsed The shares that would be burned (echo of the input for convenience)
     function previewRedeem(
         bytes32 termId,
         uint256 curveId,
-        uint256 assets
+        uint256 shares
     )
         public
         view
-        returns (uint256 shares, uint256 assetsAfterFees)
+        returns (uint256 assetsAfterFees, uint256 sharesUsed)
     {
         bool _isAtom = isAtom(termId);
-        return _calculateRedeem(termId, curveId, assets, _isAtom);
+        return _calculateRedeem(termId, curveId, shares, _isAtom);
     }
 
-    /// @notice returns amount of assets that would be exchanged by vault given amount of 'shares' provided
+    /// @notice returns amount of shares that would be exchanged by vault given amount of 'assets' provided
     ///
     /// @param assets amount of assets to calculate shares on
     /// @param termId atom or triple (term) id to get corresponding shares for
@@ -332,6 +340,13 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         return _convertToShares(termId, curveId, assets);
     }
 
+    /// @notice returns amount of assets that would be exchanged by vault given amount of 'shares' provided
+    ///
+    /// @param shares amount of shares to calculate assets on
+    /// @param termId atom or triple (term) id to get corresponding assets for
+    /// @param curveId bonding curve ID to get corresponding assets for
+    ///
+    /// @return assets amount of assets that would be exchanged by vault given amount of 'shares' provided
     function convertToAssets(bytes32 termId, uint256 curveId, uint256 shares) external view returns (uint256) {
         return _convertToAssets(termId, curveId, shares);
     }
@@ -404,6 +419,10 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
             }
         }
 
+        // Add the static portion of the fee that is yet to be accounted for
+        uint256 atomCreationProtocolFees = atomConfig.atomCreationProtocolFee * length;
+        _accumulateStaticProtocolFees(atomCreationProtocolFees);
+
         _addUtilization(msg.sender, int256(_payment));
 
         return ids;
@@ -447,7 +466,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         address atomWallet = _accumulateAtomWalletFees(atomId, assetsAfterFixedFees);
 
         /* --- Add assets after fees to Atom Vault (User Owned) --- */
-        uint256 sharesTotal =
+        uint256 userSharesAfter =
             _updateVaultOnCreation(sender, atomId, curveId, assetsAfterFees, sharesForReceiver, VaultType.ATOM);
 
         /* --- Add entry fee to Atom Vault (Protocol Owned) --- */
@@ -455,11 +474,14 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
         /* --- Emit Events --- */
         emit AtomCreated(sender, atomId, data, atomWallet);
+
         emit Deposited(
-            sender, sender, atomId, curveId, assets, assetsAfterFees, sharesForReceiver, sharesTotal, VaultType.ATOM
+            sender, sender, atomId, curveId, assets, assetsAfterFees, sharesForReceiver, userSharesAfter, VaultType.ATOM
         );
 
-        totalTermsCreated++;
+        // Increment total terms created
+        ++totalTermsCreated;
+
         return atomId;
     }
 
@@ -526,7 +548,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
         // Add the static portion of the fee that is yet to be accounted for
         uint256 tripleCreationProtocolFees = tripleConfig.tripleCreationProtocolFee * length;
-        _accumulateVaultProtocolFees(tripleCreationProtocolFees);
+        _accumulateStaticProtocolFees(tripleCreationProtocolFees);
 
         /* --- Increase the users utilization ratio to calculate rewards --- */
         _addUtilization(msg.sender, int256(_amount));
@@ -576,7 +598,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         _accumulateVaultProtocolFees(assetsAfterFixedFees);
 
         /* --- Add user assets after fees to vault (User Owned) --- */
-        uint256 sharesTotal =
+        uint256 userSharesAfter =
             _updateVaultOnCreation(sender, tripleId, curveId, assetsAfterFees, sharesForReceiver, VaultType.TRIPLE);
 
         /* --- Add vault and triple fees to vault (Protocol Owned) --- */
@@ -585,16 +607,32 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
             tripleId, _feeOnRaw(assetsAfterFixedFees, tripleConfig.atomDepositFractionForTriple)
         );
 
+        // Credit the static totalAtomDepositsOnTripleCreation fee to the pro-rata vaults
+        if (tripleConfig.totalAtomDepositsOnTripleCreation != 0) {
+            _increaseProRataVaultsAssets(tripleId, tripleConfig.totalAtomDepositsOnTripleCreation);
+        }
+
         /* --- Initialize the counter vault with min shares --- */
         _initializeCounterTripleVault(_counterTripleId, curveId);
 
         /* --- Emit events --- */
         emit TripleCreated(sender, tripleId, subjectId, predicateId, objectId);
+
         emit Deposited(
-            sender, sender, tripleId, curveId, assets, assetsAfterFees, sharesForReceiver, sharesTotal, VaultType.TRIPLE
+            sender,
+            sender,
+            tripleId,
+            curveId,
+            assets,
+            assetsAfterFees,
+            sharesForReceiver,
+            userSharesAfter,
+            VaultType.TRIPLE
         );
 
-        totalTermsCreated++;
+        // Increment total terms created
+        ++totalTermsCreated;
+
         return tripleId;
     }
 
@@ -694,42 +732,65 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         internal
         returns (uint256)
     {
+        // --- validations independent of vault type ---
         _validateMinDeposit(assets);
-
-        /* --- Check the user is receiving the minimum amount of shares --- */
         _validateMinShares(termId, curveId, assets, minShares);
 
-        (bool _isAtom, VaultType _vaultType) = _requireVaultType(termId);
+        // --- discover vault type and basic flags up front ---
+        (bool isAtomVault, VaultType _vaultType) = _requireVaultType(termId);
+        bool isNew = _isNewVault(termId, curveId);
+        bool isDefault = curveId == bondingCurveConfig.defaultCurveId;
 
-        if (!_isAtom) {
-            if (_hasCounterStake(termId, curveId, receiver)) {
-                revert MultiVault_HasCounterStake();
-            }
+        // --- triple-only invariants before any state changes ---
+        if (!isAtomVault) {
+            if (_hasCounterStake(termId, curveId, receiver)) revert MultiVault_HasCounterStake();
+            if (isNew && isCounterTriple(termId)) revert MultiVault_CannotDirectlyInitializeCounterTriple();
         }
 
-        (uint256 sharesForReceiver, uint256 assetsAfterFees) = _calculateDeposit(termId, curveId, assets, _isAtom);
+        // default curve vaults must be created via createAtoms/createTriples
+        if (isNew && isDefault) {
+            revert MultiVault_DefaultCurveMustBeInitializedViaCreatePaths();
+        }
 
-        /* --- Accumulate fees for all vault types --- */
+        /* --- Calculate final shares and assets after fees --- */
+        (uint256 sharesForReceiver, uint256 assetsAfterFees) = _calculateDeposit(termId, curveId, assets, isAtomVault);
+
+        /* --- Account for the minShare cost only for non-default curve vaults --- */
+        if (isNew && !isDefault) assets -= _minShareCostFor(_vaultType);
+
+        /* --- Accumulate dynamic fees --- */
         _accumulateVaultProtocolFees(assets);
 
-        /* --- Add vault and triple fees to vault (Protocol Owned) --- */
-        _increaseProRataVaultAssets(termId, _feeOnRaw(assets, vaultFees.entryFee), _vaultType);
+        /* --- Add entry fee to vault (Protocol Owned) --- */
+        if (!isNew) _increaseProRataVaultAssets(termId, _feeOnRaw(assets, vaultFees.entryFee), _vaultType);
 
-        if (_isAtom) {
-            /* --- Handle modifiers for atom vault types --- */
+        /* --- Apply atom or triple specific fees --- */
+        if (isAtomVault) {
             _accumulateAtomWalletFees(termId, assets);
         } else {
-            /* --- Handle modifiers for triple vault types --- */
             _increaseProRataVaultsAssets(termId, _feeOnRaw(assets, tripleConfig.atomDepositFractionForTriple));
         }
 
-        /* --- Add user assets after total fees to vault (User Owned) --- */
-        uint256 sharesTotal =
-            _updateVaultOnDeposit(receiver, termId, curveId, assetsAfterFees, sharesForReceiver, _vaultType);
+        uint256 userBalanceAfter;
 
-        /* --- Emit events --- */
+        // --- user accounting (returns the user's total balance after mint) ---
+        if (isNew && !isDefault) {
+            userBalanceAfter =
+                _updateVaultOnCreation(receiver, termId, curveId, assetsAfterFees, sharesForReceiver, _vaultType);
+
+            if (!isAtomVault) {
+                bytes32 _counterTripleId = getCounterIdFromTripleId(termId);
+
+                /* --- Initialize the counter vault with min shares --- */
+                _initializeCounterTripleVault(_counterTripleId, curveId);
+            }
+        } else {
+            userBalanceAfter =
+                _updateVaultOnDeposit(receiver, termId, curveId, assetsAfterFees, sharesForReceiver, _vaultType);
+        }
+
         emit Deposited(
-            sender, receiver, termId, curveId, assets, assetsAfterFees, sharesForReceiver, sharesTotal, _vaultType
+            sender, receiver, termId, curveId, assets, assetsAfterFees, sharesForReceiver, userBalanceAfter, _vaultType
         );
 
         return sharesForReceiver;
@@ -832,18 +893,20 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         _increaseProRataVaultAssets(termId, _feeOnRaw(rawAssetsBeforeFees, vaultFees.exitFee), _vaultType);
 
         /* --- Release user assets after fees from vault (User Owned) --- */
-        uint256 sharesTotal = _updateVaultOnRedeem(receiver, termId, curveId, assetsAfterFees, shares, _vaultType);
+        uint256 userSharesAfter =
+            _updateVaultOnRedeem(receiver, termId, curveId, rawAssetsBeforeFees, shares, _vaultType);
 
         Address.sendValue(payable(receiver), assetsAfterFees);
+
         emit Redeemed(
             sender,
             receiver,
             termId,
             curveId,
             shares,
-            sharesTotal,
-            rawAssetsBeforeFees,
-            rawAssetsBeforeFees - assetsAfterFees,
+            userSharesAfter,
+            assetsAfterFees, // net assets sent to user
+            rawAssetsBeforeFees - assetsAfterFees, // total fees charged
             _vaultType
         );
 
@@ -920,15 +983,31 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         walletConfig = _walletConfig;
     }
 
+    /// @notice Permissionless function to sweep the accumulated protocol fees for a given epoch to the protocol
+    /// multisig
+    /// @dev This function serves as a fallback in case `_claimAccumulatedProtocolFees` is not called automatically
+    /// during utilization rollover, or in case of an extended period of inactivity in the protocol
+    function sweepAccumulatedProtocolFees(uint256 epoch) external {
+        _claimAccumulatedProtocolFees(epoch);
+    }
+
     /* =================================================== */
     /*                    Accumulators                     */
     /* =================================================== */
 
+    /// @dev Increase the accumulated protocol fees in a given epoch by a percentage of the raw assets
     function _accumulateVaultProtocolFees(uint256 _assets) internal {
         uint256 _fees = _feeOnRaw(_assets, vaultFees.protocolFee);
         uint256 epoch = currentEpoch();
         accumulatedProtocolFees[epoch] += _fees;
         emit ProtocolFeeAccrued(epoch, _fees);
+    }
+
+    /// @dev Increase the accumulated protocol fees in a given epoch by an absolute amount
+    function _accumulateStaticProtocolFees(uint256 _assets) internal {
+        uint256 epoch = currentEpoch();
+        accumulatedProtocolFees[epoch] += _assets;
+        emit ProtocolFeeAccrued(epoch, _assets);
     }
 
     /// @dev Increase the accumulated atom wallet fees
@@ -997,13 +1076,24 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         view
         returns (uint256, uint256)
     {
-        uint256 protocolFee = _feeOnRaw(assets, vaultFees.protocolFee);
-        uint256 entryFee = _feeOnRaw(assets, vaultFees.entryFee);
-        uint256 atomWalletDepositFee = _feeOnRaw(assets, atomConfig.atomWalletDepositFee);
+        bool isNew = _isNewVault(termId, curveId);
+        bool isDefault = curveId == bondingCurveConfig.defaultCurveId;
 
-        uint256 assetsAfterFees = assets - entryFee - protocolFee - atomWalletDepositFee;
+        uint256 base = assets; // assets before any fees
+
+        // Account for the minShare cost only for non-default curve
+        if (isNew && !isDefault) {
+            uint256 minShareCost = generalConfig.minShare;
+            if (assets <= minShareCost) revert MultiVault_DepositTooSmallToCoverMinShares();
+            base = assets - minShareCost;
+        }
+
+        uint256 protocolFee = _feeOnRaw(base, vaultFees.protocolFee);
+        uint256 entryFee = isNew ? 0 : _feeOnRaw(base, vaultFees.entryFee); // waive entry fee on brand-new vaults
+        uint256 atomWalletDepositFee = _feeOnRaw(base, atomConfig.atomWalletDepositFee);
+
+        uint256 assetsAfterFees = base - protocolFee - entryFee - atomWalletDepositFee;
         uint256 shares = _convertToShares(termId, curveId, assetsAfterFees);
-
         return (shares, assetsAfterFees);
     }
 
@@ -1042,14 +1132,28 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         view
         returns (uint256, uint256)
     {
-        // Calculate the protocol fee and accumulate it.
-        uint256 protocolFee = _feeOnRaw(assets, vaultFees.protocolFee);
-        uint256 entryFee = _feeOnRaw(assets, vaultFees.entryFee);
-        uint256 atomDepositFraction = _feeOnRaw(assets, tripleConfig.atomDepositFractionForTriple);
+        bool isNew = _isNewVault(termId, curveId);
+        bool isDefault = curveId == bondingCurveConfig.defaultCurveId;
 
-        uint256 assetsAfterFees = assets - protocolFee - entryFee - atomDepositFraction;
+        if (isNew && isCounterTriple(termId)) {
+            revert MultiVault_CannotDirectlyInitializeCounterTriple();
+        }
+
+        uint256 base = assets; // assets before any fees
+
+        // Account for the minShare cost only for non-default curve
+        if (isNew && !isDefault) {
+            uint256 minShareCost = generalConfig.minShare * 2; // positive + counter triple min shares
+            if (assets <= minShareCost) revert MultiVault_DepositTooSmallToCoverMinShares();
+            base = assets - minShareCost;
+        }
+
+        uint256 protocolFee = _feeOnRaw(base, vaultFees.protocolFee);
+        uint256 entryFee = isNew ? 0 : _feeOnRaw(base, vaultFees.entryFee); // waive entry fee on brand-new vaults
+        uint256 atomDepositFraction = _feeOnRaw(base, tripleConfig.atomDepositFractionForTriple);
+
+        uint256 assetsAfterFees = base - protocolFee - entryFee - atomDepositFraction;
         uint256 shares = _convertToShares(termId, curveId, assetsAfterFees);
-
         return (shares, assetsAfterFees);
     }
 
@@ -1057,13 +1161,13 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         bytes32 termId,
         uint256 curveId,
         uint256 _shares,
-        bool isAtom
+        bool _isAtom
     )
         internal
         view
         returns (uint256, uint256)
     {
-        if (isAtom) {
+        if (_isAtom) {
             return _calculateAtomRedeem(termId, curveId, _shares);
         } else {
             return _calculateTripleRedeem(termId, curveId, _shares);
@@ -1179,7 +1283,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         );
     }
 
-    /// @dev Initializes the counter triple vault with ghost shares for the admin
+    /// @dev Initializes the counter triple vault with min shares minted to the burn address
     /// @param counterTripleId the ID of the counter triple
     function _initializeCounterTripleVault(bytes32 counterTripleId, uint256 curveId) internal {
         VaultState storage vaultState = _vaults[counterTripleId][curveId];
@@ -1193,8 +1297,8 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
             VaultType.COUNTER_TRIPLE
         );
 
-        // Mint ghost shares to burn address for the counter vault
-        _mint(BURN_ADDRESS, counterTripleId, curveId, minShare);
+        // Mint min shares to the burn address for the counter vault
+        _mint(BURN_ADDRESS, counterTripleId, curveId, generalConfig.minShare);
     }
 
     /// @dev mint vault shares to address `to`
@@ -1278,42 +1382,40 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /// @param user the address of the user
     function _rollover(address user) internal {
         uint256 currentEpochLocal = currentEpoch();
-        uint256 oldEpoch = lastActiveEpoch[user];
+        uint256 userLastEpoch = lastActiveEpoch[user];
 
-        // If user has never deposited before, oldEpoch might be 0
-        // or if oldEpoch == currentEpochLocal, no rollover is needed
-        if (oldEpoch == 0 || oldEpoch == currentEpochLocal) {
-            // first ever action done by the user
-            if (oldEpoch == 0) {
-                lastActiveEpoch[user] = currentEpochLocal;
+        // First, handle system-wide rollover if this is the first action in the new epoch
+        if (currentEpochLocal > 0 && totalUtilization[currentEpochLocal] == 0) {
+            // Roll over from the immediately previous epoch
+            uint256 previousEpoch = currentEpochLocal - 1;
+            if (totalUtilization[previousEpoch] != 0) {
+                totalUtilization[currentEpochLocal] = totalUtilization[previousEpoch];
             }
+        }
+
+        // Then handle user-specific rollover
+        if (userLastEpoch == 0 || userLastEpoch == currentEpochLocal) {
+            // First ever action by this user, or already active in current epoch; no rollover needed
             return;
         }
 
-        // first action in the new epoch automatically rolls over the totalUtilization
-        if (totalUtilization[currentEpochLocal] == 0) {
-            totalUtilization[currentEpochLocal] = totalUtilization[oldEpoch];
-            uint256 previousEpoch = currentEpochLocal - 1;
-            if (currentEpochLocal > 0) {
-                _claimAccumulatedProtocolFees(previousEpoch);
-            }
-        }
-
+        // User's first action in a new epoch - roll over their personal utilization from their respective last active
+        // epoch
         if (personalUtilization[user][currentEpochLocal] == 0) {
-            personalUtilization[user][currentEpochLocal] = personalUtilization[user][oldEpoch];
+            personalUtilization[user][currentEpochLocal] = personalUtilization[user][userLastEpoch];
         }
-
-        // set user’s lastActiveEpoch to the currentEpochLocal
-        lastActiveEpoch[user] = currentEpochLocal;
     }
 
-    /// @dev collects the accumulated protocol fees and transfers them to the TrustBonding contract for claiming by the
-    /// users
+    /// @dev collects the accumulated protocol fees and transfers them to the protocol multisig
     /// @param epoch the epoch to claim the protocol fees for
     function _claimAccumulatedProtocolFees(uint256 epoch) internal {
         uint256 protocolFees = accumulatedProtocolFees[epoch];
         if (protocolFees == 0) return;
+
+        accumulatedProtocolFees[epoch] = 0;
+
         Address.sendValue(payable(generalConfig.protocolMultisig), protocolFees);
+
         emit ProtocolFeeTransferred(epoch, generalConfig.protocolMultisig, protocolFees);
     }
 
@@ -1341,7 +1443,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
         uint256 sharesTotal = _mint(receiver, termId, curveId, shares);
 
-        // Mint ghost shares to burn address. Vault can never have less than ghost shares.
+        // Mint min shares to the burn address. Once created, the vault can never have less than min shares.
         _mint(BURN_ADDRESS, termId, curveId, minShares);
 
         return sharesTotal;
@@ -1353,14 +1455,18 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         uint256 curveId,
         uint256 assets,
         uint256 shares,
-        VaultType vaultType
+        VaultType _vaultType
     )
         internal
         returns (uint256)
     {
-        VaultState storage vaultState = _vaults[termId][curveId];
-
-        _setVaultTotals(termId, curveId, vaultState.totalAssets + assets, vaultState.totalShares + shares, vaultType);
+        _setVaultTotals(
+            termId,
+            curveId,
+            _vaults[termId][curveId].totalAssets + assets,
+            _vaults[termId][curveId].totalShares + shares,
+            _vaultType
+        );
 
         return _mint(receiver, termId, curveId, shares);
     }
@@ -1439,15 +1545,17 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
     function _validateMinShares(bytes32 _termId, uint256 _curveId, uint256 _assets, uint256 _minShares) internal view {
         uint256 maxAssets = IBondingCurveRegistry(bondingCurveConfig.registry).getCurveMaxAssets(_curveId);
-        if (_assets + _vaults[_termId][_curveId].totalAssets > maxAssets) {
-            revert MultiVault_ActionExceedsMaxAssets();
-        }
 
-        (uint256 expectedShares,) = previewDeposit(_termId, _curveId, _assets);
+        (uint256 expectedShares, uint256 netAssetsToVault) =
+            _calculateDeposit(_termId, _curveId, _assets, isAtom(_termId));
+        if (expectedShares == 0) revert MultiVault_DepositOrRedeemZeroShares();
 
-        if (expectedShares == 0) {
-            revert MultiVault_DepositOrRedeemZeroShares();
-        }
+        bool isNew = _isNewVault(_termId, _curveId);
+        bool isDefault = _curveId == bondingCurveConfig.defaultCurveId;
+        uint256 minShareCost = (isNew && !isDefault) ? generalConfig.minShare : 0;
+
+        uint256 projectedAssets = _vaults[_termId][_curveId].totalAssets + netAssetsToVault + minShareCost;
+        if (projectedAssets > maxAssets) revert MultiVault_ActionExceedsMaxAssets();
 
         if (expectedShares < _minShares) {
             revert MultiVault_SlippageExceeded();
@@ -1468,7 +1576,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
             revert MultiVault_DepositOrRedeemZeroShares();
         }
 
-        (, uint256 expectedAssets) = previewRedeem(_termId, _curveId, _shares);
+        (uint256 expectedAssets,) = previewRedeem(_termId, _curveId, _shares);
 
         if (expectedAssets < _minAssets) {
             revert MultiVault_SlippageExceeded();
@@ -1500,7 +1608,28 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         return sender == receiver || (approvals[receiver][sender] & uint8(ApprovalTypes.REDEMPTION)) != 0;
     }
 
+    /// @notice Get the maximum redeemable shares for a user in a vault
+    /// @param sender The address of the user
+    /// @param termId The ID of the atom or triple
+    /// @param curveId The ID of the bonding curve
+    /// @return uint256 The maximum redeemable shares for a user in a vault
     function maxRedeem(address sender, bytes32 termId, uint256 curveId) public view returns (uint256) {
         return _vaults[termId][curveId].balanceOf[sender];
+    }
+
+    /// @notice Check if a vault is new (i.e. has no shares)
+    /// @param termId The ID of the atom or triple
+    /// @param curveId The ID of the bonding curve
+    /// @return bool Whether the vault is new or not
+    function _isNewVault(bytes32 termId, uint256 curveId) internal view returns (bool) {
+        return _vaults[termId][curveId].totalShares == 0;
+    }
+
+    /// @notice Get the min shares cost for creating an atom or triple vault
+    /// @param vaultType The type of vault
+    /// @return uint256 The min shares cost for a given vault
+    function _minShareCostFor(VaultType vaultType) internal view returns (uint256) {
+        uint256 minShare = generalConfig.minShare;
+        return vaultType == VaultType.ATOM ? minShare : minShare * 2;
     }
 }

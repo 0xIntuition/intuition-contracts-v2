@@ -9,6 +9,85 @@ import { MultiVault } from "src/protocol/MultiVault.sol";
 import { MultiVaultCore } from "src/protocol/MultiVaultCore.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 
+/// @dev Minimal registry mock so _validateRedeem() can run inside a harness.
+contract BondingCurveRegistryMock {
+    function previewDeposit(
+        uint256 assets,
+        uint256, /*totalAssets*/
+        uint256, /*totalShares*/
+        uint256 /*curveId*/
+    )
+        external
+        pure
+        returns (uint256)
+    {
+        return assets; // 1:1 for tests
+    }
+
+    function previewRedeem(
+        uint256 shares,
+        uint256, /*totalShares*/
+        uint256, /*totalAssets*/
+        uint256 /*curveId*/
+    )
+        external
+        pure
+        returns (uint256)
+    {
+        return shares; // 1:1 for tests
+    }
+
+    function currentPrice(uint256, /*supply*/ uint256 /*curveId*/ ) external pure returns (uint256) {
+        return 1;
+    }
+
+    function getCurveMaxAssets(uint256 /*curveId*/ ) external pure returns (uint256) {
+        return type(uint256).max;
+    }
+}
+
+/// @dev Test-only harness exposing internal methods and internal storage.
+contract MultiVaultHarness is MultiVault {
+    // Directly poke balances & totals for a (termId, curveId)
+    function setBalanceForTest(bytes32 termId, uint256 curveId, address who, uint256 bal) external {
+        _vaults[termId][curveId].balanceOf[who] = bal;
+    }
+
+    function setTotalSharesForTest(bytes32 termId, uint256 curveId, uint256 totalShares) external {
+        _vaults[termId][curveId].totalShares = totalShares;
+    }
+
+    function setMinShareForTest(uint256 minShare) external {
+        generalConfig.minShare = minShare;
+    }
+
+    function setBondingCurveRegistryForTest(address reg) external {
+        bondingCurveConfig.registry = reg;
+    }
+
+    function setFeeDenominatorForTest(uint256 den) external {
+        generalConfig.feeDenominator = den;
+    }
+
+    // Expose the internal functions we want to hit
+    function burnForTest(address from, bytes32 termId, uint256 curveId, uint256 amount) external returns (uint256) {
+        return _burn(from, termId, curveId, amount);
+    }
+
+    function validateRedeemForTest(
+        bytes32 termId,
+        uint256 curveId,
+        address account,
+        uint256 shares,
+        uint256 minAssets
+    )
+        external
+        view
+    {
+        _validateRedeem(termId, curveId, account, shares, minAssets);
+    }
+}
+
 contract RedeemTest is BaseTest {
     uint256 constant CURVE_ID = 1; // Default linear curve ID
     /*//////////////////////////////////////////////////////////////
@@ -119,6 +198,22 @@ contract RedeemTest is BaseTest {
         protocol.multiVault.redeem(users.alice, atomId, CURVE_ID, shares, unreasonableMinAssets);
     }
 
+    function test_redeem_RevertWhen_RedeemerNotApproved() public {
+        // Alice creates atom she will receive into
+        bytes32 atomId = createSimpleAtom("redeemer-not-approved-atom", ATOM_COST[0], users.alice);
+
+        // Alice deposits into her atom
+        resetPrank(users.alice);
+        protocol.multiVault.deposit{ value: 1 ether }(users.alice, atomId, CURVE_ID, 0);
+
+        uint256 aliceShareBalance = protocol.multiVault.getShares(users.alice, atomId, CURVE_ID);
+
+        // Bob tries to redeem from Alice's shares without approval
+        resetPrank(users.bob);
+        vm.expectRevert(MultiVault.MultiVault_RedeemerNotApproved.selector);
+        protocol.multiVault.redeem(users.alice, atomId, CURVE_ID, aliceShareBalance, 0);
+    }
+
     /*//////////////////////////////////////////////////////////////
                             INTEGRATION TESTS
     //////////////////////////////////////////////////////////////*/
@@ -134,5 +229,55 @@ contract RedeemTest is BaseTest {
             assertTrue(shares > 0, "Deposit should always succeed");
             assertTrue(assets > 0, "Redeem should always succeed");
         }
+    }
+
+    /*//////////////////////////////////////////////////////////////
+        Test unreachable branches in _burn() and _validateRedeem()
+    //////////////////////////////////////////////////////////////*/
+
+    function test_redeem_InternalBurn_RevertWhen_InsufficientBalance() public {
+        MultiVaultHarness h = new MultiVaultHarness();
+
+        // Craft a fake vault key
+        bytes32 termId = keccak256("burn-harness-term");
+        uint256 curveId = 123;
+
+        // Give Alice 1e18 shares in that vault, then try burning 2e18.
+        h.setBalanceForTest(termId, curveId, users.alice, 1e18);
+
+        vm.expectRevert(MultiVault.MultiVault_BurnInsufficientBalance.selector);
+        h.burnForTest(users.alice, termId, curveId, 2e18);
+    }
+
+    function test_redeem_ValidateRedeem_RevertWhen_InsufficientRemainingShares() public {
+        MultiVaultHarness h = new MultiVaultHarness();
+        BondingCurveRegistryMock reg = new BondingCurveRegistryMock();
+        h.setBondingCurveRegistryForTest(address(reg));
+
+        // Parameters for the crafted case
+        bytes32 termId = keccak256("remaining-shares-harness-term");
+        uint256 curveId = 77;
+
+        // Choose minShare=100, totalShares=150
+        // Ask to redeem shares = 150 - 100 + 1 = 51
+        // -> remainingShares = 150 - 51 = 99 < minShare(100) => revert
+        uint256 minShare = 100;
+        uint256 totalShares = 150;
+        uint256 sharesToRedeem = totalShares - minShare + 1; // 51
+
+        // Ensure the account passes the "has enough shares" check
+        h.setMinShareForTest(minShare);
+        h.setTotalSharesForTest(termId, curveId, totalShares);
+        h.setBalanceForTest(termId, curveId, users.alice, sharesToRedeem);
+        h.setFeeDenominatorForTest(1e18);
+
+        // Expect the precise custom error with the computed remainingShares = 99
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                MultiVault.MultiVault_InsufficientRemainingSharesInVault.selector,
+                totalShares - sharesToRedeem // 99
+            )
+        );
+        h.validateRedeemForTest(termId, curveId, users.alice, sharesToRedeem, 0);
     }
 }

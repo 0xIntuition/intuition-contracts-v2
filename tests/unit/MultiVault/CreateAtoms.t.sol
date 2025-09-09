@@ -86,6 +86,19 @@ contract CreateAtomsTest is BaseTest {
         protocol.multiVault.createAtoms{ value: insufficientAmount[0] }(atomDataArray, insufficientAmount);
     }
 
+    function test_createAtoms_RevertsWhen_ArraysLengthMismatch() public {
+        bytes[] memory atomDataArray = new bytes[](2);
+        atomDataArray[0] = "First atom";
+        atomDataArray[1] = "Second atom";
+
+        uint256[] memory costArray = new uint256[](1);
+        costArray[0] = ATOM_COST[0];
+
+        resetPrank(users.alice);
+        vm.expectRevert(MultiVault.MultiVault_ArraysNotSameLength.selector);
+        protocol.multiVault.createAtoms{ value: ATOM_COST[0] }(atomDataArray, costArray);
+    }
+
     function test_createAtoms_RevertWhen_AtomExists() public {
         string memory atomString = "Duplicate atom test";
         bytes memory atomData = abi.encodePacked(atomString);

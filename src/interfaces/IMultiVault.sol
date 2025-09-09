@@ -105,7 +105,7 @@ interface IMultiVault {
     /// where applicable)
     /// @param assetsAfterFees amount of assets after all fees for the deposit are deducted
     /// @param shares amount of shares minted to the receiver
-    /// @param totalShares total shares in the vault after the deposit
+    /// @param totalShares balance of the user in the vault after the deposit
     /// @param vaultType type of the vault (ATOM, TRIPLE, COUNTER_TRIPLE)
     event Deposited(
         address indexed sender,
