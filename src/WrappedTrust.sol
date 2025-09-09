@@ -20,13 +20,13 @@ contract WrappedTrust {
     string public symbol = "WTRUST";
     uint8 public decimals = 18;
 
-    event Approval(address indexed from, address indexed to, uint256 amount);
+    event Approval(address indexed owner, address indexed spender, uint256 amount);
     event Transfer(address indexed from, address indexed to, uint256 amount);
     event Deposit(address indexed account, uint256 amount);
     event Withdrawal(address indexed account, uint256 amount);
 
-    mapping(address => uint256) public balanceOf;
-    mapping(address => mapping(address => uint256)) public allowance;
+    mapping(address account => uint256) public balanceOf;
+    mapping(address account => mapping(address spender => uint256)) public allowance;
 
     receive() external payable {
         deposit();
@@ -48,14 +48,14 @@ contract WrappedTrust {
         return address(this).balance;
     }
 
-    function approve(address account, uint256 amount) public returns (bool) {
-        allowance[msg.sender][account] = amount;
-        emit Approval(msg.sender, account, amount);
+    function approve(address spender, uint256 amount) public returns (bool) {
+        allowance[msg.sender][spender] = amount;
+        emit Approval(msg.sender, spender, amount);
         return true;
     }
 
-    function transfer(address account, uint256 amount) public returns (bool) {
-        return transferFrom(msg.sender, account, amount);
+    function transfer(address to, uint256 amount) public returns (bool) {
+        return transferFrom(msg.sender, to, amount);
     }
 
     function transferFrom(address from, address to, uint256 amount) public returns (bool) {

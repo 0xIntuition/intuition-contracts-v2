@@ -570,7 +570,7 @@ contract TrustUnlock_EdgeCases is BaseTest {
 
     function test_claimRewards_reverts_noRewards() public {
         // Move to epoch 1 (claiming enabled) but the vesting contract has no eligible rewards
-        vm.warp(block.timestamp + 1 days + 1);
+        vm.warp(block.timestamp + EMISSIONS_CONTROLLER_EPOCH_LENGTH + 1);
         vm.prank(OWNER);
         vm.expectRevert(abi.encodeWithSignature("TrustBonding_NoRewardsToClaim()"));
         unlock.claimRewards(OWNER);

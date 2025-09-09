@@ -45,35 +45,6 @@ interface IMultiVault {
     /*                       EVENTS                        */
     /* =================================================== */
 
-    /// @notice emitted when a wrapped ERC20 token is registered for a term and bonding curve id combination
-    ///
-    /// @param termId term id of the vault
-    /// @param curveId bonding curve id of the vault
-    /// @param wrappedERC20 address of the wrapped ERC20 token
-    event WrappedERC20Registered(bytes32 indexed termId, uint256 indexed curveId, address indexed wrappedERC20);
-
-    /// @notice emitted when an internal wrapper transfer is made in order to wrap or unwrap the wrapped ERC20 tokens
-    ///
-    /// @param from address of the sender
-    /// @param to address of the receiver
-    /// @param termId term id of the vault
-    /// @param curveId bonding curve id of the vault
-    /// @param shares amount of shares transferred
-    event WrapperTransfer(
-        address indexed from, address indexed to, bytes32 indexed termId, uint256 curveId, uint256 shares
-    );
-
-    /// @notice emitted when the config is synced between the MultiVault and the MultiVaultConfig
-    /// @param caller address of the caller
-    event ConfigSynced(address indexed caller);
-
-    /// @notice emitted upon recovering accidentally sent tokens from the contract
-    ///
-    /// @param token address of the token
-    /// @param recipient address of the recipient
-    /// @param amount amount of tokens recovered
-    event TokensRecovered(address indexed token, address indexed recipient, uint256 indexed amount);
-
     /// @notice Emitted when a receiver changes the approval type for a sender
     ///
     /// @param sender address of the sender being approved/disapproved
@@ -171,26 +142,6 @@ interface IMultiVault {
         VaultType vaultType
     );
 
-    /// @notice emitted after entry fee is collected
-    /// @dev entry fee is charged when depositing assets into the vault and they stay in the vault as assets
-    ///      rather than going towards minting shares for the receiver
-    ///
-    /// @param termId term id of the vault
-    /// @param curveId bonding curve id of the vault
-    /// @param sender address of the sender
-    /// @param amount amount of entry fee collected
-    event EntryFeeCollected(bytes32 indexed termId, uint256 indexed curveId, address indexed sender, uint256 amount);
-
-    /// @notice emitted after exit fee is collected
-    /// @dev exit fee is charged when redeeming shares from the vault and they stay in the vault as assets
-    ///      rather than being sent to the receiver
-    ///
-    /// @param termId term id of the vault
-    /// @param curveId bonding curve id of the vault
-    /// @param sender address of the sender
-    /// @param amount amount of exit fee collected
-    event ExitFeeCollected(bytes32 indexed termId, uint256 indexed curveId, address indexed sender, uint256 amount);
-
     /// @notice emitted after atom wallet deposit fee is collected
     /// @dev atom wallet deposit fee is charged when depositing assets into the atom vaults and it's used
     ///      to accumulate more claimable fees for the atom wallet owner of the given atom vault
@@ -199,15 +150,6 @@ interface IMultiVault {
     /// @param sender address of the sender
     /// @param amount amount of atom wallet deposit fee collected
     event AtomWalletDepositFeeCollected(bytes32 indexed termId, address indexed sender, uint256 amount);
-
-    /// @notice emitted after atom deposit fraction is deposited into the underlying vaults
-    /// @dev atom deposit fraction is charged when depositing assets into the triple vaults and it's used
-    ///      to purchase shares in the underlying atoms for the receiver
-    ///
-    /// @param termId term id of the vault
-    /// @param sender address of the sender
-    /// @param amount amount of atom deposit fraction deposited
-    event AtomDepositFractionDeposited(bytes32 indexed termId, address indexed sender, uint256 amount);
 
     /// @notice emitted after protocol fee is accrued internally.
     ///
@@ -258,30 +200,6 @@ interface IMultiVault {
     event TripleCreated(
         address indexed creator, bytes32 indexed termId, bytes32 subjectId, bytes32 predicateId, bytes32 objectId
     );
-
-    /// @notice Migrate shares from an old wallet to a new wallet for a specific term and bonding curve
-    /// @param oldWallet The address of the old wallet
-    /// @param newWallet The address of the new wallet
-    /// @param termId The ID of the atom or triple (term)
-    /// @param curveId The ID of the bonding curve to use
-    /// @dev This function burns shares from the old wallet and mints them to the new wallet.
-    /// @dev Emits a WalletMigrated event on successful migration.
-    event WalletMigrated(
-        bytes32 indexed termId,
-        uint256 indexed curveId,
-        address indexed oldWallet,
-        address newWallet,
-        uint256 sharesMigrated
-    );
-
-    /// @notice emitted when a user approves another user to pull shares from their account
-    /// @param accountFrom address of the account that is approving
-    /// @param accountTo address of the account that is being approved
-    /// @param status true if the approval is granted, false if revoked
-    /// @dev This event is emitted when a user approves another user to pull shares
-    ///      from their account. It is used to track the approvals for pulling shares.
-    /// @dev The `status` parameter indicates whether the approval is granted (true) or revoked (false).
-    event SharesPullApproval(address indexed accountFrom, address indexed accountTo, bool status);
 
     /* =================================================== */
     /*                MUTATIVE FUNCTIONS                   */

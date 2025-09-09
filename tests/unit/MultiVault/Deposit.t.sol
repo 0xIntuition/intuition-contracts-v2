@@ -18,7 +18,7 @@ contract DepositTest is BaseTest {
     function setUp() public override {
         super.setUp();
         // Ensure the bonding curve registry is set up
-        CURVE_ID = protocol.multiVault.getDefaultCurveId();
+        CURVE_ID = getDefaultCurveId();
     }
 
     function test_deposit_SingleAtom_Success() public {

@@ -2,8 +2,9 @@
 pragma solidity ^0.8.29;
 
 import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
-import { MetaERC20Dispatcher, FinalityState, IMetaERC20Hub } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
 import { Address } from "@openzeppelin/contracts/utils/Address.sol";
+import { MetaERC20Dispatcher } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
+import { FinalityState, IMetaERC20HubOrSpoke, IMetalayerRouter, IIGP } from "src/interfaces/IMetaLayer.sol";
 
 interface IERC20 {
     function mint(address to, uint256 amount) external;
@@ -29,7 +30,7 @@ contract BaseSepoliaMinterAndBridge is MetaERC20Dispatcher, AccessControl {
         IERC20(token).approve(metaERC20Hub, amount);
 
         uint256 GAS_CONSTANT = 100_000;
-        IIGP igp = IIGP(IMetalayerRouter(IMetatoken(metaERC20Hub).metalayerRouter()).igp());
+        IIGP igp = IIGP(IMetalayerRouter(IMetaERC20HubOrSpoke(metaERC20Hub).metalayerRouter()).igp());
 
         uint256 gasLimit;
         try igp.quoteGasPayment(domain, GAS_CONSTANT + 125_000) returns (uint256 _gasLimit) {
@@ -39,33 +40,12 @@ contract BaseSepoliaMinterAndBridge is MetaERC20Dispatcher, AccessControl {
         }
         require(msg.value >= gasLimit, "Not enough value sent");
 
-        _bridgeTokens(metaERC20Hub, domain, bytes32(uint256(uint160(to))), amount, gasLimit, FinalityState.INSTANT);
+        _bridgeTokensViaERC20(
+            metaERC20Hub, domain, bytes32(uint256(uint160(to))), amount, gasLimit, FinalityState.INSTANT
+        );
 
         if (msg.value > gasLimit) {
             Address.sendValue(payable(msg.sender), msg.value - gasLimit);
         }
     }
-}
-
-interface IMetalayerRouter {
-    function igp() external view returns (address);
-}
-
-interface IIGP {
-    function quoteGasPayment(uint32 destinationDomain, uint256 gasLimit) external view returns (uint256);
-}
-
-interface IMetatoken {
-    function transferRemote(
-        uint32 _recipientDomain,
-        bytes32 _recipientAddress,
-        uint256 _amount,
-        uint256 _gasLimit,
-        FinalityState _finalityState
-    )
-        external
-        payable
-        returns (bytes32 transferId);
-
-    function metalayerRouter() external view returns (address);
 }
