@@ -2,7 +2,6 @@
 pragma solidity >=0.8.22;
 
 import { Trust } from "src/Trust.sol";
-import { WrappedTrust } from "src/WrappedTrust.sol";
 import { TrustToken } from "src/legacy/TrustToken.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
@@ -22,7 +21,6 @@ struct Protocol {
     MultiVault multiVault;
     SatelliteEmissionsController satelliteEmissionsController;
     address payable permit2;
-    WrappedTrust wrappedTrust;
     AtomWalletFactory atomWalletFactory;
     UpgradeableBeacon atomWalletBeacon;
 }

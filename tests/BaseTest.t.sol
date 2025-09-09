@@ -106,7 +106,6 @@ abstract contract BaseTest is Modifiers, Test {
         users.bob = createUser("bob");
         users.charlie = createUser("charlie");
         protocol.trust = createTrustToken();
-        protocol.wrappedTrust = createWrappedTrust();
         _deployMultiVaultSystem();
         _approveTokensForUsers();
         _setupUserWrappedTokenAndTrustBonding(users.alice);
@@ -141,12 +140,6 @@ abstract contract BaseTest is Modifiers, Test {
         vm.label(address(trust), "Trust");
 
         return trust;
-    }
-
-    function createWrappedTrust() internal returns (WrappedTrust) {
-        WrappedTrust wrappedTrust = new WrappedTrust();
-        vm.label(address(wrappedTrust), "WrappedTrust");
-        return wrappedTrust;
     }
 
     /// @dev Creates a new ERC-20 token with `name`, `symbol` and `decimals`.
