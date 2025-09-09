@@ -58,6 +58,7 @@ contract CounterStakeGuardTest is BaseTest {
 
         uint256 otherCurveId;
         uint256 count = reg.count();
+
         for (uint256 i = 1; i <= count; i++) {
             if (i != defaultCurveId && reg.curveAddresses(i) != address(0)) {
                 otherCurveId = i;
@@ -76,6 +77,7 @@ contract CounterStakeGuardTest is BaseTest {
 
         // 2) Now Alice can deposit to the COUNTER side on that curve (she has no positive shares on this curve).
         vm.deal(users.alice, assets);
+
         uint256 sharesNeg = makeDeposit(users.alice, users.alice, counterTripleId, otherCurveId, assets, 0);
         assertGt(sharesNeg, 0, "cross-curve counter deposit should mint shares");
     }
