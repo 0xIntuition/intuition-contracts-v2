@@ -20,7 +20,9 @@ import {
     BondingCurveConfig
 } from "src/interfaces/IMultiVaultCore.sol";
 
+import { AtomWallet } from "src/protocol/wallet/AtomWallet.sol";
 import { AtomWalletFactory } from "src/protocol/wallet/AtomWalletFactory.sol";
+import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
@@ -56,6 +58,9 @@ abstract contract BaseTest is Modifiers, Test {
     uint256 internal TRIPLE_CREATION_PROTOCOL_FEE = 1e15; // 0.001 Trust (Fixed Cost)
     uint256 internal TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 1e15; // 0.001 Trust (Fixed Cost)
     uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 300; // 3% (Percentage Cost)
+
+    // Wallet Config
+    address internal ATOM_WARDEN = address(0xAAAA);
 
     // Vault Config
     uint256 internal ENTRY_FEE = 500; // 5% of assets deposited after fixed costs (Percentage Cost)
@@ -94,11 +99,6 @@ abstract contract BaseTest is Modifiers, Test {
                                    TEST CONTRACTS
     //////////////////////////////////////////////////////////////////////////*/
 
-    // ERC20Mock internal tokenTrust;
-
-    // MultiVault internal multiVault;
-    // MultiVaultConfig internal multiVaultConfig;
-
     function setUp() public virtual {
         users.admin = createUser("admin");
         users.controller = createUser("controller");
@@ -106,7 +106,6 @@ abstract contract BaseTest is Modifiers, Test {
         users.bob = createUser("bob");
         users.charlie = createUser("charlie");
         protocol.trust = createTrustToken();
-        protocol.wrappedTrust = createWrappedTrust();
         _deployMultiVaultSystem();
         _approveTokensForUsers();
         _setupUserWrappedTokenAndTrustBonding(users.alice);
@@ -143,12 +142,6 @@ abstract contract BaseTest is Modifiers, Test {
         return trust;
     }
 
-    function createWrappedTrust() internal returns (WrappedTrust) {
-        WrappedTrust wrappedTrust = new WrappedTrust();
-        vm.label(address(wrappedTrust), "WrappedTrust");
-        return wrappedTrust;
-    }
-
     /// @dev Creates a new ERC-20 token with `name`, `symbol` and `decimals`.
     function createToken(string memory name, string memory symbol, uint8 decimals) internal returns (ERC20Mock) {
         ERC20Mock token = new ERC20Mock(name, symbol, decimals);
@@ -168,27 +161,42 @@ abstract contract BaseTest is Modifiers, Test {
         return user;
     }
 
+    // Define proxies as state variables to avoid "stack too deep" errors
+    TransparentUpgradeableProxy internal multiVaultProxy;
+    TransparentUpgradeableProxy internal atomWalletFactoryProxy;
+    TransparentUpgradeableProxy internal trustBondingProxy;
+    TransparentUpgradeableProxy internal satelliteEmissionsControllerProxy;
+    UpgradeableBeacon internal atomWalletBeacon;
+
     function _deployMultiVaultSystem() internal {
         // Deploy MultiVault implementation
         MultiVault multiVaultImpl = new MultiVault();
         console2.log("MultiVault implementation address: ", address(multiVaultImpl));
 
         // Deploy MultiVault proxy
-        TransparentUpgradeableProxy multiVaultProxy =
-            new TransparentUpgradeableProxy(address(multiVaultImpl), users.admin, "");
+        multiVaultProxy = new TransparentUpgradeableProxy(address(multiVaultImpl), users.admin, "");
         protocol.multiVault = MultiVault(address(multiVaultProxy));
         console2.log("MultiVault proxy address: ", address(multiVaultProxy));
+
+        // Deploy AtomWallet implementation and beacon
+        AtomWallet atomWalletImpl = new AtomWallet();
+        console2.log("AtomWallet implementation deployed at:", address(atomWalletImpl));
+
+        atomWalletBeacon = new UpgradeableBeacon(address(atomWalletImpl), users.admin);
+        protocol.atomWalletBeacon = atomWalletBeacon;
+        console2.log("AtomWalletBeacon deployed at:", address(atomWalletBeacon));
 
         // Deploy AtomWalletFactory implementation
         AtomWalletFactory atomWalletFactoryImpl = new AtomWalletFactory();
         console2.log("AtomWalletFactory implementation address: ", address(atomWalletFactoryImpl));
 
         // Deploy AtomWalletFactory proxy
-        TransparentUpgradeableProxy atomWalletFactoryProxy =
-            new TransparentUpgradeableProxy(address(atomWalletFactoryImpl), users.admin, "");
+        atomWalletFactoryProxy = new TransparentUpgradeableProxy(address(atomWalletFactoryImpl), users.admin, "");
         AtomWalletFactory atomWalletFactory = AtomWalletFactory(address(atomWalletFactoryProxy));
         console2.log("AtomWalletFactory proxy address: ", address(atomWalletFactoryProxy));
+        protocol.atomWalletFactory = atomWalletFactory;
 
+        // Deploy WrappedTrust
         WrappedTrust wtrust = new WrappedTrust();
         protocol.wrappedTrust = wtrust;
         console2.log("WrappedTrust address: ", address(wtrust));
@@ -199,8 +207,7 @@ abstract contract BaseTest is Modifiers, Test {
         console2.log("TrustBonding implementation address: ", address(trustBondingImpl));
 
         // Deploy TrustBonding proxy
-        TransparentUpgradeableProxy trustBondingProxy =
-            new TransparentUpgradeableProxy(address(trustBondingImpl), users.admin, "");
+        trustBondingProxy = new TransparentUpgradeableProxy(address(trustBondingImpl), users.admin, "");
         protocol.trustBonding = TrustBonding(address(trustBondingProxy));
         console2.log("TrustBonding proxy address: ", address(trustBondingProxy));
 
@@ -208,7 +215,7 @@ abstract contract BaseTest is Modifiers, Test {
         SatelliteEmissionsController satelliteEmissionsControllerImpl = new SatelliteEmissionsController();
         console2.log("SatelliteEmissionsController Implementation", address(satelliteEmissionsControllerImpl));
 
-        TransparentUpgradeableProxy satelliteEmissionsControllerProxy =
+        satelliteEmissionsControllerProxy =
             new TransparentUpgradeableProxy(address(satelliteEmissionsControllerImpl), users.admin, "");
         protocol.satelliteEmissionsController = SatelliteEmissionsController(payable(satelliteEmissionsControllerProxy));
         console2.log("SatelliteEmissionsController Proxy", address(satelliteEmissionsControllerProxy));
@@ -236,6 +243,7 @@ abstract contract BaseTest is Modifiers, Test {
         vm.label(address(protocol.multiVault), "MultiVault");
         vm.label(address(atomWalletFactoryImpl), "AtomWalletFactoryImpl");
         vm.label(address(atomWalletFactoryProxy), "AtomWalletFactoryProxy");
+        vm.label(address(atomWalletBeacon), "AtomWalletBeacon");
         vm.label(address(atomWalletFactory), "AtomWalletFactory");
         vm.label(address(trustBondingImpl), "TrustBondingImpl");
         vm.label(address(trustBondingProxy), "TrustBondingProxy");
@@ -286,8 +294,13 @@ abstract contract BaseTest is Modifiers, Test {
         GeneralConfig memory generalConfig = _getDefaultGeneralConfig();
         generalConfig.trustBonding = address(protocol.trustBonding);
 
-        WalletConfig memory walletConfig = _getDefaultWalletConfig(address(atomWalletFactory));
+        AtomConfig memory atomConfig = _getDefaultAtomConfig();
+        TripleConfig memory tripleConfig = _getDefaultTripleConfig();
+
+        WalletConfig memory walletConfig = _getDefaultWalletConfig();
+
         walletConfig.atomWalletFactory = address(atomWalletFactory);
+        walletConfig.atomWalletBeacon = address(atomWalletBeacon);
 
         BondingCurveConfig memory bondingCurveConfig = _getDefaultBondingCurveConfig();
         bondingCurveConfig.registry = address(bondingCurveRegistry);
@@ -351,13 +364,13 @@ abstract contract BaseTest is Modifiers, Test {
         });
     }
 
-    function _getDefaultWalletConfig(address _atomWalletFactory) internal returns (WalletConfig memory) {
+    function _getDefaultWalletConfig() internal returns (WalletConfig memory) {
         return WalletConfig({
             permit2: IPermit2(address(0)),
             entryPoint: address(0),
-            atomWarden: address(0),
+            atomWarden: ATOM_WARDEN,
             atomWalletBeacon: address(0),
-            atomWalletFactory: address(_atomWalletFactory)
+            atomWalletFactory: address(0)
         });
     }
 
