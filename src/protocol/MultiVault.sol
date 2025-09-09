@@ -889,7 +889,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
     /// @notice returns the general configuration struct
     function setGeneralConfig(GeneralConfig memory _generalConfig) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        generalConfig = _generalConfig;
+        _setGeneralConfig(_generalConfig);
     }
 
     /// @notice returns the atom configuration struct
@@ -1132,16 +1132,8 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /* =================================================== */
 
     function _requireVaultType(bytes32 termId) internal view returns (bool isAtomType, VaultType vaultType) {
-        bool _isAtom = isAtom(termId);
-        bool _isTripleVault = _isTriple[termId];
-        bool _isCounterTriple = isCounterTriple(termId);
-
-        if (!_isAtom && !_isTripleVault && !_isCounterTriple) {
-            revert MultiVault_TermDoesNotExist();
-        }
-
-        VaultType _vaultType = _isAtom ? VaultType.ATOM : _isCounterTriple ? VaultType.COUNTER_TRIPLE : VaultType.TRIPLE;
-        return (_isAtom, _vaultType);
+        vaultType = getVaultType(termId);
+        return (vaultType == VaultType.ATOM, vaultType);
     }
 
     function _feeOnRaw(uint256 amount, uint256 fee) internal view returns (uint256) {
