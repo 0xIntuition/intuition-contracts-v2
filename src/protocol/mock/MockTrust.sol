@@ -9,17 +9,16 @@ import { TrustToken } from "src/legacy/TrustToken.sol";
  * @title  Trust
  * @author 0xIntuition
  * @notice The Intuition TRUST token.
+ * @dev This is a mock version without access control on reinitialization and is intended to be used for testing
+ * purposes only.
  */
-contract Trust is TrustToken, AccessControlUpgradeable {
+contract MockTrust is TrustToken, AccessControlUpgradeable {
     /*//////////////////////////////////////////////////////////////
                             V2 CONSTANTS
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Role for minting tokens
     bytes32 public constant CONTROLLER_ROLE = keccak256("CONTROLLER_ROLE");
-
-    /// @notice Address of the initial admin, which is allowed to perform the contract reinitialization
-    address public constant INITIAL_ADMIN = 0xa28d4AAcA48bE54824dA53a19b05121DE71Ef480;
 
     /*//////////////////////////////////////////////////////////////
                                  STATE
@@ -34,9 +33,6 @@ contract Trust is TrustToken, AccessControlUpgradeable {
 
     /// @notice Custom error for when a zero address is provided
     error Trust_ZeroAddress();
-
-    /// @notice Custom error for when the caller is not the initial admin
-    error Trust_OnlyInitialAdmin();
 
     /*//////////////////////////////////////////////////////////////
                                  CONSTRUCTOR
@@ -57,10 +53,6 @@ contract Trust is TrustToken, AccessControlUpgradeable {
      * @param _controller Initial minter address
      */
     function reinitialize(address _admin, address _controller) external reinitializer(2) {
-        if (msg.sender != INITIAL_ADMIN) {
-            revert Trust_OnlyInitialAdmin();
-        }
-
         if (_admin == address(0) || _controller == address(0)) {
             revert Trust_ZeroAddress();
         }

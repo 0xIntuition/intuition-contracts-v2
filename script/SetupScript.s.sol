@@ -18,6 +18,7 @@ import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.s
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { MultiVaultMigrationMode } from "src/protocol/MultiVaultMigrationMode.sol";
 import { Trust } from "src/Trust.sol";
+import { MockTrust } from "src/protocol/mock/MockTrust.sol";
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
@@ -223,7 +224,7 @@ abstract contract SetupScript is Script {
 
     function _deployTrustToken() internal returns (address) {
         // Deploy Trust implementation
-        Trust trustImpl = new Trust();
+        MockTrust trustImpl = new MockTrust();
         info("Trust Implementation", address(trustImpl));
 
         // Deploy Trust proxy
@@ -231,7 +232,10 @@ abstract contract SetupScript is Script {
         Trust trustToken = Trust(address(trustProxy));
         info("Trust Proxy", address(trustProxy));
 
-        // Initialize Trust contract
+        // Initialize Trust token contract
+        trustToken.init();
+
+        // Reinitialize Trust token contract
         trustToken.reinitialize(
             ADMIN, // admin
             ADMIN // initial controller
