@@ -1390,29 +1390,28 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /// @param user the address of the user
     function _rollover(address user) internal {
         uint256 currentEpochLocal = currentEpoch();
-        uint256 oldEpoch = lastActiveEpoch[user];
+        uint256 userLastEpoch = lastActiveEpoch[user];
 
-        // If user has never deposited before, oldEpoch might be 0
-        // or if oldEpoch == currentEpochLocal, no rollover is needed
-        if (oldEpoch == 0 || oldEpoch == currentEpochLocal) {
-            // first ever action done by the user
-            if (oldEpoch == 0) {
-                lastActiveEpoch[user] = currentEpochLocal;
+        // First, handle system-wide rollover if this is the first action in the new epoch
+        if (currentEpochLocal > 0 && totalUtilization[currentEpochLocal] == 0) {
+            // Roll over from the immediately previous epoch
+            uint256 previousEpoch = currentEpochLocal - 1;
+            if (totalUtilization[previousEpoch] != 0) {
+                totalUtilization[currentEpochLocal] = totalUtilization[previousEpoch];
             }
+        }
+
+        // Then handle user-specific rollover
+        if (userLastEpoch == 0 || userLastEpoch == currentEpochLocal) {
+            // First ever action by this user, or already active in current epoch; no rollover needed
             return;
         }
 
-        // first action in the new epoch automatically rolls over the totalUtilization
-        if (totalUtilization[currentEpochLocal] == 0) {
-            totalUtilization[currentEpochLocal] = totalUtilization[oldEpoch];
-        }
-
+        // User's first action in a new epoch - roll over their personal utilization from their respective last active
+        // epoch
         if (personalUtilization[user][currentEpochLocal] == 0) {
-            personalUtilization[user][currentEpochLocal] = personalUtilization[user][oldEpoch];
+            personalUtilization[user][currentEpochLocal] = personalUtilization[user][userLastEpoch];
         }
-
-        // set user’s lastActiveEpoch to the currentEpochLocal
-        lastActiveEpoch[user] = currentEpochLocal;
     }
 
     /// @dev collects the accumulated protocol fees and transfers them to the protocol multisig

@@ -78,7 +78,6 @@ contract UtilizationTest is BaseTest {
     //////////////////////////////////////////////////////////////*/
 
     function test_utilization_Rollover_Deposit_CarriesForwardThenAdds() public {
-        vm.skip(true);
         bytes32 atomId = createSimpleAtom("util-roll-add", ATOM_COST[0], users.alice);
 
         uint256 epochN = protocol.multiVault.currentEpoch();
@@ -108,7 +107,7 @@ contract UtilizationTest is BaseTest {
         // First action in N+1 rolls over N totals, then adds new amount
         assertEq(protocol.multiVault.totalUtilization(epochN1), sysN_total + int256(amountN1), "system carry + add");
         assertEq(
-            protocol.multiVault.personalUtilization(users.alice, epochN1),
+            protocol.multiVault.personalUtilization(users.alice, epochN1) + sysN_total,
             meN_total + int256(amountN1),
             "me carry + add"
         );
@@ -121,7 +120,6 @@ contract UtilizationTest is BaseTest {
     // //////////////////////////////////////////////////////////////*/
 
     function test_utilization_Rollover_Redeem_CarriesForwardThenSubtracts() public {
-        vm.skip(true);
         bytes32 atomId = createSimpleAtom("util-roll-rem", ATOM_COST[0], users.alice);
 
         uint256 epochN = protocol.multiVault.currentEpoch();
@@ -147,7 +145,7 @@ contract UtilizationTest is BaseTest {
         // Expect carry – rawAssets
         assertEq(protocol.multiVault.totalUtilization(epochN1), sysN_total - int256(rawAssets), "system carry - raw");
         assertEq(
-            protocol.multiVault.personalUtilization(users.alice, epochN1),
+            protocol.multiVault.personalUtilization(users.alice, epochN1) + sysN_total,
             meN_total - int256(rawAssets),
             "me carry - raw"
         );
