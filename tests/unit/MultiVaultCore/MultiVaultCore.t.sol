@@ -101,7 +101,6 @@ contract MultiVaultCoreTest is BaseTest {
 
         // Curve
         BondingCurveConfig memory b = protocol.multiVault.getBondingCurveConfig();
-        assertEq(protocol.multiVault.getDefaultCurveId(), b.defaultCurveId, "defaultCurveId passthrough");
         assertEq(b.defaultCurveId, 1, "default curve id");
     }
 
@@ -241,10 +240,6 @@ contract MultiVaultCoreTest is BaseTest {
         bytes32 unknown = _randomId("TERM");
         vm.expectRevert(abi.encodeWithSelector(MultiVaultCore.MultiVaultCore_TermDoesNotExist.selector, unknown));
         protocol.multiVault.getVaultType(unknown);
-    }
-
-    function testCore_getDefaultCurveId_View() public {
-        assertEq(protocol.multiVault.getDefaultCurveId(), 1, "default curve id is 1");
     }
 
     function testCore_CounterIdMapping_RoundTrip() public {
