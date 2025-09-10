@@ -262,7 +262,10 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     ///
     /// @return price current share price for the given vault id
     function currentSharePrice(bytes32 termId, uint256 curveId) external view returns (uint256) {
-        return _convertToAssets(termId, curveId, ONE_SHARE);
+        VaultState storage vaultState = _vaults[termId][curveId];
+        return IBondingCurveRegistry(bondingCurveConfig.registry).currentPrice(
+            curveId, vaultState.totalShares, vaultState.totalAssets
+        );
     }
 
     function previewAtomCreate(
@@ -1502,17 +1505,8 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         vaultState.totalAssets = totalAssets;
         vaultState.totalShares = totalShares;
 
-        uint256 price;
-        IBondingCurveRegistry bcRegistry = IBondingCurveRegistry(bondingCurveConfig.registry);
-        if (totalShares == 0) {
-            price = 0; // brand‑new vault
-        } else if (totalShares >= ONE_SHARE) {
-            // 1 share <= supply
-            price = bcRegistry.previewRedeem(ONE_SHARE, totalShares, totalAssets, curveId);
-        } else {
-            // supply smaller than 1 share --> we fallback to the curve’s marginal price
-            price = bcRegistry.currentPrice(totalShares, curveId);
-        }
+        IBondingCurveRegistry registry = IBondingCurveRegistry(bondingCurveConfig.registry);
+        uint256 price = registry.currentPrice(curveId, totalShares, totalAssets);
 
         emit SharePriceChanged(termId, curveId, price, totalAssets, totalShares, vaultType);
     }

@@ -126,14 +126,13 @@ contract LinearCurve is BaseCurve {
     }
 
     /// @inheritdoc BaseCurve
-    /// @dev Added for interface compatibility reasons, but not used in this curve.
     function currentPrice(uint256 /* totalShares */ ) public pure override returns (uint256 sharePrice) {
         return 1e18;
     }
 
     /// @notice In a linear curve, the base price will always be 1. Pool ratio adjustments are dealt with in the
     /// MultiVault itself.
-    function currentPrice(uint256 totalShares, uint256 totalAssets) public pure returns (uint256 sharePrice) {
+    function currentPrice(uint256 totalShares, uint256 totalAssets) public pure override returns (uint256 sharePrice) {
         return convertToAssets(ONE_SHARE, totalShares, totalAssets);
     }
 
