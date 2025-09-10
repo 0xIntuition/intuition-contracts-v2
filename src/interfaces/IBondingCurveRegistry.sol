@@ -124,6 +124,15 @@ interface IBondingCurveRegistry {
     /// @return sharePrice The current price of a share
     function currentPrice(uint256 totalShares, uint256 id) external view returns (uint256 sharePrice);
 
+    function currentPrice(
+        uint256 id,
+        uint256 totalShares,
+        uint256 totalAssets
+    )
+        external
+        view
+        returns (uint256 sharePrice);
+
     /// @notice Get the name of a curve
     /// @param id Curve ID to query
     /// @return name The name of the curve

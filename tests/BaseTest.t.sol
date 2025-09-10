@@ -60,12 +60,12 @@ abstract contract BaseTest is Modifiers, Test {
     uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 300; // 3% (Percentage Cost)
 
     // Wallet Config
-    address internal ATOM_WARDEN = address(0xAAAA);
+    address internal ATOM_WARDEN = address(1);
 
     // Vault Config
-    uint256 internal ENTRY_FEE = 500; // 5% of assets deposited after fixed costs (Percentage Cost)
-    uint256 internal EXIT_FEE = 500; // 5% of assets deposited after fixed costs (Percentage Cost)
-    uint256 internal PROTOCOL_FEE = 1000; // 10% of assets deposited after fixed costs (Percentage Cost)
+    uint256 internal ENTRY_FEE = 100; // 1% of assets deposited after fixed costs (Percentage Cost)
+    uint256 internal EXIT_FEE = 100; // 1% of assets deposited after fixed costs (Percentage Cost)
+    uint256 internal PROTOCOL_FEE = 100; // 1% of assets deposited after fixed costs (Percentage Cost)
 
     // TrustBonding configuration
     uint256 internal TRUST_BONDING_START_TIMESTAMP = block.timestamp + 20;
@@ -297,7 +297,7 @@ abstract contract BaseTest is Modifiers, Test {
         AtomConfig memory atomConfig = _getDefaultAtomConfig();
         TripleConfig memory tripleConfig = _getDefaultTripleConfig();
 
-        WalletConfig memory walletConfig = _getDefaultWalletConfig();
+        WalletConfig memory walletConfig = _getDefaultWalletConfig(address(atomWalletFactory));
 
         walletConfig.atomWalletFactory = address(atomWalletFactory);
         walletConfig.atomWalletBeacon = address(atomWalletBeacon);
@@ -364,13 +364,13 @@ abstract contract BaseTest is Modifiers, Test {
         });
     }
 
-    function _getDefaultWalletConfig() internal returns (WalletConfig memory) {
+    function _getDefaultWalletConfig(address _atomWalletFactory) internal returns (WalletConfig memory) {
         return WalletConfig({
             permit2: IPermit2(address(0)),
             entryPoint: address(0),
             atomWarden: ATOM_WARDEN,
             atomWalletBeacon: address(0),
-            atomWalletFactory: address(0)
+            atomWalletFactory: address(_atomWalletFactory)
         });
     }
 

@@ -108,4 +108,6 @@ interface IBaseCurve {
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @return sharePrice The current price of a share, scaled by 1e18
     function currentPrice(uint256 totalShares) external view returns (uint256 sharePrice);
+
+    function currentPrice(uint256 totalShares, uint256 totalAssets) external view returns (uint256 sharePrice);
 }

@@ -189,6 +189,10 @@ contract ProgressiveCurve is BaseCurve {
         return convert(totalShares).mul(SLOPE).unwrap();
     }
 
+    function currentPrice(uint256 totalShares, uint256) public view override returns (uint256 sharePrice) {
+        return convert(totalShares).mul(SLOPE).unwrap();
+    }
+
     /// @inheritdoc BaseCurve
     /// @dev Let $s$ = current total supply of shares
     /// @dev Let $a$ = assets to convert to shares

@@ -218,8 +218,20 @@ contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2Step {
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @param id Curve ID to use for the calculation
     /// @return sharePrice The current price of a share
-    function currentPrice(uint256 totalShares, uint256 id) external view returns (uint256 sharePrice) {
+    function currentPrice(uint256 id, uint256 totalShares) external view returns (uint256 sharePrice) {
         return IBaseCurve(curveAddresses[id]).currentPrice(totalShares);
+    }
+
+    function currentPrice(
+        uint256 id,
+        uint256 totalShares,
+        uint256 totalAssets
+    )
+        external
+        view
+        returns (uint256 sharePrice)
+    {
+        return IBaseCurve(curveAddresses[id]).currentPrice(totalShares, totalAssets);
     }
 
     /// @notice Get the name of a curve
