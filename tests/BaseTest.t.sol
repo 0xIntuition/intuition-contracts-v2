@@ -27,6 +27,7 @@ import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEm
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
+import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCurve.sol";
 import { ProgressiveCurve } from "src/protocol/curves/ProgressiveCurve.sol";
 import { ERC20Mock } from "./mocks/ERC20Mock.sol";
 import { Users } from "./utils/Types.sol";
@@ -226,16 +227,20 @@ abstract contract BaseTest is Modifiers, Test {
 
         // Deploy bonding curves and add them to registry
         LinearCurve linearCurve = new LinearCurve("Linear Bonding Curve");
-        ProgressiveCurve progressiveCurve = new ProgressiveCurve("Progressive Bonding Curve", 1e15); // 0.001 slope
+        OffsetProgressiveCurve offsetProgressiveCurve =
+            new OffsetProgressiveCurve("Offset Progressive Bonding Curve", 2, 5e35);
+        ProgressiveCurve progressiveCurve = new ProgressiveCurve("Progressive Bonding Curve", 2);
 
         console2.log("LinearCurve address: ", address(linearCurve));
         console2.log("ProgressiveCurve address: ", address(progressiveCurve));
 
         resetPrank(users.admin);
         bondingCurveRegistry.addBondingCurve(address(linearCurve));
+        bondingCurveRegistry.addBondingCurve(address(offsetProgressiveCurve));
         bondingCurveRegistry.addBondingCurve(address(progressiveCurve));
         console2.log("Added LinearCurve to registry with ID: 1");
-        console2.log("Added ProgressiveCurve to registry with ID: 2");
+        console2.log("Added OffsetProgressiveCurve to registry with ID: 2");
+        console2.log("Added ProgressiveCurve to registry with ID: 3");
 
         // Label contracts for debugging
         vm.label(address(multiVaultImpl), "MultiVaultImpl");
@@ -250,6 +255,7 @@ abstract contract BaseTest is Modifiers, Test {
         vm.label(address(trustBondingImpl), "TrustBonding");
         vm.label(address(bondingCurveRegistry), "BondingCurveRegistry");
         vm.label(address(linearCurve), "LinearCurve");
+        vm.label(address(offsetProgressiveCurve), "OffsetProgressiveCurve");
         vm.label(address(progressiveCurve), "ProgressiveCurve");
         vm.label(address(wtrust), "WrappedTrust");
 

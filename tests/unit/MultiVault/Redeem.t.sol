@@ -90,6 +90,10 @@ contract MultiVaultHarness is MultiVault {
 
 contract RedeemTest is BaseTest {
     uint256 constant CURVE_ID = 1; // Default linear curve ID
+    uint256 constant OFFSET_PROGRESSIVE_CURVE_ID = 2;
+    uint256 constant PROGRESSIVE_CURVE_ID = 3;
+    address constant BURN = address(0x000000000000000000000000000000000000dEaD);
+
     /*//////////////////////////////////////////////////////////////
                             HAPPY PATH TESTS
     //////////////////////////////////////////////////////////////*/
@@ -229,6 +233,221 @@ contract RedeemTest is BaseTest {
             assertTrue(shares > 0, "Deposit should always succeed");
             assertTrue(assets > 0, "Redeem should always succeed");
         }
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            PROGRESSIVE CURVE TESTS
+    //////////////////////////////////////////////////////////////*/
+
+    /*//////////////////////////////////////////////////////////////
+                            HAPPY PATH TESTS
+    //////////////////////////////////////////////////////////////*/
+
+    function test_redeem_Progressive_BasicFunctionality_Success() public {
+        // Create atom on default curve (creation enforces default)
+        bytes32 atomId = createSimpleAtom("Progressive redeem atom", ATOM_COST[0], users.alice);
+
+        // Deposit on Progressive curve directly using protocol method
+        uint256 depositAmount = 500e18;
+        resetPrank(users.alice);
+        uint256 preShares = protocol.multiVault.getShares(users.alice, atomId, PROGRESSIVE_CURVE_ID);
+
+        protocol.multiVault.deposit{ value: depositAmount }(
+            users.alice, // receiver
+            atomId,
+            PROGRESSIVE_CURVE_ID,
+            0 // minShares
+        );
+
+        uint256 shares = protocol.multiVault.getShares(users.alice, atomId, PROGRESSIVE_CURVE_ID);
+        assertTrue(shares > preShares, "Deposit should mint shares on progressive curve");
+
+        // Redeem half
+        uint256 sharesToRedeem = shares / 2;
+        resetPrank(users.alice);
+        uint256 assets = protocol.multiVault.redeem(
+            users.alice, // receiver
+            atomId,
+            PROGRESSIVE_CURVE_ID,
+            sharesToRedeem,
+            0 // minAssets
+        );
+
+        assertTrue(assets > 0, "Should receive some assets");
+
+        uint256 remainingShares = protocol.multiVault.getShares(users.alice, atomId, PROGRESSIVE_CURVE_ID);
+        uint256 expectedRemainingShares = shares - sharesToRedeem;
+        assertApproxEqRel(remainingShares, expectedRemainingShares, 1e16, "Should have remaining shares");
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            FUZZ TESTS
+    //////////////////////////////////////////////////////////////*/
+
+    function testFuzz_redeem_Progressive_DepositThenRedeem(uint96 amt, uint16 redeemBps) public {
+        bytes32 atomId = createSimpleAtom("Progressive fuzz atom", ATOM_COST[0], users.alice);
+
+        uint256 depositAmount = bound(uint256(amt), 10e18, 5000e18);
+        uint256 bps = bound(uint256(redeemBps), 1, 10_000);
+
+        resetPrank(users.alice);
+        protocol.multiVault.deposit{ value: depositAmount }(users.alice, atomId, PROGRESSIVE_CURVE_ID, 0);
+
+        uint256 userShares = protocol.multiVault.getShares(users.alice, atomId, PROGRESSIVE_CURVE_ID);
+        vm.assume(userShares > 1);
+
+        uint256 toRedeem = (userShares * bps) / 10_000;
+        if (toRedeem == 0) toRedeem = 1;
+
+        // Leave headroom near full redemption to avoid rounding-up preview > totalAssets.
+        uint256 leave = userShares / 1000; // ~0.1%
+        if (leave < 2) leave = 2;
+        if (toRedeem >= userShares - leave) {
+            toRedeem = userShares - leave;
+        }
+
+        resetPrank(users.alice);
+        uint256 received = protocol.multiVault.redeem(users.alice, atomId, PROGRESSIVE_CURVE_ID, toRedeem, 0);
+
+        assertTrue(received > 0, "Redeem should return assets");
+        uint256 remaining = protocol.multiVault.getShares(users.alice, atomId, PROGRESSIVE_CURVE_ID);
+        assertApproxEqRel(remaining, userShares - toRedeem, 1e16, "Remaining shares should reflect redemption");
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                        EDGE / MIN-SHARE INVARIANT
+    //////////////////////////////////////////////////////////////*/
+
+    function test_redeem_Progressive_RedeemAlmostAll_Succeeds_AndLeavesGhostShares() public {
+        bytes32 atomId = createSimpleAtom("Progressive redeem-almost-all atom", ATOM_COST[0], users.alice);
+
+        // Deposit on Progressive curve (non-default)
+        uint256 depositAmount = 250e18;
+        resetPrank(users.alice);
+        protocol.multiVault.deposit{ value: depositAmount }(users.alice, atomId, PROGRESSIVE_CURVE_ID, 0);
+
+        uint256 userShares = protocol.multiVault.getShares(users.alice, atomId, PROGRESSIVE_CURVE_ID);
+        assertTrue(userShares > 2, "need at least 3 shares to test");
+
+        // Non-default curves mint ghost minShares to the burn address.
+        uint256 burnSharesBefore = protocol.multiVault.getShares(BURN, atomId, PROGRESSIVE_CURVE_ID);
+        assertGt(burnSharesBefore, 0, "ghost shares should exist on non-default curves");
+
+        // Leave headroom so previewRedeem < totalAssets (avoid rounding overflow near total redemption).
+        uint256 leave = userShares / 1000; // leave 0.1%
+        if (leave < 2) leave = 2;
+        uint256 toRedeem = userShares - leave;
+
+        resetPrank(users.alice);
+        uint256 received = protocol.multiVault.redeem(users.alice, atomId, PROGRESSIVE_CURVE_ID, toRedeem, 0);
+        assertTrue(received > 0, "redeem almost all should succeed");
+
+        uint256 userRemaining = protocol.multiVault.getShares(users.alice, atomId, PROGRESSIVE_CURVE_ID);
+        assertApproxEqRel(userRemaining, leave, 1e16, "remaining user shares should match leave amount (~1% tol)");
+
+        uint256 burnSharesAfter = protocol.multiVault.getShares(BURN, atomId, PROGRESSIVE_CURVE_ID);
+        assertEq(burnSharesAfter, burnSharesBefore, "ghost shares should be unchanged");
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            OFFSET PROGRESSIVE CURVE TESTS
+    //////////////////////////////////////////////////////////////*/
+
+    /*//////////////////////////////////////////////////////////////
+                            HAPPY PATH TESTS
+    //////////////////////////////////////////////////////////////*/
+
+    function test_redeem_OffsetProgressive_BasicFunctionality_Success() public {
+        bytes32 atomId = createSimpleAtom("OffsetProgressive redeem atom", ATOM_COST[0], users.alice);
+
+        uint256 depositAmount = 600e18;
+        resetPrank(users.alice);
+        protocol.multiVault.deposit{ value: depositAmount }(users.alice, atomId, OFFSET_PROGRESSIVE_CURVE_ID, 0);
+
+        uint256 shares = protocol.multiVault.getShares(users.alice, atomId, OFFSET_PROGRESSIVE_CURVE_ID);
+        assertTrue(shares > 0, "Deposit should mint shares on offset progressive curve");
+
+        uint256 sharesToRedeem = shares / 3;
+        resetPrank(users.alice);
+        uint256 assets = protocol.multiVault.redeem(users.alice, atomId, OFFSET_PROGRESSIVE_CURVE_ID, sharesToRedeem, 0);
+
+        assertTrue(assets > 0, "Should receive some assets");
+
+        uint256 remainingShares = protocol.multiVault.getShares(users.alice, atomId, OFFSET_PROGRESSIVE_CURVE_ID);
+        uint256 expectedRemainingShares = shares - sharesToRedeem;
+        assertApproxEqRel(remainingShares, expectedRemainingShares, 1e16, "Should have remaining shares");
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            FUZZ TESTS
+    //////////////////////////////////////////////////////////////*/
+
+    function testFuzz_redeem_OffsetProgressive_DepositThenRedeem(uint96 amt, uint16 redeemBps) public {
+        bytes32 atomId = createSimpleAtom("OffsetProgressive fuzz atom", ATOM_COST[0], users.alice);
+
+        uint256 depositAmount = bound(uint256(amt), 10e18, 5000e18);
+        uint256 bps = bound(uint256(redeemBps), 1, 10_000);
+
+        resetPrank(users.alice);
+        protocol.multiVault.deposit{ value: depositAmount }(users.alice, atomId, OFFSET_PROGRESSIVE_CURVE_ID, 0);
+
+        uint256 userShares = protocol.multiVault.getShares(users.alice, atomId, OFFSET_PROGRESSIVE_CURVE_ID);
+        vm.assume(userShares > 1);
+
+        uint256 toRedeem = (userShares * bps) / 10_000;
+
+        // Leave headroom near full redemption to avoid previewRedeem > totalAssets
+        uint256 leave = userShares / 1000; // ~0.1%
+        if (leave < 2) leave = 2;
+        if (toRedeem >= userShares - leave) {
+            toRedeem = userShares - leave;
+        }
+
+        // Ensure we actually redeem something and stay < userShares
+        if (toRedeem == 0) toRedeem = 1;
+        if (toRedeem >= userShares) toRedeem = userShares - 1;
+
+        resetPrank(users.alice);
+        uint256 received = protocol.multiVault.redeem(users.alice, atomId, OFFSET_PROGRESSIVE_CURVE_ID, toRedeem, 0);
+
+        assertTrue(received > 0, "Redeem should return assets");
+        uint256 remaining = protocol.multiVault.getShares(users.alice, atomId, OFFSET_PROGRESSIVE_CURVE_ID);
+        assertApproxEqRel(remaining, userShares - toRedeem, 1e16, "Remaining shares should reflect redemption");
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                        EDGE / MIN-SHARE INVARIANT
+    //////////////////////////////////////////////////////////////*/
+
+    function test_redeem_OffsetProgressive_RedeemAlmostAll_Succeeds_AndLeavesGhostShares() public {
+        bytes32 atomId = createSimpleAtom("OffsetProgressive redeem-almost-all atom", ATOM_COST[0], users.alice);
+
+        // Deposit on OffsetProgressive curve (non-default)
+        uint256 depositAmount = 350e18;
+        resetPrank(users.alice);
+        protocol.multiVault.deposit{ value: depositAmount }(users.alice, atomId, OFFSET_PROGRESSIVE_CURVE_ID, 0);
+
+        uint256 userShares = protocol.multiVault.getShares(users.alice, atomId, OFFSET_PROGRESSIVE_CURVE_ID);
+        assertTrue(userShares > 2, "need at least 3 shares to test");
+
+        // Ghost minShares exist on non-default curves.
+        uint256 burnSharesBefore = protocol.multiVault.getShares(BURN, atomId, OFFSET_PROGRESSIVE_CURVE_ID);
+        assertGt(burnSharesBefore, 0, "ghost shares should exist on non-default curves");
+
+        // Leave headroom so previewRedeem < totalAssets (avoid rounding overflow near total redemption).
+        uint256 leave = userShares / 1000; // leave 0.1%
+        if (leave < 2) leave = 2;
+        uint256 toRedeem = userShares - leave;
+
+        resetPrank(users.alice);
+        uint256 received = protocol.multiVault.redeem(users.alice, atomId, OFFSET_PROGRESSIVE_CURVE_ID, toRedeem, 0);
+        assertTrue(received > 0, "redeem almost all should succeed");
+
+        uint256 userRemaining = protocol.multiVault.getShares(users.alice, atomId, OFFSET_PROGRESSIVE_CURVE_ID);
+        assertApproxEqRel(userRemaining, leave, 1e16, "remaining user shares should match leave amount (~1% tol)");
+
+        uint256 burnSharesAfter = protocol.multiVault.getShares(BURN, atomId, OFFSET_PROGRESSIVE_CURVE_ID);
+        assertEq(burnSharesAfter, burnSharesBefore, "ghost shares should be unchanged");
     }
 
     /*//////////////////////////////////////////////////////////////
