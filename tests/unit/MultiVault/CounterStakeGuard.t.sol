@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.21;
 
-import {console} from "forge-std/src/console.sol";
-import {MultiVault} from "src/protocol/MultiVault.sol";
-import {IBondingCurveRegistry} from "src/interfaces/IBondingCurveRegistry.sol";
-import {BaseTest} from "tests/BaseTest.t.sol";
+import { console } from "forge-std/src/console.sol";
+import { MultiVault } from "src/protocol/MultiVault.sol";
+import { IBondingCurveRegistry } from "src/interfaces/IBondingCurveRegistry.sol";
+import { BaseTest } from "tests/BaseTest.t.sol";
 
 contract CounterStakeGuardTest is BaseTest {
     bytes32 private tripleId;
@@ -18,14 +18,8 @@ contract CounterStakeGuardTest is BaseTest {
         uint256 minDeposit = protocol.multiVault.getGeneralConfig().minDeposit;
         if (minDeposit == 0) minDeposit = 1;
 
-        (bytes32 _tripleId, ) = createTripleWithAtoms(
-            "S:Local",
-            "P:Local",
-            "O:Local",
-            atomCost,
-            tripleCost + minDeposit,
-            users.alice
-        );
+        (bytes32 _tripleId,) =
+            createTripleWithAtoms("S:Local", "P:Local", "O:Local", atomCost, tripleCost + minDeposit, users.alice);
         tripleId = _tripleId;
         counterTripleId = protocol.multiVault.getCounterIdFromTripleId(tripleId);
 

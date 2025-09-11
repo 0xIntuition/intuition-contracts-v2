@@ -29,7 +29,6 @@ contract BaseSepoliaMinterAndBridge is MetaERC20Dispatcher, AccessControl {
         IERC20(token).transferFrom(msg.sender, address(this), amount);
         IERC20(token).approve(metaERC20Hub, amount);
 
-        uint256 GAS_CONSTANT = 100_000;
         IIGP igp = IIGP(IMetalayerRouter(IMetaERC20HubOrSpoke(metaERC20Hub).metalayerRouter()).igp());
 
         uint256 gasLimit;
@@ -40,7 +39,7 @@ contract BaseSepoliaMinterAndBridge is MetaERC20Dispatcher, AccessControl {
         }
         require(msg.value >= gasLimit, "Not enough value sent");
 
-        _bridgeTokensViaERC20(
+        _bridgeTokensViaNativeToken(
             metaERC20Hub, domain, bytes32(uint256(uint160(to))), amount, gasLimit, FinalityState.INSTANT
         );
 
