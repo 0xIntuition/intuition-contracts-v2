@@ -229,7 +229,7 @@ abstract contract BaseTest is Modifiers, Test {
         LinearCurve linearCurve = new LinearCurve("Linear Bonding Curve");
         OffsetProgressiveCurve offsetProgressiveCurve =
             new OffsetProgressiveCurve("Offset Progressive Bonding Curve", 2, 5e35);
-        ProgressiveCurve progressiveCurve = new ProgressiveCurve("Progressive Bonding Curve", 1e15); // 0.001 slope
+        ProgressiveCurve progressiveCurve = new ProgressiveCurve("Progressive Bonding Curve", 2);
 
         console2.log("LinearCurve address: ", address(linearCurve));
         console2.log("ProgressiveCurve address: ", address(progressiveCurve));

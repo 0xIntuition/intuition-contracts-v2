@@ -317,24 +317,35 @@ contract RedeemTest is BaseTest {
                         EDGE / MIN-SHARE INVARIANT
     //////////////////////////////////////////////////////////////*/
 
-    function test_redeem_Progressive_RedeemAll_Reverts_InsufficientRemainingShares() public {
-        bytes32 atomId = createSimpleAtom("Progressive redeem-all atom", ATOM_COST[0], users.alice);
+    function test_redeem_Progressive_RedeemAlmostAll_Succeeds_AndLeavesGhostShares() public {
+        bytes32 atomId = createSimpleAtom("Progressive redeem-almost-all atom", ATOM_COST[0], users.alice);
 
-        // Deposit on Progressive curve
+        // Deposit on Progressive curve (non-default)
         uint256 depositAmount = 250e18;
         resetPrank(users.alice);
         protocol.multiVault.deposit{ value: depositAmount }(users.alice, atomId, PROGRESSIVE_CURVE_ID, 0);
 
-        uint256 maxRedeemable = protocol.multiVault.getShares(users.alice, atomId, PROGRESSIVE_CURVE_ID);
+        uint256 userShares = protocol.multiVault.getShares(users.alice, atomId, PROGRESSIVE_CURVE_ID);
+        assertTrue(userShares > 2, "need at least 3 shares to test");
 
-        // On non-default curves, ghost shares are NOT minted. Redeeming all drops below minShare -> revert.
+        // Non-default curves mint ghost minShares to the burn address.
+        uint256 burnSharesBefore = protocol.multiVault.getShares(BURN, atomId, PROGRESSIVE_CURVE_ID);
+        assertGt(burnSharesBefore, 0, "ghost shares should exist on non-default curves");
+
+        // Leave headroom so previewRedeem < totalAssets (avoid rounding overflow near total redemption).
+        uint256 leave = userShares / 1000; // leave 0.1%
+        if (leave < 2) leave = 2;
+        uint256 toRedeem = userShares - leave;
+
         resetPrank(users.alice);
-        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_InsufficientRemainingSharesInVault.selector, 0));
-        protocol.multiVault.redeem(users.alice, atomId, PROGRESSIVE_CURVE_ID, maxRedeemable, 0);
+        uint256 received = protocol.multiVault.redeem(users.alice, atomId, PROGRESSIVE_CURVE_ID, toRedeem, 0);
+        assertTrue(received > 0, "redeem almost all should succeed");
 
-        // Sanity: burn address should have 0 shares on this non-default curve
-        uint256 burnShares = protocol.multiVault.getShares(BURN, atomId, PROGRESSIVE_CURVE_ID);
-        assertEq(burnShares, 0, "No ghost shares are minted for non-default curves");
+        uint256 userRemaining = protocol.multiVault.getShares(users.alice, atomId, PROGRESSIVE_CURVE_ID);
+        assertApproxEqRel(userRemaining, leave, 1e16, "remaining user shares should match leave amount (~1% tol)");
+
+        uint256 burnSharesAfter = protocol.multiVault.getShares(BURN, atomId, PROGRESSIVE_CURVE_ID);
+        assertEq(burnSharesAfter, burnSharesBefore, "ghost shares should be unchanged");
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -398,21 +409,36 @@ contract RedeemTest is BaseTest {
                         EDGE / MIN-SHARE INVARIANT
     //////////////////////////////////////////////////////////////*/
 
-    function test_redeem_OffsetProgressive_RedeemAll_Reverts_InsufficientRemainingShares() public {
-        bytes32 atomId = createSimpleAtom("OffsetProgressive redeem-all atom", ATOM_COST[0], users.alice);
+    function test_redeem_OffsetProgressive_RedeemAlmostAll_Succeeds_AndLeavesGhostShares() public {
+        bytes32 atomId = createSimpleAtom("OffsetProgressive redeem-almost-all atom", ATOM_COST[0], users.alice);
 
+        // Deposit on OffsetProgressive curve (non-default)
         uint256 depositAmount = 350e18;
         resetPrank(users.alice);
         protocol.multiVault.deposit{ value: depositAmount }(users.alice, atomId, OFFSET_PROGRESSIVE_CURVE_ID, 0);
 
-        uint256 maxRedeemable = protocol.multiVault.getShares(users.alice, atomId, OFFSET_PROGRESSIVE_CURVE_ID);
+        uint256 userShares = protocol.multiVault.getShares(users.alice, atomId, OFFSET_PROGRESSIVE_CURVE_ID);
+        assertTrue(userShares > 2, "need at least 3 shares to test");
+
+        // Ghost minShares exist on non-default curves.
+        uint256 burnSharesBefore = protocol.multiVault.getShares(BURN, atomId, OFFSET_PROGRESSIVE_CURVE_ID);
+        assertGt(burnSharesBefore, 0, "ghost shares should exist on non-default curves");
+
+        // Leave headroom so previewRedeem < totalAssets (avoid rounding overflow near total redemption).
+        uint256 leave = userShares / 1000; // leave 0.1%
+        if (leave < 2) leave = 2;
+        uint256 toRedeem = userShares - leave;
 
         resetPrank(users.alice);
-        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_InsufficientRemainingSharesInVault.selector, 0));
-        protocol.multiVault.redeem(users.alice, atomId, OFFSET_PROGRESSIVE_CURVE_ID, maxRedeemable, 0);
+        uint256 received = protocol.multiVault.redeem(users.alice, atomId, OFFSET_PROGRESSIVE_CURVE_ID, toRedeem, 0);
+        assertTrue(received > 0, "redeem almost all should succeed");
 
-        uint256 burnShares = protocol.multiVault.getShares(BURN, atomId, OFFSET_PROGRESSIVE_CURVE_ID);
-        assertEq(burnShares, 0, "No ghost shares are minted for non-default curves");
+        uint256 userRemaining = protocol.multiVault.getShares(users.alice, atomId, OFFSET_PROGRESSIVE_CURVE_ID);
+        assertApproxEqRel(userRemaining, leave, 1e16, "remaining user shares should match leave amount (~1% tol)");
+
+        uint256 burnSharesAfter = protocol.multiVault.getShares(BURN, atomId, OFFSET_PROGRESSIVE_CURVE_ID);
+        assertEq(burnSharesAfter, burnSharesBefore, "ghost shares should be unchanged");
+    }
 
     /*//////////////////////////////////////////////////////////////
         Test unreachable branches in _burn() and _validateRedeem()
