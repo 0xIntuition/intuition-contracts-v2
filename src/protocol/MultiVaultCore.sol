@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.29;
 
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 import {
     IMultiVaultCore,
@@ -13,12 +15,11 @@ import {
 } from "src/interfaces/IMultiVaultCore.sol";
 
 /**
- * @title  MultiVault
+ * @title  MultiVaultCore
  * @author 0xIntuition
- * @notice Core contract of the Intuition protocol. Manages the creation and management of vaults
- *         associated with atoms & triples using Trust as the base asset.
+ * @notice Core contract of the Intuition protocol. Manages atom state, triple state, and protocol configuration.
  */
-abstract contract MultiVaultCore is IMultiVault, IMultiVaultCore {
+abstract contract MultiVaultCore is Initializable, IMultiVault, IMultiVaultCore {
     /* =================================================== */
     /*                       CONSTANTS                     */
     /* =================================================== */
@@ -61,11 +62,17 @@ abstract contract MultiVaultCore is IMultiVault, IMultiVaultCore {
                                 Errors
     //////////////////////////////////////////////////////////////*/
 
-    error AtomDoesNotExist(bytes32 termId);
+    error MultiVaultCore_InvalidAdmin();
 
-    error TripleDoesNotExist(bytes32 termId);
+    error MultiVaultCore_AtomDoesNotExist(bytes32 termId);
 
-    error TermDoesNotExist(bytes32 termId);
+    error MultiVaultCore_TripleDoesNotExist(bytes32 termId);
+
+    error MultiVaultCore_TermDoesNotExist(bytes32 termId);
+
+    /* =================================================== */
+    /*                    INITIALIZER                      */
+    /* =================================================== */
 
     /**
      * @notice Initializes the MultiVaultCore contract with the provided configuration structs
@@ -85,13 +92,24 @@ abstract contract MultiVaultCore is IMultiVault, IMultiVaultCore {
         BondingCurveConfig memory _bondingCurveConfig
     )
         internal
+        onlyInitializing
     {
-        generalConfig = _generalConfig;
+        _setGeneralConfig(_generalConfig);
         atomConfig = _atomConfig;
         tripleConfig = _tripleConfig;
         walletConfig = _walletConfig;
         vaultFees = _vaultFees;
         bondingCurveConfig = _bondingCurveConfig;
+    }
+
+    /* =================================================== */
+    /*                    HELPER FUNCTIONS                 */
+    /* =================================================== */
+
+    /// @dev Internal function to set and validate the general configuration struct
+    function _setGeneralConfig(GeneralConfig memory _generalConfig) internal {
+        if (_generalConfig.admin == address(0)) revert MultiVaultCore_InvalidAdmin();
+        generalConfig = _generalConfig;
     }
 
     /* =================================================== */
@@ -143,7 +161,7 @@ abstract contract MultiVaultCore is IMultiVault, IMultiVaultCore {
     function getAtom(bytes32 atomId) public view returns (bytes memory data) {
         bytes memory _data = _atoms[atomId];
         if (_data.length == 0) {
-            revert AtomDoesNotExist(atomId);
+            revert MultiVaultCore_AtomDoesNotExist(atomId);
         }
         return _data;
     }
@@ -162,9 +180,12 @@ abstract contract MultiVaultCore is IMultiVault, IMultiVaultCore {
     /*                   Triple Getters                    */
     /* =================================================== */
 
-    function triple(bytes32 tripleId) external view returns (bytes32, bytes32, bytes32) {
-        bytes32[3] memory atomIds =
-            isCounterTriple(tripleId) ? _triples[getTripleIdFromCounterId(tripleId)] : _triples[tripleId];
+    /// @notice returns the underlying atom ids for a given triple id
+    /// @dev If the triple does not exist, instead of reverting, this function returns (bytes32(0), bytes32(0),
+    /// bytes32(0))
+    /// @param tripleId term id of the triple
+    function triple(bytes32 tripleId) public view returns (bytes32, bytes32, bytes32) {
+        bytes32[3] memory atomIds = _triples[tripleId];
         return (atomIds[0], atomIds[1], atomIds[2]);
     }
 
@@ -175,10 +196,13 @@ abstract contract MultiVaultCore is IMultiVault, IMultiVaultCore {
             + generalConfig.minShare * 2;
     }
 
+    /// @notice returns the underlying atom ids for a given triple id
+    /// @dev If the triple does not exist, this function reverts
+    /// @param tripleId term id of the triple
     function getTriple(bytes32 tripleId) public view returns (bytes32, bytes32, bytes32) {
         bytes32[3] memory atomIds = _triples[tripleId];
         if (atomIds[0] == bytes32(0) && atomIds[1] == bytes32(0) && atomIds[2] == bytes32(0)) {
-            revert TripleDoesNotExist(tripleId);
+            revert MultiVaultCore_TripleDoesNotExist(tripleId);
         }
         return (atomIds[0], atomIds[1], atomIds[2]);
     }
@@ -245,7 +269,7 @@ abstract contract MultiVaultCore is IMultiVault, IMultiVaultCore {
         bool _isVaultCounterTriple = isCounterTriple(termId);
 
         if (!_isVaultAtom && !_isVaultTriple && !_isVaultCounterTriple) {
-            revert TermDoesNotExist(termId);
+            revert MultiVaultCore_TermDoesNotExist(termId);
         }
 
         if (_isVaultAtom) return VaultType.ATOM;
