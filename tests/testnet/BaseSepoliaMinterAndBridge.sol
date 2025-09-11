@@ -39,7 +39,7 @@ contract BaseSepoliaMinterAndBridge is MetaERC20Dispatcher, AccessControl {
         }
         require(msg.value >= gasLimit, "Not enough value sent");
 
-        _bridgeTokensViaNativeToken(
+        _bridgeTokensViaERC20(
             metaERC20Hub, domain, bytes32(uint256(uint160(to))), amount, gasLimit, FinalityState.INSTANT
         );
 
