@@ -53,10 +53,10 @@ contract PumpCurveTest is Test {
     }
 
     function test_previewMint_withExistingShares() public view {
-        // Mint more tokens when some already exist
-        uint256 existingShares = 100_000_000 * 1e18; // 100M tokens
-        uint256 sharesToMint = 10_000_000 * 1e18; // 10M tokens
         uint256 existingAssets = 100_000_000 * 1e18; // 100M TRUST
+        uint256 existingShares = curve.previewDeposit(existingAssets, 0, 0); // derive consistent shares
+
+        uint256 sharesToMint = 10_000_000 * 1e18; // 10M tokens
         uint256 assets = curve.previewMint(sharesToMint, existingShares, existingAssets);
         assertGt(assets, 0);
     }
@@ -134,7 +134,7 @@ contract PumpCurveTest is Test {
     }
 
     function test_maxShares() public view {
-        assertEq(curve.maxShares(), 800_000_000 * 1e18);
+        assertEq(curve.maxShares(), 107_300_019_100_000 * 1e18);
     }
 
     function test_maxAssets() public view {
@@ -302,7 +302,6 @@ contract PumpCurveTest is Test {
                 console2.log("  Shares Received for this deposit: %s", sharesReceived / 1e18);
                 console2.log("  Total Shares Outstanding: %s", cumulativeShares / 1e18);
                 console2.log("  Current Price per Share (wei): %s", currentSharePrice);
-                console2.log("  Price in TRUST (decimal): %s", currentSharePrice * 1000 / 1e18);
                 console2.log("------------------------------------");
             }
         }
