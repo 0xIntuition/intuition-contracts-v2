@@ -6,11 +6,25 @@ import { console2 } from "forge-std/src/console2.sol";
 import { PumpCurve } from "src/protocol/curves/PumpCurve.sol";
 import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
 
+contract PumpCurveHarness is PumpCurve {
+    constructor() PumpCurve("Harness") { }
+
+    function expose_initialPrice() external pure returns (uint256) {
+        return _initialPrice();
+    }
+
+    function expose_tokensFromFormula(uint256 trustAmount) external pure returns (uint256) {
+        return _tokensFromFormula(trustAmount);
+    }
+}
+
 contract PumpCurveTest is Test {
     PumpCurve public curve;
+    PumpCurveHarness public harness;
 
     function setUp() public {
         curve = new PumpCurve("Pump Curve Test");
+        harness = new PumpCurveHarness();
     }
 
     function test_constructor_successful() public {
@@ -351,5 +365,99 @@ contract PumpCurveTest is Test {
 
         // Due to bonding curve, second deposit gets fewer shares
         assertLt(shares2, shares1);
+    }
+
+    function test_previewDeposit_revertsWhenExceedingMaxAssets() public {
+        uint256 near = curve.MAX_ASSETS() - 5e18;
+        vm.expectRevert(bytes("Exceeds max assets"));
+        curve.previewDeposit(10e18, near, 0);
+    }
+
+    function test_previewMint_revertsWhenExceedingMaxShares() public {
+        uint256 near = curve.MAX_SHARES() - 1e18;
+        vm.expectRevert(bytes("Exceeds max shares"));
+        curve.previewMint(2e18, near, 0);
+    }
+
+    function test_previewMint_revertsAtCurveLimit() public {
+        // S_internal = V - 1; s_internal = 1 -> target == V (limit)
+        uint256 S = (curve.VIRTUAL_TOKEN_RESERVES() - 1e18) * curve.SCALING_FACTOR();
+        uint256 s = 1e18 * curve.SCALING_FACTOR();
+        vm.expectRevert(bytes("At curve limit"));
+        curve.previewMint(s, S, 0);
+    }
+
+    function test_previewWithdraw_revertsWhenOverWithdrawing() public {
+        vm.expectRevert(bytes("Insufficient assets"));
+        curve.previewWithdraw(2e18, 1e18, 0);
+    }
+
+    function test_previewRedeem_revertsWhenOverRedeeming() public {
+        vm.expectRevert(bytes("Insufficient shares"));
+        curve.previewRedeem(2e18, 1e18, 0);
+    }
+
+    function test_currentPrice_zeroAtOrBeyondCap() public view {
+        // At full external cap, internal S == V → price = 0
+        uint256 S = curve.MAX_SHARES();
+        uint256 p = curve.currentPrice(S);
+        assertEq(p, 0);
+    }
+
+    function test_currentPrice_hugeNearLastInternalToken() public view {
+        // One internal token from the end: rem = 1e18 → very large price
+        uint256 S = (curve.VIRTUAL_TOKEN_RESERVES() - 1e18) * curve.SCALING_FACTOR();
+        uint256 p = curve.currentPrice(S);
+        assertGt(p, 1e36); // astronomically large
+    }
+
+    function test_roundTrip_depositThenRedeem_exact() public view {
+        // From zero state, deposit A then redeem all minted shares → A back
+        uint256 A = 25 * 1e18; // 25 TRUST
+        uint256 s = curve.previewDeposit(A, 0, 0);
+        uint256 out = curve.previewRedeem(s, s, A);
+        assertEq(out, A);
+    }
+
+    function test_roundTrip_mintThenWithdraw_almostExact() public view {
+        // Choose shares, compute required assets, then withdraw those assets.
+        uint256 s = 10_000 * 1e18; // 10k shares
+        uint256 A = curve.previewMint(s, 0, 0);
+
+        // After mint-from-zero, totals are (A, s)
+        uint256 burned = curve.previewWithdraw(A, A, s);
+
+        // Integer division on inverse paths can differ by a few wei of share.
+        // Tolerate up to 1e12 wei of share (1e-6 share), which is far below user-observable precision.
+        assertLe(burned, s); // never require *more* than minted
+        assertApproxEqAbs(burned, s, 1e12);
+    }
+
+    function test_previewDeposit_respectsMaxSharesClamp() public view {
+        // If a deposit would push past MAX_SHARES, it should clamp.
+        uint256 near = curve.MAX_SHARES() - 10e18;
+        uint256 minted = curve.previewDeposit(1_000_000_000 * 1e18, 0, near);
+        assertEq(minted, 10e18);
+    }
+
+    // Tiny sanity on 1 TRUST deposit
+    function test_oneTrustGivesShares() public view {
+        uint256 shares = curve.previewDeposit(1e18, 0, 0);
+        assertGt(shares, 0);
+    }
+
+    function test_internal_initialPrice_matchesFormula() public view {
+        uint256 expected = curve.CURVE_NUMERATOR()
+            / (curve.VIRTUAL_TRUST_RESERVES_INTERNAL() * curve.VIRTUAL_TRUST_RESERVES_INTERNAL());
+        uint256 got = harness.expose_initialPrice();
+        assertEq(got, expected);
+    }
+
+    function test_internal_tokensFromFormula_clampsAtMaxInternal() public view {
+        // Anything beyond MAX_ASSETS_INTERNAL must clamp to the same result
+        uint256 over = curve.MAX_ASSETS_INTERNAL() + 123 * 1e18;
+        uint256 clamped = harness.expose_tokensFromFormula(curve.MAX_ASSETS_INTERNAL());
+        uint256 forced = harness.expose_tokensFromFormula(over);
+        assertEq(forced, clamped);
     }
 }
