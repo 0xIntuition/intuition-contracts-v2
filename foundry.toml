@@ -4,7 +4,7 @@
   auto_detect_solc = false
   bytecode_hash = "none"
   evm_version = "cancun"
-  fuzz = { runs = 1_000 }
+  fuzz = { runs = 10_000 }
   gas_reports = ["*"]
   optimizer = true
   optimizer_runs = 10_000
