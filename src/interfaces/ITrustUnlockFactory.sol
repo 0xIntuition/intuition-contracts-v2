@@ -2,7 +2,7 @@
 pragma solidity ^0.8.29;
 
 /**
- * @title  TrustUnlock
+ * @title  ITrustUnlockFactory
  * @author 0xIntuition
  * @notice Minimal interface for the TrustUnlock factory (registry)
  */
