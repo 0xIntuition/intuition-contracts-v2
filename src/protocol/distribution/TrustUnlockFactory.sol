@@ -20,13 +20,13 @@ contract TrustUnlockFactory is Ownable2Step, ReentrancyGuard {
                                IMMUTABLES
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice The TRUST token contract
+    /// @notice Address of the Wrapped Trust (WTRUST) token
     address payable public immutable trustToken;
 
-    /// @notice The address of the TrustBonding contract
+    /// @notice Address of the TrustBonding contract
     address public immutable trustBonding;
 
-    /// @notice The address of the MultiVault contract
+    /// @notice Address of the MultiVault contract
     address payable public immutable multiVault;
 
     /*//////////////////////////////////////////////////////////////
@@ -91,7 +91,6 @@ contract TrustUnlockFactory is Ownable2Step, ReentrancyGuard {
      * @notice Creates a new TrustUnlock contract for a recipient
      *  @param recipient The address of the recipient of the TrustUnlock
      * @param unlockAmount The amount of tokens to be unlocked
-     * @param unlockBegin The timestamp when the unlock period begins
      * @param unlockCliff The timestamp when the unlock cliff ends
      * @param unlockEnd The timestamp when the unlock period ends
      * @param cliffPercentage The percentage of the unlock amount that is released at the cliff
@@ -99,7 +98,6 @@ contract TrustUnlockFactory is Ownable2Step, ReentrancyGuard {
     function createTrustUnlock(
         address recipient,
         uint256 unlockAmount,
-        uint256 unlockBegin,
         uint256 unlockCliff,
         uint256 unlockEnd,
         uint256 cliffPercentage
@@ -109,7 +107,7 @@ contract TrustUnlockFactory is Ownable2Step, ReentrancyGuard {
         nonReentrant
     {
         // Deploy a TrustUnlock contract for the recipient
-        _createTrustUnlock(recipient, unlockAmount, unlockBegin, unlockCliff, unlockEnd, cliffPercentage);
+        _createTrustUnlock(recipient, unlockAmount, unlockCliff, unlockEnd, cliffPercentage);
     }
 
     /**
@@ -119,7 +117,6 @@ contract TrustUnlockFactory is Ownable2Step, ReentrancyGuard {
      *      and assume that multiple recipients are subject to the same unlock schedule.
      * @param recipients The addresses of the recipients of the TrustUnlock contracts
      * @param unlockAmounts The amounts of tokens to be unlocked for each recipient
-     * @param unlockBegin The timestamp when the unlock period begins
      * @param unlockCliff The timestamp when the unlock cliff ends
      * @param unlockEnd The timestamp when the unlock period ends
      * @param cliffPercentage The percentage of the unlock amount that is released at the cliff
@@ -127,7 +124,6 @@ contract TrustUnlockFactory is Ownable2Step, ReentrancyGuard {
     function batchCreateTrustUnlock(
         address[] calldata recipients,
         uint256[] calldata unlockAmounts,
-        uint256 unlockBegin,
         uint256 unlockCliff,
         uint256 unlockEnd,
         uint256 cliffPercentage
@@ -147,7 +143,7 @@ contract TrustUnlockFactory is Ownable2Step, ReentrancyGuard {
 
         // Deploy TrustUnlock contracts for each recipient
         for (uint256 i; i < recipients.length;) {
-            _createTrustUnlock(recipients[i], unlockAmounts[i], unlockBegin, unlockCliff, unlockEnd, cliffPercentage);
+            _createTrustUnlock(recipients[i], unlockAmounts[i], unlockCliff, unlockEnd, cliffPercentage);
 
             unchecked {
                 ++i;
@@ -180,7 +176,6 @@ contract TrustUnlockFactory is Ownable2Step, ReentrancyGuard {
      * @notice Internal function to create a new TrustUnlock contract for a recipient with the specified parameters
      * @param recipient The address of the recipient of the TrustUnlock
      * @param unlockAmount The amount of tokens to be unlocked
-     * @param unlockBegin The timestamp when the unlock period begins
      * @param unlockCliff The timestamp when the unlock cliff ends
      * @param unlockEnd The timestamp when the unlock period ends
      * @param cliffPercentage The percentage of the unlock amount that is released at the cliff
@@ -188,7 +183,6 @@ contract TrustUnlockFactory is Ownable2Step, ReentrancyGuard {
     function _createTrustUnlock(
         address recipient,
         uint256 unlockAmount,
-        uint256 unlockBegin,
         uint256 unlockCliff,
         uint256 unlockEnd,
         uint256 cliffPercentage
@@ -202,12 +196,9 @@ contract TrustUnlockFactory is Ownable2Step, ReentrancyGuard {
 
         // Build the TrustUnlock contract parameters
         TrustUnlock.UnlockParams memory unlockParams = TrustUnlock.UnlockParams({
-            token: trustToken,
             owner: recipient,
-            trustBonding: trustBonding,
-            multiVault: multiVault,
+            registry: address(this),
             unlockAmount: unlockAmount,
-            unlockBegin: unlockBegin,
             unlockCliff: unlockCliff,
             unlockEnd: unlockEnd,
             cliffPercentage: cliffPercentage
