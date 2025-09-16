@@ -3,8 +3,6 @@ cache
 coverage
 node_modules
 out
-private
-flattened
 .wake
 
 # files
