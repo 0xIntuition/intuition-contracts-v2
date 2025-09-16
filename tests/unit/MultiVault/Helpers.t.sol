@@ -90,7 +90,7 @@ contract MultiVaultHelpersTest is BaseTest {
 
     function test_getAtomWarden_DefaultAndAfterUpdate() public {
         // default from BaseTest wallet config is zero
-        assertEq(protocol.multiVault.getAtomWarden(), address(0));
+        assertEq(protocol.multiVault.getAtomWarden(), ATOM_WARDEN);
 
         // update via admin and verify
         resetPrank({ msgSender: users.admin });
