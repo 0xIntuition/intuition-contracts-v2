@@ -124,7 +124,7 @@ contract CoreEmissionsController is ICoreEmissionsController {
     /*                   VALIDATION                        */
     /* =================================================== */
 
-    function _validateEmissionsPerEpoch(uint256 emissionsPerEpoch) internal view {
+    function _validateEmissionsPerEpoch(uint256 emissionsPerEpoch) internal pure {
         if (emissionsPerEpoch == 0) {
             revert CoreEmissionsController_InvalidEmissionsPerEpoch();
         }
