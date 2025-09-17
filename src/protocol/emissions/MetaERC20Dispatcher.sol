@@ -18,6 +18,9 @@ contract MetaERC20Dispatcher {
     FinalityState internal _finalityState;
     uint256 internal _messageGasCost;
 
+    /// @dev Gap for upgrade safety
+    uint256[50] private __gap;
+
     /* =================================================== */
     /*                      EVENTS                         */
     /* =================================================== */

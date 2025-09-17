@@ -25,7 +25,7 @@ contract Trust is TrustToken, AccessControlUpgradeable {
                                  STATE
     //////////////////////////////////////////////////////////////*/
 
-    /// @dev Gap for upgrade safety (reduced to account for AccessControl storage)
+    /// @dev Gap for upgrade safety
     uint256[50] private __gap;
 
     /*//////////////////////////////////////////////////////////////

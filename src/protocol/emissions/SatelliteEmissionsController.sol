@@ -47,6 +47,9 @@ contract SatelliteEmissionsController is
     /// @notice Mapping of bridged rewards for each epoch
     mapping(uint256 epoch => uint256 amount) internal _bridgedRewards;
 
+    /// @dev Gap for upgrade safety
+    uint256[50] private __gap;
+
     /* =================================================== */
     /*                    CONSTRUCTOR                      */
     /* =================================================== */
