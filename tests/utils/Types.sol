@@ -28,6 +28,7 @@ struct Protocol {
 struct Users {
     address payable admin;
     address payable controller;
+    address payable timelock;
     address payable alice;
     address payable bob;
     address payable charlie;

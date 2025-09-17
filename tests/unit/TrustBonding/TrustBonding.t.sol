@@ -63,7 +63,28 @@ contract TrustBondingTest is BaseTest {
 
         vm.expectRevert(abi.encodeWithSelector(ITrustBonding.TrustBonding_ZeroAddress.selector));
         newTrustBonding.initialize(
-            address(0),
+            address(0), // admin
+            users.timelock, // timelock
+            address(protocol.wrappedTrust), // protocol.wrappedTrust
+            TRUST_BONDING_EPOCH_LENGTH, // epochLength (minimum 2 weeks required)
+            address(protocol.multiVault), // multiVault
+            address(protocol.satelliteEmissionsController), // satelliteEmissionsController
+            TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound (50%)
+            TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound (30%)
+        );
+
+        vm.stopPrank();
+    }
+
+    function test_initialize_shouldRevertIfTimelockIsAddressZero() external {
+        resetPrank(users.admin);
+
+        TrustBonding newTrustBonding = _deployNewTrustBondingContract();
+
+        vm.expectRevert(abi.encodeWithSelector(ITrustBonding.TrustBonding_ZeroAddress.selector));
+        newTrustBonding.initialize(
+            users.admin, // admin
+            address(0), // timelock
             address(protocol.wrappedTrust), // protocol.wrappedTrust
             TRUST_BONDING_EPOCH_LENGTH, // epochLength (minimum 2 weeks required)
             address(protocol.multiVault), // multiVault
@@ -82,7 +103,8 @@ contract TrustBondingTest is BaseTest {
 
         vm.expectRevert("Token address cannot be 0");
         newTrustBonding.initialize(
-            users.admin,
+            users.admin, // admin
+            users.timelock, // timelock
             address(0), // protocol.wrappedTrust
             TRUST_BONDING_EPOCH_LENGTH, // epochLength (minimum 2 weeks required)
             address(protocol.multiVault), // multiVault
@@ -103,8 +125,9 @@ contract TrustBondingTest is BaseTest {
 
         vm.expectRevert("Min lock time must be at least 2 weeks");
         newTrustBonding.initialize(
-            users.admin,
-            address(protocol.wrappedTrust),
+            users.admin, // admin
+            users.timelock, // timelock
+            address(protocol.wrappedTrust), // protocol.wrappedTrust
             invalidEpochLength, // epochLength (minimum 2 weeks required)
             address(protocol.multiVault), // multiVault
             address(protocol.satelliteEmissionsController), // satelliteEmissionsController

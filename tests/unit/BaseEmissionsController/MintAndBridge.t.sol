@@ -49,6 +49,11 @@ contract MintAndBridgeTest is BaseTest {
         _deployBaseEmissionsController();
         vm.deal(unauthorizedUser, 1 ether);
         vm.deal(users.controller, 10 ether);
+
+        // Set BaseEmissionsController directly in Trust storage slot
+        vm.store(
+            address(protocol.trust), bytes32(uint256(203)), bytes32(uint256(uint160(address(baseEmissionsController))))
+        );
     }
 
     function _deployBaseEmissionsController() internal {
@@ -90,8 +95,6 @@ contract MintAndBridgeTest is BaseTest {
             metaERC20DispatchInit,
             coreEmissionsInit
         );
-
-        protocol.trust.grantRole(protocol.trust.CONTROLLER_ROLE(), address(baseEmissionsController));
 
         vm.label(address(baseEmissionsController), "BaseEmissionsController");
     }

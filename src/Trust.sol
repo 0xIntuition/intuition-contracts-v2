@@ -15,18 +15,26 @@ contract Trust is TrustToken, AccessControlUpgradeable {
                             V2 CONSTANTS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Role for minting tokens
-    bytes32 public constant CONTROLLER_ROLE = keccak256("CONTROLLER_ROLE");
-
     /// @notice Address of the initial admin, which is allowed to perform the contract reinitialization
     address public constant INITIAL_ADMIN = 0xa28d4AAcA48bE54824dA53a19b05121DE71Ef480;
 
     /*//////////////////////////////////////////////////////////////
-                                 STATE
+                            V2 STATE
     //////////////////////////////////////////////////////////////*/
+
+    /// @notice BaseEmissionsController contract address
+    address public baseEmissionsController;
 
     /// @dev Gap for upgrade safety (reduced to account for AccessControl storage)
     uint256[50] private __gap;
+
+    /*//////////////////////////////////////////////////////////////
+                                 EVENTS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Emitted when the BaseEmissionsController address is set
+    /// @param newBaseEmissionsController The new BaseEmissionsController address
+    event BaseEmissionsControllerSet(address indexed newBaseEmissionsController);
 
     /*//////////////////////////////////////////////////////////////
                                  CUSTOM ERRORS
@@ -35,8 +43,23 @@ contract Trust is TrustToken, AccessControlUpgradeable {
     /// @notice Custom error for when a zero address is provided
     error Trust_ZeroAddress();
 
+    /// @notice Custom error for when the caller is not the BaseEmissionsController
+    error Trust_OnlyBaseEmissionsController();
+
     /// @notice Custom error for when the caller is not the initial admin
     error Trust_OnlyInitialAdmin();
+
+    /*//////////////////////////////////////////////////////////////
+                              MODIFIERS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Modifier to restrict access to only the BaseEmissionsController
+    modifier onlyBaseEmissionsController() {
+        if (msg.sender != baseEmissionsController) {
+            revert Trust_OnlyBaseEmissionsController();
+        }
+        _;
+    }
 
     /*//////////////////////////////////////////////////////////////
                                  CONSTRUCTOR
@@ -54,14 +77,14 @@ contract Trust is TrustToken, AccessControlUpgradeable {
     /**
      * @notice Reinitializes the Trust contract with AccessControl
      * @param _admin Admin address (multisig)
-     * @param _controller Initial minter address
+     * @param _baseEmissionsController BaseEmissionsController address
      */
-    function reinitialize(address _admin, address _controller) external reinitializer(2) {
+    function reinitialize(address _admin, address _baseEmissionsController) external reinitializer(2) {
         if (msg.sender != INITIAL_ADMIN) {
             revert Trust_OnlyInitialAdmin();
         }
 
-        if (_admin == address(0) || _controller == address(0)) {
+        if (_admin == address(0) || _baseEmissionsController == address(0)) {
             revert Trust_ZeroAddress();
         }
 
@@ -70,7 +93,10 @@ contract Trust is TrustToken, AccessControlUpgradeable {
 
         // Set up roles
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
-        _grantRole(CONTROLLER_ROLE, _controller);
+
+        baseEmissionsController = _baseEmissionsController;
+
+        emit BaseEmissionsControllerSet(_baseEmissionsController);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -92,14 +118,20 @@ contract Trust is TrustToken, AccessControlUpgradeable {
 
     /**
      * @notice Mint new TRUST tokens to an address
+     * @dev Only BaseEmissionsController contract can call this function
      * @param to Address to mint to
      * @param amount Amount to mint
      */
-    function mint(address to, uint256 amount) public override onlyRole(CONTROLLER_ROLE) {
+    function mint(address to, uint256 amount) public override onlyBaseEmissionsController {
         _mint(to, amount);
     }
 
-    function burn(address from, uint256 amount) external onlyRole(CONTROLLER_ROLE) {
-        _burn(from, amount);
+    /**
+     * @notice Burn TRUST tokens from the caller's address
+     * @dev Caller must have enough balance to burn and can only burn their own tokens
+     * @param amount Amount to burn
+     */
+    function burn(uint256 amount) external {
+        _burn(msg.sender, amount);
     }
 }

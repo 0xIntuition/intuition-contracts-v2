@@ -11,6 +11,7 @@ import {
 import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import { EntryPoint } from "@account-abstraction/core/EntryPoint.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
+import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
 
 import { AtomWallet } from "src/protocol/wallet/AtomWallet.sol";
 import { AtomWalletFactory } from "src/protocol/wallet/AtomWalletFactory.sol";
@@ -71,6 +72,9 @@ abstract contract SetupScript is Script {
     uint256 internal EXIT_FEE = 500; // 5% of assets deposited after fixed costs (Percentage Cost)
     uint256 internal PROTOCOL_FEE = 1000; // 10% of assets deposited after fixed costs (Percentage Cost)
 
+    // Timelock Config
+    uint256 internal TIMELOCK_MIN_DELAY = 60 minutes;
+
     // TrustBonding Config
     uint256 internal BONDING_START_TIMESTAMP = block.timestamp + 100;
     uint256 internal BONDING_EPOCH_LENGTH = 2 weeks;
@@ -103,6 +107,7 @@ abstract contract SetupScript is Script {
     LinearCurve public linearCurve;
     ProgressiveCurve public progressiveCurve;
     OffsetProgressiveCurve public offsetProgressiveCurve;
+    TimelockController public timelockController;
 
     address public proxyAdminOwner;
     address public multiVaultAdmin;
@@ -188,6 +193,9 @@ abstract contract SetupScript is Script {
         ENTRY_FEE = vm.envOr("ENTRY_FEE", ENTRY_FEE);
         EXIT_FEE = vm.envOr("EXIT_FEE", EXIT_FEE);
         PROTOCOL_FEE = vm.envOr("PROTOCOL_FEE", PROTOCOL_FEE);
+
+        // Timelock Config
+        TIMELOCK_MIN_DELAY = vm.envOr("TIMELOCK_MIN_DELAY", TIMELOCK_MIN_DELAY);
 
         // TrustBonding Config
         BONDING_EPOCH_LENGTH = vm.envOr("BONDING_EPOCH_LENGTH", BONDING_EPOCH_LENGTH);
