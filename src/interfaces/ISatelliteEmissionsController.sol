@@ -11,8 +11,39 @@ import { FinalityState } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
  */
 interface ISatelliteEmissionsController {
     /* =================================================== */
+    /*                       EVENTS                        */
+    /* =================================================== */
+
+    /**
+     * @notice Event emitted when the TrustBonding address is updated
+     * @param newTrustBonding The new TrustBonding address
+     */
+    event TrustBondingUpdated(address indexed newTrustBonding);
+
+    /**
+     * @notice Event emitted when the BaseEmissionsController address is updated
+     * @param newBaseEmissionsController The new BaseEmissionsController address
+     */
+    event BaseEmissionsControllerUpdated(address indexed newBaseEmissionsController);
+
+    /**
+     * @notice Event emitted when native tokens are transferred
+     * @param recipient Address that received the native tokens
+     * @param amount Amount of native tokens transferred
+     */
+    event NativeTokenTransferred(address indexed recipient, uint256 amount);
+
+    /**
+     * @notice Event emitted when unclaimed rewards are bridged back to the BaseEmissionsController
+     * @param epoch The epoch for which unclaimed rewards were bridged
+     * @param amount The amount of unclaimed rewards bridged
+     */
+    event UnclaimedRewardsBridged(uint256 indexed epoch, uint256 amount);
+
+    /* =================================================== */
     /*                       ERRORS                        */
     /* =================================================== */
+
     error SatelliteEmissionsController_InvalidAddress();
     error SatelliteEmissionsController_InvalidAmount();
     error SatelliteEmissionsController_InvalidBridgeAmount();
@@ -35,6 +66,20 @@ interface ISatelliteEmissionsController {
     /* =================================================== */
     /*                       ADMIN                         */
     /* =================================================== */
+
+    /**
+     * @notice Set the TrustBonding contract address
+     * @dev Only callable by addresses with DEFAULT_ADMIN_ROLE
+     * @param newTrustBonding The new TrustBonding contract address
+     */
+    function setTrustBonding(address newTrustBonding) external;
+
+    /**
+     * @notice Set the BaseEmissionsController contract address
+     * @dev Only callable by addresses with DEFAULT_ADMIN_ROLE
+     * @param newBaseEmissionsController The new BaseEmissionsController contract address
+     */
+    function setBaseEmissionsController(address newBaseEmissionsController) external;
 
     /**
      * @notice Set the message gas cost for cross-chain operations

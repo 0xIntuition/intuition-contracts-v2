@@ -35,6 +35,8 @@ contract AccessControlTest is BaseTest {
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
 
     /// @notice Events to test
+    event TrustTokenUpdated(address indexed newTrustToken);
+    event SatelliteEmissionsControllerUpdated(address indexed newSatelliteEmissionsController);
     event MessageGasCostUpdated(uint256 newMessageGasCost);
     event FinalityStateUpdated(FinalityState newFinalityState);
     event RecipientDomainUpdated(uint32 newRecipientDomain);
@@ -87,6 +89,116 @@ contract AccessControlTest is BaseTest {
         );
 
         vm.label(address(baseEmissionsController), "BaseEmissionsController");
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                    DEFAULT_ADMIN_ROLE TESTS (setTrustToken)
+    //////////////////////////////////////////////////////////////*/
+
+    function test_setTrustToken_shouldSucceedWithAdminRole() external {
+        address newTrustToken = address(0x456);
+        address originalTrustToken = baseEmissionsController.getTrustToken();
+
+        vm.expectEmit(true, false, false, true);
+        emit TrustTokenUpdated(newTrustToken);
+
+        resetPrank(users.admin);
+        baseEmissionsController.setTrustToken(newTrustToken);
+
+        assertEq(baseEmissionsController.getTrustToken(), newTrustToken, "Trust token should be updated");
+        assertNotEq(originalTrustToken, newTrustToken, "Should be different from original");
+    }
+
+    function test_setTrustToken_shouldRevertWithUnauthorizedUser() external {
+        address newTrustToken = address(0x456);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, unauthorizedUser, DEFAULT_ADMIN_ROLE
+            )
+        );
+
+        resetPrank(unauthorizedUser);
+        baseEmissionsController.setTrustToken(newTrustToken);
+    }
+
+    function test_setTrustToken_shouldRevertWithControllerRole() external {
+        address newTrustToken = address(0x456);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, users.controller, DEFAULT_ADMIN_ROLE
+            )
+        );
+
+        resetPrank(users.controller);
+        baseEmissionsController.setTrustToken(newTrustToken);
+    }
+
+    function test_setTrustToken_shouldRevertWithZeroAddress() external {
+        address zeroAddress = address(0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IBaseEmissionsController.BaseEmissionsController_InvalidAddress.selector)
+        );
+
+        resetPrank(users.admin);
+        baseEmissionsController.setTrustToken(zeroAddress);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                    DEFAULT_ADMIN_ROLE TESTS (setSatelliteEmissionsController)
+    //////////////////////////////////////////////////////////////*/
+
+    function test_setSatelliteEmissionsController_shouldSucceedWithAdminRole() external {
+        address newSatellite = address(0x789);
+        address originalSatellite = baseEmissionsController.getSatelliteEmissionsController();
+
+        vm.expectEmit(true, false, false, true);
+        emit SatelliteEmissionsControllerUpdated(newSatellite);
+
+        resetPrank(users.admin);
+        baseEmissionsController.setSatelliteEmissionsController(newSatellite);
+
+        assertEq(baseEmissionsController.getSatelliteEmissionsController(), newSatellite, "Satellite should be updated");
+        assertNotEq(originalSatellite, newSatellite, "Should be different from original");
+    }
+
+    function test_setSatelliteEmissionsController_shouldRevertWithUnauthorizedUser() external {
+        address newSatellite = address(0x789);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, unauthorizedUser, DEFAULT_ADMIN_ROLE
+            )
+        );
+
+        resetPrank(unauthorizedUser);
+        baseEmissionsController.setSatelliteEmissionsController(newSatellite);
+    }
+
+    function test_setSatelliteEmissionsController_shouldRevertWithControllerRole() external {
+        address newSatellite = address(0x789);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, users.controller, DEFAULT_ADMIN_ROLE
+            )
+        );
+
+        resetPrank(users.controller);
+        baseEmissionsController.setSatelliteEmissionsController(newSatellite);
+    }
+
+    function test_setSatelliteEmissionsController_shouldRevertWithZeroAddress() external {
+        address zeroAddress = address(0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IBaseEmissionsController.BaseEmissionsController_InvalidAddress.selector)
+        );
+
+        resetPrank(users.admin);
+        baseEmissionsController.setSatelliteEmissionsController(zeroAddress);
     }
 
     /*//////////////////////////////////////////////////////////////

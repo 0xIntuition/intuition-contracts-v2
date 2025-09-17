@@ -17,6 +17,8 @@ contract AccessControlTest is BaseTest {
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
 
     /// @notice Events to test
+    event TrustBondingUpdated(address indexed newTrustBonding);
+    event BaseEmissionsControllerUpdated(address indexed newBaseEmissionsController);
     event MessageGasCostUpdated(uint256 newMessageGasCost);
     event FinalityStateUpdated(FinalityState newFinalityState);
     event RecipientDomainUpdated(uint32 newRecipientDomain);
@@ -25,6 +27,92 @@ contract AccessControlTest is BaseTest {
     function setUp() public override {
         super.setUp();
         vm.deal(unauthorizedUser, 1 ether);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                    DEFAULT_ADMIN_ROLE TESTS (setTrustBonding)
+    //////////////////////////////////////////////////////////////*/
+
+    function test_setTrustBonding_shouldSucceedWithAdminRole() external {
+        address newTrustBonding = address(0x123456);
+
+        vm.expectEmit(true, true, true, true);
+        emit TrustBondingUpdated(newTrustBonding);
+        resetPrank(users.admin);
+        protocol.satelliteEmissionsController.setTrustBonding(newTrustBonding);
+
+        assertEq(
+            protocol.satelliteEmissionsController.getTrustBonding(), newTrustBonding, "TrustBonding should be updated"
+        );
+    }
+
+    function test_setTrustBonding_shouldRevertWithUnauthorizedUser() external {
+        address newTrustBonding = address(0x123456);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, unauthorizedUser, DEFAULT_ADMIN_ROLE
+            )
+        );
+
+        resetPrank(unauthorizedUser);
+        protocol.satelliteEmissionsController.setTrustBonding(newTrustBonding);
+    }
+
+    function test_setTrustBonding_shouldRevertWithZeroAddress() external {
+        address zeroAddress = address(0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(ISatelliteEmissionsController.SatelliteEmissionsController_InvalidAddress.selector)
+        );
+
+        resetPrank(users.admin);
+        protocol.satelliteEmissionsController.setTrustBonding(zeroAddress);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                    DEFAULT_ADMIN_ROLE TESTS (setBaseEmissionsController)
+    //////////////////////////////////////////////////////////////*/
+
+    function test_setBaseEmissionsController_shouldSucceedWithAdminRole() external {
+        address newBaseEmissionsController = address(0x654321);
+
+        vm.expectEmit(true, true, true, true);
+        emit BaseEmissionsControllerUpdated(newBaseEmissionsController);
+        vm.startPrank(users.admin);
+        protocol.satelliteEmissionsController.setBaseEmissionsController(newBaseEmissionsController);
+
+        assertEq(
+            protocol.satelliteEmissionsController.getBaseEmissionsController(),
+            newBaseEmissionsController,
+            "BaseEmissionsController should be updated"
+        );
+
+        vm.stopPrank();
+    }
+
+    function test_setBaseEmissionsController_shouldRevertWithUnauthorizedUser() external {
+        address newBaseEmissionsController = address(0x654321);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, unauthorizedUser, DEFAULT_ADMIN_ROLE
+            )
+        );
+
+        resetPrank(unauthorizedUser);
+        protocol.satelliteEmissionsController.setBaseEmissionsController(newBaseEmissionsController);
+    }
+
+    function test_setBaseEmissionsController_shouldRevertWithZeroAddress() external {
+        address zeroAddress = address(0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(ISatelliteEmissionsController.SatelliteEmissionsController_InvalidAddress.selector)
+        );
+
+        resetPrank(users.admin);
+        protocol.satelliteEmissionsController.setBaseEmissionsController(zeroAddress);
     }
 
     /*//////////////////////////////////////////////////////////////

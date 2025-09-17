@@ -89,6 +89,9 @@ contract SatelliteEmissionsController is
 
         _TRUST_BONDING = trustBonding;
         _BASE_EMISSIONS_CONTROLLER = baseEmissionsController;
+
+        emit TrustBondingUpdated(trustBonding);
+        emit BaseEmissionsControllerUpdated(baseEmissionsController);
     }
 
     /* =================================================== */
@@ -103,6 +106,18 @@ contract SatelliteEmissionsController is
     receive() external payable { }
 
     /* =================================================== */
+    /*                      GETTERS                        */
+    /* =================================================== */
+
+    function getTrustBonding() external view returns (address) {
+        return _TRUST_BONDING;
+    }
+
+    function getBaseEmissionsController() external view returns (address) {
+        return _BASE_EMISSIONS_CONTROLLER;
+    }
+
+    /* =================================================== */
     /*                    CONTROLLER                       */
     /* =================================================== */
 
@@ -112,11 +127,31 @@ contract SatelliteEmissionsController is
         if (amount == 0) revert SatelliteEmissionsController_InvalidAmount();
         if (address(this).balance < amount) revert SatelliteEmissionsController_InsufficientBalance();
         Address.sendValue(payable(recipient), amount);
+
+        emit NativeTokenTransferred(recipient, amount);
     }
 
     /* =================================================== */
     /*                       ADMIN                         */
     /* =================================================== */
+
+    /// @inheritdoc ISatelliteEmissionsController
+    function setTrustBonding(address newTrustBonding) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newTrustBonding == address(0)) {
+            revert SatelliteEmissionsController_InvalidAddress();
+        }
+        _TRUST_BONDING = newTrustBonding;
+        emit TrustBondingUpdated(newTrustBonding);
+    }
+
+    /// @inheritdoc ISatelliteEmissionsController
+    function setBaseEmissionsController(address newBaseEmissionsController) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newBaseEmissionsController == address(0)) {
+            revert SatelliteEmissionsController_InvalidAddress();
+        }
+        _BASE_EMISSIONS_CONTROLLER = newBaseEmissionsController;
+        emit BaseEmissionsControllerUpdated(newBaseEmissionsController);
+    }
 
     /// @inheritdoc ISatelliteEmissionsController
     function setMessageGasCost(uint256 newGasCost) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -174,5 +209,7 @@ contract SatelliteEmissionsController is
         if (msg.value > gasLimit) {
             Address.sendValue(payable(msg.sender), msg.value - gasLimit);
         }
+
+        emit UnclaimedRewardsBridged(epoch, amount);
     }
 }

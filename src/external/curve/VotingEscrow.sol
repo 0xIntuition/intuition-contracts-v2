@@ -63,6 +63,8 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         INCREASE_UNLOCK_TIME
     }
 
+    event TokenSet(address token);
+    event MinTimeSet(uint256 min_time);
     event Deposit(
         address indexed provider, uint256 value, uint256 indexed locktime, DepositType deposit_type, uint256 ts
     );
@@ -116,6 +118,9 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         controller = _admin;
         transfersEnabled = true;
         MINTIME = min_time;
+
+        emit TokenSet(token_addr);
+        emit MinTimeSet(min_time);
     }
 
     modifier onlyUserOrWhitelist() {

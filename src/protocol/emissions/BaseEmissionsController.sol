@@ -97,6 +97,9 @@ contract BaseEmissionsController is
         // Set the Trust token contract address
         _TRUST_TOKEN = token;
         _SATELLITE_EMISSIONS_CONTROLLER = satellite;
+
+        emit TrustTokenUpdated(token);
+        emit SatelliteEmissionsControllerUpdated(satellite);
     }
 
     /* =================================================== */
@@ -173,6 +176,24 @@ contract BaseEmissionsController is
     /* =================================================== */
 
     /// @inheritdoc IBaseEmissionsController
+    function setTrustToken(address newToken) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newToken == address(0)) {
+            revert BaseEmissionsController_InvalidAddress();
+        }
+        _TRUST_TOKEN = newToken;
+        emit TrustTokenUpdated(newToken);
+    }
+
+    /// @inheritdoc IBaseEmissionsController
+    function setSatelliteEmissionsController(address newSatellite) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newSatellite == address(0)) {
+            revert BaseEmissionsController_InvalidAddress();
+        }
+        _SATELLITE_EMISSIONS_CONTROLLER = newSatellite;
+        emit SatelliteEmissionsControllerUpdated(newSatellite);
+    }
+
+    /// @inheritdoc IBaseEmissionsController
     function setMessageGasCost(uint256 newGasCost) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setMessageGasCost(newGasCost);
     }
@@ -198,6 +219,8 @@ contract BaseEmissionsController is
             revert BaseEmissionsController_InsufficientBurnableBalance();
         }
         ITrust(_TRUST_TOKEN).burn(address(this), amount);
+
+        emit TrustBurned(address(this), amount);
     }
 
     /* =================================================== */

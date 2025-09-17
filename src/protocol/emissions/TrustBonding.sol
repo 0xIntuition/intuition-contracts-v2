@@ -160,6 +160,11 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         satelliteEmissionsController = _satelliteEmissionsController;
         systemUtilizationLowerBound = _systemUtilizationLowerBound;
         personalUtilizationLowerBound = _personalUtilizationLowerBound;
+
+        emit MultiVaultSet(_multiVault);
+        emit SatelliteEmissionsControllerSet(_satelliteEmissionsController);
+        emit SystemUtilizationLowerBoundUpdated(_systemUtilizationLowerBound);
+        emit PersonalUtilizationLowerBoundUpdated(_personalUtilizationLowerBound);
     }
 
     /*//////////////////////////////////////////////////////////////
