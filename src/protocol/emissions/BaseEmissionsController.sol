@@ -163,7 +163,7 @@ contract BaseEmissionsController is
             Address.sendValue(payable(msg.sender), msg.value - gasLimit);
         }
 
-        emit TrustMintedAndBridged(address(this), amount, epoch);
+        emit TrustMintedAndBridged(_SATELLITE_EMISSIONS_CONTROLLER, amount, epoch);
     }
 
     /* =================================================== */

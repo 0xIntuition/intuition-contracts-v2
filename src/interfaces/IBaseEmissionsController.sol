@@ -15,9 +15,10 @@ interface IBaseEmissionsController {
     /* =================================================== */
 
     /**
-     * @notice Event emitted when Trust tokens are minted
+     * @notice Event emitted when Trust tokens are minted and bridged
      * @param to Address that received the minted Trust tokens
      * @param amount Amount of Trust tokens minted
+     * @param epoch Epoch for which the tokens were minted
      */
     event TrustMintedAndBridged(address indexed to, uint256 amount, uint256 epoch);
 
