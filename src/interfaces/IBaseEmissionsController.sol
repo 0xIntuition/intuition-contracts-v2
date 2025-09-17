@@ -25,6 +25,7 @@ interface IBaseEmissionsController {
     /*                       ERRORS                        */
     /* =================================================== */
 
+    error BaseEmissionsController_InvalidAddress();
     error BaseEmissionsController_InvalidEpoch();
     error BaseEmissionsController_InsufficientGasPayment();
     error BaseEmissionsController_EpochMintingLimitExceeded();

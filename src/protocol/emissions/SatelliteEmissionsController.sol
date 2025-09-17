@@ -65,6 +65,10 @@ contract SatelliteEmissionsController is
         external
         initializer
     {
+        if (admin == address(0) || trustBonding == address(0) || baseEmissionsController == address(0)) {
+            revert SatelliteEmissionsController_InvalidAddress();
+        }
+
         __AccessControl_init();
         __ReentrancyGuard_init();
 
