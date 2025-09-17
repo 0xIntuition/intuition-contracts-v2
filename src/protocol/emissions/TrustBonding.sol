@@ -213,7 +213,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         if (currentEpochLocal == 0) {
             return 0;
         }
-        uint256 prevEpoch = currentEpochLocal == 1 ? currentEpochLocal - 1 : 0;
+        uint256 prevEpoch = currentEpochLocal > 1 ? currentEpochLocal - 1 : 0;
         return _userEligibleRewardsForEpoch(account, prevEpoch) * _getPersonalUtilizationRatio(account, prevEpoch)
             / BASIS_POINTS_DIVISOR;
     }
