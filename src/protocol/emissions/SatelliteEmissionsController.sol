@@ -23,8 +23,8 @@ contract SatelliteEmissionsController is
     ISatelliteEmissionsController,
     AccessControlUpgradeable,
     ReentrancyGuardUpgradeable,
-    MetaERC20Dispatcher,
-    CoreEmissionsController
+    CoreEmissionsController,
+    MetaERC20Dispatcher
 {
     using SafeERC20 for IERC20;
 
@@ -65,6 +65,7 @@ contract SatelliteEmissionsController is
         external
         initializer
     {
+        // Initialize the AccessControl and ReentrancyGuard contracts
         __AccessControl_init();
         __ReentrancyGuard_init();
 
