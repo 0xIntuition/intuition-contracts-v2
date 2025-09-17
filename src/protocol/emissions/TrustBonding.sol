@@ -406,7 +406,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         return _epochAtTimestamp(block.timestamp);
     }
 
-    function _epochsPerYear() public view returns (uint256) {
+    function _epochsPerYear() internal view returns (uint256) {
         return YEAR / ICoreEmissionsController(satelliteEmissionsController).getEpochLength();
     }
 
