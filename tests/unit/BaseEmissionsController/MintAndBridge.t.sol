@@ -69,7 +69,6 @@ contract MintAndBridgeTest is BaseTest {
         MetaERC20DispatchInit memory metaERC20DispatchInit = MetaERC20DispatchInit({
             hubOrSpoke: address(metaERC20HubOrSpoke), // Mock meta spoke
             recipientDomain: TEST_RECIPIENT_DOMAIN,
-            recipientAddress: satelliteController,
             gasLimit: TEST_GAS_LIMIT,
             finalityState: FinalityState.INSTANT
         });

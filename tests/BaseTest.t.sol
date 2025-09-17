@@ -270,7 +270,6 @@ abstract contract BaseTest is Modifiers, Test {
             MetaERC20DispatchInit({
                 hubOrSpoke: address(metaERC20HubOrSpoke),
                 recipientDomain: 1,
-                recipientAddress: address(1),
                 gasLimit: 125_000,
                 finalityState: FinalityState.INSTANT
             }),

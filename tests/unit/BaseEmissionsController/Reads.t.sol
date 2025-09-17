@@ -46,7 +46,6 @@ contract BaseEmissionsControllerGettersTest is BaseTest {
         MetaERC20DispatchInit memory metaERC20DispatchInit = MetaERC20DispatchInit({
             hubOrSpoke: address(1),
             recipientDomain: TEST_RECIPIENT_DOMAIN,
-            recipientAddress: address(1),
             gasLimit: TEST_GAS_LIMIT,
             finalityState: FinalityState.INSTANT
         });
