@@ -16,7 +16,7 @@
 pragma solidity ^0.8.27;
 
 contract WrappedTrust {
-    string public name = "Wrapped Trust";
+    string public name = "Wrapped TRUST";
     string public symbol = "WTRUST";
     uint8 public decimals = 18;
 

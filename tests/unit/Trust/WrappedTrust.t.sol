@@ -49,8 +49,8 @@ contract WrappedTrustTest is Test {
     /*                     METADATA                        */
     /* =================================================== */
 
-    function test_metadata_Getters() public {
-        assertEq(wtr.name(), "Wrapped Trust");
+    function test_metadata_Getters() public view {
+        assertEq(wtr.name(), "Wrapped TRUST");
         assertEq(wtr.symbol(), "WTRUST");
         assertEq(wtr.decimals(), 18);
     }
