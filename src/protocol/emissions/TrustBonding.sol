@@ -491,10 +491,8 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         // Fetch the target utilization for the previous epoch
         uint256 userUtilizationTarget = userClaimedRewardsForEpoch[_account][_epoch - 1];
 
-        // If there was no target utilization in the previous epoch, any increase in utilization is rewarded with the
-        // max ratio.
-        // Similarly, if the userUtilizationDelta is greater than the target, we also return the max ratio.
-        if (userUtilizationTarget == 0 || userUtilizationDelta >= userUtilizationTarget) {
+        // If the utilizationDelta is greater than the target, we return the max ratio
+        if (userUtilizationDelta >= userUtilizationTarget) {
             return BASIS_POINTS_DIVISOR;
         }
 
@@ -533,10 +531,8 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         // Fetch the target utilization for the previous epoch
         uint256 utilizationTarget = totalClaimedRewardsForEpoch[_epoch - 1];
 
-        // If there was no target utilization in the previous epoch, any increase in utilization is rewarded with the
-        // max ratio.
-        // Similarly, if the utilizationDelta is greater than the target, we also return the max ratio.
-        if (utilizationTarget == 0 || utilizationDelta >= utilizationTarget) {
+        // If the utilizationDelta is greater than the target, we return the max ratio
+        if (utilizationDelta >= utilizationTarget) {
             return BASIS_POINTS_DIVISOR;
         }
 
