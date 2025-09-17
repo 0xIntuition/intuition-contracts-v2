@@ -66,8 +66,6 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
                                  STATE
     //////////////////////////////////////////////////////////////*/
 
-    uint256 public maxAnnualEmission;
-
     /// @notice Mapping of epochs to the total claimed rewards for that epoch among all users
     mapping(uint256 epoch => uint256 totalClaimedRewards) public totalClaimedRewardsForEpoch;
 
@@ -87,9 +85,6 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     /// @notice The personal utilization lower bound in basis points (represents the minimum possible personal
     /// utilization ratio)
     uint256 public personalUtilizationLowerBound;
-
-    /// @notice The maximum claimable protocol fees for a specific epoch
-    mapping(uint256 epoch => uint256 totalClaimableProtocolFees) public maxClaimableProtocolFeesForEpoch;
 
     /// @dev Gap for upgrade safety
     uint256[50] private __gap;
