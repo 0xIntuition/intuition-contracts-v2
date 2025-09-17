@@ -92,6 +92,25 @@ contract SatelliteEmissionsController is
     }
 
     /* =================================================== */
+    /*                      GETTERS                        */
+    /* =================================================== */
+
+    /// @inheritdoc ISatelliteEmissionsController
+    function getTrustBonding() external view returns (address) {
+        return _TRUST_BONDING;
+    }
+
+    /// @inheritdoc ISatelliteEmissionsController
+    function getBaseEmissionsController() external view returns (address) {
+        return _BASE_EMISSIONS_CONTROLLER;
+    }
+
+    /// @inheritdoc ISatelliteEmissionsController
+    function getBridgedRewards(uint256 epoch) external view returns (uint256) {
+        return _bridgedRewards[epoch];
+    }
+
+    /* =================================================== */
     /*                      RECEIVE                        */
     /* =================================================== */
 

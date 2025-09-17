@@ -21,6 +21,29 @@ interface ISatelliteEmissionsController {
     error SatelliteEmissionsController_InsufficientGasPayment();
 
     /* =================================================== */
+    /*                      GETTERS                        */
+    /* =================================================== */
+
+    /**
+     * @notice Get the TrustBonding contract address
+     * @return The address of the TrustBonding contract
+     */
+    function getTrustBonding() external view returns (address);
+
+    /**
+     * @notice Get the BaseEmissionsController contract address
+     * @return The address of the BaseEmissionsController contract
+     */
+    function getBaseEmissionsController() external view returns (address);
+
+    /**
+     * @notice Get the amount of rewards bridged for a specific epoch
+     * @param epoch The epoch to query
+     * @return The amount of rewards bridged for the given epoch
+     */
+    function getBridgedRewards(uint256 epoch) external view returns (uint256);
+
+    /* =================================================== */
     /*                    CONTROLLER                       */
     /* =================================================== */
 

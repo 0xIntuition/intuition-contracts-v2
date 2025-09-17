@@ -46,6 +46,7 @@ contract BaseEmissionsController is
     /// @notice Total amount of Trust tokens minted
     uint256 internal _totalMintedAmount;
 
+    /// @notice Mapping of minted amounts for each epoch
     mapping(uint256 epoch => uint256 amount) internal _epochToMintedAmount;
 
     /// @dev Gap for upgrade safety
