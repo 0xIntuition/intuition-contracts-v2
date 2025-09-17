@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.29;
 
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import { ISatelliteEmissionsController } from "src/interfaces/ISatelliteEmissionsController.sol";
 import { ITrustBonding } from "src/interfaces/ITrustBonding.sol";
@@ -26,8 +24,6 @@ contract SatelliteEmissionsController is
     MetaERC20Dispatcher,
     CoreEmissionsController
 {
-    using SafeERC20 for IERC20;
-
     /* =================================================== */
     /*                     CONSTANTS                       */
     /* =================================================== */
