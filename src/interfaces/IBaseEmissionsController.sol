@@ -15,6 +15,18 @@ interface IBaseEmissionsController {
     /* =================================================== */
 
     /**
+     * @notice Event emitted when the Trust token address is updated
+     * @param newToken The new Trust token address
+     */
+    event TrustTokenUpdated(address indexed newToken);
+
+    /**
+     * @notice Event emitted when the Satellite Emissions Controller address is updated
+     * @param newSatellite The new Satellite Emissions Controller address
+     */
+    event SatelliteEmissionsControllerUpdated(address indexed newSatellite);
+
+    /**
      * @notice Event emitted when Trust tokens are minted
      * @param to Address that received the minted Trust tokens
      * @param amount Amount of Trust tokens minted
@@ -25,6 +37,7 @@ interface IBaseEmissionsController {
     /*                       ERRORS                        */
     /* =================================================== */
 
+    error BaseEmissionsController_IvalidAddress();
     error BaseEmissionsController_InvalidEpoch();
     error BaseEmissionsController_InsufficientGasPayment();
     error BaseEmissionsController_EpochMintingLimitExceeded();
@@ -73,6 +86,20 @@ interface IBaseEmissionsController {
     /* =================================================== */
     /*                       ADMIN                         */
     /* =================================================== */
+
+    /**
+     * @notice Set the Trust token contract address
+     * @dev Only callable by addresses with DEFAULT_ADMIN_ROLE
+     * @param newToken The new Trust token contract address
+     */
+    function setTrustToken(address newToken) external;
+
+    /**
+     * @notice Set the Satellite Emissions Controller contract address
+     * @dev Only callable by addresses with DEFAULT_ADMIN_ROLE
+     * @param newSatellite The new Satellite Emissions Controller contract address
+     */
+    function setSatelliteEmissionsController(address newSatellite) external;
 
     /**
      * @notice Set the message gas cost for cross-chain operations

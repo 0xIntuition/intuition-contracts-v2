@@ -18,6 +18,7 @@ import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.s
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { MultiVaultMigrationMode } from "src/protocol/MultiVaultMigrationMode.sol";
 import { Trust } from "src/Trust.sol";
+import { TrustToken } from "src/legacy/TrustToken.sol";
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
@@ -226,12 +227,14 @@ abstract contract SetupScript is Script {
         Trust trustImpl = new Trust();
         info("Trust Implementation", address(trustImpl));
 
-        // Deploy Trust proxy
-        TransparentUpgradeableProxy trustProxy = new TransparentUpgradeableProxy(address(trustImpl), ADMIN, "");
+        // Deploy and initialize Trust tokenproxy
+        TransparentUpgradeableProxy trustProxy =
+            new TransparentUpgradeableProxy(address(trustImpl), ADMIN, abi.encodeWithSelector(TrustToken.init.selector));
         Trust trustToken = Trust(address(trustProxy));
         info("Trust Proxy", address(trustProxy));
 
-        // Initialize Trust contract
+        // Renitialize Trust token contract (in the actual production setting, this will be handled atomically by
+        // calling `ProxyAdmin.upgradeAndCall(proxy, impl, reinitData))`
         trustToken.reinitialize(
             ADMIN, // admin
             ADMIN // initial controller

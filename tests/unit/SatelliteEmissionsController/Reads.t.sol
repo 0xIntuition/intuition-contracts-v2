@@ -66,14 +66,15 @@ contract SatelliteEmissionsControllerGettersTest is BaseTest {
         });
 
         satelliteEmissionsController.initialize(
-            users.admin,
-            address(protocol.trustBonding),
-            TEST_BASE_EMISSIONS_CONTROLLER,
-            metaERC20DispatchInit,
-            coreEmissionsInit
+            users.admin, TEST_BASE_EMISSIONS_CONTROLLER, metaERC20DispatchInit, coreEmissionsInit
         );
 
         vm.label(address(satelliteEmissionsController), "SatelliteEmissionsController");
+
+        resetPrank(users.admin);
+
+        // Set TrustBonding contract address
+        satelliteEmissionsController.setTrustBonding(address(protocol.trustBonding));
     }
 
     /* =================================================== */

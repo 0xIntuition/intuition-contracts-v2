@@ -18,9 +18,6 @@ contract Trust is TrustToken, AccessControlUpgradeable {
     /// @notice Role for minting tokens
     bytes32 public constant CONTROLLER_ROLE = keccak256("CONTROLLER_ROLE");
 
-    /// @notice Address of the initial admin, which is allowed to perform the contract reinitialization
-    address public constant INITIAL_ADMIN = 0xa28d4AAcA48bE54824dA53a19b05121DE71Ef480;
-
     /*//////////////////////////////////////////////////////////////
                                  STATE
     //////////////////////////////////////////////////////////////*/
@@ -57,10 +54,6 @@ contract Trust is TrustToken, AccessControlUpgradeable {
      * @param _controller Initial minter address
      */
     function reinitialize(address _admin, address _controller) external reinitializer(2) {
-        if (msg.sender != INITIAL_ADMIN) {
-            revert Trust_OnlyInitialAdmin();
-        }
-
         if (_admin == address(0) || _controller == address(0)) {
             revert Trust_ZeroAddress();
         }

@@ -11,6 +11,22 @@ import { FinalityState } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
  */
 interface ISatelliteEmissionsController {
     /* =================================================== */
+    /*                       EVENTS                        */
+    /* =================================================== */
+
+    /**
+     * @notice Event emitted when the TrustBonding address is updated
+     * @param newTrustBonding The new TrustBonding address
+     */
+    event TrustBondingUpdated(address indexed newTrustBonding);
+
+    /**
+     * @notice Event emitted when the Base Emissions Controller address is updated
+     * @param newBaseEmissionsController The new Base Emissions Controller address
+     */
+    event BaseEmissionsControllerUpdated(address indexed newBaseEmissionsController);
+
+    /* =================================================== */
     /*                       ERRORS                        */
     /* =================================================== */
     error SatelliteEmissionsController_InvalidAddress();
@@ -35,6 +51,20 @@ interface ISatelliteEmissionsController {
     /* =================================================== */
     /*                       ADMIN                         */
     /* =================================================== */
+
+    /**
+     * @notice Set the TrustBonding contract address
+     * @dev Only callable by addresses with DEFAULT_ADMIN_ROLE
+     * @param newTrustBonding The new TrustBonding address
+     */
+    function setTrustBonding(address newTrustBonding) external;
+
+    /**
+     * @notice Set the BaseEmissionsController contract address
+     * @dev Only callable by addresses with DEFAULT_ADMIN_ROLE
+     * @param newBaseEmissionsController The new BaseEmissionsController address
+     */
+    function setBaseEmissionsController(address newBaseEmissionsController) external;
 
     /**
      * @notice Set the message gas cost for cross-chain operations

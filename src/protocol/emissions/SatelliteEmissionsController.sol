@@ -57,7 +57,6 @@ contract SatelliteEmissionsController is
 
     function initialize(
         address admin,
-        address trustBonding,
         address baseEmissionsController,
         MetaERC20DispatchInit memory metaERC20DispatchInit,
         CoreEmissionsControllerInit memory checkpointInit
@@ -85,9 +84,8 @@ contract SatelliteEmissionsController is
 
         // Initialize access control
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
-        _grantRole(CONTROLLER_ROLE, trustBonding);
 
-        _TRUST_BONDING = trustBonding;
+        // Set the BaseEmissionsController contract address
         _BASE_EMISSIONS_CONTROLLER = baseEmissionsController;
     }
 
@@ -117,6 +115,33 @@ contract SatelliteEmissionsController is
     /* =================================================== */
     /*                       ADMIN                         */
     /* =================================================== */
+
+    /// @inheritdoc ISatelliteEmissionsController
+    function setTrustBonding(address newTrustBonding) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newTrustBonding == address(0)) {
+            revert SatelliteEmissionsController_InvalidAddress();
+        }
+
+        // Set the new TrustBonding contract address
+        _TRUST_BONDING = newTrustBonding;
+
+        // Grant the CONTROLLER_ROLE to the new TrustBonding contract
+        _grantRole(CONTROLLER_ROLE, newTrustBonding);
+
+        emit TrustBondingUpdated(newTrustBonding);
+    }
+
+    /// @inheritdoc ISatelliteEmissionsController
+    function setBaseEmissionsController(address newBaseEmissionsController) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newBaseEmissionsController == address(0)) {
+            revert SatelliteEmissionsController_InvalidAddress();
+        }
+
+        // Set the new BaseEmissionsController contract address
+        _BASE_EMISSIONS_CONTROLLER = newBaseEmissionsController;
+
+        emit BaseEmissionsControllerUpdated(newBaseEmissionsController);
+    }
 
     /// @inheritdoc ISatelliteEmissionsController
     function setMessageGasCost(uint256 newGasCost) external onlyRole(DEFAULT_ADMIN_ROLE) {
