@@ -83,12 +83,7 @@ contract MintAndBridgeTest is BaseTest {
         });
 
         baseEmissionsController.initialize(
-            users.admin,
-            users.controller,
-            address(protocol.trust),
-            satelliteController,
-            metaERC20DispatchInit,
-            coreEmissionsInit
+            users.admin, users.controller, address(protocol.trust), metaERC20DispatchInit, coreEmissionsInit
         );
 
         protocol.trust.grantRole(protocol.trust.CONTROLLER_ROLE(), address(baseEmissionsController));

@@ -13,6 +13,7 @@ import { Trust } from "src/Trust.sol";
 import { TestTrust } from "tests/mocks/TestTrust.sol";
 import { WrappedTrust } from "src/WrappedTrust.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
+import { MultiVaultMigrationMode } from "src/protocol/MultiVaultMigrationMode.sol";
 import { AtomWalletFactory } from "src/protocol/wallet/AtomWalletFactory.sol";
 import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
@@ -54,20 +55,27 @@ contract IntuitionDeployAndSetup is SetupScript {
 
     uint32 internal BASE_METALAYER_RECIPIENT_DOMAIN = 8453;
 
-    address public MULTI_VAULT_MIGRATION_MODE;
     address public BASE_EMISSIONS_CONTROLLER;
+
+    GeneralConfig internal generalConfig;
+    AtomConfig internal atomConfig;
+    TripleConfig internal tripleConfig;
+    WalletConfig internal walletConfig;
+    VaultFees internal vaultFees;
+    BondingCurveConfig internal bondingCurveConfig;
 
     function setUp() public override {
         super.setUp();
 
         if (block.chainid == vm.envUint("ANVIL_CHAIN_ID")) {
-            MULTI_VAULT_MIGRATION_MODE = vm.envAddress("ANVIL_MULTI_VAULT_MIGRATION_MODE");
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("ANVIL_BASE_EMISSIONS_CONTROLLER");
             MIGRATOR = vm.envAddress("ANVIL_MULTI_VAULT_ROLE_MIGRATOR");
         } else if (block.chainid == vm.envUint("INTUITION_SEPOLIA_CHAIN_ID")) {
-            MULTI_VAULT_MIGRATION_MODE = vm.envAddress("INTUITION_SEPOLIA_MULTI_VAULT_MIGRATION_MODE");
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("INTUITION_SEPOLIA_BASE_EMISSIONS_CONTROLLER");
             MIGRATOR = vm.envAddress("INTUITION_SEPOLIA_MULTI_VAULT_ROLE_MIGRATOR");
+        } else if (block.chainid == vm.envUint("INTUITION_MAINNET_CHAIN_ID")) {
+            BASE_EMISSIONS_CONTROLLER = vm.envAddress("BASE_MAINNET_BASE_EMISSIONS_CONTROLLER");
+            MIGRATOR = vm.envAddress("INTUITION_MAINNET_MULTI_VAULT_ROLE_MIGRATOR");
         } else {
             revert("Unsupported chain for broadcasting");
         }
@@ -102,26 +110,40 @@ contract IntuitionDeployAndSetup is SetupScript {
     }
 
     function _deployMultiVaultSystem() internal {
-        if (MULTI_VAULT_MIGRATION_MODE == address(0)) {
-            // Deploy new MultiVault implementation and proxy
-            MultiVault multiVaultImpl = new MultiVault();
-            info("MultiVault Implementation", address(multiVaultImpl));
+        // Prepare MultiVault init data
+        _prepareMultiVaultInitData();
 
-            TransparentUpgradeableProxy multiVaultProxy =
-                new TransparentUpgradeableProxy(address(multiVaultImpl), ADMIN, "");
-            multiVault = MultiVault(address(multiVaultProxy));
-        } else {
-            // Use existing MultiVaultMigrationMode proxy as MultiVault
-            multiVault = MultiVault(address(MULTI_VAULT_MIGRATION_MODE));
-            info("MultiVault Proxy", address(multiVault));
-        }
+        bytes memory multiVaultInitData = abi.encodeWithSelector(
+            MultiVault.initialize.selector,
+            generalConfig,
+            atomConfig,
+            tripleConfig,
+            walletConfig,
+            vaultFees,
+            bondingCurveConfig
+        );
+
+        // Deploy new MultiVault implementation and proxy
+        MultiVaultMigrationMode multiVaultImpl = new MultiVaultMigrationMode();
+        info("MultiVaultMigrationMode Implementation", address(multiVaultImpl));
+
+        TransparentUpgradeableProxy multiVaultProxy =
+            new TransparentUpgradeableProxy(address(multiVaultImpl), ADMIN, multiVaultInitData);
+        multiVault = MultiVault(address(multiVaultProxy));
+
+        // Grant MIGRATOR_ROLE to the migrator address
+        IAccessControl(address(multiVault)).grantRole(MIGRATOR_ROLE, MIGRATOR);
+        console2.log("MIGRATOR_ROLE granted to:", MIGRATOR);
 
         // Deploy AtomWalletFactory implementation and proxy
         AtomWalletFactory atomWalletFactoryImpl = new AtomWalletFactory();
         info("AtomWalletFactory Implementation", address(atomWalletFactoryImpl));
 
-        TransparentUpgradeableProxy atomWalletFactoryProxy =
-            new TransparentUpgradeableProxy(address(atomWalletFactoryImpl), ADMIN, "");
+        TransparentUpgradeableProxy atomWalletFactoryProxy = new TransparentUpgradeableProxy(
+            address(atomWalletFactoryImpl),
+            ADMIN,
+            abi.encodeWithSelector(AtomWalletFactory.initialize.selector, address(multiVault)) // encoded initData
+        );
         atomWalletFactory = AtomWalletFactory(address(atomWalletFactoryProxy));
         info("AtomWalletFactory Proxy", address(atomWalletFactoryProxy));
 
@@ -129,8 +151,33 @@ contract IntuitionDeployAndSetup is SetupScript {
         SatelliteEmissionsController satelliteEmissionsControllerImpl = new SatelliteEmissionsController();
         info("SatelliteEmissionsController Implementation", address(satelliteEmissionsControllerImpl));
 
+        // Initialize SatelliteEmissionsController with proper struct parameters
+        MetaERC20DispatchInit memory metaERC20DispatchInit = MetaERC20DispatchInit({
+            recipientAddress: BASE_EMISSIONS_CONTROLLER, // this will be removed later - can stay as is for now
+            hubOrSpoke: METALAYER_HUB_OR_SPOKE, // placeholder metaERC20Hub
+            recipientDomain: BASE_METALAYER_RECIPIENT_DOMAIN,
+            gasLimit: METALAYER_GAS_LIMIT,
+            finalityState: FinalityState.FINALIZED
+        });
+
+        CoreEmissionsControllerInit memory coreEmissionsInit = CoreEmissionsControllerInit({
+            startTimestamp: EMISSIONS_START_TIMESTAMP,
+            emissionsLength: EMISSIONS_LENGTH,
+            emissionsPerEpoch: EMISSIONS_PER_EPOCH,
+            emissionsReductionCliff: EMISSIONS_REDUCTION_CLIFF,
+            emissionsReductionBasisPoints: EMISSIONS_REDUCTION_BASIS_POINTS
+        });
+
+        bytes memory satelliteInitData = abi.encodeWithSelector(
+            SatelliteEmissionsController.initialize.selector,
+            ADMIN,
+            BASE_EMISSIONS_CONTROLLER,
+            metaERC20DispatchInit,
+            coreEmissionsInit
+        );
+
         TransparentUpgradeableProxy satelliteEmissionsControllerProxy =
-            new TransparentUpgradeableProxy(address(satelliteEmissionsControllerImpl), ADMIN, "");
+            new TransparentUpgradeableProxy(address(satelliteEmissionsControllerImpl), ADMIN, satelliteInitData);
         satelliteEmissionsController = SatelliteEmissionsController(payable(satelliteEmissionsControllerProxy));
         info("SatelliteEmissionsController Proxy", address(satelliteEmissionsControllerProxy));
 
@@ -138,10 +185,27 @@ contract IntuitionDeployAndSetup is SetupScript {
         TrustBonding trustBondingImpl = new TrustBonding();
         info("TrustBonding Implementation", address(trustBondingImpl));
 
+        bytes memory trustBondingInitData = abi.encodeWithSelector(
+            TrustBonding.initialize.selector,
+            ADMIN, // owner
+            address(trust), // WTRUST token if deploying on Intuition Sepolia
+            BONDING_EPOCH_LENGTH, // epochLength
+            address(multiVault), // multiVault
+            address(satelliteEmissionsController),
+            BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound
+            BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound
+        );
+
         TransparentUpgradeableProxy trustBondingProxy =
-            new TransparentUpgradeableProxy(address(trustBondingImpl), ADMIN, "");
+            new TransparentUpgradeableProxy(address(trustBondingImpl), ADMIN, trustBondingInitData);
         trustBonding = TrustBonding(address(trustBondingProxy));
         info("TrustBonding Proxy", address(trustBondingProxy));
+
+        // Set TrustBonding address in SatelliteEmissionsController only if we are not on Intuition mainnet (on mainnet,
+        // this will be done through an admin Safe)
+        if (block.chainid != vm.envUint("INTUITION_MAINNET_CHAIN_ID")) {
+            satelliteEmissionsController.setTrustBonding(address(trustBonding));
+        }
 
         // Deploy BondingCurveRegistry
         bondingCurveRegistry = new BondingCurveRegistry(ADMIN);
@@ -161,49 +225,10 @@ contract IntuitionDeployAndSetup is SetupScript {
         bondingCurveRegistry.addBondingCurve(address(linearCurve));
         bondingCurveRegistry.addBondingCurve(address(offsetProgressiveCurve));
         bondingCurveRegistry.addBondingCurve(address(progressiveCurve));
-
-        // Initialize contracts
-        _initializeContracts();
     }
 
-    function _initializeContracts() internal {
-        // Initialize AtomWalletFactory
-        atomWalletFactory.initialize(address(multiVault));
-
-        // Initialize SatelliteEmissionsController with proper struct parameters
-        MetaERC20DispatchInit memory metaERC20DispatchInit = MetaERC20DispatchInit({
-            recipientAddress: BASE_EMISSIONS_CONTROLLER, // placeholder base emissions controller
-            hubOrSpoke: METALAYER_HUB_OR_SPOKE, // placeholder metaERC20Hub
-            recipientDomain: BASE_METALAYER_RECIPIENT_DOMAIN,
-            gasLimit: METALAYER_GAS_LIMIT,
-            finalityState: FinalityState.FINALIZED
-        });
-
-        CoreEmissionsControllerInit memory coreEmissionsInit = CoreEmissionsControllerInit({
-            startTimestamp: EMISSIONS_START_TIMESTAMP,
-            emissionsLength: EMISSIONS_LENGTH,
-            emissionsPerEpoch: EMISSIONS_PER_EPOCH,
-            emissionsReductionCliff: EMISSIONS_REDUCTION_CLIFF,
-            emissionsReductionBasisPoints: EMISSIONS_REDUCTION_BASIS_POINTS
-        });
-
-        satelliteEmissionsController.initialize(
-            ADMIN, address(trustBonding), BASE_EMISSIONS_CONTROLLER, metaERC20DispatchInit, coreEmissionsInit
-        );
-
-        // Initialize TrustBonding
-        trustBonding.initialize(
-            ADMIN, // owner
-            address(trust), // WTRUST token if deploying on Intuition Sepolia
-            BONDING_EPOCH_LENGTH, // epochLength
-            address(multiVault), // multiVault
-            address(satelliteEmissionsController),
-            BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound
-            BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound
-        );
-
-        // Prepare configuration structs
-        GeneralConfig memory generalConfig = GeneralConfig({
+    function _prepareMultiVaultInitData() internal {
+        generalConfig = GeneralConfig({
             admin: ADMIN,
             protocolMultisig: PROTOCOL_MULTISIG,
             feeDenominator: FEE_DENOMINATOR,
@@ -214,18 +239,18 @@ contract IntuitionDeployAndSetup is SetupScript {
             decimalPrecision: DECIMAL_PRECISION
         });
 
-        AtomConfig memory atomConfig = AtomConfig({
+        atomConfig = AtomConfig({
             atomCreationProtocolFee: ATOM_CREATION_PROTOCOL_FEE,
             atomWalletDepositFee: ATOM_WALLET_DEPOSIT_FEE
         });
 
-        TripleConfig memory tripleConfig = TripleConfig({
+        tripleConfig = TripleConfig({
             tripleCreationProtocolFee: TRIPLE_CREATION_PROTOCOL_FEE,
             totalAtomDepositsOnTripleCreation: TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION,
             atomDepositFractionForTriple: ATOM_DEPOSIT_FRACTION_FOR_TRIPLE
         });
 
-        WalletConfig memory walletConfig = WalletConfig({
+        walletConfig = WalletConfig({
             permit2: IPermit2(address(0)),
             entryPoint: address(0),
             atomWarden: address(0),
@@ -233,16 +258,8 @@ contract IntuitionDeployAndSetup is SetupScript {
             atomWalletFactory: address(atomWalletFactory)
         });
 
-        VaultFees memory vaultFees = VaultFees({ entryFee: ENTRY_FEE, exitFee: EXIT_FEE, protocolFee: PROTOCOL_FEE });
+        vaultFees = VaultFees({ entryFee: ENTRY_FEE, exitFee: EXIT_FEE, protocolFee: PROTOCOL_FEE });
 
-        BondingCurveConfig memory bondingCurveConfig =
-            BondingCurveConfig({ registry: address(bondingCurveRegistry), defaultCurveId: 1 });
-
-        // Initialize MultiVault
-        multiVault.initialize(generalConfig, atomConfig, tripleConfig, walletConfig, vaultFees, bondingCurveConfig);
-
-        // Grant MIGRATOR_ROLE to the migrator address
-        IAccessControl(address(multiVault)).grantRole(MIGRATOR_ROLE, MIGRATOR);
-        console2.log("MIGRATOR_ROLE granted to:", MIGRATOR);
+        bondingCurveConfig = BondingCurveConfig({ registry: address(bondingCurveRegistry), defaultCurveId: 1 });
     }
 }

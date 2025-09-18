@@ -64,7 +64,6 @@ contract BaseEmissionsController is
         address admin,
         address controller,
         address token,
-        address satellite,
         MetaERC20DispatchInit memory metaERC20DispatchInit,
         CoreEmissionsControllerInit memory checkpointInit
     )
@@ -96,7 +95,8 @@ contract BaseEmissionsController is
 
         // Set the Trust token contract address
         _TRUST_TOKEN = token;
-        _SATELLITE_EMISSIONS_CONTROLLER = satellite;
+
+        emit TrustTokenUpdated(token);
     }
 
     /* =================================================== */
@@ -171,6 +171,24 @@ contract BaseEmissionsController is
     /* =================================================== */
     /*                       ADMIN                         */
     /* =================================================== */
+
+    /// @inheritdoc IBaseEmissionsController
+    function setTrustToken(address newToken) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newToken == address(0)) {
+            revert BaseEmissionsController_IvalidAddress();
+        }
+        _TRUST_TOKEN = newToken;
+        emit TrustTokenUpdated(newToken);
+    }
+
+    /// @inheritdoc IBaseEmissionsController
+    function setSatelliteEmissionsController(address newSatellite) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newSatellite == address(0)) {
+            revert BaseEmissionsController_IvalidAddress();
+        }
+        _SATELLITE_EMISSIONS_CONTROLLER = newSatellite;
+        emit SatelliteEmissionsControllerUpdated(newSatellite);
+    }
 
     /// @inheritdoc IBaseEmissionsController
     function setMessageGasCost(uint256 newGasCost) external onlyRole(DEFAULT_ADMIN_ROLE) {

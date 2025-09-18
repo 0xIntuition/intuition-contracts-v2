@@ -265,8 +265,7 @@ abstract contract BaseTest is Modifiers, Test {
 
         protocol.satelliteEmissionsController.initialize(
             users.admin,
-            address(protocol.trustBonding),
-            address(1), // BaseEmissionsController
+            address(1), // BaseEmissionsController placeholder
             MetaERC20DispatchInit({
                 hubOrSpoke: address(metaERC20HubOrSpoke),
                 recipientDomain: 1,
@@ -282,6 +281,8 @@ abstract contract BaseTest is Modifiers, Test {
                 emissionsReductionBasisPoints: EMISSIONS_CONTROLLER_REDUCTION_BP
             })
         );
+
+        protocol.satelliteEmissionsController.setTrustBonding(address(protocol.trustBonding));
 
         // Initialize AtomWalletFactory
         atomWalletFactory.initialize(address(protocol.multiVault));

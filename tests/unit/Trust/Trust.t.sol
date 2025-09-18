@@ -269,15 +269,13 @@ contract TrustTest is BaseTest {
     /*                   REINITIALIZER TESTS               */
     /* =================================================== */
 
-    function test_Reinitialize_Success_ByInitialAdmin() public {
+    function test_Reinitialize_Success() public {
         Trust fresh = _deployTrustProxy();
         fresh.init();
 
-        address initialAdmin = fresh.INITIAL_ADMIN();
         address newAdmin = makeAddr("newAdmin");
         address controller = makeAddr("controller");
 
-        vm.prank(initialAdmin);
         fresh.reinitialize(newAdmin, controller);
 
         assertTrue(fresh.hasRole(DEFAULT_ADMIN_ROLE, newAdmin));
@@ -290,28 +288,13 @@ contract TrustTest is BaseTest {
         assertEq(fresh.balanceOf(user), 1e18);
     }
 
-    function test_Reinitialize_Revert_OnlyInitialAdmin() public {
-        Trust fresh = _deployTrustProxy();
-        fresh.init();
-
-        address notInitial = makeAddr("notInitial");
-
-        vm.prank(notInitial);
-        vm.expectRevert(Trust.Trust_OnlyInitialAdmin.selector);
-        fresh.reinitialize(makeAddr("admin"), makeAddr("controller"));
-    }
-
     function test_Reinitialize_Revert_ZeroAddresses() public {
         Trust fresh = _deployTrustProxy();
         fresh.init();
 
-        address initialAdmin = fresh.INITIAL_ADMIN();
-
-        vm.prank(initialAdmin);
         vm.expectRevert(Trust.Trust_ZeroAddress.selector);
         fresh.reinitialize(address(0), makeAddr("controller"));
 
-        vm.prank(initialAdmin);
         vm.expectRevert(Trust.Trust_ZeroAddress.selector);
         fresh.reinitialize(makeAddr("admin"), address(0));
     }
@@ -320,12 +303,8 @@ contract TrustTest is BaseTest {
         Trust fresh = _deployTrustProxy();
         fresh.init();
 
-        address initialAdmin = fresh.INITIAL_ADMIN();
-
-        vm.prank(initialAdmin);
         fresh.reinitialize(makeAddr("admin"), makeAddr("controller"));
 
-        vm.prank(initialAdmin);
         vm.expectRevert(abi.encodeWithSignature("Error(string)", "Initializable: contract is already initialized"));
         fresh.reinitialize(makeAddr("admin2"), makeAddr("controller2"));
     }

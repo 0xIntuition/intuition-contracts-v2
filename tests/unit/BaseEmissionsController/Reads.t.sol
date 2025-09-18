@@ -60,15 +60,15 @@ contract BaseEmissionsControllerGettersTest is BaseTest {
         });
 
         baseEmissionsController.initialize(
-            users.admin,
-            users.controller,
-            address(protocol.trust),
-            address(1), // satellite
-            metaERC20DispatchInit,
-            coreEmissionsInit
+            users.admin, users.controller, address(protocol.trust), metaERC20DispatchInit, coreEmissionsInit
         );
 
         vm.label(address(baseEmissionsController), "BaseEmissionsController");
+
+        resetPrank(users.admin);
+
+        // Set SatelliteEmissionsController contract address to address(1) for testing
+        baseEmissionsController.setSatelliteEmissionsController(address(1));
     }
 
     /* =================================================== */
