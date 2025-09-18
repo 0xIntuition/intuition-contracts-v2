@@ -125,7 +125,7 @@ contract CoreEmissionsControllerMock is CoreEmissionsController {
         __CoreEmissionsController_init({
             startTimestamp: DEFAULT_START_TIMESTAMP,
             emissionsLength: emissionsLength,
-            emissionsPerEpoch: 1_000_000 * 1e18, // 1M tokens
+            emissionsPerEpoch: emissionsPerEpoch,
             emissionsReductionCliff: emissionsReductionCliff,
             emissionsReductionBasisPoints: emissionsReductionBasisPoints
         });
