@@ -21,12 +21,7 @@ contract IntuitionSepoliaBridge is MetaERC20Dispatcher, AccessControl {
     function bridge(address to, uint32 domain, uint256 amount) external payable onlyRole(DEFAULT_ADMIN_ROLE) {
         IIGP igp = IIGP(IMetalayerRouter(IMetaERC20HubOrSpoke(metaERC20Hub).metalayerRouter()).igp());
 
-        uint256 gasLimit;
-        try igp.quoteGasPayment(domain, GAS_CONSTANT + 125_000) returns (uint256 _gasLimit) {
-            gasLimit = _gasLimit;
-        } catch {
-            gasLimit = 34_750_000_000_000;
-        }
+        uint256 gasLimit = igp.quoteGasPayment(domain, GAS_CONSTANT + 125_000);
 
         uint256 totalValueNeeded = gasLimit + amount;
 
@@ -37,9 +32,5 @@ contract IntuitionSepoliaBridge is MetaERC20Dispatcher, AccessControl {
         _bridgeTokensViaNativeToken(
             metaERC20Hub, domain, bytes32(uint256(uint160(to))), amount, gasLimit, FinalityState.INSTANT
         );
-
-        if (msg.value > totalValueNeeded) {
-            Address.sendValue(payable(msg.sender), msg.value - totalValueNeeded); // refund excess
-        }
     }
 }

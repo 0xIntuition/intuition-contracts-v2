@@ -12,7 +12,7 @@ interface IERC20 {
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
 }
 
-contract BaseSepoliaMinterAndBridge is MetaERC20Dispatcher, AccessControl {
+contract BaseSepoliaBridge is MetaERC20Dispatcher, AccessControl {
     address public token;
     address public metaERC20Hub;
 
