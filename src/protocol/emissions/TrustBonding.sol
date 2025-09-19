@@ -1,23 +1,14 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 
 import { ICoreEmissionsController } from "src/interfaces/ICoreEmissionsController.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 import { ITrustBonding } from "src/interfaces/ITrustBonding.sol";
 import { ISatelliteEmissionsController } from "src/interfaces/ISatelliteEmissionsController.sol";
 
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { VotingEscrow } from "src/external/curve/VotingEscrow.sol";
-
-/**
- * @dev Common forge commands for testing
- * forge inspect TrustBonding storage-layout
- */
 
 /**
  * @title  TrustBonding
@@ -49,8 +40,6 @@ import { VotingEscrow } from "src/external/curve/VotingEscrow.sol";
  *         https://github.com/stargate-protocol/stargate-dao/blob/main/contracts/VotingEscrow.sol
  */
 contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
-    using SafeERC20 for IERC20;
-
     /*//////////////////////////////////////////////////////////////
                                  CONSTANTS
     //////////////////////////////////////////////////////////////*/
@@ -77,8 +66,6 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
                                  STATE
     //////////////////////////////////////////////////////////////*/
 
-    uint256 public maxAnnualEmission;
-
     /// @notice Mapping of epochs to the total claimed rewards for that epoch among all users
     mapping(uint256 epoch => uint256 totalClaimedRewards) public totalClaimedRewardsForEpoch;
 
@@ -98,9 +85,6 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     /// @notice The personal utilization lower bound in basis points (represents the minimum possible personal
     /// utilization ratio)
     uint256 public personalUtilizationLowerBound;
-
-    /// @notice The maximum claimable protocol fees for a specific epoch
-    mapping(uint256 epoch => uint256 totalClaimableProtocolFees) public maxClaimableProtocolFeesForEpoch;
 
     /// @dev Gap for upgrade safety
     uint256[50] private __gap;
@@ -131,7 +115,6 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
             revert TrustBonding_ZeroAddress();
         }
 
-        __AccessControl_init();
         __Pausable_init();
         __VotingEscrow_init(_owner, _trustToken, _epochLength);
 
@@ -381,7 +364,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         return _epochAtTimestamp(block.timestamp);
     }
 
-    function _epochsPerYear() public view returns (uint256) {
+    function _epochsPerYear() internal view returns (uint256) {
         return YEAR / ICoreEmissionsController(satelliteEmissionsController).getEpochLength();
     }
 
@@ -466,10 +449,8 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         // Fetch the target utilization for the previous epoch
         uint256 userUtilizationTarget = userClaimedRewardsForEpoch[_account][_epoch - 1];
 
-        // If there was no target utilization in the previous epoch, any increase in utilization is rewarded with the
-        // max ratio.
-        // Similarly, if the userUtilizationDelta is greater than the target, we also return the max ratio.
-        if (userUtilizationTarget == 0 || userUtilizationDelta >= userUtilizationTarget) {
+        // If the utilizationDelta is greater than the target, we return the max ratio
+        if (userUtilizationDelta >= userUtilizationTarget) {
             return BASIS_POINTS_DIVISOR;
         }
 
@@ -508,10 +489,8 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         // Fetch the target utilization for the previous epoch
         uint256 utilizationTarget = totalClaimedRewardsForEpoch[_epoch - 1];
 
-        // If there was no target utilization in the previous epoch, any increase in utilization is rewarded with the
-        // max ratio.
-        // Similarly, if the utilizationDelta is greater than the target, we also return the max ratio.
-        if (utilizationTarget == 0 || utilizationDelta >= utilizationTarget) {
+        // If the utilizationDelta is greater than the target, we return the max ratio
+        if (utilizationDelta >= utilizationTarget) {
             return BASIS_POINTS_DIVISOR;
         }
 
