@@ -91,8 +91,9 @@ contract SatelliteEmissionsController is
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(CONTROLLER_ROLE, trustBonding);
 
-        _TRUST_BONDING = trustBonding;
-        _BASE_EMISSIONS_CONTROLLER = baseEmissionsController;
+        // Set TrustBonding and BaseEmissionsController addresses
+        _setTrustBonding(trustBonding);
+        _setBaseEmissionsController(baseEmissionsController);
     }
 
     /* =================================================== */
@@ -135,11 +136,23 @@ contract SatelliteEmissionsController is
         if (amount == 0) revert SatelliteEmissionsController_InvalidAmount();
         if (address(this).balance < amount) revert SatelliteEmissionsController_InsufficientBalance();
         Address.sendValue(payable(recipient), amount);
+
+        emit NativeTokenTransferred(recipient, amount);
     }
 
     /* =================================================== */
     /*                       ADMIN                         */
     /* =================================================== */
+
+    /// @inheritdoc ISatelliteEmissionsController
+    function setTrustBonding(address newTrustBonding) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _setTrustBonding(newTrustBonding);
+    }
+
+    /// @inheritdoc ISatelliteEmissionsController
+    function setBaseEmissionsController(address newBaseEmissionsController) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _setBaseEmissionsController(newBaseEmissionsController);
+    }
 
     /// @inheritdoc ISatelliteEmissionsController
     function setMessageGasCost(uint256 newGasCost) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -171,7 +184,7 @@ contract SatelliteEmissionsController is
 
         // Check if rewards for this epoch have already been reclaimed and bridged.
         if (_bridgedEmissions[epoch] > 0) {
-            revert SatelliteEmissionsController_PreviouslyBridgedUnclaimedRewards();
+            revert SatelliteEmissionsController_PreviouslyBridgedUnclaimedEmissions();
         }
 
         // Mark the unclaimed rewards as bridged and prevent from being claimed again.
@@ -197,5 +210,27 @@ contract SatelliteEmissionsController is
         if (msg.value > gasLimit) {
             Address.sendValue(payable(msg.sender), msg.value - gasLimit);
         }
+
+        emit UnclaimedRewardsBridged(epoch, amount);
+    }
+
+    /* =================================================== */
+    /*                       INTERNAL                      */
+    /* =================================================== */
+
+    function _setTrustBonding(address newTrustBonding) internal {
+        if (newTrustBonding == address(0)) {
+            revert SatelliteEmissionsController_InvalidAddress();
+        }
+        _TRUST_BONDING = newTrustBonding;
+        emit TrustBondingUpdated(newTrustBonding);
+    }
+
+    function _setBaseEmissionsController(address newBaseEmissionsController) internal {
+        if (newBaseEmissionsController == address(0)) {
+            revert SatelliteEmissionsController_InvalidAddress();
+        }
+        _BASE_EMISSIONS_CONTROLLER = newBaseEmissionsController;
+        emit BaseEmissionsControllerUpdated(newBaseEmissionsController);
     }
 }

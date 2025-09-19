@@ -15,11 +15,30 @@ interface IBaseEmissionsController {
     /* =================================================== */
 
     /**
+     * @notice Event emitted when the Trust token address is updated
+     * @param newTrustToken The new Trust token address
+     */
+    event TrustTokenUpdated(address indexed newTrustToken);
+
+    /**
+     * @notice Event emitted when the Satellite Emissions Controller address is updated
+     * @param newSatelliteEmissionsController The new Satellite Emissions Controller address
+     */
+    event SatelliteEmissionsControllerUpdated(address indexed newSatelliteEmissionsController);
+
+    /**
      * @notice Event emitted when Trust tokens are minted
      * @param to Address that received the minted Trust tokens
      * @param amount Amount of Trust tokens minted
      */
     event TrustMintedAndBridged(address indexed to, uint256 amount, uint256 epoch);
+
+    /**
+     * @notice Event emitted when the Trust tokens are burned
+     * @param from Address that burned the Trust tokens
+     * @param amount Amount of Trust tokens burned
+     */
+    event TrustBurned(address indexed from, uint256 amount);
 
     /* =================================================== */
     /*                       ERRORS                        */
@@ -74,6 +93,20 @@ interface IBaseEmissionsController {
     /* =================================================== */
     /*                       ADMIN                         */
     /* =================================================== */
+
+    /**
+     * @notice Set the Trust token contract address
+     * @dev Only callable by addresses with DEFAULT_ADMIN_ROLE
+     * @param newTrustToken The new Trust token contract address
+     */
+    function setTrustToken(address newTrustToken) external;
+
+    /**
+     * @notice Set the Satellite Emissions Controller contract address
+     * @dev Only callable by addresses with DEFAULT_ADMIN_ROLE
+     * @param newSatelliteEmissionsController The new Satellite Emissions Controller contract address
+     */
+    function setSatelliteEmissionsController(address newSatelliteEmissionsController) external;
 
     /**
      * @notice Set the message gas cost for cross-chain operations
