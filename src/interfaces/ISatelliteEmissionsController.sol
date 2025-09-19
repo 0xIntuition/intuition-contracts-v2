@@ -93,5 +93,5 @@ interface ISatelliteEmissionsController {
      * has ended, which is enforced in the TrustBonding contract. Only callable by addresses with DEFAULT_ADMIN_ROLE.
      * @param epoch The epoch for which to bridge unclaimed rewards
      */
-    function bridgeUnclaimedRewards(uint256 epoch) external payable;
+    function bridgeUnclaimedEmissions(uint256 epoch) external payable;
 }
