@@ -13,10 +13,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import { Address } from "@openzeppelin/contracts/utils/Address.sol";
+
 pragma solidity ^0.8.27;
 
 contract WrappedTrust {
-    string public name = "Wrapped Trust";
+    string public name = "Wrapped TRUST";
     string public symbol = "WTRUST";
     uint8 public decimals = 18;
 
@@ -40,8 +42,8 @@ contract WrappedTrust {
     function withdraw(uint256 amount) public {
         require(balanceOf[msg.sender] >= amount);
         balanceOf[msg.sender] -= amount;
-        payable(msg.sender).transfer(amount);
         emit Withdrawal(msg.sender, amount);
+        Address.sendValue(payable(msg.sender), amount);
     }
 
     function totalSupply() public view returns (uint256) {

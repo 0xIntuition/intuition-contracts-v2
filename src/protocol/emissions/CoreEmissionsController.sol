@@ -36,6 +36,9 @@ contract CoreEmissionsController is ICoreEmissionsController {
     /// @dev Factor used to calculate retained emissions after reduction (10000 - reduction_basis_points)
     uint256 internal _EMISSIONS_RETENTION_FACTOR;
 
+    /// @dev Gap for upgrade safety
+    uint256[50] private __gap;
+
     /* =================================================== */
     /*                 INITIALIZATION                      */
     /* =================================================== */
