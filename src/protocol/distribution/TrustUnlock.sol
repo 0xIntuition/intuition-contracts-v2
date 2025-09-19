@@ -8,6 +8,7 @@ import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.s
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import { ITrustUnlock } from "src/interfaces/ITrustUnlock.sol";
+import { ITrustUnlockFactory } from "src/interfaces/ITrustUnlockFactory.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 import { WrappedTrust } from "src/WrappedTrust.sol";
@@ -29,23 +30,17 @@ contract TrustUnlock is ITrustUnlock, ReentrancyGuard, Ownable {
 
     /**
      * @notice Struct to hold the parameters for the TrustUnlock contract constructor
-     * @param token The address of the Trust token contract
      * @param owner The address of the owner
-     * @param trustBonding The address of the TrustBonding contract
-     * @param multiVault The address of the MultiVault contract
+     * @param registry The address of the TrustUnlock factory (registry)
      * @param unlockAmount The amount of Trust tokens to unlock
-     * @param unlockBegin The timestamp at which the unlock begins
      * @param unlockCliff The timestamp at which the unlock cliff ends
      * @param unlockEnd The timestamp at which the unlock ends (i.e. all tokens are unlocked)
      * @param cliffPercentage The percentage of tokens unlocked at the unlock cliff (expressed in basis points)
      */
     struct UnlockParams {
         address owner;
-        address payable token;
-        address trustBonding;
-        address payable multiVault;
+        address registry;
         uint256 unlockAmount;
-        uint256 unlockBegin;
         uint256 unlockCliff;
         uint256 unlockEnd;
         uint256 cliffPercentage;
@@ -65,20 +60,11 @@ contract TrustUnlock is ITrustUnlock, ReentrancyGuard, Ownable {
                                IMMUTABLES
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice The Trust (WTRUST) token contract
-    address payable public immutable trustToken;
-
-    /// @notice The TrustBonding contract
-    address public immutable trustBonding;
-
-    /// @notice The MultiVault contract
-    address payable public immutable multiVault;
+    /// @notice The address of the TrustUnlock factory (registry)
+    address public immutable registry;
 
     /// @notice The amount of Trust tokens to unlock
     uint256 public immutable unlockAmount;
-
-    /// @notice The timestamp at which the unlock begins
-    uint256 public immutable unlockBegin;
 
     /// @notice The timestamp at which the unlock cliff ends
     uint256 public immutable unlockCliff;
@@ -104,11 +90,9 @@ contract TrustUnlock is ITrustUnlock, ReentrancyGuard, Ownable {
                                  ERRORS
     //////////////////////////////////////////////////////////////*/
 
-    error Unlock_CliffIsTooEarly();
     error Unlock_EndIsTooEarly();
     error Unlock_InvalidCliffPercentage();
     error Unlock_InsufficientUnlockedTokens();
-    error Unlock_UnlockBeginTooEarly();
     error Unlock_ZeroAddress();
     error Unlock_ZeroAmount();
 
@@ -137,23 +121,12 @@ contract TrustUnlock is ITrustUnlock, ReentrancyGuard, Ownable {
      * @param unlockParams The parameters for the new TrustUnlock contract
      */
     constructor(UnlockParams memory unlockParams) Ownable(unlockParams.owner) {
-        if (
-            unlockParams.token == address(0) || unlockParams.owner == address(0)
-                || unlockParams.trustBonding == address(0) || unlockParams.multiVault == address(0)
-        ) {
+        if (unlockParams.owner == address(0) || unlockParams.registry == address(0)) {
             revert Unlock_ZeroAddress();
         }
 
         if (unlockParams.unlockAmount == 0) {
             revert Unlock_ZeroAmount();
-        }
-
-        if (unlockParams.unlockBegin < block.timestamp) {
-            revert Unlock_UnlockBeginTooEarly();
-        }
-
-        if (unlockParams.unlockCliff < unlockParams.unlockBegin) {
-            revert Unlock_CliffIsTooEarly();
         }
 
         if (unlockParams.cliffPercentage > BASIS_POINTS_DIVISOR) {
@@ -166,14 +139,11 @@ contract TrustUnlock is ITrustUnlock, ReentrancyGuard, Ownable {
             revert Unlock_EndIsTooEarly();
         }
 
-        trustToken = unlockParams.token;
+        registry = unlockParams.registry;
         unlockAmount = unlockParams.unlockAmount;
-        unlockBegin = unlockParams.unlockBegin;
         unlockCliff = unlockParams.unlockCliff;
         cliffPercentage = unlockParams.cliffPercentage;
         unlockEnd = unlockParams.unlockEnd;
-        trustBonding = unlockParams.trustBonding;
-        multiVault = unlockParams.multiVault;
     }
 
     /// @notice Allow the contract to receive TRUST directly
@@ -188,7 +158,7 @@ contract TrustUnlock is ITrustUnlock, ReentrancyGuard, Ownable {
      * @param amount The amount of Trust tokens to approve
      */
     function approveTrustBonding(uint256 amount) external onlyOwner {
-        IERC20(trustToken).forceApprove(address(trustBonding), amount);
+        IERC20(address(trustToken())).forceApprove(address(trustBonding()), amount);
     }
 
     /**
@@ -221,7 +191,7 @@ contract TrustUnlock is ITrustUnlock, ReentrancyGuard, Ownable {
     function create_lock(uint256 amount, uint256 unlockTime) external nonReentrant onlyOwner {
         bondedAmount += amount;
         _wrapTrustTokens(amount);
-        TrustBonding(trustBonding).create_lock(amount, unlockTime);
+        TrustBonding(trustBonding()).create_lock(amount, unlockTime);
         emit BondedAmountUpdated(bondedAmount);
     }
 
@@ -232,7 +202,7 @@ contract TrustUnlock is ITrustUnlock, ReentrancyGuard, Ownable {
     function increase_amount(uint256 amount) external nonReentrant onlyOwner {
         bondedAmount += amount;
         _wrapTrustTokens(amount);
-        TrustBonding(trustBonding).increase_amount(amount);
+        TrustBonding(trustBonding()).increase_amount(amount);
         emit BondedAmountUpdated(bondedAmount);
     }
 
@@ -242,15 +212,15 @@ contract TrustUnlock is ITrustUnlock, ReentrancyGuard, Ownable {
      * @dev The `newUnlockTime` gets rounded down to the nearest whole week
      */
     function increase_unlock_time(uint256 newUnlockTime) external nonReentrant onlyOwner {
-        TrustBonding(trustBonding).increase_unlock_time(newUnlockTime);
+        TrustBonding(trustBonding()).increase_unlock_time(newUnlockTime);
     }
 
     /// @notice Claim unlocked tokens back from TrustBonding to this contract
     function withdraw() external onlyOwner nonReentrant {
         // Decrease internal accounting of bonded amount and withdraw Trust from TrustBonding to this contract
         bondedAmount = 0;
-        TrustBonding(trustBonding).withdraw();
-        _unwrapTrustTokens(IERC20(trustToken).balanceOf(address(this)));
+        TrustBonding(trustBonding()).withdraw();
+        _unwrapTrustTokens(IERC20(address(trustToken())).balanceOf(address(this)));
         emit BondedAmountUpdated(bondedAmount);
     }
 
@@ -260,8 +230,8 @@ contract TrustUnlock is ITrustUnlock, ReentrancyGuard, Ownable {
      * @param rewardsRecipient The address to which the rewards are sent
      */
     function claimRewards(address rewardsRecipient) external nonReentrant onlyOwner {
-        TrustBonding(trustBonding).claimRewards(rewardsRecipient);
-        _unwrapTrustTokens(IERC20(trustToken).balanceOf(address(this)));
+        TrustBonding(trustBonding()).claimRewards(rewardsRecipient);
+        _unwrapTrustTokens(IERC20(address(trustToken())).balanceOf(address(this)));
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -285,7 +255,7 @@ contract TrustUnlock is ITrustUnlock, ReentrancyGuard, Ownable {
         onlyNonLockedTokens(_sum(assets))
         returns (bytes32[] memory atomIds)
     {
-        atomIds = IMultiVault(multiVault).createAtoms{ value: _sum(assets) }(atomDataArray, assets);
+        atomIds = IMultiVault(multiVault()).createAtoms{ value: _sum(assets) }(atomDataArray, assets);
     }
 
     /**
@@ -310,7 +280,7 @@ contract TrustUnlock is ITrustUnlock, ReentrancyGuard, Ownable {
         returns (bytes32[] memory tripleIds)
     {
         tripleIds =
-            IMultiVault(multiVault).createTriples{ value: _sum(assets) }(subjectIds, predicateIds, objectIds, assets);
+            IMultiVault(multiVault()).createTriples{ value: _sum(assets) }(subjectIds, predicateIds, objectIds, assets);
     }
 
     /**
@@ -334,7 +304,7 @@ contract TrustUnlock is ITrustUnlock, ReentrancyGuard, Ownable {
         onlyNonLockedTokens(msg.value)
         returns (uint256 shares)
     {
-        shares = IMultiVault(multiVault).deposit{ value: msg.value }(receiver, termId, curveId, minShares);
+        shares = IMultiVault(multiVault()).deposit{ value: msg.value }(receiver, termId, curveId, minShares);
     }
 
     /**
@@ -360,8 +330,9 @@ contract TrustUnlock is ITrustUnlock, ReentrancyGuard, Ownable {
         onlyNonLockedTokens(_sum(assets))
         returns (uint256[] memory shares)
     {
-        shares =
-            IMultiVault(multiVault).depositBatch{ value: _sum(assets) }(receiver, termIds, curveIds, assets, minShares);
+        shares = IMultiVault(multiVault()).depositBatch{ value: _sum(assets) }(
+            receiver, termIds, curveIds, assets, minShares
+        );
     }
 
     /**
@@ -385,7 +356,7 @@ contract TrustUnlock is ITrustUnlock, ReentrancyGuard, Ownable {
         onlyOwner
         returns (uint256 assets)
     {
-        assets = IMultiVault(multiVault).redeem(receiver, termId, curveId, shares, minAssets);
+        assets = IMultiVault(multiVault()).redeem(receiver, termId, curveId, shares, minAssets);
     }
 
     /**
@@ -409,19 +380,34 @@ contract TrustUnlock is ITrustUnlock, ReentrancyGuard, Ownable {
         onlyOwner
         returns (uint256[] memory assets)
     {
-        assets = IMultiVault(multiVault).redeemBatch(receiver, termIds, curveIds, shares, minAssets);
+        assets = IMultiVault(multiVault()).redeemBatch(receiver, termIds, curveIds, shares, minAssets);
     }
 
     /*//////////////////////////////////////////////////////////////
                          VIEW FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
+    /// @notice Address of the Wrapped Trust (WTRUST) token
+    function trustToken() public view returns (address payable) {
+        return ITrustUnlockFactory(registry).trustToken();
+    }
+
+    /// @notice Address of the TrustBonding contract
+    function trustBonding() public view returns (address) {
+        return ITrustUnlockFactory(registry).trustBonding();
+    }
+
+    /// @notice Address of the MultiVault contract
+    function multiVault() public view returns (address payable) {
+        return ITrustUnlockFactory(registry).multiVault();
+    }
+
     /**
      * @notice Returns the timestamp at which the bonding lock ends for this contract
      * @return lockEndTimestamp The timestamp at which the bonding lock ends
      */
     function bondingLockEndTimestamp() external view returns (uint256 lockEndTimestamp) {
-        (, lockEndTimestamp) = TrustBonding(trustBonding).locked(address(this));
+        (, lockEndTimestamp) = TrustBonding(trustBonding()).locked(address(this));
     }
 
     /**
@@ -430,7 +416,7 @@ contract TrustUnlock is ITrustUnlock, ReentrancyGuard, Ownable {
      * @return The amount of Trust tokens bonded
      */
     function bondingLockedAmount() external view returns (uint256) {
-        (int128 lockedAmount,) = TrustBonding(trustBonding).locked(address(this));
+        (int128 lockedAmount,) = TrustBonding(trustBonding()).locked(address(this));
         return uint256(uint128(lockedAmount));
     }
 
@@ -482,12 +468,12 @@ contract TrustUnlock is ITrustUnlock, ReentrancyGuard, Ownable {
     }
 
     function _wrapTrustTokens(uint256 amount) internal {
-        WrappedTrust(trustToken).deposit{ value: amount }();
-        WrappedTrust(trustToken).approve(address(trustBonding), amount);
+        WrappedTrust(trustToken()).deposit{ value: amount }();
+        WrappedTrust(trustToken()).approve(address(trustBonding()), amount);
     }
 
     function _unwrapTrustTokens(uint256 amount) internal {
-        WrappedTrust(trustToken).withdraw(amount);
+        WrappedTrust(trustToken()).withdraw(amount);
     }
 
     /**
