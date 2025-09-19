@@ -8,6 +8,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IPermit2 } from "src/interfaces/IPermit2.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
+import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
 
 import { Trust } from "src/Trust.sol";
 import { TestTrust } from "tests/mocks/TestTrust.sol";
@@ -134,6 +135,9 @@ contract IntuitionDeployAndSetup is SetupScript {
         satelliteEmissionsController = SatelliteEmissionsController(payable(satelliteEmissionsControllerProxy));
         info("SatelliteEmissionsController Proxy", address(satelliteEmissionsControllerProxy));
 
+        // Deploy TimelockController
+        timelockController = _deployTimelockController();
+
         // Deploy TrustBonding implementation and proxy
         TrustBonding trustBondingImpl = new TrustBonding();
         info("TrustBonding Implementation", address(trustBondingImpl));
@@ -194,6 +198,7 @@ contract IntuitionDeployAndSetup is SetupScript {
         // Initialize TrustBonding
         trustBonding.initialize(
             ADMIN, // owner
+            address(timelockController), // trust
             address(trust), // WTRUST token if deploying on Intuition Sepolia
             BONDING_EPOCH_LENGTH, // epochLength
             address(multiVault), // multiVault
@@ -244,5 +249,18 @@ contract IntuitionDeployAndSetup is SetupScript {
         // Grant MIGRATOR_ROLE to the migrator address
         IAccessControl(address(multiVault)).grantRole(MIGRATOR_ROLE, MIGRATOR);
         console2.log("MIGRATOR_ROLE granted to:", MIGRATOR);
+    }
+
+    function _deployTimelockController() internal returns (TimelockController) {
+        address[] memory proposers = new address[](1);
+        proposers[0] = ADMIN;
+
+        address[] memory executors = new address[](1);
+        executors[0] = ADMIN;
+
+        // Deploy TimelockController
+        TimelockController timelock = new TimelockController(TIMELOCK_MIN_DELAY, proposers, executors, address(0));
+        info("TimelockController", address(timelock));
+        return timelock;
     }
 }

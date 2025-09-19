@@ -28,6 +28,7 @@ contract NormalizedUtilizationRatioTest is TrustBondingBase {
 
         trustBondingMock.initialize(
             users.admin,
+            users.timelock,
             address(protocol.wrappedTrust),
             TRUST_BONDING_EPOCH_LENGTH,
             address(protocol.multiVault),

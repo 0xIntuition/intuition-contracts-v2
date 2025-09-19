@@ -70,9 +70,6 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     /// @notice Role used for pausing the contract
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
-    /// @notice Role used for the timelocked operations
-    bytes32 public constant TIMELOCK_ROLE = keccak256("TIMELOCK_ROLE");
-
     /*//////////////////////////////////////////////////////////////
                                  STATE
     //////////////////////////////////////////////////////////////*/
@@ -102,8 +99,25 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     /// @notice The maximum claimable protocol fees for a specific epoch
     mapping(uint256 epoch => uint256 totalClaimableProtocolFees) public maxClaimableProtocolFeesForEpoch;
 
+    /// @notice The address of the Timelock contract that can update certain parameters
+    address public timelock;
+
     /// @dev Gap for upgrade safety
     uint256[50] private __gap;
+
+    /*//////////////////////////////////////////////////////////////
+                                 MODIFIERS
+    //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @notice Modifier to restrict access to functions to only the timelock address
+     */
+    modifier onlyTimelock() {
+        if (msg.sender != timelock) {
+            revert TrustBonding_OnlyTimelock();
+        }
+        _;
+    }
 
     /*//////////////////////////////////////////////////////////////
                                  CONSTRUCTOR
@@ -117,6 +131,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     /// @inheritdoc ITrustBonding
     function initialize(
         address _owner,
+        address _timelock,
         address _trustToken,
         uint256 _epochLength,
         address _multiVault,
@@ -128,6 +143,10 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         initializer
     {
         if (_owner == address(0)) {
+            revert TrustBonding_ZeroAddress();
+        }
+
+        if (_timelock == address(0)) {
             revert TrustBonding_ZeroAddress();
         }
 
@@ -156,6 +175,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         _grantRole(DEFAULT_ADMIN_ROLE, _owner);
         _grantRole(PAUSER_ROLE, _owner);
 
+        timelock = _timelock;
         multiVault = _multiVault;
         satelliteEmissionsController = _satelliteEmissionsController;
         systemUtilizationLowerBound = _systemUtilizationLowerBound;
@@ -369,7 +389,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /// @inheritdoc ITrustBonding
-    function setMultiVault(address _multiVault) external onlyRole(TIMELOCK_ROLE) {
+    function setMultiVault(address _multiVault) external onlyTimelock {
         if (_multiVault == address(0)) {
             revert TrustBonding_ZeroAddress();
         }
@@ -380,10 +400,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /// @inheritdoc ITrustBonding
-    function updateSatelliteEmissionsController(address _satelliteEmissionsController)
-        external
-        onlyRole(TIMELOCK_ROLE)
-    {
+    function updateSatelliteEmissionsController(address _satelliteEmissionsController) external onlyTimelock {
         if (_satelliteEmissionsController == address(0)) {
             revert TrustBonding_ZeroAddress();
         }
@@ -394,7 +411,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /// @inheritdoc ITrustBonding
-    function updateSystemUtilizationLowerBound(uint256 newLowerBound) external onlyRole(TIMELOCK_ROLE) {
+    function updateSystemUtilizationLowerBound(uint256 newLowerBound) external onlyTimelock {
         if (newLowerBound > BASIS_POINTS_DIVISOR || newLowerBound < MINIMUM_SYSTEM_UTILIZATION_LOWER_BOUND) {
             revert TrustBonding_InvalidUtilizationLowerBound();
         }
@@ -405,7 +422,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /// @inheritdoc ITrustBonding
-    function updatePersonalUtilizationLowerBound(uint256 newLowerBound) external onlyRole(TIMELOCK_ROLE) {
+    function updatePersonalUtilizationLowerBound(uint256 newLowerBound) external onlyTimelock {
         if (newLowerBound > BASIS_POINTS_DIVISOR || newLowerBound < MINIMUM_PERSONAL_UTILIZATION_LOWER_BOUND) {
             revert TrustBonding_InvalidUtilizationLowerBound();
         }

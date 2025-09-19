@@ -544,6 +544,5 @@ contract TrustBondingReadsTest is TrustBondingBase {
         assertEq(protocol.trustBonding.MINIMUM_SYSTEM_UTILIZATION_LOWER_BOUND(), 4000);
         assertEq(protocol.trustBonding.MINIMUM_PERSONAL_UTILIZATION_LOWER_BOUND(), 2500);
         assertEq(protocol.trustBonding.PAUSER_ROLE(), keccak256("PAUSER_ROLE"));
-        assertEq(protocol.trustBonding.TIMELOCK_ROLE(), keccak256("TIMELOCK_ROLE"));
     }
 }

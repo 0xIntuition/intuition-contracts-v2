@@ -65,6 +65,9 @@ interface ITrustBonding {
     /// @dev Thrown when a user has no rewards to claim
     error TrustBonding_NoRewardsToClaim();
 
+    /// @dev Thrown when a function is called by an address other than the timelock
+    error TrustBonding_OnlyTimelock();
+
     /// @dev Thrown when attempting to claim rewards for an epoch that has already been claimed
     error TrustBonding_RewardsAlreadyClaimedForEpoch();
 
@@ -78,6 +81,7 @@ interface ITrustBonding {
     /**
      * @notice Initializes the TrustBonding contract
      * @param _owner The owner of the contract
+     * @param _timelock The address of the timelock contract
      * @param _trustToken The address of the WTRUST token
      * @param _epochLength The length of an epoch in seconds
      * @param _multiVault The address of the MultiVault contract
@@ -87,6 +91,7 @@ interface ITrustBonding {
      */
     function initialize(
         address _owner,
+        address _timelock,
         address _trustToken,
         uint256 _epochLength,
         address _multiVault,
