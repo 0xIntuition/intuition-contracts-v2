@@ -127,18 +127,6 @@ contract SatelliteEmissionsController is
     receive() external payable { }
 
     /* =================================================== */
-    /*                      GETTERS                        */
-    /* =================================================== */
-
-    function getTrustBonding() external view returns (address) {
-        return _TRUST_BONDING;
-    }
-
-    function getBaseEmissionsController() external view returns (address) {
-        return _BASE_EMISSIONS_CONTROLLER;
-    }
-
-    /* =================================================== */
     /*                    CONTROLLER                       */
     /* =================================================== */
 
@@ -196,7 +184,7 @@ contract SatelliteEmissionsController is
 
         // Check if rewards for this epoch have already been reclaimed and bridged.
         if (_bridgedEmissions[epoch] > 0) {
-            revert SatelliteEmissionsController_PreviouslyBridgedUnclaimedRewards();
+            revert SatelliteEmissionsController_PreviouslyBridgedUnclaimedEmissions();
         }
 
         // Mark the unclaimed rewards as bridged and prevent from being claimed again.

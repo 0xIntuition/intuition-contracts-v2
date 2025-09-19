@@ -127,7 +127,7 @@ contract BridgeUnclaimedEmissionsTest is TrustBondingBase {
         protocol.satelliteEmissionsController.bridgeUnclaimedEmissions{ value: GAS_QUOTE }(2);
         vm.expectRevert(
             abi.encodeWithSelector(
-                ISatelliteEmissionsController.SatelliteEmissionsController_PreviouslyBridgedUnclaimedRewards.selector
+                ISatelliteEmissionsController.SatelliteEmissionsController_PreviouslyBridgedUnclaimedEmissions.selector
             )
         );
         protocol.satelliteEmissionsController.bridgeUnclaimedEmissions{ value: GAS_QUOTE }(2);
