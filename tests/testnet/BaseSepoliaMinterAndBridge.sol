@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.29;
+pragma solidity 0.8.29;
 
 import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
 import { Address } from "@openzeppelin/contracts/utils/Address.sol";

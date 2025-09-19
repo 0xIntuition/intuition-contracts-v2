@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.29;
+pragma solidity 0.8.29;
 
 import { Ownable, Ownable2Step } from "@openzeppelin/contracts/access/Ownable2Step.sol";
 

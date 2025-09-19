@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.19;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.29;
 
 import { ERC20Upgradeable } from "@openzeppelinV4/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import { Initializable } from "@openzeppelinV4/contracts-upgradeable/proxy/utils/Initializable.sol";

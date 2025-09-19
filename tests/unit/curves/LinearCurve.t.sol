@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.29;
+pragma solidity 0.8.29;
 
 import { Test } from "forge-std/src/Test.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
