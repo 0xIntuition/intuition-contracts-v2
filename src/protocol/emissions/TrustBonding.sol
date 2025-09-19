@@ -114,7 +114,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         if (_owner == address(0)) {
             revert TrustBonding_ZeroAddress();
         }
-        
+
         __Pausable_init();
         __VotingEscrow_init(_owner, _trustToken, _epochLength);
 

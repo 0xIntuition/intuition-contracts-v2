@@ -61,7 +61,6 @@ contract AccessControlTest is BaseTest {
         metaERC20DispatchInit = MetaERC20DispatchInit({
             hubOrSpoke: address(0x123), // Mock meta spoke
             recipientDomain: TEST_RECIPIENT_DOMAIN,
-            recipientAddress: address(baseEmissionsController),
             gasLimit: TEST_GAS_LIMIT,
             finalityState: FinalityState.INSTANT
         });
