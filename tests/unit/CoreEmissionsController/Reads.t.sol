@@ -418,7 +418,8 @@ contract CoreEmissionsControllerTest is CoreEmissionsControllerBase {
     }
 
     function test_emissions_doesNotZeroOutEmissionsWithinPlannedHorizon_whenUsingProdParams() public {
-        uint256 prodStartingEmissionsPerYear = 0.075 * 1e9 * 1e18; // 75M tokens (7.5% of 1B total supply)
+        // 75M tokens (7.5% of 1B total supply) starting emissions per year
+        uint256 prodStartingEmissionsPerYear = 75_000_000 * 1e18;
         uint256 prodEmissionsPerEpoch = prodStartingEmissionsPerYear / DEFAULT_REDUCTION_CLIFF;
 
         controller.setupCustomScenario(
