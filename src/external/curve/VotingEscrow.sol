@@ -102,6 +102,9 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     // The goal is to prevent tokenizing the escrow
     mapping(address => bool) public contracts_whitelist;
 
+    /// @dev Gap for upgrade safety
+    uint256[50] private __gap;
+
     /// @dev Initialize the VotingEscrow contract and its dependencies
     function __VotingEscrow_init(address _admin, address token_addr, uint256 min_time) internal onlyInitializing {
         require(token_addr != address(0), "Token address cannot be 0");
