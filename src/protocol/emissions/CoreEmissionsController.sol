@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.29;
+pragma solidity 0.8.29;
 
 import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 import { ICoreEmissionsController } from "src/interfaces/ICoreEmissionsController.sol";

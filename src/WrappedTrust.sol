@@ -15,7 +15,7 @@
 
 import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 
-pragma solidity ^0.8.27;
+pragma solidity 0.8.29;
 
 contract WrappedTrust {
     string public name = "Wrapped TRUST";
