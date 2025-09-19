@@ -71,6 +71,10 @@ contract BaseEmissionsController is
         external
         initializer
     {
+        if (admin == address(0) || controller == address(0) || token == address(0) || satellite == address(0)) {
+            revert BaseEmissionsController_InvalidAddress();
+        }
+
         // Initialize the AccessControl and ReentrancyGuard contracts
         __AccessControl_init();
         __ReentrancyGuard_init();
