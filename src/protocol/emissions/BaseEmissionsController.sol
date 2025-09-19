@@ -46,6 +46,7 @@ contract BaseEmissionsController is
     /// @notice Total amount of Trust tokens minted
     uint256 internal _totalMintedAmount;
 
+    /// @notice Mapping of minted amounts for each epoch
     mapping(uint256 epoch => uint256 amount) internal _epochToMintedAmount;
 
     /// @dev Gap for upgrade safety
@@ -71,6 +72,10 @@ contract BaseEmissionsController is
         external
         initializer
     {
+        if (admin == address(0) || controller == address(0) || token == address(0) || satellite == address(0)) {
+            revert BaseEmissionsController_InvalidAddress();
+        }
+
         // Initialize the AccessControl and ReentrancyGuard contracts
         __AccessControl_init();
         __ReentrancyGuard_init();
@@ -95,8 +100,10 @@ contract BaseEmissionsController is
         _grantRole(CONTROLLER_ROLE, controller);
 
         // Set the Trust token contract address
-        _TRUST_TOKEN = token;
-        _SATELLITE_EMISSIONS_CONTROLLER = satellite;
+        _setTrustToken(token);
+
+        // Set the Satellite Emissions Controller contract address
+        _setSatelliteEmissionsController(satellite);
     }
 
     /* =================================================== */
@@ -173,6 +180,16 @@ contract BaseEmissionsController is
     /* =================================================== */
 
     /// @inheritdoc IBaseEmissionsController
+    function setTrustToken(address newToken) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _setTrustToken(newToken);
+    }
+
+    /// @inheritdoc IBaseEmissionsController
+    function setSatelliteEmissionsController(address newSatellite) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _setSatelliteEmissionsController(newSatellite);
+    }
+
+    /// @inheritdoc IBaseEmissionsController
     function setMessageGasCost(uint256 newGasCost) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setMessageGasCost(newGasCost);
     }
@@ -198,11 +215,29 @@ contract BaseEmissionsController is
             revert BaseEmissionsController_InsufficientBurnableBalance();
         }
         ITrust(_TRUST_TOKEN).burn(address(this), amount);
+
+        emit TrustBurned(address(this), amount);
     }
 
     /* =================================================== */
     /*                      INTERNAL                       */
     /* =================================================== */
+
+    function _setTrustToken(address newToken) internal {
+        if (newToken == address(0)) {
+            revert BaseEmissionsController_InvalidAddress();
+        }
+        _TRUST_TOKEN = newToken;
+        emit TrustTokenUpdated(newToken);
+    }
+
+    function _setSatelliteEmissionsController(address newSatellite) internal {
+        if (newSatellite == address(0)) {
+            revert BaseEmissionsController_InvalidAddress();
+        }
+        _SATELLITE_EMISSIONS_CONTROLLER = newSatellite;
+        emit SatelliteEmissionsControllerUpdated(newSatellite);
+    }
 
     function _balanceBurnable() internal view returns (uint256) {
         return ITrust(_TRUST_TOKEN).balanceOf(address(this));

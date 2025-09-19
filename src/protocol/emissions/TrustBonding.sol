@@ -131,24 +131,6 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
             revert TrustBonding_ZeroAddress();
         }
 
-        if (_multiVault == address(0)) {
-            revert TrustBonding_ZeroAddress();
-        }
-
-        if (
-            _systemUtilizationLowerBound > BASIS_POINTS_DIVISOR
-                || _systemUtilizationLowerBound < MINIMUM_SYSTEM_UTILIZATION_LOWER_BOUND
-        ) {
-            revert TrustBonding_InvalidUtilizationLowerBound();
-        }
-
-        if (
-            _personalUtilizationLowerBound > BASIS_POINTS_DIVISOR
-                || _personalUtilizationLowerBound < MINIMUM_PERSONAL_UTILIZATION_LOWER_BOUND
-        ) {
-            revert TrustBonding_InvalidUtilizationLowerBound();
-        }
-
         __AccessControl_init();
         __Pausable_init();
         __VotingEscrow_init(_owner, _trustToken, _epochLength);
@@ -156,10 +138,10 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         _grantRole(DEFAULT_ADMIN_ROLE, _owner);
         _grantRole(PAUSER_ROLE, _owner);
 
-        multiVault = _multiVault;
-        satelliteEmissionsController = _satelliteEmissionsController;
-        systemUtilizationLowerBound = _systemUtilizationLowerBound;
-        personalUtilizationLowerBound = _personalUtilizationLowerBound;
+        _setMultiVault(_multiVault);
+        _updateSatelliteEmissionsController(_satelliteEmissionsController);
+        _updateSystemUtilizationLowerBound(_systemUtilizationLowerBound);
+        _updatePersonalUtilizationLowerBound(_personalUtilizationLowerBound);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -213,7 +195,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         if (currentEpochLocal == 0) {
             return 0;
         }
-        uint256 prevEpoch = currentEpochLocal == 1 ? currentEpochLocal - 1 : 0;
+        uint256 prevEpoch = currentEpochLocal > 1 ? currentEpochLocal - 1 : 0;
         return _userEligibleRewardsForEpoch(account, prevEpoch) * _getPersonalUtilizationRatio(account, prevEpoch)
             / BASIS_POINTS_DIVISOR;
     }
@@ -370,13 +352,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
 
     /// @inheritdoc ITrustBonding
     function setMultiVault(address _multiVault) external onlyRole(TIMELOCK_ROLE) {
-        if (_multiVault == address(0)) {
-            revert TrustBonding_ZeroAddress();
-        }
-
-        multiVault = _multiVault;
-
-        emit MultiVaultSet(_multiVault);
+        _setMultiVault(_multiVault);
     }
 
     /// @inheritdoc ITrustBonding
@@ -384,35 +360,17 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         external
         onlyRole(TIMELOCK_ROLE)
     {
-        if (_satelliteEmissionsController == address(0)) {
-            revert TrustBonding_ZeroAddress();
-        }
-
-        satelliteEmissionsController = _satelliteEmissionsController;
-
-        emit SatelliteEmissionsControllerSet(_satelliteEmissionsController);
+        _updateSatelliteEmissionsController(_satelliteEmissionsController);
     }
 
     /// @inheritdoc ITrustBonding
     function updateSystemUtilizationLowerBound(uint256 newLowerBound) external onlyRole(TIMELOCK_ROLE) {
-        if (newLowerBound > BASIS_POINTS_DIVISOR || newLowerBound < MINIMUM_SYSTEM_UTILIZATION_LOWER_BOUND) {
-            revert TrustBonding_InvalidUtilizationLowerBound();
-        }
-
-        systemUtilizationLowerBound = newLowerBound;
-
-        emit SystemUtilizationLowerBoundUpdated(newLowerBound);
+        _updateSystemUtilizationLowerBound(newLowerBound);
     }
 
     /// @inheritdoc ITrustBonding
     function updatePersonalUtilizationLowerBound(uint256 newLowerBound) external onlyRole(TIMELOCK_ROLE) {
-        if (newLowerBound > BASIS_POINTS_DIVISOR || newLowerBound < MINIMUM_PERSONAL_UTILIZATION_LOWER_BOUND) {
-            revert TrustBonding_InvalidUtilizationLowerBound();
-        }
-
-        personalUtilizationLowerBound = newLowerBound;
-
-        emit PersonalUtilizationLowerBoundUpdated(newLowerBound);
+        _updatePersonalUtilizationLowerBound(newLowerBound);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -582,5 +540,41 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         uint256 ratioRange = BASIS_POINTS_DIVISOR - lowerBound;
         uint256 utilizationRatio = lowerBound + (delta * ratioRange) / target;
         return utilizationRatio;
+    }
+
+    function _setMultiVault(address newMultiVault) internal {
+        if (newMultiVault == address(0)) {
+            revert TrustBonding_ZeroAddress();
+        }
+        multiVault = newMultiVault;
+        emit MultiVaultSet(newMultiVault);
+    }
+
+    function _updateSatelliteEmissionsController(address newSatelliteEmissionsController) internal {
+        if (newSatelliteEmissionsController == address(0)) {
+            revert TrustBonding_ZeroAddress();
+        }
+        satelliteEmissionsController = newSatelliteEmissionsController;
+        emit SatelliteEmissionsControllerSet(newSatelliteEmissionsController);
+    }
+
+    function _updateSystemUtilizationLowerBound(uint256 newLowerBound) internal {
+        if (newLowerBound > BASIS_POINTS_DIVISOR || newLowerBound < MINIMUM_SYSTEM_UTILIZATION_LOWER_BOUND) {
+            revert TrustBonding_InvalidUtilizationLowerBound();
+        }
+
+        systemUtilizationLowerBound = newLowerBound;
+
+        emit SystemUtilizationLowerBoundUpdated(newLowerBound);
+    }
+
+    function _updatePersonalUtilizationLowerBound(uint256 newLowerBound) internal {
+        if (newLowerBound > BASIS_POINTS_DIVISOR || newLowerBound < MINIMUM_PERSONAL_UTILIZATION_LOWER_BOUND) {
+            revert TrustBonding_InvalidUtilizationLowerBound();
+        }
+
+        personalUtilizationLowerBound = newLowerBound;
+
+        emit PersonalUtilizationLowerBoundUpdated(newLowerBound);
     }
 }
