@@ -46,6 +46,7 @@ contract BaseEmissionsController is
     /// @notice Total amount of Trust tokens minted
     uint256 internal _totalMintedAmount;
 
+    /// @notice Mapping of minted amounts for each epoch
     mapping(uint256 epoch => uint256 amount) internal _epochToMintedAmount;
 
     /// @dev Gap for upgrade safety
@@ -71,6 +72,10 @@ contract BaseEmissionsController is
         external
         initializer
     {
+        if (admin == address(0) || controller == address(0) || token == address(0) || satellite == address(0)) {
+            revert BaseEmissionsController_InvalidAddress();
+        }
+
         // Initialize the AccessControl and ReentrancyGuard contracts
         __AccessControl_init();
         __ReentrancyGuard_init();

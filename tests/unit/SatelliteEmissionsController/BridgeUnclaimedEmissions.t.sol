@@ -9,8 +9,8 @@ import { ISatelliteEmissionsController } from "src/interfaces/ISatelliteEmission
 import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 
-/// @dev forge test --match-path 'tests/unit/SatelliteEmissionsController/BridgeUnclaimedRewards.t.sol'
-contract BridgeUnclaimedRewardsTest is TrustBondingBase {
+/// @dev forge test --match-path 'tests/unit/SatelliteEmissionsController/BridgeUnclaimedEmissions.t.sol'
+contract BridgeUnclaimedEmissionsTest is TrustBondingBase {
     uint256 internal constant GAS_QUOTE = 0.025 ether;
 
     /// @notice Events to test
@@ -29,7 +29,7 @@ contract BridgeUnclaimedRewardsTest is TrustBondingBase {
                         SUCCESSFUL BRIDGING TESTS
     //////////////////////////////////////////////////////////////*/
 
-    function test_bridgeUnclaimedRewards_successfulBridging_epoch4ToEpoch2() external {
+    function test_bridgeUnclaimedEmissions_successfulBridging_epoch4ToEpoch2() external {
         // Create lock and generate rewards for epoch 2
         _createLock(users.alice, initialTokens);
         _advanceToEpoch(3);
@@ -47,7 +47,7 @@ contract BridgeUnclaimedRewardsTest is TrustBondingBase {
         uint256 satelliteBalanceBefore = address(protocol.satelliteEmissionsController).balance;
 
         resetPrank(users.admin);
-        protocol.satelliteEmissionsController.bridgeUnclaimedRewards{ value: GAS_QUOTE }(2);
+        protocol.satelliteEmissionsController.bridgeUnclaimedEmissions{ value: GAS_QUOTE }(2);
 
         uint256 satelliteBalanceAfter = address(protocol.satelliteEmissionsController).balance;
         uint256 satelliteBalanceDiff = satelliteBalanceBefore - satelliteBalanceAfter;
@@ -56,7 +56,7 @@ contract BridgeUnclaimedRewardsTest is TrustBondingBase {
         assertEq(satelliteBalanceDiff, unclaimedRewardsBefore, "Bridged amount should match unclaimed rewards");
     }
 
-    function test_bridgeUnclaimedRewards_successfulBridging_epoch5ToEpoch3() external {
+    function test_bridgeUnclaimedEmissions_successfulBridging_epoch5ToEpoch3() external {
         // Create locks for multiple users to generate different reward scenarios
         _createLock(users.alice, initialTokens);
         _createLock(users.bob, initialTokens / 2);
@@ -77,7 +77,7 @@ contract BridgeUnclaimedRewardsTest is TrustBondingBase {
         uint256 satelliteBalanceBefore = address(protocol.satelliteEmissionsController).balance;
 
         resetPrank(users.admin);
-        protocol.satelliteEmissionsController.bridgeUnclaimedRewards{ value: GAS_QUOTE }(3);
+        protocol.satelliteEmissionsController.bridgeUnclaimedEmissions{ value: GAS_QUOTE }(3);
 
         uint256 satelliteBalanceAfter = address(protocol.satelliteEmissionsController).balance;
         uint256 satelliteBalanceDiff = satelliteBalanceBefore - satelliteBalanceAfter;
@@ -85,7 +85,7 @@ contract BridgeUnclaimedRewardsTest is TrustBondingBase {
         assertEq(satelliteBalanceDiff, unclaimedRewardsBefore, "Should bridge Bob's unclaimed rewards");
     }
 
-    function test_bridgeUnclaimedRewards_successfulBridging_allRewardsUnclaimed() external {
+    function test_bridgeUnclaimedEmissions_successfulBridging_allRewardsUnclaimed() external {
         // Create lock but never claim any rewards
         _createLock(users.alice, initialTokens);
 
@@ -100,7 +100,7 @@ contract BridgeUnclaimedRewardsTest is TrustBondingBase {
         uint256 satelliteBalanceBefore = address(protocol.satelliteEmissionsController).balance;
 
         resetPrank(users.admin);
-        protocol.satelliteEmissionsController.bridgeUnclaimedRewards{ value: GAS_QUOTE }(2);
+        protocol.satelliteEmissionsController.bridgeUnclaimedEmissions{ value: GAS_QUOTE }(2);
 
         uint256 satelliteBalanceAfter = address(protocol.satelliteEmissionsController).balance;
         uint256 satelliteBalanceDiff = satelliteBalanceBefore - satelliteBalanceAfter;
@@ -115,7 +115,7 @@ contract BridgeUnclaimedRewardsTest is TrustBondingBase {
     /*//////////////////////////////////////////////////////////////
                         FAILED BRIDGING TESTS
     //////////////////////////////////////////////////////////////*/
-    function test_bridgeUnclaimedRewards_revertWhen_previouslyClaimed() external {
+    function test_bridgeUnclaimedEmissions_revertWhen_previouslyClaimed() external {
         _createLock(users.alice, initialTokens);
         _advanceToEpoch(4);
 
@@ -124,16 +124,16 @@ contract BridgeUnclaimedRewardsTest is TrustBondingBase {
         assertGt(unclaimedRewards, 0, "Should have unclaimed rewards");
 
         resetPrank(users.admin);
-        protocol.satelliteEmissionsController.bridgeUnclaimedRewards{ value: GAS_QUOTE }(2);
+        protocol.satelliteEmissionsController.bridgeUnclaimedEmissions{ value: GAS_QUOTE }(2);
         vm.expectRevert(
             abi.encodeWithSelector(
                 ISatelliteEmissionsController.SatelliteEmissionsController_PreviouslyBridgedUnclaimedRewards.selector
             )
         );
-        protocol.satelliteEmissionsController.bridgeUnclaimedRewards{ value: GAS_QUOTE }(2);
+        protocol.satelliteEmissionsController.bridgeUnclaimedEmissions{ value: GAS_QUOTE }(2);
     }
 
-    function test_bridgeUnclaimedRewards_revertWhen_insufficientGasPayment() external {
+    function test_bridgeUnclaimedEmissions_revertWhen_insufficientGasPayment() external {
         _createLock(users.alice, initialTokens);
         _advanceToEpoch(4);
 
@@ -147,23 +147,23 @@ contract BridgeUnclaimedRewardsTest is TrustBondingBase {
                 ISatelliteEmissionsController.SatelliteEmissionsController_InsufficientGasPayment.selector
             )
         );
-        protocol.satelliteEmissionsController.bridgeUnclaimedRewards{ value: GAS_QUOTE / 2 }(2); // Insufficient gas
+        protocol.satelliteEmissionsController.bridgeUnclaimedEmissions{ value: GAS_QUOTE / 2 }(2); // Insufficient gas
     }
 
-    function test_bridgeUnclaimedRewards_revertWhen_unauthorized() external {
+    function test_bridgeUnclaimedEmissions_revertWhen_unauthorized() external {
         _createLock(users.alice, initialTokens);
         _advanceToEpoch(4);
 
         resetPrank(users.alice); // Alice is not admin
         vm.expectRevert();
-        protocol.satelliteEmissionsController.bridgeUnclaimedRewards{ value: GAS_QUOTE }(2);
+        protocol.satelliteEmissionsController.bridgeUnclaimedEmissions{ value: GAS_QUOTE }(2);
     }
 
     /*//////////////////////////////////////////////////////////////
                         EPOCH-SPECIFIC BRIDGING TESTS
     //////////////////////////////////////////////////////////////*/
 
-    function test_bridgeUnclaimedRewards_revertWhen_bridgingTooRecentEpoch() external {
+    function test_bridgeUnclaimedEmissions_revertWhen_bridgingTooRecentEpoch() external {
         _createLock(users.alice, initialTokens);
         _advanceToEpoch(4);
 
@@ -177,7 +177,7 @@ contract BridgeUnclaimedRewardsTest is TrustBondingBase {
                 ISatelliteEmissionsController.SatelliteEmissionsController_InvalidBridgeAmount.selector
             )
         );
-        protocol.satelliteEmissionsController.bridgeUnclaimedRewards{ value: GAS_QUOTE }(3);
+        protocol.satelliteEmissionsController.bridgeUnclaimedEmissions{ value: GAS_QUOTE }(3);
 
         // Try to bridge current epoch (epoch 4)
         vm.expectRevert(
@@ -185,10 +185,10 @@ contract BridgeUnclaimedRewardsTest is TrustBondingBase {
                 ISatelliteEmissionsController.SatelliteEmissionsController_InvalidBridgeAmount.selector
             )
         );
-        protocol.satelliteEmissionsController.bridgeUnclaimedRewards{ value: GAS_QUOTE }(4);
+        protocol.satelliteEmissionsController.bridgeUnclaimedEmissions{ value: GAS_QUOTE }(4);
     }
 
-    function test_bridgeUnclaimedRewards_validBridging_epoch5ToEpoch2And3() external {
+    function test_bridgeUnclaimedEmissions_validBridging_epoch5ToEpoch2And3() external {
         // Create locks for different users
         _createLock(users.alice, initialTokens);
         _createLock(users.bob, initialTokens);
@@ -211,20 +211,20 @@ contract BridgeUnclaimedRewardsTest is TrustBondingBase {
         assertGt(unclaimedEpoch2, 0, "Should have Bob's unclaimed epoch 2 rewards");
 
         resetPrank(users.admin);
-        protocol.satelliteEmissionsController.bridgeUnclaimedRewards{ value: GAS_QUOTE }(2);
+        protocol.satelliteEmissionsController.bridgeUnclaimedEmissions{ value: GAS_QUOTE }(2);
 
         // Bridge epoch 3 rewards (should have Bob's unclaimed rewards)
         uint256 unclaimedEpoch3 = protocol.trustBonding.getUnclaimedRewardsForEpoch(3);
         assertGt(unclaimedEpoch3, 0, "Should have Bob's unclaimed epoch 3 rewards");
 
-        protocol.satelliteEmissionsController.bridgeUnclaimedRewards{ value: GAS_QUOTE }(3);
+        protocol.satelliteEmissionsController.bridgeUnclaimedEmissions{ value: GAS_QUOTE }(3);
     }
 
     /*//////////////////////////////////////////////////////////////
                         EDGE CASE TESTS
     //////////////////////////////////////////////////////////////*/
 
-    function test_bridgeUnclaimedRewards_earlyEpochs_noRewardsToBridge() external {
+    function test_bridgeUnclaimedEmissions_earlyEpochs_noRewardsToBridge() external {
         // Test bridging in very early epochs when no bridging should be possible
         _createLock(users.alice, initialTokens);
 
@@ -243,7 +243,7 @@ contract BridgeUnclaimedRewardsTest is TrustBondingBase {
         assertEq(unclaimedEpoch0InEpoch2, 1_000_000 * 1e18, "Epoch 0 should now release the full 1,000,000 emissions");
     }
 
-    function test_bridgeUnclaimedRewards_gasRefund() external {
+    function test_bridgeUnclaimedEmissions_gasRefund() external {
         _createLock(users.alice, initialTokens);
         _advanceToEpoch(4);
 
@@ -251,7 +251,7 @@ contract BridgeUnclaimedRewardsTest is TrustBondingBase {
         uint256 adminBalanceBefore = users.admin.balance;
 
         resetPrank(users.admin);
-        protocol.satelliteEmissionsController.bridgeUnclaimedRewards{ value: excessGas }(2);
+        protocol.satelliteEmissionsController.bridgeUnclaimedEmissions{ value: excessGas }(2);
 
         uint256 adminBalanceAfter = users.admin.balance;
         uint256 gasUsed = adminBalanceBefore - adminBalanceAfter;
@@ -260,7 +260,7 @@ contract BridgeUnclaimedRewardsTest is TrustBondingBase {
         assertGe(gasUsed, GAS_QUOTE, "Should use at least the minimum required gas");
     }
 
-    function test_bridgeUnclaimedRewards_multipleUsers_partialClaims() external {
+    function test_bridgeUnclaimedEmissions_multipleUsers_partialClaims() external {
         // Setup multiple users with different behaviors
         _createLock(users.alice, initialTokens);
         _createLock(users.bob, initialTokens / 2);
@@ -288,7 +288,7 @@ contract BridgeUnclaimedRewardsTest is TrustBondingBase {
         uint256 satelliteBalanceBefore = address(protocol.satelliteEmissionsController).balance;
 
         resetPrank(users.admin);
-        protocol.satelliteEmissionsController.bridgeUnclaimedRewards{ value: GAS_QUOTE }(2);
+        protocol.satelliteEmissionsController.bridgeUnclaimedEmissions{ value: GAS_QUOTE }(2);
 
         uint256 satelliteBalanceAfter = address(protocol.satelliteEmissionsController).balance;
         uint256 bridgedAmount = satelliteBalanceBefore - satelliteBalanceAfter;

@@ -6,12 +6,29 @@ import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.so
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { ISatelliteEmissionsController } from "src/interfaces/ISatelliteEmissionsController.sol";
 import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
-import { FinalityState } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
+import { MetaERC20Dispatcher } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
+import { MetaERC20DispatchInit, FinalityState } from "src/interfaces/IMetaLayer.sol";
+import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";
+import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 /// @dev forge test --match-path 'tests/unit/SatelliteEmissionsController/AccessControl.t.sol'
 contract AccessControlTest is BaseTest {
+    // Test constants
+    uint256 internal constant TEST_START_TIMESTAMP = 1_640_995_200; // Jan 1, 2022
+    uint256 internal constant TEST_EPOCH_LENGTH = 14 days;
+    uint256 internal constant TEST_EMISSIONS_PER_EPOCH = 1_000_000 * 1e18;
+    uint256 internal constant TEST_REDUCTION_CLIFF = 26;
+    uint256 internal constant TEST_REDUCTION_BASIS_POINTS = 1000; // 10%
+    uint32 internal constant TEST_RECIPIENT_DOMAIN = 1;
+    uint256 internal constant TEST_GAS_LIMIT = 125_000;
+
+    // Initializer structs
+    MetaERC20DispatchInit public metaERC20DispatchInit;
+    CoreEmissionsControllerInit public coreEmissionsInit;
+
     /// @notice Test addresses
     address public unauthorizedUser = address(0x999);
+    address public baseEmissionsController = address(0xABC);
 
     /// @notice Role constants for testing
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
@@ -27,6 +44,83 @@ contract AccessControlTest is BaseTest {
     function setUp() public override {
         super.setUp();
         vm.deal(unauthorizedUser, 1 ether);
+    }
+
+    function _deploySatelliteEmissionsController() internal returns (SatelliteEmissionsController) {
+        // Deploy SatelliteEmissionsController implementation
+        SatelliteEmissionsController satelliteEmissionsControllerImpl = new SatelliteEmissionsController();
+
+        // Deploy proxy
+        TransparentUpgradeableProxy satelliteEmissionsControllerProxyContract =
+            new TransparentUpgradeableProxy(address(satelliteEmissionsControllerImpl), users.admin, "");
+
+        SatelliteEmissionsController satelliteEmissionsController =
+            SatelliteEmissionsController(payable(address(satelliteEmissionsControllerProxyContract)));
+
+        // Initialize the contract
+        metaERC20DispatchInit = MetaERC20DispatchInit({
+            hubOrSpoke: address(0x123), // Mock meta spoke
+            recipientDomain: TEST_RECIPIENT_DOMAIN,
+            recipientAddress: address(baseEmissionsController),
+            gasLimit: TEST_GAS_LIMIT,
+            finalityState: FinalityState.INSTANT
+        });
+
+        coreEmissionsInit = CoreEmissionsControllerInit({
+            startTimestamp: TEST_START_TIMESTAMP,
+            emissionsLength: TEST_EPOCH_LENGTH,
+            emissionsPerEpoch: TEST_EMISSIONS_PER_EPOCH,
+            emissionsReductionCliff: TEST_REDUCTION_CLIFF,
+            emissionsReductionBasisPoints: TEST_REDUCTION_BASIS_POINTS
+        });
+
+        vm.label(address(satelliteEmissionsController), "SatelliteEmissionsController");
+
+        return satelliteEmissionsController;
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                    INITIALIZATION TESTS
+    //////////////////////////////////////////////////////////////*/
+
+    function test_initialize_shouldRevertIfAdminIsZeroAddress() external {
+        SatelliteEmissionsController satelliteEmissionsController = _deploySatelliteEmissionsController();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(ISatelliteEmissionsController.SatelliteEmissionsController_InvalidAddress.selector)
+        );
+
+        satelliteEmissionsController.initialize(
+            address(0),
+            address(protocol.trust),
+            address(baseEmissionsController),
+            metaERC20DispatchInit,
+            coreEmissionsInit
+        );
+    }
+
+    function test_initialize_shouldRevertIfTrustBondingIsZeroAddress() external {
+        SatelliteEmissionsController satelliteEmissionsController = _deploySatelliteEmissionsController();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(ISatelliteEmissionsController.SatelliteEmissionsController_InvalidAddress.selector)
+        );
+
+        satelliteEmissionsController.initialize(
+            users.admin, address(0), address(baseEmissionsController), metaERC20DispatchInit, coreEmissionsInit
+        );
+    }
+
+    function test_initialize_shouldRevertIfBaseEmissionsControllerIsZeroAddress() external {
+        SatelliteEmissionsController satelliteEmissionsController = _deploySatelliteEmissionsController();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(ISatelliteEmissionsController.SatelliteEmissionsController_InvalidAddress.selector)
+        );
+
+        satelliteEmissionsController.initialize(
+            users.admin, address(protocol.trust), address(0), metaERC20DispatchInit, coreEmissionsInit
+        );
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -238,6 +332,15 @@ contract AccessControlTest is BaseTest {
             DEFAULT_ADMIN_ROLE TESTS (setMetaERC20SpokeOrHub)
     //////////////////////////////////////////////////////////////*/
 
+    function test_setMetaERC20SpokeOrHub_shouldRevertWithZeroAddress() external {
+        address zeroAddress = address(0);
+
+        vm.expectRevert(abi.encodeWithSelector(MetaERC20Dispatcher.MetaERC20Dispatcher_InvalidAddress.selector));
+
+        resetPrank(users.admin);
+        protocol.satelliteEmissionsController.setMetaERC20SpokeOrHub(zeroAddress);
+    }
+
     function test_setMetaERC20SpokeOrHub_shouldSucceedWithAdminRole() external {
         address newSpokeOrHub = address(0x123456);
         address originalSpokeOrHub = protocol.satelliteEmissionsController.getMetaERC20SpokeOrHub();
@@ -254,19 +357,6 @@ contract AccessControlTest is BaseTest {
             "MetaERC20SpokeOrHub should be updated"
         );
         assertNotEq(originalSpokeOrHub, newSpokeOrHub, "Should be different from original");
-    }
-
-    function test_setMetaERC20SpokeOrHub_shouldAllowZeroAddress() external {
-        address zeroAddress = address(0);
-
-        resetPrank(users.admin);
-        protocol.satelliteEmissionsController.setMetaERC20SpokeOrHub(zeroAddress);
-
-        assertEq(
-            protocol.satelliteEmissionsController.getMetaERC20SpokeOrHub(),
-            zeroAddress,
-            "MetaERC20SpokeOrHub should accept zero address"
-        );
     }
 
     function test_setMetaERC20SpokeOrHub_shouldRevertWithUnauthorizedUser() external {

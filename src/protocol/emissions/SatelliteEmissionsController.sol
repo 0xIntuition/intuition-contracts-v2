@@ -44,8 +44,8 @@ contract SatelliteEmissionsController is
     /// @notice Address of the BaseEmissionsController contract
     address internal _BASE_EMISSIONS_CONTROLLER;
 
-    /// @notice Mapping of bridged rewards for each epoch
-    mapping(uint256 epoch => uint256 amount) internal _bridgedRewards;
+    /// @notice Mapping of bridged emissions for each epoch
+    mapping(uint256 epoch => uint256 amount) internal _bridgedEmissions;
 
     /* =================================================== */
     /*                    CONSTRUCTOR                      */
@@ -65,6 +65,10 @@ contract SatelliteEmissionsController is
         external
         initializer
     {
+        if (admin == address(0) || trustBonding == address(0) || baseEmissionsController == address(0)) {
+            revert SatelliteEmissionsController_InvalidAddress();
+        }
+
         __AccessControl_init();
         __ReentrancyGuard_init();
 
@@ -90,6 +94,25 @@ contract SatelliteEmissionsController is
         // Set TrustBonding and BaseEmissionsController addresses
         _setTrustBonding(trustBonding);
         _setBaseEmissionsController(baseEmissionsController);
+    }
+
+    /* =================================================== */
+    /*                      GETTERS                        */
+    /* =================================================== */
+
+    /// @inheritdoc ISatelliteEmissionsController
+    function getTrustBonding() external view returns (address) {
+        return _TRUST_BONDING;
+    }
+
+    /// @inheritdoc ISatelliteEmissionsController
+    function getBaseEmissionsController() external view returns (address) {
+        return _BASE_EMISSIONS_CONTROLLER;
+    }
+
+    /// @inheritdoc ISatelliteEmissionsController
+    function getBridgedEmissions(uint256 epoch) external view returns (uint256) {
+        return _bridgedEmissions[epoch];
     }
 
     /* =================================================== */
@@ -164,7 +187,7 @@ contract SatelliteEmissionsController is
     }
 
     /// @inheritdoc ISatelliteEmissionsController
-    function bridgeUnclaimedRewards(uint256 epoch) external payable onlyRole(DEFAULT_ADMIN_ROLE) {
+    function bridgeUnclaimedEmissions(uint256 epoch) external payable onlyRole(DEFAULT_ADMIN_ROLE) {
         // Prevent bridging of zero amount if no unclaimed rewards are available.
         uint256 amount = ITrustBonding(_TRUST_BONDING).getUnclaimedRewardsForEpoch(epoch);
         if (amount == 0) {
@@ -172,12 +195,12 @@ contract SatelliteEmissionsController is
         }
 
         // Check if rewards for this epoch have already been reclaimed and bridged.
-        if (_bridgedRewards[epoch] > 0) {
+        if (_bridgedEmissions[epoch] > 0) {
             revert SatelliteEmissionsController_PreviouslyBridgedUnclaimedRewards();
         }
 
         // Mark the unclaimed rewards as bridged and prevent from being claimed again.
-        _bridgedRewards[epoch] = amount;
+        _bridgedEmissions[epoch] = amount;
 
         // Calculate gas limit for the bridge transfer using the MetaLayer router.
         uint256 gasLimit = _quoteGasPayment(_recipientDomain, GAS_CONSTANT + _messageGasCost);

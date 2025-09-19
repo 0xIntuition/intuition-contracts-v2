@@ -31,6 +31,12 @@ contract MetaERC20Dispatcher {
     event MetaERC20SpokeOrHubUpdated(address newMetaERC20SpokeOrHub);
 
     /* =================================================== */
+    /*                      ERRORS                         */
+    /* =================================================== */
+
+    error MetaERC20Dispatcher_InvalidAddress();
+
+    /* =================================================== */
     /*                    INITIALIZER                      */
     /* =================================================== */
 
@@ -89,6 +95,9 @@ contract MetaERC20Dispatcher {
     }
 
     function _setMetaERC20SpokeOrHub(address newMetaERC20SpokeOrHub) internal {
+        if (newMetaERC20SpokeOrHub == address(0)) {
+            revert MetaERC20Dispatcher_InvalidAddress();
+        }
         _metaERC20SpokeOrHub = newMetaERC20SpokeOrHub;
         emit MetaERC20SpokeOrHubUpdated(newMetaERC20SpokeOrHub);
     }
