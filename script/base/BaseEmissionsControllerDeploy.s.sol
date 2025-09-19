@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.27;
+// SPDX-License-Identifier: BUSL-1.1
+pragma solidity 0.8.29;
 
 import { Script, console2 } from "forge-std/src/Script.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";

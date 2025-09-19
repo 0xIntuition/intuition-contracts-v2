@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.29;
+pragma solidity 0.8.29;
 
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
@@ -52,7 +52,6 @@ contract SatelliteEmissionsControllerGettersTest is BaseTest {
         MetaERC20DispatchInit memory metaERC20DispatchInit = MetaERC20DispatchInit({
             hubOrSpoke: TEST_HUB_ADDRESS,
             recipientDomain: TEST_RECIPIENT_DOMAIN,
-            recipientAddress: address(TEST_BASE_EMISSIONS_CONTROLLER),
             gasLimit: TEST_GAS_LIMIT,
             finalityState: FinalityState.INSTANT
         });
@@ -79,6 +78,21 @@ contract SatelliteEmissionsControllerGettersTest is BaseTest {
     /* =================================================== */
     /*           CORE EMISSIONS GETTERS TESTS             */
     /* =================================================== */
+
+    function test_getTrustBonding_Success() public {
+        address trustBonding = satelliteEmissionsController.getTrustBonding();
+        assertEq(trustBonding, address(protocol.trustBonding));
+    }
+
+    function test_getBaseEmissionsController_Success() public {
+        address baseEmissionsController = satelliteEmissionsController.getBaseEmissionsController();
+        assertEq(baseEmissionsController, TEST_BASE_EMISSIONS_CONTROLLER);
+    }
+
+    function test_getBridgedEmissions_InitiallyReturnsZero() public {
+        uint256 bridgedEmissions = satelliteEmissionsController.getBridgedEmissions(0);
+        assertEq(bridgedEmissions, 0);
+    }
 
     function test_getStartTimestamp_Success() public {
         uint256 startTimestamp = satelliteEmissionsController.getStartTimestamp();

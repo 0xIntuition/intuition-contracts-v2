@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.29;
+pragma solidity 0.8.29;
 
 import { FinalityState, IMetaERC20HubOrSpoke, IMetalayerRouter, IIGP } from "src/interfaces/IMetaLayer.sol";
 
@@ -18,6 +18,9 @@ contract MetaERC20Dispatcher {
     FinalityState internal _finalityState;
     uint256 internal _messageGasCost;
 
+    /// @dev Gap for upgrade safety
+    uint256[50] private __gap;
+
     /* =================================================== */
     /*                      EVENTS                         */
     /* =================================================== */
@@ -29,6 +32,12 @@ contract MetaERC20Dispatcher {
     event RecipientDomainUpdated(uint32 newRecipientDomain);
 
     event MetaERC20SpokeOrHubUpdated(address newMetaERC20SpokeOrHub);
+
+    /* =================================================== */
+    /*                      ERRORS                         */
+    /* =================================================== */
+
+    error MetaERC20Dispatcher_InvalidAddress();
 
     /* =================================================== */
     /*                    INITIALIZER                      */
@@ -89,6 +98,9 @@ contract MetaERC20Dispatcher {
     }
 
     function _setMetaERC20SpokeOrHub(address newMetaERC20SpokeOrHub) internal {
+        if (newMetaERC20SpokeOrHub == address(0)) {
+            revert MetaERC20Dispatcher_InvalidAddress();
+        }
         _metaERC20SpokeOrHub = newMetaERC20SpokeOrHub;
         emit MetaERC20SpokeOrHubUpdated(newMetaERC20SpokeOrHub);
     }

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.27;
+pragma solidity 0.8.29;
 
 import { TrustBonding } from "../../src/protocol/emissions/TrustBonding.sol";
 
@@ -46,12 +46,5 @@ contract TrustBondingMock is TrustBonding {
      */
     function setUserClaimedRewardsForEpoch(address user, uint256 epoch, uint256 amount) external {
         userClaimedRewardsForEpoch[user][epoch] = amount;
-    }
-
-    /**
-     * @notice Helper function to set max claimable protocol fees for testing
-     */
-    function setMaxClaimableProtocolFeesForEpoch(uint256 epoch, uint256 amount) external {
-        maxClaimableProtocolFeesForEpoch[epoch] = amount;
     }
 }

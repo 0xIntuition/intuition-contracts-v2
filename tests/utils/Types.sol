@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
-pragma solidity >=0.8.22;
+// SPDX-License-Identifier: BUSL-1.1
+pragma solidity >=0.8.29;
 
 import { Trust } from "src/Trust.sol";
 import { TrustToken } from "src/legacy/TrustToken.sol";

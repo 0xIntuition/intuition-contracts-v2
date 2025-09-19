@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.29;
+pragma solidity 0.8.29;
 
 import { CoreEmissionsControllerBase } from "./CoreEmissionsControllerBase.t.sol";
 import { console2 } from "forge-std/src/console2.sol";
@@ -417,6 +417,41 @@ contract CoreEmissionsControllerTest is CoreEmissionsControllerBase {
         assertEq(totalEmissions, expected, "Total emissions calculation incorrect");
     }
 
+    function test_emissions_doesNotZeroOutEmissionsWithinPlannedHorizon_whenUsingProdParams() public {
+        // 75M tokens (7.5% of 1B total supply) starting emissions per year
+        uint256 prodStartingEmissionsPerYear = 75_000_000 * 1e18;
+        uint256 prodEmissionsPerEpoch = prodStartingEmissionsPerYear / DEFAULT_REDUCTION_CLIFF;
+
+        controller.setupCustomScenario(
+            TWO_WEEKS, // emissionsLength
+            prodEmissionsPerEpoch, // emissionsPerEpoch
+            DEFAULT_REDUCTION_CLIFF, // emissionsReductionCliff (after 26 bi-weekly epochs = 1 year)
+            DEFAULT_REDUCTION_BASIS_POINTS // emissionsReductionBasisPoints (10% emission reduction per cliff)
+        );
+
+        uint256 YEARS = 399; // practical time horizon we care about (test runs show that emissions zero out after ~400
+            // years)
+        uint256 EPOCHS_PER_CLIFF = 26; // bi-weekly scenario => 1 year per cliff
+
+        uint256 last = type(uint256).max;
+        uint256 epochLen = controller.getEpochLength();
+
+        for (uint256 y = 0; y <= YEARS; y++) {
+            uint256 epochAtCliff = y * EPOCHS_PER_CLIFF;
+
+            // Value via epoch-based path
+            uint256 e = controller.getEmissionsAtEpoch(epochAtCliff);
+            assertGt(e, 0, "Emissions unexpectedly hit zero within horizon");
+            if (y > 0) assertLe(e, last, "Emissions should be non-increasing");
+            last = e;
+
+            // Cross-check via timestamp-based path at mid-epoch
+            uint256 tMid = controller.getEpochTimestampStart(epochAtCliff) + (epochLen / 2);
+            uint256 eTs = controller.getEmissionsAtTimestamp(tMid);
+            assertEq(eTs, e, "Timestamp-based emissions mismatch at cliff");
+        }
+    }
+
     /* =================================================== */
     /*               INTERNAL FUNCTION TESTS              */
     /* =================================================== */
@@ -513,7 +548,7 @@ contract CoreEmissionsControllerTest is CoreEmissionsControllerBase {
     function test_customScenario_DifferentParameters() public {
         // Test with custom parameters
         uint256 customEpochLength = 3 days;
-        uint256 customEmissions = 500_000 * 1e18;
+        uint256 customEmissions = 1_000_000 * 1e18;
         uint256 customCliff = 100; // 100 epochs
         uint256 customReduction = 500; // 5%
 

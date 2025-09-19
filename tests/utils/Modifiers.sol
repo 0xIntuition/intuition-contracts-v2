@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
-pragma solidity >=0.8.22;
+// SPDX-License-Identifier: BUSL-1.1
+pragma solidity >=0.8.29;
 
 import { Users, Protocol } from "tests/utils/Types.sol";
 import { Utils } from "tests/utils/Utils.sol";

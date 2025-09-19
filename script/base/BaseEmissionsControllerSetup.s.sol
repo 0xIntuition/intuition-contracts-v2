@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.27;
+// SPDX-License-Identifier: BUSL-1.1
+pragma solidity 0.8.29;
 
 import { Script, console2 } from "forge-std/src/Script.sol";
 
@@ -51,7 +51,6 @@ contract BaseEmissionsControllerSetup is SetupScript {
     function _setupContracts() internal {
         // Initialize SatelliteEmissionsController with proper struct parameters
         MetaERC20DispatchInit memory metaERC20DispatchInit = MetaERC20DispatchInit({
-            recipientAddress: BASE_EMISSIONS_CONTROLLER,
             hubOrSpoke: METALAYER_HUB_OR_SPOKE,
             recipientDomain: SATELLITE_METALAYER_RECIPIENT_DOMAIN,
             gasLimit: METALAYER_GAS_LIMIT,
