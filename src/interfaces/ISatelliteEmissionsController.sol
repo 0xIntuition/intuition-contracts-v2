@@ -37,11 +37,11 @@ interface ISatelliteEmissionsController {
     function getBaseEmissionsController() external view returns (address);
 
     /**
-     * @notice Get the amount of rewards bridged for a specific epoch
+     * @notice Get the amount of emissions bridged back to Base for a specific epoch
      * @param epoch The epoch to query
-     * @return The amount of rewards bridged for the given epoch
+     * @return The amount of rewards bridged back to Base for the given epoch
      */
-    function getBridgedRewards(uint256 epoch) external view returns (uint256);
+    function getBridgedEmissions(uint256 epoch) external view returns (uint256);
 
     /* =================================================== */
     /*                    CONTROLLER                       */

@@ -44,8 +44,8 @@ contract SatelliteEmissionsController is
     /// @notice Address of the BaseEmissionsController contract
     address internal _BASE_EMISSIONS_CONTROLLER;
 
-    /// @notice Mapping of bridged rewards for each epoch
-    mapping(uint256 epoch => uint256 amount) internal _bridgedRewards;
+    /// @notice Mapping of bridged emissions for each epoch
+    mapping(uint256 epoch => uint256 amount) internal _bridgedEmissions;
 
     /* =================================================== */
     /*                    CONSTRUCTOR                      */
@@ -106,8 +106,8 @@ contract SatelliteEmissionsController is
     }
 
     /// @inheritdoc ISatelliteEmissionsController
-    function getBridgedRewards(uint256 epoch) external view returns (uint256) {
-        return _bridgedRewards[epoch];
+    function getBridgedEmissions(uint256 epoch) external view returns (uint256) {
+        return _bridgedEmissions[epoch];
     }
 
     /* =================================================== */
@@ -166,12 +166,12 @@ contract SatelliteEmissionsController is
         }
 
         // Check if rewards for this epoch have already been reclaimed and bridged.
-        if (_bridgedRewards[epoch] > 0) {
+        if (_bridgedEmissions[epoch] > 0) {
             revert SatelliteEmissionsController_PreviouslyBridgedUnclaimedRewards();
         }
 
         // Mark the unclaimed rewards as bridged and prevent from being claimed again.
-        _bridgedRewards[epoch] = amount;
+        _bridgedEmissions[epoch] = amount;
 
         // Calculate gas limit for the bridge transfer using the MetaLayer router.
         uint256 gasLimit = _quoteGasPayment(_recipientDomain, GAS_CONSTANT + _messageGasCost);
