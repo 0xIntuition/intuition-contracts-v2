@@ -87,11 +87,9 @@ contract SatelliteEmissionsController is
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(CONTROLLER_ROLE, trustBonding);
 
-        _TRUST_BONDING = trustBonding;
-        _BASE_EMISSIONS_CONTROLLER = baseEmissionsController;
-
-        emit TrustBondingUpdated(trustBonding);
-        emit BaseEmissionsControllerUpdated(baseEmissionsController);
+        // Set TrustBonding and BaseEmissionsController addresses
+        _setTrustBonding(trustBonding);
+        _setBaseEmissionsController(baseEmissionsController);
     }
 
     /* =================================================== */
