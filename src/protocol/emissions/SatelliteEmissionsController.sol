@@ -137,20 +137,12 @@ contract SatelliteEmissionsController is
 
     /// @inheritdoc ISatelliteEmissionsController
     function setTrustBonding(address newTrustBonding) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newTrustBonding == address(0)) {
-            revert SatelliteEmissionsController_InvalidAddress();
-        }
-        _TRUST_BONDING = newTrustBonding;
-        emit TrustBondingUpdated(newTrustBonding);
+        _setTrustBonding(newTrustBonding);
     }
 
     /// @inheritdoc ISatelliteEmissionsController
     function setBaseEmissionsController(address newBaseEmissionsController) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newBaseEmissionsController == address(0)) {
-            revert SatelliteEmissionsController_InvalidAddress();
-        }
-        _BASE_EMISSIONS_CONTROLLER = newBaseEmissionsController;
-        emit BaseEmissionsControllerUpdated(newBaseEmissionsController);
+        _setBaseEmissionsController(newBaseEmissionsController);
     }
 
     /// @inheritdoc ISatelliteEmissionsController
@@ -211,5 +203,25 @@ contract SatelliteEmissionsController is
         }
 
         emit UnclaimedRewardsBridged(epoch, amount);
+    }
+
+    /* =================================================== */
+    /*                       INTERNAL                      */
+    /* =================================================== */
+
+    function _setTrustBonding(address newTrustBonding) internal {
+        if (newTrustBonding == address(0)) {
+            revert SatelliteEmissionsController_InvalidAddress();
+        }
+        _TRUST_BONDING = newTrustBonding;
+        emit TrustBondingUpdated(newTrustBonding);
+    }
+
+    function _setBaseEmissionsController(address newBaseEmissionsController) internal {
+        if (newBaseEmissionsController == address(0)) {
+            revert SatelliteEmissionsController_InvalidAddress();
+        }
+        _BASE_EMISSIONS_CONTROLLER = newBaseEmissionsController;
+        emit BaseEmissionsControllerUpdated(newBaseEmissionsController);
     }
 }

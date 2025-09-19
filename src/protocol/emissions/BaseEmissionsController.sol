@@ -95,11 +95,10 @@ contract BaseEmissionsController is
         _grantRole(CONTROLLER_ROLE, controller);
 
         // Set the Trust token contract address
-        _TRUST_TOKEN = token;
-        _SATELLITE_EMISSIONS_CONTROLLER = satellite;
+        _setTrustToken(token);
 
-        emit TrustTokenUpdated(token);
-        emit SatelliteEmissionsControllerUpdated(satellite);
+        // Set the Satellite Emissions Controller contract address
+        _setSatelliteEmissionsController(satellite);
     }
 
     /* =================================================== */
@@ -177,20 +176,12 @@ contract BaseEmissionsController is
 
     /// @inheritdoc IBaseEmissionsController
     function setTrustToken(address newToken) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newToken == address(0)) {
-            revert BaseEmissionsController_InvalidAddress();
-        }
-        _TRUST_TOKEN = newToken;
-        emit TrustTokenUpdated(newToken);
+        _setTrustToken(newToken);
     }
 
     /// @inheritdoc IBaseEmissionsController
     function setSatelliteEmissionsController(address newSatellite) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newSatellite == address(0)) {
-            revert BaseEmissionsController_InvalidAddress();
-        }
-        _SATELLITE_EMISSIONS_CONTROLLER = newSatellite;
-        emit SatelliteEmissionsControllerUpdated(newSatellite);
+        _setSatelliteEmissionsController(newSatellite);
     }
 
     /// @inheritdoc IBaseEmissionsController
@@ -226,6 +217,22 @@ contract BaseEmissionsController is
     /* =================================================== */
     /*                      INTERNAL                       */
     /* =================================================== */
+
+    function _setTrustToken(address newToken) internal {
+        if (newToken == address(0)) {
+            revert BaseEmissionsController_InvalidAddress();
+        }
+        _TRUST_TOKEN = newToken;
+        emit TrustTokenUpdated(newToken);
+    }
+
+    function _setSatelliteEmissionsController(address newSatellite) internal {
+        if (newSatellite == address(0)) {
+            revert BaseEmissionsController_InvalidAddress();
+        }
+        _SATELLITE_EMISSIONS_CONTROLLER = newSatellite;
+        emit SatelliteEmissionsControllerUpdated(newSatellite);
+    }
 
     function _balanceBurnable() internal view returns (uint256) {
         return ITrust(_TRUST_TOKEN).balanceOf(address(this));
