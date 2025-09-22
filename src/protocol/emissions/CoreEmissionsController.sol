@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.29;
+pragma solidity 0.8.29;
 
 import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 import { ICoreEmissionsController } from "src/interfaces/ICoreEmissionsController.sol";
@@ -35,6 +35,9 @@ contract CoreEmissionsController is ICoreEmissionsController {
 
     /// @dev Factor used to calculate retained emissions after reduction (10000 - reduction_basis_points)
     uint256 internal _EMISSIONS_RETENTION_FACTOR;
+
+    /// @dev Gap for upgrade safety
+    uint256[50] private __gap;
 
     /* =================================================== */
     /*                 INITIALIZATION                      */
@@ -187,7 +190,7 @@ contract CoreEmissionsController is ICoreEmissionsController {
         }
 
         // Calculate current epoch number
-        uint256 currentEpochNumber = (timestamp - _START_TIMESTAMP) / _EPOCH_LENGTH;
+        uint256 currentEpochNumber = _calculateTotalEpochsToTimestamp(timestamp);
 
         // Calculate how many complete cliff periods have passed
         uint256 cliffsPassed = currentEpochNumber / _EMISSIONS_REDUCTION_CLIFF;
@@ -196,6 +199,11 @@ contract CoreEmissionsController is ICoreEmissionsController {
         return _applyCliffReductions(_EMISSIONS_PER_EPOCH, _EMISSIONS_RETENTION_FACTOR, cliffsPassed);
     }
 
+    /**
+     * @notice Calculate total epochs that have passed up to a given timestamp
+     * @param timestamp The timestamp to calculate epochs for
+     * @return Total number of complete epochs that have passed since start
+     */
     function _calculateTotalEpochsToTimestamp(uint256 timestamp) internal view returns (uint256) {
         if (timestamp < _START_TIMESTAMP) {
             return 0;

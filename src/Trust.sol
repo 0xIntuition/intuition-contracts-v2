@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.19;
+pragma solidity 0.8.29;
 
 import { AccessControlUpgradeable } from "@openzeppelinV4/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 
@@ -19,7 +19,7 @@ contract Trust is ITrust, TrustToken, AccessControlUpgradeable {
     /// @notice BaseEmissionsController contract address
     address public baseEmissionsController;
 
-    /// @dev Gap for upgrade safety (reduced to account for AccessControl storage)
+    /// @dev Gap for upgrade safety
     uint256[50] private __gap;
 
     /* =================================================== */

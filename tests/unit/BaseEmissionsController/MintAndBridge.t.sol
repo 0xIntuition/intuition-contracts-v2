@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.29;
+pragma solidity 0.8.29;
 
 import { console, Vm } from "forge-std/src/Test.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
@@ -74,7 +74,6 @@ contract MintAndBridgeTest is BaseTest {
         MetaERC20DispatchInit memory metaERC20DispatchInit = MetaERC20DispatchInit({
             hubOrSpoke: address(metaERC20HubOrSpoke), // Mock meta spoke
             recipientDomain: TEST_RECIPIENT_DOMAIN,
-            recipientAddress: satelliteController,
             gasLimit: TEST_GAS_LIMIT,
             finalityState: FinalityState.INSTANT
         });
@@ -119,7 +118,7 @@ contract MintAndBridgeTest is BaseTest {
         assertEq(epochMintedBefore, 0, "Should start with no minted for epoch");
 
         vm.expectEmit(true, false, false, true);
-        emit TrustMintedAndBridged(address(baseEmissionsController), expectedEmissions, 0);
+        emit TrustMintedAndBridged(address(satelliteController), expectedEmissions, 0);
 
         resetPrank(users.controller);
         baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(0);

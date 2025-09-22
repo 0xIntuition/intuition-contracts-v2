@@ -1,23 +1,14 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.27;
+pragma solidity 0.8.29;
 
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 
 import { ICoreEmissionsController } from "src/interfaces/ICoreEmissionsController.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 import { ITrustBonding } from "src/interfaces/ITrustBonding.sol";
 import { ISatelliteEmissionsController } from "src/interfaces/ISatelliteEmissionsController.sol";
 
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { VotingEscrow } from "src/external/curve/VotingEscrow.sol";
-
-/**
- * @dev Common forge commands for testing
- * forge inspect TrustBonding storage-layout
- */
 
 /**
  * @title  TrustBonding
@@ -49,8 +40,6 @@ import { VotingEscrow } from "src/external/curve/VotingEscrow.sol";
  *         https://github.com/stargate-protocol/stargate-dao/blob/main/contracts/VotingEscrow.sol
  */
 contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
-    using SafeERC20 for IERC20;
-
     /*//////////////////////////////////////////////////////////////
                                  CONSTANTS
     //////////////////////////////////////////////////////////////*/
@@ -74,8 +63,6 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
                                  STATE
     //////////////////////////////////////////////////////////////*/
 
-    uint256 public maxAnnualEmission;
-
     /// @notice Mapping of epochs to the total claimed rewards for that epoch among all users
     mapping(uint256 epoch => uint256 totalClaimedRewards) public totalClaimedRewardsForEpoch;
 
@@ -95,9 +82,6 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     /// @notice The personal utilization lower bound in basis points (represents the minimum possible personal
     /// utilization ratio)
     uint256 public personalUtilizationLowerBound;
-
-    /// @notice The maximum claimable protocol fees for a specific epoch
-    mapping(uint256 epoch => uint256 totalClaimableProtocolFees) public maxClaimableProtocolFeesForEpoch;
 
     /// @notice The address of the Timelock contract that can update certain parameters
     address public timelock;
@@ -146,40 +130,17 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
             revert TrustBonding_ZeroAddress();
         }
 
-        if (_timelock == address(0)) {
-            revert TrustBonding_ZeroAddress();
-        }
-
-        if (_multiVault == address(0)) {
-            revert TrustBonding_ZeroAddress();
-        }
-
-        if (
-            _systemUtilizationLowerBound > BASIS_POINTS_DIVISOR
-                || _systemUtilizationLowerBound < MINIMUM_SYSTEM_UTILIZATION_LOWER_BOUND
-        ) {
-            revert TrustBonding_InvalidUtilizationLowerBound();
-        }
-
-        if (
-            _personalUtilizationLowerBound > BASIS_POINTS_DIVISOR
-                || _personalUtilizationLowerBound < MINIMUM_PERSONAL_UTILIZATION_LOWER_BOUND
-        ) {
-            revert TrustBonding_InvalidUtilizationLowerBound();
-        }
-
-        __AccessControl_init();
         __Pausable_init();
         __VotingEscrow_init(_owner, _trustToken, _epochLength);
 
         _grantRole(DEFAULT_ADMIN_ROLE, _owner);
         _grantRole(PAUSER_ROLE, _owner);
-
-        timelock = _timelock;
-        multiVault = _multiVault;
-        satelliteEmissionsController = _satelliteEmissionsController;
-        systemUtilizationLowerBound = _systemUtilizationLowerBound;
-        personalUtilizationLowerBound = _personalUtilizationLowerBound;
+  
+        _setTimelock(_timelock);
+        _setMultiVault(_multiVault);
+        _updateSatelliteEmissionsController(_satelliteEmissionsController);
+        _updateSystemUtilizationLowerBound(_systemUtilizationLowerBound);
+        _updatePersonalUtilizationLowerBound(_personalUtilizationLowerBound);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -233,7 +194,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         if (currentEpochLocal == 0) {
             return 0;
         }
-        uint256 prevEpoch = currentEpochLocal == 1 ? currentEpochLocal - 1 : 0;
+        uint256 prevEpoch = currentEpochLocal > 1 ? currentEpochLocal - 1 : 0;
         return _userEligibleRewardsForEpoch(account, prevEpoch) * _getPersonalUtilizationRatio(account, prevEpoch)
             / BASIS_POINTS_DIVISOR;
     }
@@ -389,47 +350,31 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /// @inheritdoc ITrustBonding
-    function setMultiVault(address _multiVault) external onlyTimelock {
-        if (_multiVault == address(0)) {
-            revert TrustBonding_ZeroAddress();
-        }
-
-        multiVault = _multiVault;
-
-        emit MultiVaultSet(_multiVault);
+    function setTimelock(address _timelock) external onlyTimelock {
+       _setTimelock(_timelock);
     }
 
     /// @inheritdoc ITrustBonding
-    function updateSatelliteEmissionsController(address _satelliteEmissionsController) external onlyTimelock {
-        if (_satelliteEmissionsController == address(0)) {
-            revert TrustBonding_ZeroAddress();
-        }
+    function setMultiVault(address _multiVault) external onlyTimelock {
+        _setMultiVault(_multiVault);
+    }
 
-        satelliteEmissionsController = _satelliteEmissionsController;
-
-        emit SatelliteEmissionsControllerSet(_satelliteEmissionsController);
+    /// @inheritdoc ITrustBonding
+    function updateSatelliteEmissionsController(address _satelliteEmissionsController)
+        external
+        onlyTimelock
+    {
+        _updateSatelliteEmissionsController(_satelliteEmissionsController);
     }
 
     /// @inheritdoc ITrustBonding
     function updateSystemUtilizationLowerBound(uint256 newLowerBound) external onlyTimelock {
-        if (newLowerBound > BASIS_POINTS_DIVISOR || newLowerBound < MINIMUM_SYSTEM_UTILIZATION_LOWER_BOUND) {
-            revert TrustBonding_InvalidUtilizationLowerBound();
-        }
-
-        systemUtilizationLowerBound = newLowerBound;
-
-        emit SystemUtilizationLowerBoundUpdated(newLowerBound);
+        _updateSystemUtilizationLowerBound(newLowerBound);
     }
 
     /// @inheritdoc ITrustBonding
     function updatePersonalUtilizationLowerBound(uint256 newLowerBound) external onlyTimelock {
-        if (newLowerBound > BASIS_POINTS_DIVISOR || newLowerBound < MINIMUM_PERSONAL_UTILIZATION_LOWER_BOUND) {
-            revert TrustBonding_InvalidUtilizationLowerBound();
-        }
-
-        personalUtilizationLowerBound = newLowerBound;
-
-        emit PersonalUtilizationLowerBoundUpdated(newLowerBound);
+        _updatePersonalUtilizationLowerBound(newLowerBound);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -440,7 +385,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         return _epochAtTimestamp(block.timestamp);
     }
 
-    function _epochsPerYear() public view returns (uint256) {
+    function _epochsPerYear() internal view returns (uint256) {
         return YEAR / ICoreEmissionsController(satelliteEmissionsController).getEpochLength();
     }
 
@@ -525,10 +470,8 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         // Fetch the target utilization for the previous epoch
         uint256 userUtilizationTarget = userClaimedRewardsForEpoch[_account][_epoch - 1];
 
-        // If there was no target utilization in the previous epoch, any increase in utilization is rewarded with the
-        // max ratio.
-        // Similarly, if the userUtilizationDelta is greater than the target, we also return the max ratio.
-        if (userUtilizationTarget == 0 || userUtilizationDelta >= userUtilizationTarget) {
+        // If the utilizationDelta is greater than the target, we return the max ratio
+        if (userUtilizationDelta >= userUtilizationTarget) {
             return BASIS_POINTS_DIVISOR;
         }
 
@@ -567,10 +510,8 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         // Fetch the target utilization for the previous epoch
         uint256 utilizationTarget = totalClaimedRewardsForEpoch[_epoch - 1];
 
-        // If there was no target utilization in the previous epoch, any increase in utilization is rewarded with the
-        // max ratio.
-        // Similarly, if the utilizationDelta is greater than the target, we also return the max ratio.
-        if (utilizationTarget == 0 || utilizationDelta >= utilizationTarget) {
+        // If the utilizationDelta is greater than the target, we return the max ratio
+        if (utilizationDelta >= utilizationTarget) {
             return BASIS_POINTS_DIVISOR;
         }
 
@@ -599,5 +540,49 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         uint256 ratioRange = BASIS_POINTS_DIVISOR - lowerBound;
         uint256 utilizationRatio = lowerBound + (delta * ratioRange) / target;
         return utilizationRatio;
+    }
+    
+    function _setTimelock(address _timelock) internal {    
+        if (_timelock == address(0)) {
+            revert TrustBonding_ZeroAddress();
+        }
+        timelock = _timelock;
+        emit TimelockSet(_timelock);
+    }
+
+    function _setMultiVault(address newMultiVault) internal {
+        if (newMultiVault == address(0)) {
+            revert TrustBonding_ZeroAddress();
+        }
+        multiVault = newMultiVault;
+        emit MultiVaultSet(newMultiVault);
+    }
+
+    function _updateSatelliteEmissionsController(address newSatelliteEmissionsController) internal {
+        if (newSatelliteEmissionsController == address(0)) {
+            revert TrustBonding_ZeroAddress();
+        }
+        satelliteEmissionsController = newSatelliteEmissionsController;
+        emit SatelliteEmissionsControllerSet(newSatelliteEmissionsController);
+    }
+
+    function _updateSystemUtilizationLowerBound(uint256 newLowerBound) internal {
+        if (newLowerBound > BASIS_POINTS_DIVISOR || newLowerBound < MINIMUM_SYSTEM_UTILIZATION_LOWER_BOUND) {
+            revert TrustBonding_InvalidUtilizationLowerBound();
+        }
+
+        systemUtilizationLowerBound = newLowerBound;
+
+        emit SystemUtilizationLowerBoundUpdated(newLowerBound);
+    }
+
+    function _updatePersonalUtilizationLowerBound(uint256 newLowerBound) internal {
+        if (newLowerBound > BASIS_POINTS_DIVISOR || newLowerBound < MINIMUM_PERSONAL_UTILIZATION_LOWER_BOUND) {
+            revert TrustBonding_InvalidUtilizationLowerBound();
+        }
+
+        personalUtilizationLowerBound = newLowerBound;
+
+        emit PersonalUtilizationLowerBoundUpdated(newLowerBound);
     }
 }

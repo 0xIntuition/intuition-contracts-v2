@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.4;
+pragma solidity 0.8.29;
 
 /**
  * https://github.com/stargate-protocol/stargate-dao/blob/main/contracts/VotingEscrow.sol
@@ -63,6 +63,8 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         INCREASE_UNLOCK_TIME
     }
 
+    event TokenSet(address token);
+    event MinTimeSet(uint256 min_time);
     event Deposit(
         address indexed provider, uint256 value, uint256 indexed locktime, DepositType deposit_type, uint256 ts
     );
@@ -100,6 +102,9 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     // The goal is to prevent tokenizing the escrow
     mapping(address => bool) public contracts_whitelist;
 
+    /// @dev Gap for upgrade safety
+    uint256[50] private __gap;
+
     /// @dev Initialize the VotingEscrow contract and its dependencies
     function __VotingEscrow_init(address _admin, address token_addr, uint256 min_time) internal onlyInitializing {
         require(token_addr != address(0), "Token address cannot be 0");
@@ -116,6 +121,9 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         controller = _admin;
         transfersEnabled = true;
         MINTIME = min_time;
+
+        emit TokenSet(token_addr);
+        emit MinTimeSet(min_time);
     }
 
     modifier onlyUserOrWhitelist() {
