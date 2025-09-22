@@ -20,6 +20,12 @@ interface ITrustBonding {
     event RewardsClaimed(address indexed user, address indexed recipient, uint256 amount);
 
     /**
+     * @notice Emitted when the timelock contract is set
+     * @param timelock The address of the timelock contract
+     */
+    event TimelockSet(address indexed timelock);
+
+    /**
      * @notice Emitted when the MultiVault contract is set
      * @param multiVault The address of the MultiVault contract
      */
@@ -233,41 +239,48 @@ interface ITrustBonding {
 
     /**
      * @notice Pauses the contract, preventing certain operations
-     * @dev Can only be called by the owner
+     * @dev Can only be called by the PAUSER_ROLE
      */
     function pause() external;
 
     /**
      * @notice Unpauses the contract, allowing all operations to resume
-     * @dev Can only be called by the owner
+     * @dev Can only be called by the DEFAULT_ADMIN_ROLE
      */
     function unpause() external;
 
     /**
+     * @notice Sets the timelock contract address
+     * @param _timelock The address of the timelock contract
+     * @dev Can only be called by the timelock. Reverts if _timelock is the zero address
+     */
+    function setTimelock(address _timelock) external;
+
+    /**
      * @notice Sets the MultiVault contract address
      * @param _multiVault The address of the MultiVault contract
-     * @dev Can only be called by the owner. Reverts if _multiVault is the zero address
+     * @dev Can only be called by the timelock. Reverts if _multiVault is the zero address
      */
     function setMultiVault(address _multiVault) external;
 
     /**
      * @notice Updates the lower bound for the system utilization ratio
      * @param newLowerBound The new lower bound for the system utilization ratio (must be between 0 and 1e18)
-     * @dev Can only be called by the owner. Reverts if newLowerBound is invalid
+     * @dev Can only be called by the timelock. Reverts if newLowerBound is invalid
      */
     function updateSystemUtilizationLowerBound(uint256 newLowerBound) external;
 
     /**
      * @notice Updates the lower bound for the personal utilization ratio
      * @param newLowerBound The new lower bound for the personal utilization ratio (must be between 0 and 1e18)
-     * @dev Can only be called by the owner. Reverts if newLowerBound is invalid
+     * @dev Can only be called by the timelock. Reverts if newLowerBound is invalid
      */
     function updatePersonalUtilizationLowerBound(uint256 newLowerBound) external;
 
     /**
      * @notice Updates the SatelliteEmissionsController contract address
      * @param _satelliteEmissionsController The address of the SatelliteEmissionsController contract
-     * @dev Can only be called by the owner. Reverts if _satelliteEmissionsController is the zero address
+     * @dev Can only be called by the timelock. Reverts if _satelliteEmissionsController is the zero address
      */
     function updateSatelliteEmissionsController(address _satelliteEmissionsController) external;
 }

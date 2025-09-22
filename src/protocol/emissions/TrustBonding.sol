@@ -135,7 +135,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
 
         _grantRole(DEFAULT_ADMIN_ROLE, _owner);
         _grantRole(PAUSER_ROLE, _owner);
-  
+
         _setTimelock(_timelock);
         _setMultiVault(_multiVault);
         _updateSatelliteEmissionsController(_satelliteEmissionsController);
@@ -351,7 +351,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
 
     /// @inheritdoc ITrustBonding
     function setTimelock(address _timelock) external onlyTimelock {
-       _setTimelock(_timelock);
+        _setTimelock(_timelock);
     }
 
     /// @inheritdoc ITrustBonding
@@ -360,10 +360,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /// @inheritdoc ITrustBonding
-    function updateSatelliteEmissionsController(address _satelliteEmissionsController)
-        external
-        onlyTimelock
-    {
+    function updateSatelliteEmissionsController(address _satelliteEmissionsController) external onlyTimelock {
         _updateSatelliteEmissionsController(_satelliteEmissionsController);
     }
 
@@ -541,8 +538,8 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         uint256 utilizationRatio = lowerBound + (delta * ratioRange) / target;
         return utilizationRatio;
     }
-    
-    function _setTimelock(address _timelock) internal {    
+
+    function _setTimelock(address _timelock) internal {
         if (_timelock == address(0)) {
             revert TrustBonding_ZeroAddress();
         }
