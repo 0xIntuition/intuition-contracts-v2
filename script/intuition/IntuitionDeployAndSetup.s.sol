@@ -131,9 +131,12 @@ contract IntuitionDeployAndSetup is SetupScript {
             new TransparentUpgradeableProxy(address(multiVaultImpl), ADMIN, multiVaultInitData);
         multiVault = MultiVault(address(multiVaultProxy));
 
-        // Grant MIGRATOR_ROLE to the migrator address
-        IAccessControl(address(multiVault)).grantRole(MIGRATOR_ROLE, MIGRATOR);
-        console2.log("MIGRATOR_ROLE granted to:", MIGRATOR);
+        // Grant the MIGRATOR_ROLE to the migrator address only if we are not on the Intuition mainnet (on mainnet,
+        // this will be done through an admin Safe)
+        if (block.chainid != vm.envUint("INTUITION_MAINNET_CHAIN_ID")) {
+            IAccessControl(address(multiVault)).grantRole(MIGRATOR_ROLE, MIGRATOR);
+            console2.log("MIGRATOR_ROLE granted to:", MIGRATOR);
+        }
 
         // Deploy AtomWalletFactory implementation and proxy
         AtomWalletFactory atomWalletFactoryImpl = new AtomWalletFactory();
@@ -201,8 +204,8 @@ contract IntuitionDeployAndSetup is SetupScript {
         trustBonding = TrustBonding(address(trustBondingProxy));
         info("TrustBonding Proxy", address(trustBondingProxy));
 
-        // Set TrustBonding address in SatelliteEmissionsController only if we are not on Intuition mainnet (on mainnet,
-        // this will be done through an admin Safe)
+        // Set the TrustBonding address in SatelliteEmissionsController only if we are not on the Intuition mainnet (on
+        // mainnet, this will be done through an admin Safe)
         if (block.chainid != vm.envUint("INTUITION_MAINNET_CHAIN_ID")) {
             satelliteEmissionsController.setTrustBonding(address(trustBonding));
         }
