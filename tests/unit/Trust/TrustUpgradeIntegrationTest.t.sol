@@ -9,12 +9,12 @@ import {
     ITransparentUpgradeableProxy
 } from "@openzeppelinV4/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
+import { ITrust } from "src/interfaces/ITrust.sol";
 import { Trust } from "src/Trust.sol";
 
 contract TrustUpgradeIntegrationTest is Test {
     // Role identifiers
     bytes32 DEFAULT_ADMIN_ROLE = 0x00;
-    bytes32 CONTROLLER_ROLE = keccak256("CONTROLLER_ROLE");
 
     // Base chain addresses (legacy TRUST token deployment & ProxyAdmin)
     address constant TRUST_PROXY = 0x6cd905dF2Ed214b22e0d48FF17CD4200C1C6d8A3;
@@ -51,9 +51,6 @@ contract TrustUpgradeIntegrationTest is Test {
         trust = Trust(TRUST_PROXY);
 
         // Reinitialize the upgraded Trust token contract
-        address initialAdmin = trust.INITIAL_ADMIN();
-        vm.deal(initialAdmin, 10 ether);
-        vm.prank(initialAdmin);
         trust.reinitialize(newAdmin, newController);
 
         // Basic post-upgrade checks
@@ -66,7 +63,7 @@ contract TrustUpgradeIntegrationTest is Test {
         assertEq(trust.totalSupply(), supplyBefore, "totalSupply must persist across upgrade");
     }
 
-    function test_PostUpgrade_Minting_Works_WithControllerRole() external {
+    function test_PostUpgrade_Minting_Works_WhenCalledByBaseEmissionsController() external {
         uint256 balanceBefore = trust.balanceOf(recipient);
         uint256 supplyBefore = trust.totalSupply();
 
@@ -78,12 +75,12 @@ contract TrustUpgradeIntegrationTest is Test {
         assertEq(trust.totalSupply(), supplyBefore + 1e18);
     }
 
-    function test_PostUpgrade_Minting_Reverts_WithoutControllerRole() external {
+    function test_PostUpgrade_Minting_Reverts_WhenNotCalledByBaseEmissionsController() external {
         // Non-controller attempt
         address rando = address(0xDEAD);
 
         vm.prank(rando);
-        vm.expectRevert(Trust.Trust_OnlyBaseEmissionsController.selector);
+        vm.expectRevert(ITrust.Trust_OnlyBaseEmissionsController.selector);
         trust.mint(address(0xFEED), 1);
     }
 

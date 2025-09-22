@@ -5,6 +5,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
 
+import { ITrust } from "src/interfaces/ITrust.sol";
 import { Trust } from "src/Trust.sol";
 import { BaseTest } from "tests/BaseTest.t.sol";
 
@@ -92,7 +93,7 @@ contract TrustTest is BaseTest {
         address recipient = makeAddr("recipient");
 
         resetPrank(user);
-        vm.expectRevert(Trust.Trust_OnlyBaseEmissionsController.selector);
+        vm.expectRevert(ITrust.Trust_OnlyBaseEmissionsController.selector);
         protocol.trust.mint(recipient, amount);
     }
 
@@ -188,15 +189,13 @@ contract TrustTest is BaseTest {
     /*                   REINITIALIZER TESTS               */
     /* =================================================== */
 
-    function test_Reinitialize_Success_ByInitialAdmin() public {
+    function test_Reinitialize_Success() public {
         Trust fresh = _deployTrustProxy();
         fresh.init();
 
-        address initialAdmin = fresh.INITIAL_ADMIN();
         address newAdmin = makeAddr("newAdmin");
         address controller = makeAddr("controller");
 
-        vm.prank(initialAdmin);
         fresh.reinitialize(newAdmin, controller);
 
         assertTrue(fresh.hasRole(DEFAULT_ADMIN_ROLE, newAdmin));
@@ -208,29 +207,14 @@ contract TrustTest is BaseTest {
         assertEq(fresh.balanceOf(user), 1e18);
     }
 
-    function test_Reinitialize_Revert_OnlyInitialAdmin() public {
-        Trust fresh = _deployTrustProxy();
-        fresh.init();
-
-        address notInitial = makeAddr("notInitial");
-
-        vm.prank(notInitial);
-        vm.expectRevert(Trust.Trust_OnlyInitialAdmin.selector);
-        fresh.reinitialize(makeAddr("admin"), makeAddr("controller"));
-    }
-
     function test_Reinitialize_Revert_ZeroAddresses() public {
         Trust fresh = _deployTrustProxy();
         fresh.init();
 
-        address initialAdmin = fresh.INITIAL_ADMIN();
-
-        vm.prank(initialAdmin);
-        vm.expectRevert(Trust.Trust_ZeroAddress.selector);
+        vm.expectRevert(ITrust.Trust_ZeroAddress.selector);
         fresh.reinitialize(address(0), makeAddr("controller"));
 
-        vm.prank(initialAdmin);
-        vm.expectRevert(Trust.Trust_ZeroAddress.selector);
+        vm.expectRevert(ITrust.Trust_ZeroAddress.selector);
         fresh.reinitialize(makeAddr("admin"), address(0));
     }
 
@@ -238,14 +222,37 @@ contract TrustTest is BaseTest {
         Trust fresh = _deployTrustProxy();
         fresh.init();
 
-        address initialAdmin = fresh.INITIAL_ADMIN();
-
-        vm.prank(initialAdmin);
         fresh.reinitialize(makeAddr("admin"), makeAddr("controller"));
 
-        vm.prank(initialAdmin);
         vm.expectRevert(abi.encodeWithSignature("Error(string)", "Initializable: contract is already initialized"));
         fresh.reinitialize(makeAddr("admin2"), makeAddr("controller2"));
+    }
+
+    /* =================================================== */
+    /*                      ADMIN TESTS                    */
+    /* =================================================== */
+
+    function test_setBaseEmissionsController_Success() public {
+        address newController = makeAddr("newController");
+
+        resetPrank(admin);
+        protocol.trust.setBaseEmissionsController(newController);
+
+        assertEq(protocol.trust.baseEmissionsController(), newController);
+    }
+
+    function test_setBaseEmissionsController_Revert_NotAdmin() public {
+        address newController = makeAddr("newController");
+
+        resetPrank(user);
+        vm.expectRevert(_missingRoleRevert(user, DEFAULT_ADMIN_ROLE));
+        protocol.trust.setBaseEmissionsController(newController);
+    }
+
+    function test_setBaseEmissionsController_Revert_ZeroAddress() public {
+        resetPrank(admin);
+        vm.expectRevert(ITrust.Trust_ZeroAddress.selector);
+        protocol.trust.setBaseEmissionsController(address(0));
     }
 
     /* =================================================== */

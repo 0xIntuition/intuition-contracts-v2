@@ -145,7 +145,7 @@ contract BaseEmissionsController is
 
         // Mint new TRUST using the calculated epoch emissions
         ITrust(_TRUST_TOKEN).mint(address(this), amount);
-        ITrust(_TRUST_TOKEN).approve(_metaERC20SpokeOrHub, amount);
+        IERC20(_TRUST_TOKEN).approve(_metaERC20SpokeOrHub, amount);
 
         // Bridge new emissions to the Satellite Emissions Controller
         uint256 gasLimit = _quoteGasPayment(_recipientDomain, GAS_CONSTANT + _messageGasCost);
@@ -197,7 +197,7 @@ contract BaseEmissionsController is
         if (amount > _balanceBurnable()) {
             revert BaseEmissionsController_InsufficientBurnableBalance();
         }
-        ITrust(_TRUST_TOKEN).burn(address(this), amount);
+        ITrust(_TRUST_TOKEN).burn(amount);
     }
 
     /* =================================================== */
@@ -205,6 +205,6 @@ contract BaseEmissionsController is
     /* =================================================== */
 
     function _balanceBurnable() internal view returns (uint256) {
-        return ITrust(_TRUST_TOKEN).balanceOf(address(this));
+        return IERC20(_TRUST_TOKEN).balanceOf(address(this));
     }
 }
