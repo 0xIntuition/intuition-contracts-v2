@@ -1,18 +1,16 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.29;
+pragma solidity 0.8.29;
 
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { Address } from "@openzeppelin/contracts/utils/Address.sol";
-import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {Address} from "@openzeppelin/contracts/utils/Address.sol";
+import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
-import { ISatelliteEmissionsController } from "src/interfaces/ISatelliteEmissionsController.sol";
-import { ITrustBonding } from "src/interfaces/ITrustBonding.sol";
-import { MetaERC20DispatchInit } from "src/interfaces/IMetaLayer.sol";
-import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";
-import { CoreEmissionsController } from "src/protocol/emissions/CoreEmissionsController.sol";
-import { FinalityState, MetaERC20Dispatcher } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
+import {ISatelliteEmissionsController} from "src/interfaces/ISatelliteEmissionsController.sol";
+import {ITrustBonding} from "src/interfaces/ITrustBonding.sol";
+import {MetaERC20DispatchInit} from "src/interfaces/IMetaLayer.sol";
+import {CoreEmissionsControllerInit} from "src/interfaces/ICoreEmissionsController.sol";
+import {CoreEmissionsController} from "src/protocol/emissions/CoreEmissionsController.sol";
+import {FinalityState, MetaERC20Dispatcher} from "src/protocol/emissions/MetaERC20Dispatcher.sol";
 
 /**
  * @title  SatelliteEmissionsController
@@ -23,11 +21,9 @@ contract SatelliteEmissionsController is
     ISatelliteEmissionsController,
     AccessControlUpgradeable,
     ReentrancyGuardUpgradeable,
-    MetaERC20Dispatcher,
-    CoreEmissionsController
+    CoreEmissionsController,
+    MetaERC20Dispatcher
 {
-    using SafeERC20 for IERC20;
-
     /* =================================================== */
     /*                     CONSTANTS                       */
     /* =================================================== */
@@ -44,8 +40,11 @@ contract SatelliteEmissionsController is
     /// @notice Address of the BaseEmissionsController contract
     address internal _BASE_EMISSIONS_CONTROLLER;
 
-    /// @notice Mapping of bridged rewards for each epoch
-    mapping(uint256 epoch => uint256 amount) internal _bridgedRewards;
+    /// @notice Mapping of bridged emissions for each epoch
+    mapping(uint256 epoch => uint256 amount) internal _bridgedEmissions;
+
+    /// @dev Gap for upgrade safety
+    uint256[50] private __gap;
 
     /* =================================================== */
     /*                    CONSTRUCTOR                      */
@@ -60,10 +59,12 @@ contract SatelliteEmissionsController is
         address baseEmissionsController,
         MetaERC20DispatchInit memory metaERC20DispatchInit,
         CoreEmissionsControllerInit memory checkpointInit
-    )
-        external
-        initializer
-    {
+    ) external initializer {
+        if (admin == address(0) || trustBonding == address(0) || baseEmissionsController == address(0)) {
+            revert SatelliteEmissionsController_InvalidAddress();
+        }
+
+        // Initialize the AccessControl and ReentrancyGuard contracts
         __AccessControl_init();
         __ReentrancyGuard_init();
 
@@ -85,8 +86,28 @@ contract SatelliteEmissionsController is
         // Initialize access control
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
 
-        // Set the BaseEmissionsController contract address
-        _BASE_EMISSIONS_CONTROLLER = baseEmissionsController;
+        // Set TrustBonding and BaseEmissionsController addresses
+        _setTrustBonding(trustBonding);
+        _setBaseEmissionsController(baseEmissionsController);
+    }
+
+    /* =================================================== */
+    /*                      GETTERS                        */
+    /* =================================================== */
+
+    /// @inheritdoc ISatelliteEmissionsController
+    function getTrustBonding() external view returns (address) {
+        return _TRUST_BONDING;
+    }
+
+    /// @inheritdoc ISatelliteEmissionsController
+    function getBaseEmissionsController() external view returns (address) {
+        return _BASE_EMISSIONS_CONTROLLER;
+    }
+
+    /// @inheritdoc ISatelliteEmissionsController
+    function getBridgedEmissions(uint256 epoch) external view returns (uint256) {
+        return _bridgedEmissions[epoch];
     }
 
     /* =================================================== */
@@ -98,7 +119,7 @@ contract SatelliteEmissionsController is
      * those tokens until a user claims their rewards or until they are bridged back to the BaseEmissionsController to
      * be burned.
      */
-    receive() external payable { }
+    receive() external payable {}
 
     /* =================================================== */
     /*                    CONTROLLER                       */
@@ -110,6 +131,8 @@ contract SatelliteEmissionsController is
         if (amount == 0) revert SatelliteEmissionsController_InvalidAmount();
         if (address(this).balance < amount) revert SatelliteEmissionsController_InsufficientBalance();
         Address.sendValue(payable(recipient), amount);
+
+        emit NativeTokenTransferred(recipient, amount);
     }
 
     /* =================================================== */
@@ -118,29 +141,12 @@ contract SatelliteEmissionsController is
 
     /// @inheritdoc ISatelliteEmissionsController
     function setTrustBonding(address newTrustBonding) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newTrustBonding == address(0)) {
-            revert SatelliteEmissionsController_InvalidAddress();
-        }
-
-        // Set the new TrustBonding contract address
-        _TRUST_BONDING = newTrustBonding;
-
-        // Grant the CONTROLLER_ROLE to the new TrustBonding contract
-        _grantRole(CONTROLLER_ROLE, newTrustBonding);
-
-        emit TrustBondingUpdated(newTrustBonding);
+        _setTrustBonding(newTrustBonding);
     }
 
     /// @inheritdoc ISatelliteEmissionsController
     function setBaseEmissionsController(address newBaseEmissionsController) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newBaseEmissionsController == address(0)) {
-            revert SatelliteEmissionsController_InvalidAddress();
-        }
-
-        // Set the new BaseEmissionsController contract address
-        _BASE_EMISSIONS_CONTROLLER = newBaseEmissionsController;
-
-        emit BaseEmissionsControllerUpdated(newBaseEmissionsController);
+        _setBaseEmissionsController(newBaseEmissionsController);
     }
 
     /// @inheritdoc ISatelliteEmissionsController
@@ -164,7 +170,7 @@ contract SatelliteEmissionsController is
     }
 
     /// @inheritdoc ISatelliteEmissionsController
-    function bridgeUnclaimedRewards(uint256 epoch) external payable onlyRole(DEFAULT_ADMIN_ROLE) {
+    function bridgeUnclaimedEmissions(uint256 epoch) external payable onlyRole(DEFAULT_ADMIN_ROLE) {
         // Prevent bridging of zero amount if no unclaimed rewards are available.
         uint256 amount = ITrustBonding(_TRUST_BONDING).getUnclaimedRewardsForEpoch(epoch);
         if (amount == 0) {
@@ -172,12 +178,12 @@ contract SatelliteEmissionsController is
         }
 
         // Check if rewards for this epoch have already been reclaimed and bridged.
-        if (_bridgedRewards[epoch] > 0) {
-            revert SatelliteEmissionsController_PreviouslyBridgedUnclaimedRewards();
+        if (_bridgedEmissions[epoch] > 0) {
+            revert SatelliteEmissionsController_PreviouslyBridgedUnclaimedEmissions();
         }
 
         // Mark the unclaimed rewards as bridged and prevent from being claimed again.
-        _bridgedRewards[epoch] = amount;
+        _bridgedEmissions[epoch] = amount;
 
         // Calculate gas limit for the bridge transfer using the MetaLayer router.
         uint256 gasLimit = _quoteGasPayment(_recipientDomain, GAS_CONSTANT + _messageGasCost);
@@ -199,5 +205,27 @@ contract SatelliteEmissionsController is
         if (msg.value > gasLimit) {
             Address.sendValue(payable(msg.sender), msg.value - gasLimit);
         }
+
+        emit UnclaimedRewardsBridged(epoch, amount);
+    }
+
+    /* =================================================== */
+    /*                       INTERNAL                      */
+    /* =================================================== */
+
+    function _setTrustBonding(address newTrustBonding) internal {
+        if (newTrustBonding == address(0)) {
+            revert SatelliteEmissionsController_InvalidAddress();
+        }
+        _TRUST_BONDING = newTrustBonding;
+        emit TrustBondingUpdated(newTrustBonding);
+    }
+
+    function _setBaseEmissionsController(address newBaseEmissionsController) internal {
+        if (newBaseEmissionsController == address(0)) {
+            revert SatelliteEmissionsController_InvalidAddress();
+        }
+        _BASE_EMISSIONS_CONTROLLER = newBaseEmissionsController;
+        emit BaseEmissionsControllerUpdated(newBaseEmissionsController);
     }
 }

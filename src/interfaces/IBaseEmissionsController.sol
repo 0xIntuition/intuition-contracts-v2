@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.29;
+pragma solidity 0.8.29;
 
-import { FinalityState } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
+import {FinalityState} from "src/protocol/emissions/MetaERC20Dispatcher.sol";
 
 /**
  * @title  IBaseEmissionsController
@@ -16,28 +16,36 @@ interface IBaseEmissionsController {
 
     /**
      * @notice Event emitted when the Trust token address is updated
-     * @param newToken The new Trust token address
+     * @param newTrustToken The new Trust token address
      */
-    event TrustTokenUpdated(address indexed newToken);
+    event TrustTokenUpdated(address indexed newTrustToken);
 
     /**
      * @notice Event emitted when the Satellite Emissions Controller address is updated
-     * @param newSatellite The new Satellite Emissions Controller address
+     * @param newSatelliteEmissionsController The new Satellite Emissions Controller address
      */
-    event SatelliteEmissionsControllerUpdated(address indexed newSatellite);
+    event SatelliteEmissionsControllerUpdated(address indexed newSatelliteEmissionsController);
 
     /**
-     * @notice Event emitted when Trust tokens are minted
+     * @notice Event emitted when Trust tokens are minted and bridged
      * @param to Address that received the minted Trust tokens
      * @param amount Amount of Trust tokens minted
+     * @param epoch Epoch for which the tokens were minted
      */
     event TrustMintedAndBridged(address indexed to, uint256 amount, uint256 epoch);
+
+    /**
+     * @notice Event emitted when the Trust tokens are burned
+     * @param from Address that burned the Trust tokens
+     * @param amount Amount of Trust tokens burned
+     */
+    event TrustBurned(address indexed from, uint256 amount);
 
     /* =================================================== */
     /*                       ERRORS                        */
     /* =================================================== */
 
-    error BaseEmissionsController_IvalidAddress();
+    error BaseEmissionsController_InvalidAddress();
     error BaseEmissionsController_InvalidEpoch();
     error BaseEmissionsController_InsufficientGasPayment();
     error BaseEmissionsController_EpochMintingLimitExceeded();
@@ -90,16 +98,16 @@ interface IBaseEmissionsController {
     /**
      * @notice Set the Trust token contract address
      * @dev Only callable by addresses with DEFAULT_ADMIN_ROLE
-     * @param newToken The new Trust token contract address
+     * @param newTrustToken The new Trust token contract address
      */
-    function setTrustToken(address newToken) external;
+    function setTrustToken(address newTrustToken) external;
 
     /**
      * @notice Set the Satellite Emissions Controller contract address
      * @dev Only callable by addresses with DEFAULT_ADMIN_ROLE
-     * @param newSatellite The new Satellite Emissions Controller contract address
+     * @param newSatelliteEmissionsController The new Satellite Emissions Controller contract address
      */
-    function setSatelliteEmissionsController(address newSatellite) external;
+    function setSatelliteEmissionsController(address newSatelliteEmissionsController) external;
 
     /**
      * @notice Set the message gas cost for cross-chain operations

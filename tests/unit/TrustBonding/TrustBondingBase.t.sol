@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.27;
+pragma solidity 0.8.29;
 
 import { console, Vm } from "forge-std/src/Test.sol";
 import {
@@ -83,16 +83,16 @@ contract TrustBondingBase is BaseTest {
     /// @dev Set total claimed rewards for a specific epoch using vm.store
     function _setTotalClaimedRewardsForEpoch(uint256 epoch, uint256 claimedRewards) internal {
         // mapping(uint256 epoch => uint256 totalClaimedRewards) public totalClaimedRewardsForEpoch;
-        // Assuming this is at storage slot 13 based on the TrustBonding contract
-        bytes32 slot = keccak256(abi.encode(epoch, uint256(13)));
+        // Assuming this is at storage slot 62 based on the TrustBonding contract
+        bytes32 slot = keccak256(abi.encode(epoch, uint256(62)));
         vm.store(address(protocol.trustBonding), slot, bytes32(claimedRewards));
     }
 
     /// @dev Set user claimed rewards for a specific epoch using vm.store
     function _setUserClaimedRewardsForEpoch(address user, uint256 epoch, uint256 claimedRewards) internal {
         // mapping(address user => mapping(uint256 epoch => uint256 claimedRewards)) public userClaimedRewardsForEpoch;
-        // Assuming this is at storage slot 14 based on the TrustBonding contract
-        bytes32 userSlot = keccak256(abi.encode(user, uint256(14)));
+        // Assuming this is at storage slot 63 based on the TrustBonding contract
+        bytes32 userSlot = keccak256(abi.encode(user, uint256(63)));
         bytes32 finalSlot = keccak256(abi.encode(epoch, userSlot));
         vm.store(address(protocol.trustBonding), finalSlot, bytes32(claimedRewards));
     }

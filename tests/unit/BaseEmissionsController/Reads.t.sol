@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.29;
+pragma solidity 0.8.29;
 
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { BaseEmissionsController } from "src/protocol/emissions/BaseEmissionsController.sol";
@@ -46,7 +46,6 @@ contract BaseEmissionsControllerGettersTest is BaseTest {
         MetaERC20DispatchInit memory metaERC20DispatchInit = MetaERC20DispatchInit({
             hubOrSpoke: address(1),
             recipientDomain: TEST_RECIPIENT_DOMAIN,
-            recipientAddress: address(1),
             gasLimit: TEST_GAS_LIMIT,
             finalityState: FinalityState.INSTANT
         });

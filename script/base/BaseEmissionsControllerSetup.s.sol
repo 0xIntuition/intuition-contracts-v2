@@ -1,11 +1,11 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.27;
+// SPDX-License-Identifier: BUSL-1.1
+pragma solidity 0.8.29;
 
-import { Script, console2 } from "forge-std/src/Script.sol";
+import {Script, console2} from "forge-std/src/Script.sol";
 
-import { SetupScript } from "../SetupScript.s.sol";
-import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";
-import { BaseEmissionsController } from "src/protocol/emissions/BaseEmissionsController.sol";
+import {SetupScript} from "../SetupScript.s.sol";
+import {CoreEmissionsControllerInit} from "src/interfaces/ICoreEmissionsController.sol";
+import {BaseEmissionsController} from "src/protocol/emissions/BaseEmissionsController.sol";
 
 /*
 LOCAL

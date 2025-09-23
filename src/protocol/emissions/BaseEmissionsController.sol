@@ -1,18 +1,16 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.29;
+pragma solidity 0.8.29;
 
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
-import { Address } from "@openzeppelin/contracts/utils/Address.sol";
+import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 
-import { IBaseEmissionsController } from "src/interfaces/IBaseEmissionsController.sol";
-import { ITrust } from "src/interfaces/ITrust.sol";
-import { MetaERC20DispatchInit } from "src/interfaces/IMetaLayer.sol";
-import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";
-import { CoreEmissionsController } from "src/protocol/emissions/CoreEmissionsController.sol";
-import { FinalityState, MetaERC20Dispatcher } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
+import {IBaseEmissionsController} from "src/interfaces/IBaseEmissionsController.sol";
+import {ITrust} from "src/interfaces/ITrust.sol";
+import {MetaERC20DispatchInit} from "src/interfaces/IMetaLayer.sol";
+import {CoreEmissionsControllerInit} from "src/interfaces/ICoreEmissionsController.sol";
+import {CoreEmissionsController} from "src/protocol/emissions/CoreEmissionsController.sol";
+import {FinalityState, MetaERC20Dispatcher} from "src/protocol/emissions/MetaERC20Dispatcher.sol";
 
 /**
  * @title  BaseEmissionsController
@@ -46,6 +44,7 @@ contract BaseEmissionsController is
     /// @notice Total amount of Trust tokens minted
     uint256 internal _totalMintedAmount;
 
+    /// @notice Mapping of minted amounts for each epoch
     mapping(uint256 epoch => uint256 amount) internal _epochToMintedAmount;
 
     /// @dev Gap for upgrade safety
@@ -66,10 +65,11 @@ contract BaseEmissionsController is
         address token,
         MetaERC20DispatchInit memory metaERC20DispatchInit,
         CoreEmissionsControllerInit memory checkpointInit
-    )
-        external
-        initializer
-    {
+    ) external initializer {
+        if (admin == address(0) || controller == address(0) || token == address(0) || satellite == address(0)) {
+            revert BaseEmissionsController_InvalidAddress();
+        }
+
         // Initialize the AccessControl and ReentrancyGuard contracts
         __AccessControl_init();
         __ReentrancyGuard_init();
@@ -94,9 +94,10 @@ contract BaseEmissionsController is
         _grantRole(CONTROLLER_ROLE, controller);
 
         // Set the Trust token contract address
-        _TRUST_TOKEN = token;
+        _setTrustToken(token);
 
-        emit TrustTokenUpdated(token);
+        // Set the Satellite Emissions Controller contract address
+        _setSatelliteEmissionsController(satellite);
     }
 
     /* =================================================== */
@@ -165,7 +166,7 @@ contract BaseEmissionsController is
             Address.sendValue(payable(msg.sender), msg.value - gasLimit);
         }
 
-        emit TrustMintedAndBridged(address(this), amount, epoch);
+        emit TrustMintedAndBridged(_SATELLITE_EMISSIONS_CONTROLLER, amount, epoch);
     }
 
     /* =================================================== */
@@ -174,20 +175,12 @@ contract BaseEmissionsController is
 
     /// @inheritdoc IBaseEmissionsController
     function setTrustToken(address newToken) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newToken == address(0)) {
-            revert BaseEmissionsController_IvalidAddress();
-        }
-        _TRUST_TOKEN = newToken;
-        emit TrustTokenUpdated(newToken);
+        _setTrustToken(newToken);
     }
 
     /// @inheritdoc IBaseEmissionsController
     function setSatelliteEmissionsController(address newSatellite) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newSatellite == address(0)) {
-            revert BaseEmissionsController_IvalidAddress();
-        }
-        _SATELLITE_EMISSIONS_CONTROLLER = newSatellite;
-        emit SatelliteEmissionsControllerUpdated(newSatellite);
+        _setSatelliteEmissionsController(newSatellite);
     }
 
     /// @inheritdoc IBaseEmissionsController
@@ -216,11 +209,29 @@ contract BaseEmissionsController is
             revert BaseEmissionsController_InsufficientBurnableBalance();
         }
         ITrust(_TRUST_TOKEN).burn(address(this), amount);
+
+        emit TrustBurned(address(this), amount);
     }
 
     /* =================================================== */
     /*                      INTERNAL                       */
     /* =================================================== */
+
+    function _setTrustToken(address newToken) internal {
+        if (newToken == address(0)) {
+            revert BaseEmissionsController_InvalidAddress();
+        }
+        _TRUST_TOKEN = newToken;
+        emit TrustTokenUpdated(newToken);
+    }
+
+    function _setSatelliteEmissionsController(address newSatellite) internal {
+        if (newSatellite == address(0)) {
+            revert BaseEmissionsController_InvalidAddress();
+        }
+        _SATELLITE_EMISSIONS_CONTROLLER = newSatellite;
+        emit SatelliteEmissionsControllerUpdated(newSatellite);
+    }
 
     function _balanceBurnable() internal view returns (uint256) {
         return ITrust(_TRUST_TOKEN).balanceOf(address(this));

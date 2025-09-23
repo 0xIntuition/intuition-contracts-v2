@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.27;
+pragma solidity 0.8.29;
 
 import { console, Vm } from "forge-std/src/Test.sol";
 
@@ -527,11 +527,6 @@ contract TrustBondingReadsTest is TrustBondingBase {
 
         uint256 claimed = protocol.trustBonding.userClaimedRewardsForEpoch(users.alice, prevEpoch);
         assertGt(claimed, 0);
-    }
-
-    function test_maxClaimableProtocolFeesForEpoch() external view {
-        uint256 fees = protocol.trustBonding.maxClaimableProtocolFeesForEpoch(0);
-        assertEq(fees, 0); // Should be 0 by default
     }
 
     /* =================================================== */

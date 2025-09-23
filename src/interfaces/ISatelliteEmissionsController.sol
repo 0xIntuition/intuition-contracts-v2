@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.29;
+pragma solidity 0.8.29;
 
-import { FinalityState } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
+import {FinalityState} from "src/protocol/emissions/MetaERC20Dispatcher.sol";
 
 /**
  * @title  ISatelliteEmissionsController
@@ -21,20 +21,58 @@ interface ISatelliteEmissionsController {
     event TrustBondingUpdated(address indexed newTrustBonding);
 
     /**
-     * @notice Event emitted when the Base Emissions Controller address is updated
-     * @param newBaseEmissionsController The new Base Emissions Controller address
+     * @notice Event emitted when the BaseEmissionsController address is updated
+     * @param newBaseEmissionsController The new BaseEmissionsController address
      */
     event BaseEmissionsControllerUpdated(address indexed newBaseEmissionsController);
+
+    /**
+     * @notice Event emitted when native tokens are transferred
+     * @param recipient Address that received the native tokens
+     * @param amount Amount of native tokens transferred
+     */
+    event NativeTokenTransferred(address indexed recipient, uint256 amount);
+
+    /**
+     * @notice Event emitted when unclaimed rewards are bridged back to the BaseEmissionsController
+     * @param epoch The epoch for which unclaimed rewards were bridged
+     * @param amount The amount of unclaimed rewards bridged
+     */
+    event UnclaimedRewardsBridged(uint256 indexed epoch, uint256 amount);
 
     /* =================================================== */
     /*                       ERRORS                        */
     /* =================================================== */
+
     error SatelliteEmissionsController_InvalidAddress();
     error SatelliteEmissionsController_InvalidAmount();
     error SatelliteEmissionsController_InvalidBridgeAmount();
-    error SatelliteEmissionsController_PreviouslyBridgedUnclaimedRewards();
+    error SatelliteEmissionsController_PreviouslyBridgedUnclaimedEmissions();
     error SatelliteEmissionsController_InsufficientBalance();
     error SatelliteEmissionsController_InsufficientGasPayment();
+
+    /* =================================================== */
+    /*                      GETTERS                        */
+    /* =================================================== */
+
+    /**
+     * @notice Get the TrustBonding contract address
+     * @return The address of the TrustBonding contract
+     */
+    function getTrustBonding() external view returns (address);
+
+    /**
+     * @notice Get the BaseEmissionsController contract address
+     * @return The address of the BaseEmissionsController contract
+     */
+    function getBaseEmissionsController() external view returns (address);
+
+    /**
+     * @notice Get the amount of emissions bridged back to Base for a specific epoch
+     * @param epoch The epoch to query
+     * @return The amount of emissions bridged back to Base for the given epoch
+     */
+    function getBridgedEmissions(uint256 epoch) external view returns (uint256);
 
     /* =================================================== */
     /*                    CONTROLLER                       */
@@ -55,14 +93,14 @@ interface ISatelliteEmissionsController {
     /**
      * @notice Set the TrustBonding contract address
      * @dev Only callable by addresses with DEFAULT_ADMIN_ROLE
-     * @param newTrustBonding The new TrustBonding address
+     * @param newTrustBonding The new TrustBonding contract address
      */
     function setTrustBonding(address newTrustBonding) external;
 
     /**
      * @notice Set the BaseEmissionsController contract address
      * @dev Only callable by addresses with DEFAULT_ADMIN_ROLE
-     * @param newBaseEmissionsController The new BaseEmissionsController address
+     * @param newBaseEmissionsController The new BaseEmissionsController contract address
      */
     function setBaseEmissionsController(address newBaseEmissionsController) external;
 
@@ -95,10 +133,10 @@ interface ISatelliteEmissionsController {
     function setRecipientDomain(uint32 newRecipientDomain) external;
 
     /**
-     * @notice Bridges unclaimed rewards for a specific epoch back to the BaseEmissionsController
-     * @dev The SatelliteEmissionsController can only bridge unclaimed rewards once the claiming period for that epoch
+     * @notice Bridges unclaimed emissions for a specific epoch back to the BaseEmissionsController
+     * @dev The SatelliteEmissionsController can only bridge unclaimed emission once the claiming period for that epoch
      * has ended, which is enforced in the TrustBonding contract. Only callable by addresses with DEFAULT_ADMIN_ROLE.
-     * @param epoch The epoch for which to bridge unclaimed rewards
+     * @param epoch The epoch for which to bridge unclaimed emissions
      */
-    function bridgeUnclaimedRewards(uint256 epoch) external payable;
+    function bridgeUnclaimedEmissions(uint256 epoch) external payable;
 }
