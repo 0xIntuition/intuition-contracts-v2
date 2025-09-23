@@ -1,29 +1,36 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import {console2} from "forge-std/src/console2.sol";
+import { console2 } from "forge-std/src/console2.sol";
 
-import {SetupScript} from "../SetupScript.s.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IPermit2} from "src/interfaces/IPermit2.sol";
-import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
-import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
+import { SetupScript } from "../SetupScript.s.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IPermit2 } from "src/interfaces/IPermit2.sol";
+import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 
-import {Trust} from "src/Trust.sol";
-import {TestTrust} from "tests/mocks/TestTrust.sol";
-import {WrappedTrust} from "src/WrappedTrust.sol";
-import {MultiVault} from "src/protocol/MultiVault.sol";
-import {MultiVaultMigrationMode} from "src/protocol/MultiVaultMigrationMode.sol";
-import {AtomWalletFactory} from "src/protocol/wallet/AtomWalletFactory.sol";
-import {SatelliteEmissionsController} from "src/protocol/emissions/SatelliteEmissionsController.sol";
-import {TrustBonding} from "src/protocol/emissions/TrustBonding.sol";
-import {BondingCurveRegistry} from "src/protocol/curves/BondingCurveRegistry.sol";
-import {LinearCurve} from "src/protocol/curves/LinearCurve.sol";
-import {ProgressiveCurve} from "src/protocol/curves/ProgressiveCurve.sol";
-import {OffsetProgressiveCurve} from "src/protocol/curves/OffsetProgressiveCurve.sol";
-import {GeneralConfig, AtomConfig, TripleConfig, WalletConfig, VaultFees, BondingCurveConfig} from "src/interfaces/IMultiVaultCore.sol";
-import {MetaERC20DispatchInit, FinalityState} from "src/interfaces/IMetaLayer.sol";
-import {CoreEmissionsControllerInit} from "src/interfaces/ICoreEmissionsController.sol";
+import { Trust } from "src/Trust.sol";
+import { TestTrust } from "tests/mocks/TestTrust.sol";
+import { WrappedTrust } from "src/WrappedTrust.sol";
+import { MultiVault } from "src/protocol/MultiVault.sol";
+import { MultiVaultMigrationMode } from "src/protocol/MultiVaultMigrationMode.sol";
+import { AtomWalletFactory } from "src/protocol/wallet/AtomWalletFactory.sol";
+import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
+import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
+import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
+import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
+import { ProgressiveCurve } from "src/protocol/curves/ProgressiveCurve.sol";
+import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCurve.sol";
+import {
+    GeneralConfig,
+    AtomConfig,
+    TripleConfig,
+    WalletConfig,
+    VaultFees,
+    BondingCurveConfig
+} from "src/interfaces/IMultiVaultCore.sol";
+import { MetaERC20DispatchInit, FinalityState } from "src/interfaces/IMetaLayer.sol";
+import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";
 
 /*
 LOCAL
@@ -120,11 +127,8 @@ contract IntuitionDeployAndSetup is SetupScript {
         MultiVaultMigrationMode multiVaultImpl = new MultiVaultMigrationMode();
         info("MultiVaultMigrationMode Implementation", address(multiVaultImpl));
 
-        TransparentUpgradeableProxy multiVaultProxy = new TransparentUpgradeableProxy(
-            address(multiVaultImpl),
-            ADMIN,
-            multiVaultInitData
-        );
+        TransparentUpgradeableProxy multiVaultProxy =
+            new TransparentUpgradeableProxy(address(multiVaultImpl), ADMIN, multiVaultInitData);
         multiVault = MultiVault(address(multiVaultProxy));
 
         // Grant the MIGRATOR_ROLE to the migrator address only if we are not on the Intuition mainnet (on mainnet,
@@ -152,7 +156,6 @@ contract IntuitionDeployAndSetup is SetupScript {
 
         // Initialize SatelliteEmissionsController with proper struct parameters
         MetaERC20DispatchInit memory metaERC20DispatchInit = MetaERC20DispatchInit({
-            recipientAddress: BASE_EMISSIONS_CONTROLLER, // this will be removed later - can stay as is for now
             hubOrSpoke: METALAYER_HUB_OR_SPOKE, // placeholder metaERC20Hub
             recipientDomain: BASE_METALAYER_RECIPIENT_DOMAIN,
             gasLimit: METALAYER_GAS_LIMIT,
@@ -175,11 +178,8 @@ contract IntuitionDeployAndSetup is SetupScript {
             coreEmissionsInit
         );
 
-        TransparentUpgradeableProxy satelliteEmissionsControllerProxy = new TransparentUpgradeableProxy(
-            address(satelliteEmissionsControllerImpl),
-            ADMIN,
-            satelliteInitData
-        );
+        TransparentUpgradeableProxy satelliteEmissionsControllerProxy =
+            new TransparentUpgradeableProxy(address(satelliteEmissionsControllerImpl), ADMIN, satelliteInitData);
         satelliteEmissionsController = SatelliteEmissionsController(payable(satelliteEmissionsControllerProxy));
         info("SatelliteEmissionsController Proxy", address(satelliteEmissionsControllerProxy));
 
@@ -198,11 +198,8 @@ contract IntuitionDeployAndSetup is SetupScript {
             BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound
         );
 
-        TransparentUpgradeableProxy trustBondingProxy = new TransparentUpgradeableProxy(
-            address(trustBondingImpl),
-            ADMIN,
-            trustBondingInitData
-        );
+        TransparentUpgradeableProxy trustBondingProxy =
+            new TransparentUpgradeableProxy(address(trustBondingImpl), ADMIN, trustBondingInitData);
         trustBonding = TrustBonding(address(trustBondingProxy));
         info("TrustBonding Proxy", address(trustBondingProxy));
 
@@ -219,9 +216,7 @@ contract IntuitionDeployAndSetup is SetupScript {
         // Deploy bonding curves
         linearCurve = new LinearCurve("Linear Bonding Curve");
         offsetProgressiveCurve = new OffsetProgressiveCurve(
-            "Offset Progressive Bonding Curve",
-            OFFSET_PROGRESSIVE_CURVE_SLOPE,
-            OFFSET_PROGRESSIVE_CURVE_OFFSET
+            "Offset Progressive Bonding Curve", OFFSET_PROGRESSIVE_CURVE_SLOPE, OFFSET_PROGRESSIVE_CURVE_OFFSET
         );
         progressiveCurve = new ProgressiveCurve("Progressive Bonding Curve", PROGRESSIVE_CURVE_SLOPE);
         info("LinearCurve", address(linearCurve));
@@ -265,8 +260,8 @@ contract IntuitionDeployAndSetup is SetupScript {
             atomWalletFactory: address(atomWalletFactory)
         });
 
-        vaultFees = VaultFees({entryFee: ENTRY_FEE, exitFee: EXIT_FEE, protocolFee: PROTOCOL_FEE});
+        vaultFees = VaultFees({ entryFee: ENTRY_FEE, exitFee: EXIT_FEE, protocolFee: PROTOCOL_FEE });
 
-        bondingCurveConfig = BondingCurveConfig({registry: address(bondingCurveRegistry), defaultCurveId: 1});
+        bondingCurveConfig = BondingCurveConfig({ registry: address(bondingCurveRegistry), defaultCurveId: 1 });
     }
 }

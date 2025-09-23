@@ -282,6 +282,9 @@ abstract contract BaseTest is Modifiers, Test {
         );
 
         protocol.satelliteEmissionsController.setTrustBonding(address(protocol.trustBonding));
+        protocol.satelliteEmissionsController.grantRole(
+            protocol.satelliteEmissionsController.CONTROLLER_ROLE(), address((trustBondingProxy))
+        );
 
         // Initialize AtomWalletFactory
         atomWalletFactory.initialize(address(protocol.multiVault));

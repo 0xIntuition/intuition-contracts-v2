@@ -50,7 +50,6 @@ contract BaseEmissionsControllerDeploy is SetupScript {
 
         // 2. Prepare initialization params for the BaseEmissionsController
         MetaERC20DispatchInit memory metaERC20DispatchInit = MetaERC20DispatchInit({
-            recipientAddress: BASE_EMISSIONS_CONTROLLER, // this will be removed later - can stay as is for now
             hubOrSpoke: METALAYER_HUB_OR_SPOKE,
             recipientDomain: SATELLITE_METALAYER_RECIPIENT_DOMAIN,
             gasLimit: METALAYER_GAS_LIMIT,

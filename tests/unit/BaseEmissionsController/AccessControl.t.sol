@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import {console, Vm} from "forge-std/src/Test.sol";
-import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
-import {BaseTest} from "tests/BaseTest.t.sol";
-import {IBaseEmissionsController} from "src/interfaces/IBaseEmissionsController.sol";
-import {BaseEmissionsController} from "src/protocol/emissions/BaseEmissionsController.sol";
-import {CoreEmissionsControllerInit} from "src/interfaces/ICoreEmissionsController.sol";
-import {MetaERC20Dispatcher} from "src/protocol/emissions/MetaERC20Dispatcher.sol";
-import {MetaERC20DispatchInit, FinalityState} from "src/interfaces/IMetaLayer.sol";
-import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import { console, Vm } from "forge-std/src/Test.sol";
+import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
+import { BaseTest } from "tests/BaseTest.t.sol";
+import { IBaseEmissionsController } from "src/interfaces/IBaseEmissionsController.sol";
+import { BaseEmissionsController } from "src/protocol/emissions/BaseEmissionsController.sol";
+import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";
+import { MetaERC20Dispatcher } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
+import { MetaERC20DispatchInit, FinalityState } from "src/interfaces/IMetaLayer.sol";
+import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 /// @dev forge test --match-path 'tests/unit/BaseEmissionsController/AccessControl.t.sol'
 contract AccessControlTest is BaseTest {
@@ -74,12 +74,7 @@ contract AccessControlTest is BaseTest {
         BaseEmissionsController baseEmissionsControllerInstance = _deployBaseEmissionsController();
 
         baseEmissionsControllerInstance.initialize(
-            users.admin,
-            users.controller,
-            address(protocol.trust),
-            satelliteController,
-            metaERC20DispatchInit,
-            coreEmissionsInit
+            users.admin, users.controller, address(protocol.trust), metaERC20DispatchInit, coreEmissionsInit
         );
 
         baseEmissionsController = baseEmissionsControllerInstance;
@@ -90,11 +85,8 @@ contract AccessControlTest is BaseTest {
         BaseEmissionsController baseEmissionsControllerImpl = new BaseEmissionsController();
 
         // Deploy proxy
-        TransparentUpgradeableProxy baseEmissionsControllerProxy = new TransparentUpgradeableProxy(
-            address(baseEmissionsControllerImpl),
-            users.admin,
-            ""
-        );
+        TransparentUpgradeableProxy baseEmissionsControllerProxy =
+            new TransparentUpgradeableProxy(address(baseEmissionsControllerImpl), users.admin, "");
 
         baseEmissionsController = BaseEmissionsController(address(baseEmissionsControllerProxy));
 
@@ -115,12 +107,7 @@ contract AccessControlTest is BaseTest {
         );
 
         baseEmissionsControllerInstance.initialize(
-            address(0),
-            users.controller,
-            address(protocol.trust),
-            satelliteController,
-            metaERC20DispatchInit,
-            coreEmissionsInit
+            address(0), users.controller, address(protocol.trust), metaERC20DispatchInit, coreEmissionsInit
         );
     }
 
@@ -132,12 +119,7 @@ contract AccessControlTest is BaseTest {
         );
 
         baseEmissionsControllerInstance.initialize(
-            users.admin,
-            address(0),
-            address(protocol.trust),
-            satelliteController,
-            metaERC20DispatchInit,
-            coreEmissionsInit
+            users.admin, address(0), address(protocol.trust), metaERC20DispatchInit, coreEmissionsInit
         );
     }
 
@@ -149,29 +131,7 @@ contract AccessControlTest is BaseTest {
         );
 
         baseEmissionsControllerInstance.initialize(
-            users.admin,
-            users.controller,
-            address(0),
-            satelliteController,
-            metaERC20DispatchInit,
-            coreEmissionsInit
-        );
-    }
-
-    function test_initialize_shouldRevertIfSatelliteIsZero() external {
-        BaseEmissionsController baseEmissionsControllerInstance = _deployBaseEmissionsController();
-
-        vm.expectRevert(
-            abi.encodeWithSelector(IBaseEmissionsController.BaseEmissionsController_InvalidAddress.selector)
-        );
-
-        baseEmissionsControllerInstance.initialize(
-            users.admin,
-            users.controller,
-            address(protocol.trust),
-            address(0),
-            metaERC20DispatchInit,
-            coreEmissionsInit
+            users.admin, users.controller, address(0), metaERC20DispatchInit, coreEmissionsInit
         );
     }
 
@@ -198,9 +158,7 @@ contract AccessControlTest is BaseTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                unauthorizedUser,
-                DEFAULT_ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, unauthorizedUser, DEFAULT_ADMIN_ROLE
             )
         );
 
@@ -213,9 +171,7 @@ contract AccessControlTest is BaseTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                users.controller,
-                DEFAULT_ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, users.controller, DEFAULT_ADMIN_ROLE
             )
         );
 
@@ -248,11 +204,7 @@ contract AccessControlTest is BaseTest {
         resetPrank(users.admin);
         baseEmissionsController.setSatelliteEmissionsController(newSatellite);
 
-        assertEq(
-            baseEmissionsController.getSatelliteEmissionsController(),
-            newSatellite,
-            "Satellite should be updated"
-        );
+        assertEq(baseEmissionsController.getSatelliteEmissionsController(), newSatellite, "Satellite should be updated");
         assertNotEq(originalSatellite, newSatellite, "Should be different from original");
     }
 
@@ -261,9 +213,7 @@ contract AccessControlTest is BaseTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                unauthorizedUser,
-                DEFAULT_ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, unauthorizedUser, DEFAULT_ADMIN_ROLE
             )
         );
 
@@ -276,9 +226,7 @@ contract AccessControlTest is BaseTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                users.controller,
-                DEFAULT_ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, users.controller, DEFAULT_ADMIN_ROLE
             )
         );
 
@@ -320,9 +268,7 @@ contract AccessControlTest is BaseTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                unauthorizedUser,
-                DEFAULT_ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, unauthorizedUser, DEFAULT_ADMIN_ROLE
             )
         );
 
@@ -335,9 +281,7 @@ contract AccessControlTest is BaseTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                users.controller,
-                DEFAULT_ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, users.controller, DEFAULT_ADMIN_ROLE
             )
         );
 
@@ -361,9 +305,7 @@ contract AccessControlTest is BaseTest {
         baseEmissionsController.setMessageGasCost(largeGasCost);
 
         assertEq(
-            baseEmissionsController.getMessageGasCost(),
-            largeGasCost,
-            "Message gas cost should accept large values"
+            baseEmissionsController.getMessageGasCost(), largeGasCost, "Message gas cost should accept large values"
         );
     }
 
@@ -418,9 +360,7 @@ contract AccessControlTest is BaseTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                unauthorizedUser,
-                DEFAULT_ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, unauthorizedUser, DEFAULT_ADMIN_ROLE
             )
         );
 
@@ -433,9 +373,7 @@ contract AccessControlTest is BaseTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                users.controller,
-                DEFAULT_ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, users.controller, DEFAULT_ADMIN_ROLE
             )
         );
 
@@ -466,9 +404,7 @@ contract AccessControlTest is BaseTest {
         baseEmissionsController.setMetaERC20SpokeOrHub(newSpokeOrHub);
 
         assertEq(
-            baseEmissionsController.getMetaERC20SpokeOrHub(),
-            newSpokeOrHub,
-            "MetaERC20SpokeOrHub should be updated"
+            baseEmissionsController.getMetaERC20SpokeOrHub(), newSpokeOrHub, "MetaERC20SpokeOrHub should be updated"
         );
         assertNotEq(originalSpokeOrHub, newSpokeOrHub, "Should be different from original");
     }
@@ -478,9 +414,7 @@ contract AccessControlTest is BaseTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                unauthorizedUser,
-                DEFAULT_ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, unauthorizedUser, DEFAULT_ADMIN_ROLE
             )
         );
 
@@ -493,9 +427,7 @@ contract AccessControlTest is BaseTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                users.controller,
-                DEFAULT_ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, users.controller, DEFAULT_ADMIN_ROLE
             )
         );
 
@@ -537,9 +469,7 @@ contract AccessControlTest is BaseTest {
         baseEmissionsController.setRecipientDomain(maxDomain);
 
         assertEq(
-            baseEmissionsController.getRecipientDomain(),
-            maxDomain,
-            "Recipient domain should accept max uint32 value"
+            baseEmissionsController.getRecipientDomain(), maxDomain, "Recipient domain should accept max uint32 value"
         );
     }
 
@@ -548,9 +478,7 @@ contract AccessControlTest is BaseTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                unauthorizedUser,
-                DEFAULT_ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, unauthorizedUser, DEFAULT_ADMIN_ROLE
             )
         );
 
@@ -563,9 +491,7 @@ contract AccessControlTest is BaseTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                users.controller,
-                DEFAULT_ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, users.controller, DEFAULT_ADMIN_ROLE
             )
         );
 
@@ -588,9 +514,7 @@ contract AccessControlTest is BaseTest {
         // Admin should be able to set message gas cost
         baseEmissionsController.setMessageGasCost(newGasCost);
         assertEq(
-            baseEmissionsController.getMessageGasCost(),
-            newGasCost,
-            "Admin should be able to set message gas cost"
+            baseEmissionsController.getMessageGasCost(), newGasCost, "Admin should be able to set message gas cost"
         );
 
         // Admin should be able to set finality state
@@ -612,9 +536,7 @@ contract AccessControlTest is BaseTest {
         // Admin should be able to set recipient domain
         baseEmissionsController.setRecipientDomain(newDomain);
         assertEq(
-            baseEmissionsController.getRecipientDomain(),
-            newDomain,
-            "Admin should be able to set recipient domain"
+            baseEmissionsController.getRecipientDomain(), newDomain, "Admin should be able to set recipient domain"
         );
 
         vm.stopPrank();
@@ -631,36 +553,28 @@ contract AccessControlTest is BaseTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                users.controller,
-                DEFAULT_ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, users.controller, DEFAULT_ADMIN_ROLE
             )
         );
         baseEmissionsController.setMessageGasCost(newGasCost);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                users.controller,
-                DEFAULT_ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, users.controller, DEFAULT_ADMIN_ROLE
             )
         );
         baseEmissionsController.setFinalityState(newState);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                users.controller,
-                DEFAULT_ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, users.controller, DEFAULT_ADMIN_ROLE
             )
         );
         baseEmissionsController.setMetaERC20SpokeOrHub(newSpokeOrHub);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                users.controller,
-                DEFAULT_ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, users.controller, DEFAULT_ADMIN_ROLE
             )
         );
         baseEmissionsController.setRecipientDomain(newDomain);
@@ -680,9 +594,7 @@ contract AccessControlTest is BaseTest {
         for (uint256 i = 0; i < gasCosts.length; i++) {
             baseEmissionsController.setMessageGasCost(gasCosts[i]);
             assertEq(
-                baseEmissionsController.getMessageGasCost(),
-                gasCosts[i],
-                "Each gas cost update should take effect"
+                baseEmissionsController.getMessageGasCost(), gasCosts[i], "Each gas cost update should take effect"
             );
         }
 
@@ -803,15 +715,9 @@ contract AccessControlTest is BaseTest {
 
         // Verify all updates took effect and are consistent
         assertEq(baseEmissionsController.getMessageGasCost(), newGasCost, "Message gas cost should be updated");
+        assertEq(uint8(baseEmissionsController.getFinalityState()), uint8(newState), "Finality state should be updated");
         assertEq(
-            uint8(baseEmissionsController.getFinalityState()),
-            uint8(newState),
-            "Finality state should be updated"
-        );
-        assertEq(
-            baseEmissionsController.getMetaERC20SpokeOrHub(),
-            newSpokeOrHub,
-            "MetaERC20SpokeOrHub should be updated"
+            baseEmissionsController.getMetaERC20SpokeOrHub(), newSpokeOrHub, "MetaERC20SpokeOrHub should be updated"
         );
         assertEq(baseEmissionsController.getRecipientDomain(), newDomain, "Recipient domain should be updated");
 
@@ -833,36 +739,28 @@ contract AccessControlTest is BaseTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                unauthorizedUser,
-                DEFAULT_ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, unauthorizedUser, DEFAULT_ADMIN_ROLE
             )
         );
         baseEmissionsController.setMessageGasCost(newGasCost);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                unauthorizedUser,
-                DEFAULT_ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, unauthorizedUser, DEFAULT_ADMIN_ROLE
             )
         );
         baseEmissionsController.setFinalityState(newState);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                unauthorizedUser,
-                DEFAULT_ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, unauthorizedUser, DEFAULT_ADMIN_ROLE
             )
         );
         baseEmissionsController.setMetaERC20SpokeOrHub(newSpokeOrHub);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                unauthorizedUser,
-                DEFAULT_ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, unauthorizedUser, DEFAULT_ADMIN_ROLE
             )
         );
         baseEmissionsController.setRecipientDomain(newDomain);
@@ -887,9 +785,7 @@ contract AccessControlTest is BaseTest {
         for (uint256 i = 0; i < testUsers.length; i++) {
             vm.expectRevert(
                 abi.encodeWithSelector(
-                    IAccessControl.AccessControlUnauthorizedAccount.selector,
-                    testUsers[i],
-                    DEFAULT_ADMIN_ROLE
+                    IAccessControl.AccessControlUnauthorizedAccount.selector, testUsers[i], DEFAULT_ADMIN_ROLE
                 )
             );
 

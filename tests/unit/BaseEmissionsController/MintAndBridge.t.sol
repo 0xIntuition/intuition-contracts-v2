@@ -88,6 +88,12 @@ contract MintAndBridgeTest is BaseTest {
         protocol.trust.grantRole(protocol.trust.CONTROLLER_ROLE(), address(baseEmissionsController));
 
         vm.label(address(baseEmissionsController), "BaseEmissionsController");
+
+        vm.stopPrank();
+
+        // Set the satellite controller address
+        vm.prank(users.admin);
+        baseEmissionsController.setSatelliteEmissionsController(satelliteController);
     }
 
     /* =================================================== */

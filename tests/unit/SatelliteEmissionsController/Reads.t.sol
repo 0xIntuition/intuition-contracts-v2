@@ -74,6 +74,9 @@ contract SatelliteEmissionsControllerGettersTest is BaseTest {
 
         // Set TrustBonding contract address
         satelliteEmissionsController.setTrustBonding(address(protocol.trustBonding));
+
+        // Grant CONTROLLER_ROLE to TrustBonding contract
+        satelliteEmissionsController.grantRole(CONTROLLER_ROLE, address(protocol.trustBonding));
     }
 
     /* =================================================== */

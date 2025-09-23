@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
-import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import {Address} from "@openzeppelin/contracts/utils/Address.sol";
+import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 
-import {IBaseEmissionsController} from "src/interfaces/IBaseEmissionsController.sol";
-import {ITrust} from "src/interfaces/ITrust.sol";
-import {MetaERC20DispatchInit} from "src/interfaces/IMetaLayer.sol";
-import {CoreEmissionsControllerInit} from "src/interfaces/ICoreEmissionsController.sol";
-import {CoreEmissionsController} from "src/protocol/emissions/CoreEmissionsController.sol";
-import {FinalityState, MetaERC20Dispatcher} from "src/protocol/emissions/MetaERC20Dispatcher.sol";
+import { IBaseEmissionsController } from "src/interfaces/IBaseEmissionsController.sol";
+import { ITrust } from "src/interfaces/ITrust.sol";
+import { MetaERC20DispatchInit } from "src/interfaces/IMetaLayer.sol";
+import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";
+import { CoreEmissionsController } from "src/protocol/emissions/CoreEmissionsController.sol";
+import { FinalityState, MetaERC20Dispatcher } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
 
 /**
  * @title  BaseEmissionsController
@@ -65,8 +65,11 @@ contract BaseEmissionsController is
         address token,
         MetaERC20DispatchInit memory metaERC20DispatchInit,
         CoreEmissionsControllerInit memory checkpointInit
-    ) external initializer {
-        if (admin == address(0) || controller == address(0) || token == address(0) || satellite == address(0)) {
+    )
+        external
+        initializer
+    {
+        if (admin == address(0) || controller == address(0) || token == address(0)) {
             revert BaseEmissionsController_InvalidAddress();
         }
 
@@ -95,9 +98,6 @@ contract BaseEmissionsController is
 
         // Set the Trust token contract address
         _setTrustToken(token);
-
-        // Set the Satellite Emissions Controller contract address
-        _setSatelliteEmissionsController(satellite);
     }
 
     /* =================================================== */

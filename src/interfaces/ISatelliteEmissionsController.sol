@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import {FinalityState} from "src/protocol/emissions/MetaERC20Dispatcher.sol";
+import { FinalityState } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
 
 /**
  * @title  ISatelliteEmissionsController
