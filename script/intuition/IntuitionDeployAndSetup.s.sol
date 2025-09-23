@@ -203,10 +203,16 @@ contract IntuitionDeployAndSetup is SetupScript {
         trustBonding = TrustBonding(address(trustBondingProxy));
         info("TrustBonding Proxy", address(trustBondingProxy));
 
-        // Set the TrustBonding address in SatelliteEmissionsController only if we are not on the Intuition mainnet (on
-        // mainnet, this will be done through an admin Safe)
+        // Set the TrustBonding address in SatelliteEmissionsController and grant it the CONTROLLER_ROLE only
+        // if we are not on the Intuition mainnet (on mainnet, this will be done through an admin Safe)
         if (block.chainid != vm.envUint("INTUITION_MAINNET_CHAIN_ID")) {
             satelliteEmissionsController.setTrustBonding(address(trustBonding));
+
+            // Grant CONTROLLER_ROLE to TrustBonding in SatelliteEmissionsController
+            IAccessControl(address(satelliteEmissionsController)).grantRole(
+                satelliteEmissionsController.CONTROLLER_ROLE(), address(trustBonding)
+            );
+            console2.log("CONTROLLER_ROLE in SatelliteEmissionsController granted to TrustBonding");
         }
 
         // Deploy BondingCurveRegistry
