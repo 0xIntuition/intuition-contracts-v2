@@ -125,8 +125,6 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
     error MultiVault_TripleExists(bytes32 termId, bytes32 subjectId, bytes32 predicateId, bytes32 objectId);
 
-    error MultiVault_TermDoesNotExist();
-
     error MultiVault_TermNotTriple();
 
     error MultiVault_ActionExceedsMaxAssets();

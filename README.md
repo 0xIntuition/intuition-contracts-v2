@@ -135,9 +135,4 @@ $ bun run test:coverage:report
 
 ## License
 
-This project is licensed under MIT.
-
-
-## Deployed Contract Addresses:
-
-EntryPoint: 0x334bE66b33EC87698c16D4386896f8E807d5d2D8
+This project is licensed under BUSL-1.1

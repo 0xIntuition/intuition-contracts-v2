@@ -5,15 +5,17 @@ import { console2 } from "forge-std/src/console2.sol";
 
 import { SetupScript } from "../SetupScript.s.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { IPermit2 } from "src/interfaces/IPermit2.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
+import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 
 import { Trust } from "src/Trust.sol";
 import { TestTrust } from "tests/mocks/TestTrust.sol";
 import { WrappedTrust } from "src/WrappedTrust.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { MultiVaultMigrationMode } from "src/protocol/MultiVaultMigrationMode.sol";
+import { AtomWarden } from "src/protocol/wallet/AtomWarden.sol";
+import { AtomWallet } from "src/protocol/wallet/AtomWallet.sol";
 import { AtomWalletFactory } from "src/protocol/wallet/AtomWalletFactory.sol";
 import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
@@ -110,6 +112,38 @@ contract IntuitionDeployAndSetup is SetupScript {
     }
 
     function _deployMultiVaultSystem() internal {
+        // Deploy AtomWallet implementation contract
+        atomWalletImplementation = new AtomWallet();
+        info("AtomWallet Implementation", address(atomWalletImplementation));
+
+        // Deploy UpgradeableBeacon for AtomWallet
+        atomWalletBeacon = new UpgradeableBeacon(address(atomWalletImplementation), ADMIN);
+        info("AtomWallet UpgradeableBeacon", address(atomWalletBeacon));
+
+        // Deploy AtomWalletFactory implementation and proxy
+        AtomWalletFactory atomWalletFactoryImpl = new AtomWalletFactory();
+        info("AtomWalletFactory Implementation", address(atomWalletFactoryImpl));
+
+        TransparentUpgradeableProxy atomWalletFactoryProxy = new TransparentUpgradeableProxy(
+            address(atomWalletFactoryImpl),
+            ADMIN,
+            abi.encodeWithSelector(AtomWalletFactory.initialize.selector, address(multiVault)) // encoded initData
+        );
+        atomWalletFactory = AtomWalletFactory(address(atomWalletFactoryProxy));
+        info("AtomWalletFactory Proxy", address(atomWalletFactoryProxy));
+
+        // Deploy AtomWarden implementation and proxy
+        AtomWarden atomWardenImpl = new AtomWarden();
+        info("AtomWarden Implementation", address(atomWardenImpl));
+
+        TransparentUpgradeableProxy atomWardenProxy = new TransparentUpgradeableProxy(
+            address(atomWardenImpl),
+            ADMIN,
+            abi.encodeWithSelector(AtomWarden.initialize.selector, ADMIN, address(multiVault)) // encoded initData
+        );
+        atomWarden = AtomWarden(address(atomWardenProxy));
+        info("AtomWarden Proxy", address(atomWardenProxy));
+
         // Prepare MultiVault init data
         _prepareMultiVaultInitData();
 
@@ -137,18 +171,6 @@ contract IntuitionDeployAndSetup is SetupScript {
             IAccessControl(address(multiVault)).grantRole(MIGRATOR_ROLE, MIGRATOR);
             console2.log("MIGRATOR_ROLE granted to:", MIGRATOR);
         }
-
-        // Deploy AtomWalletFactory implementation and proxy
-        AtomWalletFactory atomWalletFactoryImpl = new AtomWalletFactory();
-        info("AtomWalletFactory Implementation", address(atomWalletFactoryImpl));
-
-        TransparentUpgradeableProxy atomWalletFactoryProxy = new TransparentUpgradeableProxy(
-            address(atomWalletFactoryImpl),
-            ADMIN,
-            abi.encodeWithSelector(AtomWalletFactory.initialize.selector, address(multiVault)) // encoded initData
-        );
-        atomWalletFactory = AtomWalletFactory(address(atomWalletFactoryProxy));
-        info("AtomWalletFactory Proxy", address(atomWalletFactoryProxy));
 
         // Deploy SatelliteEmissionsController implementation and proxy
         SatelliteEmissionsController satelliteEmissionsControllerImpl = new SatelliteEmissionsController();
@@ -259,10 +281,10 @@ contract IntuitionDeployAndSetup is SetupScript {
         });
 
         walletConfig = WalletConfig({
-            permit2: IPermit2(address(0)),
-            entryPoint: address(0),
-            atomWarden: address(0),
-            atomWalletBeacon: address(0),
+            entryPoint: 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789, // deterministic address for EntryPoint across all
+                // chains
+            atomWarden: address(atomWarden),
+            atomWalletBeacon: address(atomWalletBeacon),
             atomWalletFactory: address(atomWalletFactory)
         });
 

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity >=0.8.29;
+pragma solidity 0.8.29;
 
 import { Trust } from "src/Trust.sol";
 import { TrustToken } from "src/legacy/TrustToken.sol";
@@ -20,7 +20,6 @@ struct Protocol {
     BondingCurveRegistry curveRegistry;
     MultiVault multiVault;
     SatelliteEmissionsController satelliteEmissionsController;
-    address payable permit2;
     AtomWalletFactory atomWalletFactory;
     UpgradeableBeacon atomWalletBeacon;
 }

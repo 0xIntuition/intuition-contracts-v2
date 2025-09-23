@@ -12,6 +12,7 @@ import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/Upgradea
 import { EntryPoint } from "@account-abstraction/core/EntryPoint.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 
+import { AtomWarden } from "src/protocol/wallet/AtomWarden.sol";
 import { AtomWallet } from "src/protocol/wallet/AtomWallet.sol";
 import { AtomWalletFactory } from "src/protocol/wallet/AtomWalletFactory.sol";
 import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
@@ -30,8 +31,7 @@ import {
     TripleConfig,
     WalletConfig,
     VaultFees,
-    BondingCurveConfig,
-    IPermit2
+    BondingCurveConfig
 } from "src/interfaces/IMultiVaultCore.sol";
 
 abstract contract SetupScript is Script {
@@ -97,21 +97,16 @@ abstract contract SetupScript is Script {
     // Deployed contracts
     Trust public trust;
     MultiVault public multiVault;
+    AtomWarden public atomWarden;
+    AtomWallet public atomWalletImplementation;
     AtomWalletFactory public atomWalletFactory;
+    UpgradeableBeacon public atomWalletBeacon;
     SatelliteEmissionsController public satelliteEmissionsController;
     TrustBonding public trustBonding;
     BondingCurveRegistry public bondingCurveRegistry;
     LinearCurve public linearCurve;
     ProgressiveCurve public progressiveCurve;
     OffsetProgressiveCurve public offsetProgressiveCurve;
-
-    address public proxyAdminOwner;
-    address public multiVaultAdmin;
-    address public protocolMultisig;
-    address public migrator;
-    address public permit2; // should be deployed separately
-    address public atomWarden;
-    address public atomWalletBeacon;
 
     /// @dev Initializes the transaction broadcaster like this:
     ///
@@ -240,63 +235,6 @@ abstract contract SetupScript is Script {
             ADMIN // initial controller
         );
         return address(trustToken);
-    }
-
-    function _getGeneralConfig() internal view returns (GeneralConfig memory) {
-        return GeneralConfig({
-            admin: ADMIN,
-            protocolMultisig: protocolMultisig,
-            feeDenominator: FEE_DENOMINATOR,
-            trustBonding: address(trustBonding),
-            minDeposit: MIN_DEPOSIT,
-            minShare: MIN_SHARES,
-            atomDataMaxLength: ATOM_DATA_MAX_LENGTH,
-            decimalPrecision: DECIMAL_PRECISION
-        });
-    }
-
-    function _getAtomConfig() internal view returns (AtomConfig memory) {
-        return AtomConfig({
-            atomCreationProtocolFee: ATOM_CREATION_PROTOCOL_FEE,
-            atomWalletDepositFee: ATOM_WALLET_DEPOSIT_FEE
-        });
-    }
-
-    function _getTripleConfig() internal view returns (TripleConfig memory) {
-        return TripleConfig({
-            tripleCreationProtocolFee: TRIPLE_CREATION_PROTOCOL_FEE,
-            totalAtomDepositsOnTripleCreation: TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION,
-            atomDepositFractionForTriple: ATOM_DEPOSIT_FRACTION_FOR_TRIPLE
-        });
-    }
-
-    function _getWalletConfig() internal returns (WalletConfig memory) {
-        address entryPoint = address(new EntryPoint());
-        console2.log("EntryPoint deployed at:", entryPoint);
-
-        return WalletConfig({
-            permit2: IPermit2(permit2), // Can be deployed separately and set later. We didn't include it here because
-                // it requires strictly 0.8.17 Solidity version.
-            entryPoint: entryPoint,
-            atomWarden: atomWarden,
-            atomWalletBeacon: atomWalletBeacon,
-            atomWalletFactory: address(atomWalletFactory)
-        });
-    }
-
-    function _getVaultFees() internal view returns (VaultFees memory) {
-        return VaultFees({
-            entryFee: ENTRY_FEE, // 1%
-            exitFee: EXIT_FEE, // 1%
-            protocolFee: PROTOCOL_FEE // 1%
-         });
-    }
-
-    function _getBondingCurveConfig() internal view returns (BondingCurveConfig memory) {
-        return BondingCurveConfig({
-            registry: address(bondingCurveRegistry),
-            defaultCurveId: 1 // Linear curve
-         });
     }
 
     function info(string memory label, address addr) internal pure {
