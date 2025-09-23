@@ -130,6 +130,10 @@ contract BaseEmissionsController is
 
     /// @inheritdoc IBaseEmissionsController
     function mintAndBridge(uint256 epoch) external payable nonReentrant onlyRole(CONTROLLER_ROLE) {
+        if (_SATELLITE_EMISSIONS_CONTROLLER == address(0)) {
+            revert BaseEmissionsController_SatelliteEmissionsControllerNotSet();
+        }
+
         uint256 currentEpoch = _currentEpoch();
 
         if (epoch > currentEpoch) {

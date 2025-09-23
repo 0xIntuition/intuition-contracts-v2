@@ -144,6 +144,25 @@ contract IntuitionDeployAndSetup is SetupScript {
         atomWarden = AtomWarden(address(atomWardenProxy));
         info("AtomWarden Proxy", address(atomWardenProxy));
 
+        // Deploy BondingCurveRegistry
+        bondingCurveRegistry = new BondingCurveRegistry(ADMIN);
+        info("BondingCurveRegistry", address(bondingCurveRegistry));
+
+        // Deploy bonding curves
+        linearCurve = new LinearCurve("Linear Bonding Curve");
+        offsetProgressiveCurve = new OffsetProgressiveCurve(
+            "Offset Progressive Bonding Curve", OFFSET_PROGRESSIVE_CURVE_SLOPE, OFFSET_PROGRESSIVE_CURVE_OFFSET
+        );
+        progressiveCurve = new ProgressiveCurve("Progressive Bonding Curve", PROGRESSIVE_CURVE_SLOPE);
+        info("LinearCurve", address(linearCurve));
+        info("OffsetProgressiveCurve", address(offsetProgressiveCurve));
+        info("ProgressiveCurve", address(progressiveCurve));
+
+        // Add curves to registry
+        bondingCurveRegistry.addBondingCurve(address(linearCurve));
+        bondingCurveRegistry.addBondingCurve(address(offsetProgressiveCurve));
+        bondingCurveRegistry.addBondingCurve(address(progressiveCurve)); // review if still required
+
         // Prepare MultiVault init data
         _prepareMultiVaultInitData();
 
@@ -236,25 +255,6 @@ contract IntuitionDeployAndSetup is SetupScript {
             );
             console2.log("CONTROLLER_ROLE in SatelliteEmissionsController granted to TrustBonding");
         }
-
-        // Deploy BondingCurveRegistry
-        bondingCurveRegistry = new BondingCurveRegistry(ADMIN);
-        info("BondingCurveRegistry", address(bondingCurveRegistry));
-
-        // Deploy bonding curves
-        linearCurve = new LinearCurve("Linear Bonding Curve");
-        offsetProgressiveCurve = new OffsetProgressiveCurve(
-            "Offset Progressive Bonding Curve", OFFSET_PROGRESSIVE_CURVE_SLOPE, OFFSET_PROGRESSIVE_CURVE_OFFSET
-        );
-        progressiveCurve = new ProgressiveCurve("Progressive Bonding Curve", PROGRESSIVE_CURVE_SLOPE);
-        info("LinearCurve", address(linearCurve));
-        info("OffsetProgressiveCurve", address(offsetProgressiveCurve));
-        info("ProgressiveCurve", address(progressiveCurve));
-
-        // Add curves to registry
-        bondingCurveRegistry.addBondingCurve(address(linearCurve));
-        bondingCurveRegistry.addBondingCurve(address(offsetProgressiveCurve));
-        bondingCurveRegistry.addBondingCurve(address(progressiveCurve));
     }
 
     function _prepareMultiVaultInitData() internal {
@@ -281,8 +281,7 @@ contract IntuitionDeployAndSetup is SetupScript {
         });
 
         walletConfig = WalletConfig({
-            entryPoint: 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789, // deterministic address for EntryPoint across all
-                // chains
+            entryPoint: ENTRY_POINT,
             atomWarden: address(atomWarden),
             atomWalletBeacon: address(atomWalletBeacon),
             atomWalletFactory: address(atomWalletFactory)

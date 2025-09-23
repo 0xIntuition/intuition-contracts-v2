@@ -67,10 +67,14 @@ abstract contract SetupScript is Script {
     uint256 internal TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 1e15; // 0.001 Trust (Fixed Cost)
     uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 300; // 3% (Percentage Cost)
 
+    // Wallet Config
+    address internal ENTRY_POINT = 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789; // deterministic address of the
+        // EntryPoint contract on all chains
+
     // Vault Config
-    uint256 internal ENTRY_FEE = 500; // 5% of assets deposited after fixed costs (Percentage Cost)
-    uint256 internal EXIT_FEE = 500; // 5% of assets deposited after fixed costs (Percentage Cost)
-    uint256 internal PROTOCOL_FEE = 1000; // 10% of assets deposited after fixed costs (Percentage Cost)
+    uint256 internal ENTRY_FEE = 100; // 1% of assets deposited after fixed costs (Percentage Cost)
+    uint256 internal EXIT_FEE = 100; // 1% of assets deposited after fixed costs (Percentage Cost)
+    uint256 internal PROTOCOL_FEE = 100; // 1% of assets deposited after fixed costs (Percentage Cost)
 
     // TrustBonding Config
     uint256 internal BONDING_START_TIMESTAMP = block.timestamp + 100;

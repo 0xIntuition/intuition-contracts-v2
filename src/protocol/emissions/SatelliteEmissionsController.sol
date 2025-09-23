@@ -132,6 +132,7 @@ contract SatelliteEmissionsController is
         if (recipient == address(0)) revert SatelliteEmissionsController_InvalidAddress();
         if (amount == 0) revert SatelliteEmissionsController_InvalidAmount();
         if (address(this).balance < amount) revert SatelliteEmissionsController_InsufficientBalance();
+
         Address.sendValue(payable(recipient), amount);
 
         emit NativeTokenTransferred(recipient, amount);

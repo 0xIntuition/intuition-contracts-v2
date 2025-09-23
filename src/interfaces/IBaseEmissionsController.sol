@@ -50,6 +50,7 @@ interface IBaseEmissionsController {
     error BaseEmissionsController_InsufficientGasPayment();
     error BaseEmissionsController_EpochMintingLimitExceeded();
     error BaseEmissionsController_InsufficientBurnableBalance();
+    error BaseEmissionsController_SatelliteEmissionsControllerNotSet();
 
     /* =================================================== */
     /*                      GETTERS                        */
