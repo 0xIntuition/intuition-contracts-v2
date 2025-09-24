@@ -68,8 +68,8 @@ abstract contract SetupScript is Script {
     uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 300; // 3% (Percentage Cost)
 
     // Wallet Config
-    address internal ENTRY_POINT = 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789; // deterministic address of the
-        // EntryPoint contract on all chains
+    address internal ENTRY_POINT = 0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108; // deterministic address of the
+        // EntryPoint contract on all chains (v0.8.0)
 
     // Vault Config
     uint256 internal ENTRY_FEE = 100; // 1% of assets deposited after fixed costs (Percentage Cost)
