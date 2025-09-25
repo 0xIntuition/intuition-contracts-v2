@@ -56,9 +56,9 @@ contract OffsetProgressiveCurveTest is Test {
     }
 
     function test_currentPrice_increasesWithSupply() public view {
-        uint256 price1 = curve.currentPrice(0);
-        uint256 price2 = curve.currentPrice(10e18);
-        uint256 price3 = curve.currentPrice(100e18);
+        uint256 price1 = curve.currentPrice(0, 0);
+        uint256 price2 = curve.currentPrice(10e18, 0);
+        uint256 price3 = curve.currentPrice(100e18, 0);
 
         assertGt(price1, 0);
         assertGt(price2, price1);
@@ -66,7 +66,7 @@ contract OffsetProgressiveCurveTest is Test {
     }
 
     function test_currentPrice_offsetEffect() public view {
-        uint256 priceAtZero = curve.currentPrice(0);
+        uint256 priceAtZero = curve.currentPrice(0, 0);
         assertEq(priceAtZero, OFFSET * SLOPE / 1e18);
     }
 
@@ -104,7 +104,7 @@ contract OffsetProgressiveCurveTest is Test {
         } else {
             // Need assets large enough that sqrt(s^2 + 2a/m) > s
             // This means 2a/m > 2s (approximately), so a > s*m
-            uint256 currentPrice = curve.currentPrice(totalShares);
+            uint256 currentPrice = curve.currentPrice(totalShares, 0);
             assets = (currentPrice * assetMultiplier) / 100; // Assets as percentage of current price
             assets = assets > 0 ? assets : 1;
         }
@@ -116,7 +116,7 @@ contract OffsetProgressiveCurveTest is Test {
     function testFuzz_currentPrice(uint256 totalShares) public view {
         totalShares = bound(totalShares, 0, curve.maxShares());
 
-        uint256 price = curve.currentPrice(totalShares);
+        uint256 price = curve.currentPrice(totalShares, 0);
         // Looking at the contract: convert(totalShares).add(OFFSET).mul(SLOPE).unwrap()
         // This means: (totalShares * 1e18 + OFFSET) * SLOPE / 1e18
         // Since OFFSET is 0.0001e18 = 1e14, and SLOPE is 0.001e18 = 1e15

@@ -67,12 +67,6 @@ contract LinearCurveTest is Test {
         assertEq(assets, 2e18);
     }
 
-    function test_currentPrice_alwaysReturnsOne() public view {
-        assertEq(curve.currentPrice(0), 1e18);
-        assertEq(curve.currentPrice(100e18), 1e18);
-        assertEq(curve.currentPrice(type(uint128).max), 1e18);
-    }
-
     function test_currentPriceWithAssets_zeroSupply() public view {
         uint256 price = curve.currentPrice(0, 0);
         assertEq(price, 1e18);

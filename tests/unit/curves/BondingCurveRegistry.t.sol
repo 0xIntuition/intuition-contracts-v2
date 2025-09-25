@@ -137,7 +137,7 @@ contract BondingCurveRegistryTest is Test {
         vm.prank(admin);
         registry.addBondingCurve(address(linearCurve));
 
-        uint256 price = registry.currentPrice(1, 10e18);
+        uint256 price = registry.currentPrice(1, 10e18, 10e18);
         assertEq(price, 1e18);
     }
 
