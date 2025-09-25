@@ -19,7 +19,7 @@ This document provides step-by-step instructions to deploy and verify the system
 ## 2.) EntryPoint
 
 - **Step 1:** Execute the deterministic `EntryPoint` deployment script found at `script/auxiliary/DeployEntryPoint.s.sol`
-- **Step 2:**  Verify the newly deployed `EntryPoint` contract found at `0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108` using the following parameters:
+- **Step 2:** Verify the newly deployed `EntryPoint` contract found at `0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108` using the following parameters:
   - Paste in the code from [EntryPoint.sol](https://github.com/eth-infinitism/account-abstraction/blob/develop/contracts/core/EntryPoint.sol)
   - Select solidity version 0.8.29
   - Optimizer enabled with 10,000 runs
