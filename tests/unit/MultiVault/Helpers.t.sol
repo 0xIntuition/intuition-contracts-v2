@@ -89,6 +89,9 @@ contract MultiVaultHelpersTest is BaseTest {
     ////////////////////////////////////////////////////////////////////*/
 
     function test_getAtomWarden_DefaultAndAfterUpdate() public {
+        // expect default atom warden address
+        assertEq(protocol.multiVault.getAtomWarden(), ATOM_WARDEN);
+
         // update via admin and verify
         resetPrank({ msgSender: users.admin });
         (, address entryPoint,, address beacon, address factory) = protocol.multiVault.walletConfig();
