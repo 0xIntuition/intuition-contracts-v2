@@ -56,7 +56,6 @@ contract SatelliteEmissionsController is
 
     function initialize(
         address admin,
-        address trustBonding,
         address baseEmissionsController,
         MetaERC20DispatchInit memory metaERC20DispatchInit,
         CoreEmissionsControllerInit memory checkpointInit
@@ -64,7 +63,7 @@ contract SatelliteEmissionsController is
         external
         initializer
     {
-        if (admin == address(0) || trustBonding == address(0) || baseEmissionsController == address(0)) {
+        if (admin == address(0)) {
             revert SatelliteEmissionsController_InvalidAddress();
         }
 
@@ -89,10 +88,8 @@ contract SatelliteEmissionsController is
 
         // Initialize access control
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
-        _grantRole(CONTROLLER_ROLE, trustBonding);
 
-        // Set TrustBonding and BaseEmissionsController addresses
-        _setTrustBonding(trustBonding);
+        // Set BaseEmissionsController contract address
         _setBaseEmissionsController(baseEmissionsController);
     }
 
@@ -135,6 +132,7 @@ contract SatelliteEmissionsController is
         if (recipient == address(0)) revert SatelliteEmissionsController_InvalidAddress();
         if (amount == 0) revert SatelliteEmissionsController_InvalidAmount();
         if (address(this).balance < amount) revert SatelliteEmissionsController_InsufficientBalance();
+
         Address.sendValue(payable(recipient), amount);
 
         emit NativeTokenTransferred(recipient, amount);

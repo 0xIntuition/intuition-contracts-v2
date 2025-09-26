@@ -134,7 +134,7 @@ contract AtomWalletFactory is IAtomWalletFactory, Initializable {
     /// @return bytes memory the deployment data for the AtomWallet contract (using BeaconProxy pattern)
     function _getDeploymentData(bytes32 atomId) internal view returns (bytes memory) {
         // Addresses of the atomWalletBeacon and entryPoint contracts
-        (, address entryPoint,, address atomWalletBeacon,) = multiVault.walletConfig();
+        (address entryPoint,, address atomWalletBeacon,) = multiVault.walletConfig();
 
         // BeaconProxy creation code
         bytes memory code = type(BeaconProxy).creationCode;

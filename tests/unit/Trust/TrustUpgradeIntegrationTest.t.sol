@@ -51,9 +51,6 @@ contract TrustUpgradeIntegrationTest is Test {
         trust = Trust(TRUST_PROXY);
 
         // Reinitialize the upgraded Trust token contract
-        address initialAdmin = trust.INITIAL_ADMIN();
-        vm.deal(initialAdmin, 10 ether);
-        vm.prank(initialAdmin);
         trust.reinitialize(newAdmin, newController);
 
         // Basic post-upgrade checks

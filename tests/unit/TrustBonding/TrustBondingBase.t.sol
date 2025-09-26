@@ -65,7 +65,7 @@ contract TrustBondingBase is BaseTest {
         // This would typically be found by examining the contract's storage layout
         // For now, we'll use a placeholder approach that works with vm.store
 
-        bytes32 slot = keccak256(abi.encode(epoch, uint256(32))); // MultiVault totalUtilization storage slot
+        bytes32 slot = keccak256(abi.encode(epoch, uint256(31))); // MultiVault totalUtilization storage slot
         vm.store(address(protocol.multiVault), slot, bytes32(uint256(utilization)));
     }
 
@@ -75,7 +75,7 @@ contract TrustBondingBase is BaseTest {
         // mapping(address user => mapping(uint256 epoch => int256 utilization)) public personalUtilization;
 
         // Calculate the storage slot for the nested mapping
-        bytes32 userSlot = keccak256(abi.encode(user, uint256(33))); // MultiVault personalUtilization storage slot
+        bytes32 userSlot = keccak256(abi.encode(user, uint256(32))); // MultiVault personalUtilization storage slot
         bytes32 finalSlot = keccak256(abi.encode(epoch, userSlot));
         vm.store(address(protocol.multiVault), finalSlot, bytes32(uint256(utilization)));
     }
