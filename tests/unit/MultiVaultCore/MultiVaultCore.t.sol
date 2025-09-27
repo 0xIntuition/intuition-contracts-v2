@@ -49,7 +49,7 @@ contract MultiVaultCoreTest is BaseTest {
 
         AtomConfig memory ac = _getDefaultAtomConfig();
         TripleConfig memory tc = _getDefaultTripleConfig();
-        WalletConfig memory wc = _getDefaultWalletConfig();
+        WalletConfig memory wc = _getDefaultWalletConfig(address(1));
         VaultFees memory vf = _getDefaultVaultFees();
         BondingCurveConfig memory bc = _getDefaultBondingCurveConfig();
 

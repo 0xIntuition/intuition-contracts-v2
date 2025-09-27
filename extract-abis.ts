@@ -5,9 +5,8 @@ import * as path from 'path';
 // List of contracts to extract ABIs for
 // Add new contract names here to include them in the extraction
 const CONTRACTS_TO_EXTRACT = [
-  'Trust',
   'MultiVault',
-  'AtomWalletFactory',
+  'BaseEmissionsController',
   'SatelliteEmissionsController',
   'TrustBonding',
   'BondingCurveRegistry',
@@ -15,6 +14,8 @@ const CONTRACTS_TO_EXTRACT = [
   'ProgressiveCurve',
   'OffsetProgressiveCurve',
   'AtomWallet',
+  'Trust',
+  'AtomWalletFactory',
   'TrustToken'
 ];
 

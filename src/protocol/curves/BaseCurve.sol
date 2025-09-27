@@ -145,6 +145,7 @@ abstract contract BaseCurve is IBaseCurve {
     /// @notice Get the current price of a share
     ///
     /// @param totalShares Total quantity of shares already awarded by the curve
+    /// @param totalAssets Total quantity of assets already staked into the curve
     /// @return sharePrice The current price of a share, scaled by 1e18
-    function currentPrice(uint256 totalShares) public view virtual returns (uint256 sharePrice);
+    function currentPrice(uint256 totalShares, uint256 totalAssets) public view virtual returns (uint256 sharePrice);
 }

@@ -52,6 +52,7 @@ abstract contract SetupScript is Script {
     address internal ADMIN;
     address internal PROTOCOL_MULTISIG;
     address internal TRUST_TOKEN;
+    // address internal METALAYER_HUB_OR_SPOKE;
 
     uint8 internal DECIMAL_PRECISION = 18;
     uint256 internal FEE_DENOMINATOR = 10_000;
@@ -144,6 +145,7 @@ abstract contract SetupScript is Script {
 
     modifier broadcast() {
         vm.startBroadcast(broadcaster);
+        console2.log("Broadcasting from:", broadcaster);
         _;
         vm.stopBroadcast();
     }
@@ -166,10 +168,12 @@ abstract contract SetupScript is Script {
             ADMIN = vm.envAddress("BASE_SEPOLIA_ADMIN_ADDRESS");
             TRUST_TOKEN = vm.envOr("BASE_SEPOLIA_TRUST_TOKEN", address(0));
             PROTOCOL_MULTISIG = vm.envOr("BASE_SEPOLIA_PROTOCOL_MULTISIG", ADMIN);
+            // METALAYER_HUB_OR_SPOKE = vm.envAddress("BASE_SEPOLIA_ERC20_HUB");
         } else if (block.chainid == vm.envUint("INTUITION_SEPOLIA_CHAIN_ID")) {
             ADMIN = vm.envAddress("INTUITION_SEPOLIA_ADMIN_ADDRESS");
             TRUST_TOKEN = vm.envOr("INTUITION_SEPOLIA_WRAPPED_TRUST_TOKEN", address(0)); // WTRUST token
             PROTOCOL_MULTISIG = vm.envOr("INTUITION_SEPOLIA_PROTOCOL_MULTISIG", ADMIN);
+            // METALAYER_HUB_OR_SPOKE = vm.envAddress("INTUITION_SEPOLIA_ERC20_SPOKE");
         } else {
             revert("Unsupported chain for broadcasting");
         }

@@ -205,7 +205,15 @@ contract OffsetProgressiveCurve is BaseCurve {
     /// offset
     /// @dev And the slope ($m$) determines how quickly the price increases
     /// @dev TLDR: Each new share costs more than the last, but starting from an offset point on the curve
-    function currentPrice(uint256 totalShares) public view override returns (uint256 sharePrice) {
+    function currentPrice(
+        uint256 totalShares,
+        uint256 /* totalAssets */
+    )
+        public
+        view
+        override
+        returns (uint256 sharePrice)
+    {
         return convert(totalShares).add(OFFSET).mul(SLOPE).unwrap();
     }
 

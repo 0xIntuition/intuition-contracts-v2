@@ -38,7 +38,6 @@ contract TrustUnlockFactoryTest is BaseTest {
     uint256 public constant UNLOCK_AMOUNT = 500_000 * 1e18;
     uint256 public constant BASIS_POINTS_DIV = 10_000;
     uint256 public constant CLIFF_PCT = 2500; // 25 %
-    uint256 public unlockBegin;
     uint256 public unlockCliff;
     uint256 public unlockEnd;
 
@@ -61,9 +60,8 @@ contract TrustUnlockFactoryTest is BaseTest {
         vm.deal(address(factory), UNLOCK_AMOUNT * 3);
 
         // Set up common schedule example
-        unlockBegin = block.timestamp + 1 days;
-        unlockCliff = unlockBegin + ONE_YEAR;
-        unlockEnd = unlockBegin + 3 * ONE_YEAR;
+        unlockCliff = block.timestamp + ONE_YEAR;
+        unlockEnd = block.timestamp + 3 * ONE_YEAR;
 
         vm.stopPrank();
     }
@@ -86,7 +84,7 @@ contract TrustUnlockFactoryTest is BaseTest {
     function test_createTrustUnlock_deploysAndFunds() external {
         vm.startPrank(users.admin);
 
-        factory.createTrustUnlock(users.alice, UNLOCK_AMOUNT, unlockBegin, unlockCliff, unlockEnd, CLIFF_PCT);
+        factory.createTrustUnlock(users.alice, UNLOCK_AMOUNT, unlockCliff, unlockEnd, CLIFF_PCT);
 
         address trustUnlock = factory.trustUnlocks(users.alice);
         assertTrue(trustUnlock != address(0), "trustUnlock not recorded");
@@ -100,7 +98,6 @@ contract TrustUnlockFactoryTest is BaseTest {
         // basic smoke-check on trustUnlock params
         assertEq(TrustUnlock(payable(trustUnlock)).owner(), users.alice);
         assertEq(TrustUnlock(payable(trustUnlock)).unlockAmount(), UNLOCK_AMOUNT);
-        assertEq(TrustUnlock(payable(trustUnlock)).unlockBegin(), unlockBegin);
 
         vm.stopPrank();
     }
@@ -108,23 +105,10 @@ contract TrustUnlockFactoryTest is BaseTest {
     function test_createTrustUnlock_revertIfExists() external {
         vm.startPrank(users.admin);
 
-        factory.createTrustUnlock(users.alice, UNLOCK_AMOUNT, unlockBegin, unlockCliff, unlockEnd, CLIFF_PCT);
+        factory.createTrustUnlock(users.alice, UNLOCK_AMOUNT, unlockCliff, unlockEnd, CLIFF_PCT);
 
         vm.expectRevert(abi.encodeWithSelector(TrustUnlockFactory.Unlock_TrustUnlockAlreadyExists.selector));
-        factory.createTrustUnlock(users.alice, UNLOCK_AMOUNT, unlockBegin, unlockCliff, unlockEnd, CLIFF_PCT);
-
-        vm.stopPrank();
-    }
-
-    function test_createTrustUnlock_revertIfInsufficientBalance() external {
-        vm.startPrank(users.admin);
-
-        // The factory doesn't actually check balance before creating contracts
-        // This test doesn't make sense with the current implementation
-        // Let's test something else - perhaps contract creation with zero amount should fail
-
-        vm.expectRevert();
-        factory.createTrustUnlock(users.bob, 0, unlockBegin, unlockCliff, unlockEnd, CLIFF_PCT);
+        factory.createTrustUnlock(users.alice, UNLOCK_AMOUNT, unlockCliff, unlockEnd, CLIFF_PCT);
 
         vm.stopPrank();
     }
@@ -143,7 +127,7 @@ contract TrustUnlockFactoryTest is BaseTest {
         amts[0] = UNLOCK_AMOUNT;
         amts[1] = UNLOCK_AMOUNT;
 
-        factory.batchCreateTrustUnlock(recips, amts, unlockBegin, unlockCliff, unlockEnd, CLIFF_PCT);
+        factory.batchCreateTrustUnlock(recips, amts, unlockCliff, unlockEnd, CLIFF_PCT);
 
         address trustUnlockBob = factory.trustUnlocks(users.bob);
         address trustUnlockCharlie = factory.trustUnlocks(users.charlie);
@@ -169,7 +153,7 @@ contract TrustUnlockFactoryTest is BaseTest {
         address[] memory recips;
         uint256[] memory amts;
         vm.expectRevert(abi.encodeWithSelector(TrustUnlockFactory.Unlock_ZeroLengthArray.selector));
-        factory.batchCreateTrustUnlock(recips, amts, unlockBegin, unlockCliff, unlockEnd, CLIFF_PCT);
+        factory.batchCreateTrustUnlock(recips, amts, unlockCliff, unlockEnd, CLIFF_PCT);
         vm.stopPrank();
     }
 
@@ -181,7 +165,7 @@ contract TrustUnlockFactoryTest is BaseTest {
         amts[0] = UNLOCK_AMOUNT;
         amts[1] = UNLOCK_AMOUNT;
         vm.expectRevert(abi.encodeWithSelector(TrustUnlockFactory.Unlock_ArrayLengthMismatch.selector));
-        factory.batchCreateTrustUnlock(recips, amts, unlockBegin, unlockCliff, unlockEnd, CLIFF_PCT);
+        factory.batchCreateTrustUnlock(recips, amts, unlockCliff, unlockEnd, CLIFF_PCT);
         vm.stopPrank();
     }
 
@@ -234,10 +218,10 @@ contract TrustUnlockFactoryTest is BaseTest {
         uint256[] memory amts = new uint256[](0);
 
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, users.alice));
-        factory.createTrustUnlock(users.alice, UNLOCK_AMOUNT, unlockBegin, unlockCliff, unlockEnd, CLIFF_PCT);
+        factory.createTrustUnlock(users.alice, UNLOCK_AMOUNT, unlockCliff, unlockEnd, CLIFF_PCT);
 
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, users.alice));
-        factory.batchCreateTrustUnlock(recips, amts, 0, 0, 0, 0);
+        factory.batchCreateTrustUnlock(recips, amts, 0, 0, 0);
 
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, users.alice));
         factory.recoverTokens(address(protocol.wrappedTrust), rescueAcct);

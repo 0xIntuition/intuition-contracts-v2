@@ -323,7 +323,7 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
     }
 
     function testSetWalletConfig_RevertWhen_NonAdmin() public {
-        WalletConfig memory wc = _getDefaultWalletConfig();
+        WalletConfig memory wc = _getDefaultWalletConfig(address(1));
         wc.entryPoint = address(0x99);
 
         resetPrank({ msgSender: users.bob });

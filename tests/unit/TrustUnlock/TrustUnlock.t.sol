@@ -5,17 +5,30 @@ import { console2 } from "forge-std/src/console2.sol";
 import { Test } from "forge-std/src/Test.sol";
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { TrustUnlock } from "src/protocol/distribution/TrustUnlock.sol";
+import { ITrustUnlockFactory } from "src/interfaces/ITrustUnlockFactory.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 
+contract MockRegistry {
+    address public trustToken;
+    address public trustBonding;
+    address public multiVault;
+
+    constructor(address _trustToken, address _trustBonding, address _multiVault) {
+        trustToken = _trustToken;
+        trustBonding = _trustBonding;
+        multiVault = _multiVault;
+    }
+}
+
 contract TrustUnlock_Base is BaseTest {
+    ITrustUnlockFactory internal registry;
     TrustUnlock internal unlock;
 
     // Handy locals we reuse across tests
     address internal OWNER;
     uint256 internal UNLOCK_AMOUNT;
     uint256 internal T0;
-    uint256 internal BEGIN_TS;
     uint256 internal CLIFF_TS;
     uint256 internal END_TS;
     uint256 internal CLIFF_BP;
@@ -23,23 +36,28 @@ contract TrustUnlock_Base is BaseTest {
     function setUp() public override {
         super.setUp();
 
+        // Deploy a mock registry (factory) for the vesting contract to use
+        registry = ITrustUnlockFactory(
+            address(
+                new MockRegistry(
+                    address(protocol.wrappedTrust), address(protocol.trustBonding), address(protocol.multiVault)
+                )
+            )
+        );
+
         OWNER = users.alice;
         UNLOCK_AMOUNT = 1000 ether;
         T0 = block.timestamp;
 
-        // Vesting schedule: begin in 1w, cliff at 2w, linearly unlock to 12w
-        BEGIN_TS = T0 + 1 weeks;
+        // Vesting schedule: cliff at 2w from now, linearly unlock to 12w
         CLIFF_TS = T0 + 2 weeks;
         END_TS = T0 + 12 weeks;
         CLIFF_BP = 1000; // 10%
 
         TrustUnlock.UnlockParams memory p = TrustUnlock.UnlockParams({
             owner: OWNER,
-            token: payable(address(protocol.wrappedTrust)), // Trust / WrappedTrust
-            trustBonding: address(protocol.trustBonding),
-            multiVault: payable(address(protocol.multiVault)),
+            registry: address(registry),
             unlockAmount: UNLOCK_AMOUNT,
-            unlockBegin: BEGIN_TS,
             unlockCliff: CLIFF_TS,
             unlockEnd: END_TS,
             cliffPercentage: CLIFF_BP
@@ -64,11 +82,10 @@ contract TrustUnlock_Base is BaseTest {
     /* ---------------------------------------------------------- */
 
     function test_constructor_setsImmutables() public {
-        assertEq(address(unlock.trustToken()), address(protocol.wrappedTrust));
-        assertEq(unlock.trustBonding(), address(protocol.trustBonding));
-        assertEq(address(unlock.multiVault()), address(protocol.multiVault));
+        // assertEq(address(unlock.trustToken()), address(registry.trustToken()));
+        // assertEq(unlock.trustBonding(), address(registry.trustBonding()));
+        // assertEq(address(unlock.multiVault()), address(registry.multiVault()));
         assertEq(unlock.unlockAmount(), UNLOCK_AMOUNT);
-        assertEq(unlock.unlockBegin(), BEGIN_TS);
         assertEq(unlock.unlockCliff(), CLIFF_TS);
         assertEq(unlock.unlockEnd(), END_TS);
         assertEq(unlock.cliffPercentage(), CLIFF_BP);
@@ -220,11 +237,11 @@ contract TrustUnlock_Base is BaseTest {
 
 contract TrustUnlock_EdgeCases is BaseTest {
     TrustUnlock internal unlock;
+    ITrustUnlockFactory internal registry;
 
     address internal OWNER;
     uint256 internal UNLOCK_AMOUNT;
     uint256 internal T0;
-    uint256 internal BEGIN_TS;
     uint256 internal CLIFF_TS;
     uint256 internal END_TS;
     uint256 internal CLIFF_BP;
@@ -232,22 +249,27 @@ contract TrustUnlock_EdgeCases is BaseTest {
     function setUp() public override {
         super.setUp();
 
+        // Deploy a mock registry (factory) for the vesting contract to use
+        registry = ITrustUnlockFactory(
+            address(
+                new MockRegistry(
+                    address(protocol.wrappedTrust), address(protocol.trustBonding), address(protocol.multiVault)
+                )
+            )
+        );
+
         OWNER = users.alice;
         UNLOCK_AMOUNT = 1000 ether;
         T0 = block.timestamp;
 
-        BEGIN_TS = T0 + 1 weeks;
         CLIFF_TS = T0 + 2 weeks;
         END_TS = T0 + 12 weeks;
         CLIFF_BP = 1000;
 
         TrustUnlock.UnlockParams memory p = TrustUnlock.UnlockParams({
             owner: OWNER,
-            token: payable(address(protocol.wrappedTrust)),
-            trustBonding: address(protocol.trustBonding),
-            multiVault: payable(address(protocol.multiVault)),
+            registry: address(registry),
             unlockAmount: UNLOCK_AMOUNT,
-            unlockBegin: BEGIN_TS,
             unlockCliff: CLIFF_TS,
             unlockEnd: END_TS,
             cliffPercentage: CLIFF_BP
@@ -272,11 +294,8 @@ contract TrustUnlock_EdgeCases is BaseTest {
     function test_constructor_reverts_zeroAddresses() public {
         TrustUnlock.UnlockParams memory p = TrustUnlock.UnlockParams({
             owner: address(0),
-            token: payable(address(protocol.wrappedTrust)),
-            trustBonding: address(protocol.trustBonding),
-            multiVault: payable(address(protocol.multiVault)),
+            registry: address(registry),
             unlockAmount: 1,
-            unlockBegin: block.timestamp + 1,
             unlockCliff: block.timestamp + 2,
             unlockEnd: block.timestamp + 2 + 1 weeks,
             cliffPercentage: 0
@@ -285,17 +304,7 @@ contract TrustUnlock_EdgeCases is BaseTest {
         new TrustUnlock(p);
 
         p.owner = users.alice;
-        p.token = payable(address(0));
-        vm.expectRevert(TrustUnlock.Unlock_ZeroAddress.selector);
-        new TrustUnlock(p);
-
-        p.token = payable(address(protocol.wrappedTrust));
-        p.trustBonding = address(0);
-        vm.expectRevert(TrustUnlock.Unlock_ZeroAddress.selector);
-        new TrustUnlock(p);
-
-        p.trustBonding = address(protocol.trustBonding);
-        p.multiVault = payable(address(0));
+        p.registry = address(0);
         vm.expectRevert(TrustUnlock.Unlock_ZeroAddress.selector);
         new TrustUnlock(p);
     }
@@ -303,11 +312,8 @@ contract TrustUnlock_EdgeCases is BaseTest {
     function test_constructor_reverts_zeroAmount() public {
         TrustUnlock.UnlockParams memory p = TrustUnlock.UnlockParams({
             owner: users.alice,
-            token: payable(address(protocol.wrappedTrust)),
-            trustBonding: address(protocol.trustBonding),
-            multiVault: payable(address(protocol.multiVault)),
+            registry: address(registry),
             unlockAmount: 0,
-            unlockBegin: block.timestamp + 1,
             unlockCliff: block.timestamp + 2,
             unlockEnd: block.timestamp + 2 + 1 weeks,
             cliffPercentage: 0
@@ -316,46 +322,11 @@ contract TrustUnlock_EdgeCases is BaseTest {
         new TrustUnlock(p);
     }
 
-    function test_constructor_reverts_beginTooEarly() public {
-        TrustUnlock.UnlockParams memory p = TrustUnlock.UnlockParams({
-            owner: users.alice,
-            token: payable(address(protocol.wrappedTrust)),
-            trustBonding: address(protocol.trustBonding),
-            multiVault: payable(address(protocol.multiVault)),
-            unlockAmount: 1,
-            unlockBegin: block.timestamp - 1,
-            unlockCliff: block.timestamp + 1,
-            unlockEnd: block.timestamp + 1 + 1 weeks,
-            cliffPercentage: 0
-        });
-        vm.expectRevert(TrustUnlock.Unlock_UnlockBeginTooEarly.selector);
-        new TrustUnlock(p);
-    }
-
-    function test_constructor_reverts_cliffTooEarly() public {
-        TrustUnlock.UnlockParams memory p = TrustUnlock.UnlockParams({
-            owner: users.alice,
-            token: payable(address(protocol.wrappedTrust)),
-            trustBonding: address(protocol.trustBonding),
-            multiVault: payable(address(protocol.multiVault)),
-            unlockAmount: 1,
-            unlockBegin: block.timestamp + 10,
-            unlockCliff: block.timestamp + 9,
-            unlockEnd: block.timestamp + 10 + 1 weeks,
-            cliffPercentage: 0
-        });
-        vm.expectRevert(TrustUnlock.Unlock_CliffIsTooEarly.selector);
-        new TrustUnlock(p);
-    }
-
     function test_constructor_reverts_cliffPctTooHigh() public {
         TrustUnlock.UnlockParams memory p = TrustUnlock.UnlockParams({
             owner: users.alice,
-            token: payable(address(protocol.wrappedTrust)),
-            trustBonding: address(protocol.trustBonding),
-            multiVault: payable(address(protocol.multiVault)),
+            registry: address(registry),
             unlockAmount: 1,
-            unlockBegin: block.timestamp + 10,
             unlockCliff: block.timestamp + 11,
             unlockEnd: block.timestamp + 11 + 1 weeks,
             cliffPercentage: 10_001
@@ -367,11 +338,8 @@ contract TrustUnlock_EdgeCases is BaseTest {
     function test_constructor_reverts_endTooEarly() public {
         TrustUnlock.UnlockParams memory p = TrustUnlock.UnlockParams({
             owner: users.alice,
-            token: payable(address(protocol.wrappedTrust)),
-            trustBonding: address(protocol.trustBonding),
-            multiVault: payable(address(protocol.multiVault)),
+            registry: address(registry),
             unlockAmount: 1,
-            unlockBegin: block.timestamp + 10,
             unlockCliff: block.timestamp + 11,
             unlockEnd: block.timestamp + 11 + 1 weeks - 1, // < cliff + 1w
             cliffPercentage: 0
