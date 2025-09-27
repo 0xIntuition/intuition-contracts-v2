@@ -136,15 +136,6 @@ contract IntuitionDeployAndSetup is SetupScript {
         // Deploy TimelockController
         timelockController = _deployTimelockController();
 
-        // Deploy TrustBonding implementation and proxy
-        TrustBonding trustBondingImpl = new TrustBonding();
-        info("TrustBonding Implementation", address(trustBondingImpl));
-
-        TransparentUpgradeableProxy trustBondingProxy =
-            new TransparentUpgradeableProxy(address(trustBondingImpl), ADMIN, "");
-        trustBonding = TrustBonding(address(trustBondingProxy));
-        info("TrustBonding Proxy", address(trustBondingProxy));
-
         // Deploy AtomWarden implementation and proxy
         AtomWarden atomWardenImpl = new AtomWarden();
         info("AtomWarden Implementation", address(atomWardenImpl));
@@ -243,7 +234,7 @@ contract IntuitionDeployAndSetup is SetupScript {
         bytes memory trustBondingInitData = abi.encodeWithSelector(
             TrustBonding.initialize.selector,
             ADMIN, // owner
-            address(timelockController), // trust
+            address(timelockController), // timelock controller
             address(trust), // WTRUST token if deploying on Intuition Sepolia
             BONDING_EPOCH_LENGTH, // epochLength
             address(multiVault), // multiVault
