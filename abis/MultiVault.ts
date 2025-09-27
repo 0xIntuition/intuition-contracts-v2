@@ -1060,11 +1060,6 @@ export const MultiVaultAbi = [
         "internalType": "struct WalletConfig",
         "components": [
           {
-            "name": "permit2",
-            "type": "address",
-            "internalType": "contract IPermit2"
-          },
-          {
             "name": "entryPoint",
             "type": "address",
             "internalType": "address"
@@ -1226,11 +1221,6 @@ export const MultiVaultAbi = [
         "type": "tuple",
         "internalType": "struct WalletConfig",
         "components": [
-          {
-            "name": "permit2",
-            "type": "address",
-            "internalType": "contract IPermit2"
-          },
           {
             "name": "entryPoint",
             "type": "address",
@@ -1918,11 +1908,6 @@ export const MultiVaultAbi = [
         "internalType": "struct WalletConfig",
         "components": [
           {
-            "name": "permit2",
-            "type": "address",
-            "internalType": "contract IPermit2"
-          },
-          {
             "name": "entryPoint",
             "type": "address",
             "internalType": "address"
@@ -2099,11 +2084,6 @@ export const MultiVaultAbi = [
     "name": "walletConfig",
     "inputs": [],
     "outputs": [
-      {
-        "name": "permit2",
-        "type": "address",
-        "internalType": "contract IPermit2"
-      },
       {
         "name": "entryPoint",
         "type": "address",
@@ -2936,11 +2916,6 @@ export const MultiVaultAbi = [
   {
     "type": "error",
     "name": "MultiVault_SlippageExceeded",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "MultiVault_TermDoesNotExist",
     "inputs": []
   },
   {

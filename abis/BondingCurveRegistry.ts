@@ -116,12 +116,17 @@ export const BondingCurveRegistryAbi = [
     "name": "currentPrice",
     "inputs": [
       {
+        "name": "id",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
         "name": "totalShares",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "id",
+        "name": "totalAssets",
         "type": "uint256",
         "internalType": "uint256"
       }
