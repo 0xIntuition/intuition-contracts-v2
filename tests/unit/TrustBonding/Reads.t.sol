@@ -385,34 +385,25 @@ contract TrustBondingReadsTest is TrustBondingBase {
     /* =================================================== */
 
     function test_getAprAtEpoch_noLocked() external view {
-        uint256 currentEpoch = protocol.trustBonding.currentEpoch();
-        uint256 apr = protocol.trustBonding.getAprAtEpoch(currentEpoch);
+        uint256 apy = protocol.trustBonding.getSystemApy();
 
-        assertEq(apr, 0); // No APR when no tokens locked
+        assertEq(apy, 0); // No APR when no tokens locked
     }
 
     function test_getAprAtEpoch_withLocked() external {
         _createLock(users.alice, INITIAL_TOKENS);
 
         uint256 currentEpoch = protocol.trustBonding.currentEpoch();
-        uint256 apr = protocol.trustBonding.getAprAtEpoch(currentEpoch);
+        uint256 apy = protocol.trustBonding.getSystemApy();
 
-        assertGt(apr, 0); // Should have positive APR
-    }
-
-    function test_getAprAtEpoch_shouldRevertForFutureEpoch() external {
-        uint256 currentEpoch = protocol.trustBonding.currentEpoch();
-        uint256 futureEpoch = currentEpoch + 1;
-
-        vm.expectRevert(abi.encodeWithSelector(ITrustBonding.TrustBonding_InvalidEpoch.selector));
-        protocol.trustBonding.getAprAtEpoch(futureEpoch);
+        assertGt(apy, 0); // Should have positive APR
     }
 
     function test_getAprAtEpoch_calculation() external {
         _createLock(users.alice, INITIAL_TOKENS);
 
         uint256 currentEpoch = protocol.trustBonding.currentEpoch();
-        uint256 apr = protocol.trustBonding.getAprAtEpoch(currentEpoch);
+        uint256 apy = protocol.trustBonding.getSystemApy();
 
         // Calculate expected APR
         uint256 trustPerEpoch = protocol.trustBonding.trustPerEpoch(currentEpoch);
@@ -420,7 +411,7 @@ contract TrustBondingReadsTest is TrustBondingBase {
         uint256 totalLocked = protocol.trustBonding.totalLocked();
         uint256 expectedApr = trustPerYear * protocol.trustBonding.BASIS_POINTS_DIVISOR() / totalLocked;
 
-        assertEq(apr, expectedApr);
+        assertEq(apy, expectedApr);
     }
 
     /* =================================================== */

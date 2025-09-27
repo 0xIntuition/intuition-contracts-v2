@@ -5,10 +5,10 @@ import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/P
 
 import { ICoreEmissionsController } from "src/interfaces/ICoreEmissionsController.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
-import { ITrustBonding } from "src/interfaces/ITrustBonding.sol";
+import { ITrustBonding, UserInfo } from "src/interfaces/ITrustBonding.sol";
 import { ISatelliteEmissionsController } from "src/interfaces/ISatelliteEmissionsController.sol";
 
-import { VotingEscrow } from "src/external/curve/VotingEscrow.sol";
+import { VotingEscrow, LockedBalance } from "src/external/curve/VotingEscrow.sol";
 
 /**
  * @title  TrustBonding
@@ -173,6 +173,11 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /// @inheritdoc ITrustBonding
+    function trustPerEpoch(uint256 epoch) public view returns (uint256) {
+        return _emissionsForEpoch(epoch);
+    }
+
+    /// @inheritdoc ITrustBonding
     function previousEpoch() public view returns (uint256) {
         uint256 curr = _currentEpoch();
         return curr == 0 ? 0 : curr - 1;
@@ -232,11 +237,6 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /// @inheritdoc ITrustBonding
-    function trustPerEpoch(uint256 epoch) public view returns (uint256) {
-        return _emissionsForEpoch(epoch);
-    }
-
-    /// @inheritdoc ITrustBonding
     function getSystemUtilizationRatio(uint256 epoch) public view returns (uint256) {
         return _getSystemUtilizationRatio(epoch);
     }
@@ -244,23 +244,6 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     /// @inheritdoc ITrustBonding
     function getPersonalUtilizationRatio(address account, uint256 epoch) public view returns (uint256) {
         return _getPersonalUtilizationRatio(account, epoch);
-    }
-
-    /// @inheritdoc ITrustBonding
-    function getAprAtEpoch(uint256 epoch) external view returns (uint256) {
-        if (epoch > currentEpoch()) {
-            revert TrustBonding_InvalidEpoch();
-        }
-
-        uint256 totalLockedAmount = totalLocked();
-
-        if (totalLockedAmount == 0) {
-            return 0;
-        }
-
-        uint256 trustPerYear = _emissionsForEpoch(epoch) * epochsPerYear();
-
-        return trustPerYear * BASIS_POINTS_DIVISOR / totalLockedAmount;
     }
 
     /// @inheritdoc ITrustBonding
@@ -281,6 +264,73 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         uint256 epochRewards = _emissionsForEpoch(epoch);
         uint256 claimedRewards = totalClaimedRewardsForEpoch[epoch];
         return epochRewards - claimedRewards;
+    }
+
+    function getUserInfo(address account) external view returns (UserInfo memory) {
+        uint256 currentEpochLocal = _currentEpoch();
+        if (currentEpochLocal == 0) {
+            return UserInfo(0, 0, 0, 0, 0, 0);
+        }
+
+        uint256 prevEpoch = currentEpochLocal > 1 ? currentEpochLocal - 1 : 0;
+        uint256 userRewards = _userEligibleRewardsForEpoch(account, prevEpoch);
+        uint256 personalUtilization = _getPersonalUtilizationRatio(account, prevEpoch);
+        LockedBalance memory userLocked = locked[account];
+
+        return UserInfo({
+            personalUtilization: personalUtilization,
+            adjustedRewards: (userRewards * personalUtilization) / BASIS_POINTS_DIVISOR,
+            rawRewards: userRewards,
+            lockedAmount: userLocked.amount >= 0 ? uint256(uint128(userLocked.amount)) : 0,
+            lockEnd: userLocked.end,
+            bondedBalance: _balanceOf(account, block.timestamp)
+        });
+    }
+
+    /// @inheritdoc ITrustBonding
+    function getUserEligibleRewards(address account) external view returns (uint256) {
+        uint256 _currEpoch = _currentEpoch();
+        if (_currEpoch == 0) {
+            return 0;
+        }
+        uint256 prevEpoch = _previousEpoch();
+        uint256 userClaimedReward = userClaimedRewardsForEpoch[account][prevEpoch];
+        uint256 userEligibleReward = _userEligibleRewardsForEpoch(account, prevEpoch)
+            * _getPersonalUtilizationRatio(account, prevEpoch) / BASIS_POINTS_DIVISOR;
+        if (userEligibleReward <= userClaimedReward) {
+            return 0;
+        }
+        return userEligibleReward - userClaimedReward;
+    }
+
+    /// @inheritdoc ITrustBonding
+    function getUserApy(address account) external view returns (uint256 currentApy, uint256 maxApy) {
+        uint256 _currEpoch = _currentEpoch();
+        if (_currEpoch == 0) {
+            return (0, 0);
+        }
+        uint256 prevEpoch = _previousEpoch();
+        uint256 userRewards = _userEligibleRewardsForEpoch(account, prevEpoch);
+        uint256 personalUtilization = _getPersonalUtilizationRatio(account, prevEpoch);
+
+        int256 locked = locked[account].amount;
+        if (userRewards == 0 || locked <= 0) {
+            return (0, 0);
+        }
+        currentApy = (userRewards * personalUtilization * _epochsPerYear()) * BASIS_POINTS_DIVISOR / uint256(locked);
+        maxApy = (userRewards * _epochsPerYear()) * BASIS_POINTS_DIVISOR / uint256(locked);
+        return (currentApy, maxApy);
+    }
+
+    /// @inheritdoc ITrustBonding
+    function getSystemApy() external view returns (uint256) {
+        if (supply == 0) {
+            return 0;
+        }
+
+        uint256 emissionsPerYear = _emissionsForEpoch(_currentEpoch()) * _epochsPerYear();
+
+        return emissionsPerYear * BASIS_POINTS_DIVISOR / supply;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -591,5 +641,10 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         personalUtilizationLowerBound = newLowerBound;
 
         emit PersonalUtilizationLowerBoundUpdated(newLowerBound);
+    }
+
+    function _previousEpoch() internal view returns (uint256) {
+        uint256 curr = _currentEpoch();
+        return curr == 0 ? 0 : curr - 1;
     }
 }
