@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.27;
-
-import { IPermit2 } from "src/interfaces/IPermit2.sol";
+pragma solidity 0.8.29;
 
 /// @title IMultiVault
 /// @author 0xIntuition
@@ -361,6 +359,20 @@ interface IMultiVault {
     function isTermCreated(bytes32 id) external view returns (bool);
 
     /**
+     * @notice Retrieves the atom data for a given atom ID
+     * @param atomId The ID of the atom to retrieve data for
+     * @return The atom data for the specified atom ID
+     */
+    function atom(bytes32 atomId) external view returns (bytes memory);
+
+    /**
+     * @notice Checks if a term ID corresponds to an atom vault
+     * @param atomId The term ID to check
+     * @return True if the term ID is an atom, false otherwise
+     */
+    function isAtom(bytes32 atomId) external view returns (bool);
+
+    /**
      * @notice Checks if a term ID corresponds to a triple vault
      * @param id The term ID to check
      * @return True if the term ID is a triple, false otherwise
@@ -368,8 +380,14 @@ interface IMultiVault {
     function isTriple(bytes32 id) external view returns (bool);
 
     /**
+     * @notice Computes the deterministic address of an atom wallet for a given atom ID
+     * @param atomId The ID of the atom to compute the wallet address for
+     * @return The computed address of the atom wallet
+     */
+    function computeAtomWalletAddr(bytes32 atomId) external view returns (address);
+
+    /**
      * @notice Returns the wallet configuration for ERC-4337 compatibility
-     * @return permit2 The Permit2 contract instance
      * @return entryPoint The EntryPoint contract address for ERC-4337
      * @return atomWarden The AtomWarden contract address
      * @return atomWalletBeacon The UpgradeableBeacon contract address for AtomWallets
@@ -378,11 +396,5 @@ interface IMultiVault {
     function walletConfig()
         external
         view
-        returns (
-            IPermit2 permit2,
-            address entryPoint,
-            address atomWarden,
-            address atomWalletBeacon,
-            address atomWalletFactory
-        );
+        returns (address entryPoint, address atomWarden, address atomWalletBeacon, address atomWalletFactory);
 }

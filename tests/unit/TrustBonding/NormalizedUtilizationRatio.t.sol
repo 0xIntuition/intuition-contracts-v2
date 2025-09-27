@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity >=0.8.29 <0.9.0;
+pragma solidity 0.8.29;
 
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { TrustBondingBase } from "tests/unit/TrustBonding/TrustBondingBase.t.sol";
@@ -28,6 +28,7 @@ contract NormalizedUtilizationRatioTest is TrustBondingBase {
 
         trustBondingMock.initialize(
             users.admin,
+            users.timelock,
             address(protocol.wrappedTrust),
             TRUST_BONDING_EPOCH_LENGTH,
             address(protocol.multiVault),

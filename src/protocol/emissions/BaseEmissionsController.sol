@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.29;
+pragma solidity 0.8.29;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 
 import { IBaseEmissionsController } from "src/interfaces/IBaseEmissionsController.sol";
@@ -46,6 +45,7 @@ contract BaseEmissionsController is
     /// @notice Total amount of Trust tokens minted
     uint256 internal _totalMintedAmount;
 
+    /// @notice Mapping of minted amounts for each epoch
     mapping(uint256 epoch => uint256 amount) internal _epochToMintedAmount;
 
     /// @dev Gap for upgrade safety
@@ -64,13 +64,16 @@ contract BaseEmissionsController is
         address admin,
         address controller,
         address token,
-        address satellite,
         MetaERC20DispatchInit memory metaERC20DispatchInit,
         CoreEmissionsControllerInit memory checkpointInit
     )
         external
         initializer
     {
+        if (admin == address(0) || controller == address(0) || token == address(0)) {
+            revert BaseEmissionsController_InvalidAddress();
+        }
+
         // Initialize the AccessControl and ReentrancyGuard contracts
         __AccessControl_init();
         __ReentrancyGuard_init();
@@ -95,8 +98,7 @@ contract BaseEmissionsController is
         _grantRole(CONTROLLER_ROLE, controller);
 
         // Set the Trust token contract address
-        _TRUST_TOKEN = token;
-        _SATELLITE_EMISSIONS_CONTROLLER = satellite;
+        _setTrustToken(token);
     }
 
     /* =================================================== */
@@ -129,6 +131,10 @@ contract BaseEmissionsController is
 
     /// @inheritdoc IBaseEmissionsController
     function mintAndBridge(uint256 epoch) external payable nonReentrant onlyRole(CONTROLLER_ROLE) {
+        if (_SATELLITE_EMISSIONS_CONTROLLER == address(0)) {
+            revert BaseEmissionsController_SatelliteEmissionsControllerNotSet();
+        }
+
         uint256 currentEpoch = _currentEpoch();
 
         if (epoch > currentEpoch) {
@@ -145,7 +151,7 @@ contract BaseEmissionsController is
 
         // Mint new TRUST using the calculated epoch emissions
         ITrust(_TRUST_TOKEN).mint(address(this), amount);
-        ITrust(_TRUST_TOKEN).approve(_metaERC20SpokeOrHub, amount);
+        IERC20(_TRUST_TOKEN).approve(_metaERC20SpokeOrHub, amount);
 
         // Bridge new emissions to the Satellite Emissions Controller
         uint256 gasLimit = _quoteGasPayment(_recipientDomain, GAS_CONSTANT + _messageGasCost);
@@ -165,12 +171,22 @@ contract BaseEmissionsController is
             Address.sendValue(payable(msg.sender), msg.value - gasLimit);
         }
 
-        emit TrustMintedAndBridged(address(this), amount, epoch);
+        emit TrustMintedAndBridged(_SATELLITE_EMISSIONS_CONTROLLER, amount, epoch);
     }
 
     /* =================================================== */
     /*                       ADMIN                         */
     /* =================================================== */
+
+    /// @inheritdoc IBaseEmissionsController
+    function setTrustToken(address newToken) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _setTrustToken(newToken);
+    }
+
+    /// @inheritdoc IBaseEmissionsController
+    function setSatelliteEmissionsController(address newSatellite) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _setSatelliteEmissionsController(newSatellite);
+    }
 
     /// @inheritdoc IBaseEmissionsController
     function setMessageGasCost(uint256 newGasCost) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -197,14 +213,33 @@ contract BaseEmissionsController is
         if (amount > _balanceBurnable()) {
             revert BaseEmissionsController_InsufficientBurnableBalance();
         }
-        ITrust(_TRUST_TOKEN).burn(address(this), amount);
+
+        ITrust(_TRUST_TOKEN).burn(amount);
+
+        emit TrustBurned(address(this), amount);
     }
 
     /* =================================================== */
     /*                      INTERNAL                       */
     /* =================================================== */
 
+    function _setTrustToken(address newToken) internal {
+        if (newToken == address(0)) {
+            revert BaseEmissionsController_InvalidAddress();
+        }
+        _TRUST_TOKEN = newToken;
+        emit TrustTokenUpdated(newToken);
+    }
+
+    function _setSatelliteEmissionsController(address newSatellite) internal {
+        if (newSatellite == address(0)) {
+            revert BaseEmissionsController_InvalidAddress();
+        }
+        _SATELLITE_EMISSIONS_CONTROLLER = newSatellite;
+        emit SatelliteEmissionsControllerUpdated(newSatellite);
+    }
+
     function _balanceBurnable() internal view returns (uint256) {
-        return ITrust(_TRUST_TOKEN).balanceOf(address(this));
+        return IERC20(_TRUST_TOKEN).balanceOf(address(this));
     }
 }

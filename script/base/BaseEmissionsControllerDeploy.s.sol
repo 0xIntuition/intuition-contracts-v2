@@ -1,10 +1,12 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.27;
+// SPDX-License-Identifier: BUSL-1.1
+pragma solidity 0.8.29;
 
 import { Script, console2 } from "forge-std/src/Script.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { SetupScript } from "../SetupScript.s.sol";
 import { BaseEmissionsController } from "src/protocol/emissions/BaseEmissionsController.sol";
+import { MetaERC20DispatchInit, FinalityState } from "src/interfaces/IMetaLayer.sol";
+import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";
 
 /*
 LOCAL
@@ -25,6 +27,11 @@ contract BaseEmissionsControllerDeploy is SetupScript {
     BaseEmissionsController public baseEmissionsControllerImpl;
     TransparentUpgradeableProxy public baseEmissionsControllerProxy;
 
+    /// @notice Chain ID for the Intuition Testnet
+    uint32 internal SATELLITE_METALAYER_RECIPIENT_DOMAIN = 13_579;
+
+    address public BASE_EMISSIONS_CONTROLLER;
+
     function setUp() public override {
         super.setUp();
     }
@@ -41,7 +48,33 @@ contract BaseEmissionsControllerDeploy is SetupScript {
         // 1. Deploy the BaseEmissionsController implementation contract
         baseEmissionsControllerImpl = new BaseEmissionsController();
 
-        // 2. Deploy the TransparentUpgradeableProxy with the BaseEmissionsController implementation
-        baseEmissionsControllerProxy = new TransparentUpgradeableProxy(address(baseEmissionsControllerImpl), ADMIN, "");
+        // 2. Prepare initialization params for the BaseEmissionsController
+        MetaERC20DispatchInit memory metaERC20DispatchInit = MetaERC20DispatchInit({
+            hubOrSpoke: METALAYER_HUB_OR_SPOKE,
+            recipientDomain: SATELLITE_METALAYER_RECIPIENT_DOMAIN,
+            gasLimit: METALAYER_GAS_LIMIT,
+            finalityState: FinalityState.FINALIZED
+        });
+
+        CoreEmissionsControllerInit memory coreEmissionsInit = CoreEmissionsControllerInit({
+            startTimestamp: EMISSIONS_START_TIMESTAMP,
+            emissionsLength: EMISSIONS_LENGTH,
+            emissionsPerEpoch: EMISSIONS_PER_EPOCH,
+            emissionsReductionCliff: EMISSIONS_REDUCTION_CLIFF,
+            emissionsReductionBasisPoints: EMISSIONS_REDUCTION_BASIS_POINTS
+        });
+
+        bytes memory initData = abi.encodeWithSelector(
+            BaseEmissionsController.initialize.selector,
+            ADMIN,
+            ADMIN,
+            address(trust),
+            metaERC20DispatchInit,
+            coreEmissionsInit
+        );
+
+        // 3. Deploy the TransparentUpgradeableProxy with the BaseEmissionsController implementation
+        baseEmissionsControllerProxy =
+            new TransparentUpgradeableProxy(address(baseEmissionsControllerImpl), ADMIN, initData);
     }
 }

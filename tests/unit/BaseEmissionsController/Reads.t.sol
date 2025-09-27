@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.29;
+pragma solidity 0.8.29;
 
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { BaseEmissionsController } from "src/protocol/emissions/BaseEmissionsController.sol";
@@ -46,7 +46,6 @@ contract BaseEmissionsControllerGettersTest is BaseTest {
         MetaERC20DispatchInit memory metaERC20DispatchInit = MetaERC20DispatchInit({
             hubOrSpoke: address(1),
             recipientDomain: TEST_RECIPIENT_DOMAIN,
-            recipientAddress: address(1),
             gasLimit: TEST_GAS_LIMIT,
             finalityState: FinalityState.INSTANT
         });
@@ -60,15 +59,15 @@ contract BaseEmissionsControllerGettersTest is BaseTest {
         });
 
         baseEmissionsController.initialize(
-            users.admin,
-            users.controller,
-            address(protocol.trust),
-            address(1), // satellite
-            metaERC20DispatchInit,
-            coreEmissionsInit
+            users.admin, users.controller, address(protocol.trust), metaERC20DispatchInit, coreEmissionsInit
         );
 
         vm.label(address(baseEmissionsController), "BaseEmissionsController");
+
+        resetPrank(users.admin);
+
+        // Set SatelliteEmissionsController contract address to address(1) for testing
+        baseEmissionsController.setSatelliteEmissionsController(address(1));
     }
 
     /* =================================================== */

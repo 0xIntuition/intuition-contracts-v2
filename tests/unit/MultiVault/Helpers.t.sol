@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.29;
+pragma solidity 0.8.29;
 
 import { BaseTest } from "tests/BaseTest.t.sol";
-import { IPermit2 } from "src/interfaces/IPermit2.sol";
 import { WalletConfig } from "src/interfaces/IMultiVaultCore.sol";
 
 contract MultiVaultHelpersTest is BaseTest {
@@ -94,11 +93,10 @@ contract MultiVaultHelpersTest is BaseTest {
 
         // update via admin and verify
         resetPrank({ msgSender: users.admin });
-        (, address entryPoint,, address beacon, address factory) = protocol.multiVault.walletConfig();
+        (address entryPoint,, address beacon, address factory) = protocol.multiVault.walletConfig();
         protocol.multiVault.setWalletConfig(
             // set only the fields we change/keep; keep factory same as in deployment
             WalletConfig({
-                permit2: IPermit2(address(0)),
                 entryPoint: entryPoint,
                 atomWarden: address(0xAbCd),
                 atomWalletBeacon: beacon,

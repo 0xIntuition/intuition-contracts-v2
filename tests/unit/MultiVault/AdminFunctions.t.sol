@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.29;
+pragma solidity 0.8.29;
 
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
-import { IPermit2 } from "src/interfaces/IPermit2.sol";
 import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
 import {
@@ -297,16 +296,10 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
     ////////////////////////////////////////////////////////////////////*/
 
     function testSetWalletConfig_OnlyAdmin_UpdatesFields() public {
-        (
-            IPermit2 permit2Addr,
-            address entryPoint,
-            address atomWarden,
-            address atomWalletBeacon,
-            address atomWalletFactory
-        ) = protocol.multiVault.walletConfig();
+        (address entryPoint, address atomWarden, address atomWalletBeacon, address atomWalletFactory) =
+            protocol.multiVault.walletConfig();
 
         WalletConfig memory wc = WalletConfig({
-            permit2: IPermit2(address(0xDEAD)),
             entryPoint: address(0xBEEF),
             atomWarden: address(0xCAFE),
             atomWalletBeacon: address(0xFEED),
@@ -316,17 +309,14 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
         resetPrank({ msgSender: users.admin });
         protocol.multiVault.setWalletConfig(wc);
 
-        (IPermit2 nPermit2, address nEntry, address nWarden, address nBeacon, address nFactory) =
-            protocol.multiVault.walletConfig();
+        (address nEntry, address nWarden, address nBeacon, address nFactory) = protocol.multiVault.walletConfig();
 
-        assertEq(address(nPermit2), address(0xDEAD));
         assertEq(nEntry, address(0xBEEF));
         assertEq(nWarden, address(0xCAFE));
         assertEq(nBeacon, address(0xFEED));
         assertEq(nFactory, atomWalletFactory);
 
         // Silence warnings for unused originals
-        permit2Addr;
         entryPoint;
         atomWarden;
         atomWalletBeacon;

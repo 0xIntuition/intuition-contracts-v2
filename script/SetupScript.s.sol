@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: MIT
-pragma solidity >=0.8.29 <0.9.0;
+// SPDX-License-Identifier: BUSL-1.1
+pragma solidity 0.8.29;
 
 import { console2 } from "forge-std/src/console2.sol";
 import { Script } from "forge-std/src/Script.sol";
@@ -11,13 +11,16 @@ import {
 import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import { EntryPoint } from "@account-abstraction/core/EntryPoint.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
+import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
 
+import { AtomWarden } from "src/protocol/wallet/AtomWarden.sol";
 import { AtomWallet } from "src/protocol/wallet/AtomWallet.sol";
 import { AtomWalletFactory } from "src/protocol/wallet/AtomWalletFactory.sol";
 import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { MultiVaultMigrationMode } from "src/protocol/MultiVaultMigrationMode.sol";
 import { Trust } from "src/Trust.sol";
+import { TrustToken } from "src/legacy/TrustToken.sol";
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
@@ -29,8 +32,7 @@ import {
     TripleConfig,
     WalletConfig,
     VaultFees,
-    BondingCurveConfig,
-    IPermit2
+    BondingCurveConfig
 } from "src/interfaces/IMultiVaultCore.sol";
 
 abstract contract SetupScript is Script {
@@ -67,10 +69,17 @@ abstract contract SetupScript is Script {
     uint256 internal TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 1e15; // 0.001 Trust (Fixed Cost)
     uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 300; // 3% (Percentage Cost)
 
+    // Wallet Config
+    address internal ENTRY_POINT = 0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108; // deterministic address of the
+        // EntryPoint contract on all chains (v0.8.0)
+
     // Vault Config
-    uint256 internal ENTRY_FEE = 500; // 5% of assets deposited after fixed costs (Percentage Cost)
-    uint256 internal EXIT_FEE = 500; // 5% of assets deposited after fixed costs (Percentage Cost)
-    uint256 internal PROTOCOL_FEE = 1000; // 10% of assets deposited after fixed costs (Percentage Cost)
+    uint256 internal ENTRY_FEE = 100; // 1% of assets deposited after fixed costs (Percentage Cost)
+    uint256 internal EXIT_FEE = 100; // 1% of assets deposited after fixed costs (Percentage Cost)
+    uint256 internal PROTOCOL_FEE = 100; // 1% of assets deposited after fixed costs (Percentage Cost)
+
+    // Timelock Config
+    uint256 internal TIMELOCK_MIN_DELAY = 60 minutes;
 
     // TrustBonding Config
     uint256 internal BONDING_START_TIMESTAMP = block.timestamp + 100;
@@ -97,21 +106,17 @@ abstract contract SetupScript is Script {
     // Deployed contracts
     Trust public trust;
     MultiVault public multiVault;
+    AtomWarden public atomWarden;
+    AtomWallet public atomWalletImplementation;
     AtomWalletFactory public atomWalletFactory;
+    UpgradeableBeacon public atomWalletBeacon;
     SatelliteEmissionsController public satelliteEmissionsController;
     TrustBonding public trustBonding;
     BondingCurveRegistry public bondingCurveRegistry;
     LinearCurve public linearCurve;
     ProgressiveCurve public progressiveCurve;
     OffsetProgressiveCurve public offsetProgressiveCurve;
-
-    address public proxyAdminOwner;
-    address public multiVaultAdmin;
-    address public protocolMultisig;
-    address public migrator;
-    address public permit2; // should be deployed separately
-    address public atomWarden;
-    address public atomWalletBeacon;
+    TimelockController public timelockController;
 
     /// @dev Initializes the transaction broadcaster like this:
     ///
@@ -193,6 +198,9 @@ abstract contract SetupScript is Script {
         EXIT_FEE = vm.envOr("EXIT_FEE", EXIT_FEE);
         PROTOCOL_FEE = vm.envOr("PROTOCOL_FEE", PROTOCOL_FEE);
 
+        // Timelock Config
+        TIMELOCK_MIN_DELAY = vm.envOr("TIMELOCK_MIN_DELAY", TIMELOCK_MIN_DELAY);
+
         // TrustBonding Config
         BONDING_EPOCH_LENGTH = vm.envOr("BONDING_EPOCH_LENGTH", BONDING_EPOCH_LENGTH);
         BONDING_SYSTEM_UTILIZATION_LOWER_BOUND =
@@ -230,74 +238,19 @@ abstract contract SetupScript is Script {
         Trust trustImpl = new Trust();
         info("Trust Implementation", address(trustImpl));
 
-        // Deploy Trust proxy
-        TransparentUpgradeableProxy trustProxy = new TransparentUpgradeableProxy(address(trustImpl), ADMIN, "");
+        // Deploy and initialize Trust tokenproxy
+        TransparentUpgradeableProxy trustProxy =
+            new TransparentUpgradeableProxy(address(trustImpl), ADMIN, abi.encodeWithSelector(TrustToken.init.selector));
         Trust trustToken = Trust(address(trustProxy));
         info("Trust Proxy", address(trustProxy));
 
-        // Initialize Trust contract
+        // Renitialize Trust token contract (in the actual production setting, this will be handled atomically by
+        // calling `ProxyAdmin.upgradeAndCall(proxy, impl, reinitData))`
         trustToken.reinitialize(
             ADMIN, // admin
             ADMIN // initial controller
         );
         return address(trustToken);
-    }
-
-    function _getGeneralConfig() internal view returns (GeneralConfig memory) {
-        return GeneralConfig({
-            admin: ADMIN,
-            protocolMultisig: protocolMultisig,
-            feeDenominator: FEE_DENOMINATOR,
-            trustBonding: address(trustBonding),
-            minDeposit: MIN_DEPOSIT,
-            minShare: MIN_SHARES,
-            atomDataMaxLength: ATOM_DATA_MAX_LENGTH,
-            decimalPrecision: DECIMAL_PRECISION
-        });
-    }
-
-    function _getAtomConfig() internal view returns (AtomConfig memory) {
-        return AtomConfig({
-            atomCreationProtocolFee: ATOM_CREATION_PROTOCOL_FEE,
-            atomWalletDepositFee: ATOM_WALLET_DEPOSIT_FEE
-        });
-    }
-
-    function _getTripleConfig() internal view returns (TripleConfig memory) {
-        return TripleConfig({
-            tripleCreationProtocolFee: TRIPLE_CREATION_PROTOCOL_FEE,
-            totalAtomDepositsOnTripleCreation: TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION,
-            atomDepositFractionForTriple: ATOM_DEPOSIT_FRACTION_FOR_TRIPLE
-        });
-    }
-
-    function _getWalletConfig() internal returns (WalletConfig memory) {
-        address entryPoint = address(new EntryPoint());
-        console2.log("EntryPoint deployed at:", entryPoint);
-
-        return WalletConfig({
-            permit2: IPermit2(permit2), // Can be deployed separately and set later. We didn't include it here because
-                // it requires strictly 0.8.17 Solidity version.
-            entryPoint: entryPoint,
-            atomWarden: atomWarden,
-            atomWalletBeacon: atomWalletBeacon,
-            atomWalletFactory: address(atomWalletFactory)
-        });
-    }
-
-    function _getVaultFees() internal view returns (VaultFees memory) {
-        return VaultFees({
-            entryFee: ENTRY_FEE, // 1%
-            exitFee: EXIT_FEE, // 1%
-            protocolFee: PROTOCOL_FEE // 1%
-         });
-    }
-
-    function _getBondingCurveConfig() internal view returns (BondingCurveConfig memory) {
-        return BondingCurveConfig({
-            registry: address(bondingCurveRegistry),
-            defaultCurveId: 1 // Linear curve
-         });
     }
 
     function info(string memory label, address addr) internal pure {

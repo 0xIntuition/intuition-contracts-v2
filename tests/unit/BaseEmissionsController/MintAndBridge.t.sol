@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.29;
+pragma solidity 0.8.29;
 
 import { console, Vm } from "forge-std/src/Test.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
@@ -49,6 +49,11 @@ contract MintAndBridgeTest is BaseTest {
         _deployBaseEmissionsController();
         vm.deal(unauthorizedUser, 1 ether);
         vm.deal(users.controller, 10 ether);
+
+        // Set BaseEmissionsController directly in Trust storage slot
+        vm.store(
+            address(protocol.trust), bytes32(uint256(203)), bytes32(uint256(uint160(address(baseEmissionsController))))
+        );
     }
 
     function _deployBaseEmissionsController() internal {
@@ -69,7 +74,6 @@ contract MintAndBridgeTest is BaseTest {
         MetaERC20DispatchInit memory metaERC20DispatchInit = MetaERC20DispatchInit({
             hubOrSpoke: address(metaERC20HubOrSpoke), // Mock meta spoke
             recipientDomain: TEST_RECIPIENT_DOMAIN,
-            recipientAddress: satelliteController,
             gasLimit: TEST_GAS_LIMIT,
             finalityState: FinalityState.INSTANT
         });
@@ -83,17 +87,16 @@ contract MintAndBridgeTest is BaseTest {
         });
 
         baseEmissionsController.initialize(
-            users.admin,
-            users.controller,
-            address(protocol.trust),
-            satelliteController,
-            metaERC20DispatchInit,
-            coreEmissionsInit
+            users.admin, users.controller, address(protocol.trust), metaERC20DispatchInit, coreEmissionsInit
         );
 
-        protocol.trust.grantRole(protocol.trust.CONTROLLER_ROLE(), address(baseEmissionsController));
-
         vm.label(address(baseEmissionsController), "BaseEmissionsController");
+
+        vm.stopPrank();
+
+        // Set the satellite controller address
+        vm.prank(users.admin);
+        baseEmissionsController.setSatelliteEmissionsController(satelliteController);
     }
 
     /* =================================================== */
@@ -116,7 +119,7 @@ contract MintAndBridgeTest is BaseTest {
         assertEq(epochMintedBefore, 0, "Should start with no minted for epoch");
 
         vm.expectEmit(true, false, false, true);
-        emit TrustMintedAndBridged(address(baseEmissionsController), expectedEmissions, 0);
+        emit TrustMintedAndBridged(address(satelliteController), expectedEmissions, 0);
 
         resetPrank(users.controller);
         baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(0);
@@ -208,6 +211,21 @@ contract MintAndBridgeTest is BaseTest {
     /* =================================================== */
     /*              FAILED MINT AND BRIDGE TESTS          */
     /* =================================================== */
+
+    function test_mintAndBridge_revertWhen_satelliteEmissionsControllerNotSet() external {
+        vm.warp(TEST_START_TIMESTAMP + 1 days);
+
+        // Set satellite emissions controller to zero address by directly manipulating storage
+        vm.store(address(baseEmissionsController), bytes32(uint256(108)), bytes32(0));
+
+        resetPrank(users.controller);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBaseEmissionsController.BaseEmissionsController_SatelliteEmissionsControllerNotSet.selector
+            )
+        );
+        baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(0);
+    }
 
     function test_mintAndBridge_revertWhen_unauthorized() external {
         vm.warp(TEST_START_TIMESTAMP + 1 days);

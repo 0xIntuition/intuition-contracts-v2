@@ -14,6 +14,8 @@
   src = "src"
   test = "tests"
   libs = ["node_modules", "lib"]
+  extra_output = ["storageLayout", "metadata"]
+  ignored_error_codes = [2072]
   remappings = [
     "forge-std/=lib/forge-std/",
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
@@ -31,10 +33,18 @@
   fuzz = { runs = 10_000 }
   verbosity = 4
 
+[profile.test]
+  ignored_error_codes = [2018, 2072, 5740, 3860]  # 2072: unused parameter, 5740: unreachable code, 3860: contract size, 2018: function state mutability can be restricted to view
+  verbosity = 2
+
 [etherscan]
   mainnet = { key = "${API_KEY_ETHERSCAN}" }
   base = { key = "${API_KEY_ETHERSCAN}" }
   base_sepolia = { key = "${API_KEY_ETHERSCAN}" }
+
+[lint]
+  exclude_lints = ["mixed-case-function", "asm-keccak256", "screaming-snake-case-immutable", "incorrect-shift", "mixed-case-variable"]
+  ignore = ["./src/interfaces/**/*.sol", "./tests/**/*.sol", "./script/**/*.sol", "./src/external/**/*.sol"]
 
 [fmt]
   bracket_spacing = true

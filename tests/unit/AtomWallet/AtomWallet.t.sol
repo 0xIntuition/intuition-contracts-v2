@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.27;
+pragma solidity 0.8.29;
 
 import { Test, console } from "forge-std/src/Test.sol";
 import { BeaconProxy } from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
@@ -49,7 +49,6 @@ contract AtomWalletTest is BaseTest {
     AtomWallet public atomWallet;
     address public atomWalletAddress;
     MockEntryPoint public mockEntryPoint;
-    address public permit2 = address(0x4444);
 
     function setUp() public override {
         // Deploy mock EntryPoint and fund it with TRUST first
@@ -64,7 +63,6 @@ contract AtomWalletTest is BaseTest {
             address(protocol.multiVault),
             abi.encodeWithSelector(protocol.multiVault.walletConfig.selector),
             abi.encode(
-                permit2,
                 address(mockEntryPoint),
                 address(ATOM_WARDEN),
                 address(protocol.atomWalletBeacon),

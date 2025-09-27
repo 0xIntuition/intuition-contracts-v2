@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity >=0.8.29 <0.9.0;
+pragma solidity 0.8.29;
 
 import { console, Vm } from "forge-std/src/Test.sol";
 import { TrustBondingBase } from "tests/unit/TrustBonding/TrustBondingBase.t.sol";
@@ -10,7 +10,6 @@ contract TrustBondingEventsTest is TrustBondingBase {
     /// @notice Constants
     uint256 public dealAmount = 100 * 1e18;
     uint256 public lockAmount = 1000 * 1e18;
-    address public timelock = address(4);
 
     /* =================================================== */
     /*                       SETUP                         */
@@ -24,9 +23,8 @@ contract TrustBondingEventsTest is TrustBondingBase {
 
         vm.deal(address(protocol.satelliteEmissionsController), 10_000_000 ether);
 
-        // Grant timelock role for admin functions and whitelist users
+        // Whitelist users
         vm.startPrank(users.admin);
-        protocol.trustBonding.grantRole(protocol.trustBonding.TIMELOCK_ROLE(), timelock);
         protocol.trustBonding.add_to_whitelist(users.alice);
         protocol.trustBonding.add_to_whitelist(users.bob);
         vm.stopPrank();
@@ -64,7 +62,7 @@ contract TrustBondingEventsTest is TrustBondingBase {
         vm.expectEmit(true, false, false, false);
         emit ITrustBonding.MultiVaultSet(newMultiVault);
 
-        vm.prank(timelock);
+        vm.prank(users.timelock);
         protocol.trustBonding.setMultiVault(newMultiVault);
     }
 
@@ -74,7 +72,7 @@ contract TrustBondingEventsTest is TrustBondingBase {
         vm.expectEmit(true, false, false, false);
         emit ITrustBonding.SatelliteEmissionsControllerSet(newSatelliteEmissionsController);
 
-        vm.prank(timelock);
+        vm.prank(users.timelock);
         protocol.trustBonding.updateSatelliteEmissionsController(newSatelliteEmissionsController);
     }
 
@@ -84,7 +82,7 @@ contract TrustBondingEventsTest is TrustBondingBase {
         vm.expectEmit(false, false, false, true);
         emit ITrustBonding.SystemUtilizationLowerBoundUpdated(newLowerBound);
 
-        vm.prank(timelock);
+        vm.prank(users.timelock);
         protocol.trustBonding.updateSystemUtilizationLowerBound(newLowerBound);
     }
 
@@ -94,7 +92,7 @@ contract TrustBondingEventsTest is TrustBondingBase {
         vm.expectEmit(false, false, false, true);
         emit ITrustBonding.PersonalUtilizationLowerBoundUpdated(newLowerBound);
 
-        vm.prank(timelock);
+        vm.prank(users.timelock);
         protocol.trustBonding.updatePersonalUtilizationLowerBound(newLowerBound);
     }
 
@@ -134,21 +132,21 @@ contract TrustBondingEventsTest is TrustBondingBase {
         vm.expectEmit(true, false, false, false);
         emit ITrustBonding.MultiVaultSet(newMultiVault);
 
-        vm.prank(timelock);
+        vm.prank(users.timelock);
         protocol.trustBonding.setMultiVault(newMultiVault);
 
         // Test SystemUtilizationLowerBoundUpdated event
         vm.expectEmit(false, false, false, true);
         emit ITrustBonding.SystemUtilizationLowerBoundUpdated(newSystemBound);
 
-        vm.prank(timelock);
+        vm.prank(users.timelock);
         protocol.trustBonding.updateSystemUtilizationLowerBound(newSystemBound);
 
         // Test PersonalUtilizationLowerBoundUpdated event
         vm.expectEmit(false, false, false, true);
         emit ITrustBonding.PersonalUtilizationLowerBoundUpdated(newPersonalBound);
 
-        vm.prank(timelock);
+        vm.prank(users.timelock);
         protocol.trustBonding.updatePersonalUtilizationLowerBound(newPersonalBound);
     }
 
@@ -159,7 +157,7 @@ contract TrustBondingEventsTest is TrustBondingBase {
         // Capture the exact event data
         vm.recordLogs();
 
-        vm.prank(timelock);
+        vm.prank(users.timelock);
         protocol.trustBonding.updateSystemUtilizationLowerBound(newBound);
 
         Vm.Log[] memory logs = vm.getRecordedLogs();

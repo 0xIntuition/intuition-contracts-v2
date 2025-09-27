@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.27;
+pragma solidity 0.8.29;
 
 import { console, Vm } from "forge-std/src/Test.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
@@ -15,13 +15,11 @@ contract AccessControlTest is BaseTest {
 
     /// @notice Test addresses
     address public unauthorizedUser = address(0x999);
-    address public timelockUser = address(0x888);
     address public pauserUser = address(0x777);
 
     /// @notice Role constants for testing
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
-    bytes32 public constant TIMELOCK_ROLE = keccak256("TIMELOCK_ROLE");
 
     /// @notice Events to test (removed for now due to interface issues)
 
@@ -31,14 +29,11 @@ contract AccessControlTest is BaseTest {
         _setupUserWrappedTokenAndTrustBonding(users.alice);
 
         // Set up additional role users
-        vm.deal(timelockUser, 1 ether);
         vm.deal(pauserUser, 1 ether);
         vm.deal(unauthorizedUser, 1 ether);
 
         // Grant roles for testing
         vm.startPrank(users.admin);
-        protocol.trustBonding.grantRole(TIMELOCK_ROLE, users.admin);
-        protocol.trustBonding.grantRole(TIMELOCK_ROLE, timelockUser);
         protocol.trustBonding.grantRole(PAUSER_ROLE, pauserUser);
         vm.stopPrank();
     }
@@ -78,10 +73,12 @@ contract AccessControlTest is BaseTest {
 
     function test_pause_shouldRevertWithTimelockRole() external {
         vm.expectRevert(
-            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, timelockUser, PAUSER_ROLE)
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, users.timelock, PAUSER_ROLE
+            )
         );
 
-        vm.prank(timelockUser);
+        vm.prank(users.timelock);
         protocol.trustBonding.pause();
     }
 
@@ -134,11 +131,11 @@ contract AccessControlTest is BaseTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector, timelockUser, DEFAULT_ADMIN_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, users.timelock, DEFAULT_ADMIN_ROLE
             )
         );
 
-        vm.prank(timelockUser);
+        vm.prank(users.timelock);
         protocol.trustBonding.unpause();
     }
 
@@ -166,22 +163,22 @@ contract AccessControlTest is BaseTest {
     }
 
     /*//////////////////////////////////////////////////////////////
-                        TIMELOCK_ROLE TESTS (setMultiVault)
+                        onlyTimelock TESTS
     //////////////////////////////////////////////////////////////*/
 
     function test_setMultiVault_shouldSucceedWithTimelockRole() external {
         address newMultiVault = address(0x123456);
 
-        vm.prank(timelockUser);
+        vm.prank(users.timelock);
         protocol.trustBonding.setMultiVault(newMultiVault);
 
         assertEq(protocol.trustBonding.multiVault(), newMultiVault, "MultiVault should be updated");
     }
 
-    function test_setMultiVault_shouldSucceedWithAdminRole() external {
+    function test_setMultiVault_shouldSucceedWithTimelockAsCaller() external {
         address newMultiVault = address(0x123456);
 
-        vm.prank(users.admin);
+        vm.prank(users.timelock);
         protocol.trustBonding.setMultiVault(newMultiVault);
 
         assertEq(protocol.trustBonding.multiVault(), newMultiVault, "MultiVault should be updated");
@@ -190,18 +187,14 @@ contract AccessControlTest is BaseTest {
     function test_setMultiVault_shouldRevertWithZeroAddress() external {
         vm.expectRevert(abi.encodeWithSelector(ITrustBonding.TrustBonding_ZeroAddress.selector));
 
-        vm.prank(timelockUser);
+        vm.prank(users.timelock);
         protocol.trustBonding.setMultiVault(address(0));
     }
 
     function test_setMultiVault_shouldRevertWithUnauthorizedUser() external {
         address newMultiVault = address(0x123456);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector, unauthorizedUser, TIMELOCK_ROLE
-            )
-        );
+        vm.expectRevert(ITrustBonding.TrustBonding_OnlyTimelock.selector);
 
         vm.prank(unauthorizedUser);
         protocol.trustBonding.setMultiVault(newMultiVault);
@@ -210,22 +203,16 @@ contract AccessControlTest is BaseTest {
     function test_setMultiVault_shouldRevertWithPauserRole() external {
         address newMultiVault = address(0x123456);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, pauserUser, TIMELOCK_ROLE)
-        );
+        vm.expectRevert(ITrustBonding.TrustBonding_OnlyTimelock.selector);
 
         vm.prank(pauserUser);
         protocol.trustBonding.setMultiVault(newMultiVault);
     }
 
-    /*//////////////////////////////////////////////////////////////
-            TIMELOCK_ROLE TESTS (setSatelliteEmissionsController)
-    //////////////////////////////////////////////////////////////*/
-
     function test_setSatelliteEmissionsController_shouldSucceedWithTimelockRole() external {
         address newController = address(0x654321);
 
-        vm.prank(timelockUser);
+        vm.prank(users.timelock);
         protocol.trustBonding.updateSatelliteEmissionsController(newController);
 
         assertEq(
@@ -235,10 +222,10 @@ contract AccessControlTest is BaseTest {
         );
     }
 
-    function test_setSatelliteEmissionsController_shouldSucceedWithAdminRole() external {
+    function test_setSatelliteEmissionsController_shouldSucceedWithTimelockAsCaller() external {
         address newController = address(0x654321);
 
-        vm.prank(users.admin);
+        vm.prank(users.timelock);
         protocol.trustBonding.updateSatelliteEmissionsController(newController);
 
         assertEq(
@@ -251,18 +238,14 @@ contract AccessControlTest is BaseTest {
     function test_setSatelliteEmissionsController_shouldRevertWithZeroAddress() external {
         vm.expectRevert(abi.encodeWithSelector(ITrustBonding.TrustBonding_ZeroAddress.selector));
 
-        vm.prank(timelockUser);
+        vm.prank(users.timelock);
         protocol.trustBonding.updateSatelliteEmissionsController(address(0));
     }
 
     function test_setSatelliteEmissionsController_shouldRevertWithUnauthorizedUser() external {
         address newController = address(0x654321);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector, unauthorizedUser, TIMELOCK_ROLE
-            )
-        );
+        vm.expectRevert(ITrustBonding.TrustBonding_OnlyTimelock.selector);
 
         vm.prank(unauthorizedUser);
         protocol.trustBonding.updateSatelliteEmissionsController(newController);
@@ -271,22 +254,16 @@ contract AccessControlTest is BaseTest {
     function test_setSatelliteEmissionsController_shouldRevertWithPauserRole() external {
         address newController = address(0x654321);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, pauserUser, TIMELOCK_ROLE)
-        );
+        vm.expectRevert(ITrustBonding.TrustBonding_OnlyTimelock.selector);
 
         vm.prank(pauserUser);
         protocol.trustBonding.updateSatelliteEmissionsController(newController);
     }
 
-    /*//////////////////////////////////////////////////////////////
-          TIMELOCK_ROLE TESTS (updateSystemUtilizationLowerBound)
-    //////////////////////////////////////////////////////////////*/
-
     function test_updateSystemUtilizationLowerBound_shouldSucceedWithValidBound() external {
         uint256 newLowerBound = 6000; // 60%
 
-        vm.prank(timelockUser);
+        vm.prank(users.timelock);
         protocol.trustBonding.updateSystemUtilizationLowerBound(newLowerBound);
 
         assertEq(
@@ -299,7 +276,7 @@ contract AccessControlTest is BaseTest {
     function test_updateSystemUtilizationLowerBound_shouldSucceedWithMinimumBound() external {
         uint256 minimumBound = 4000; // 40% - minimum allowed
 
-        vm.prank(timelockUser);
+        vm.prank(users.timelock);
         protocol.trustBonding.updateSystemUtilizationLowerBound(minimumBound);
 
         assertEq(
@@ -312,7 +289,7 @@ contract AccessControlTest is BaseTest {
     function test_updateSystemUtilizationLowerBound_shouldSucceedWithMaximumBound() external {
         uint256 maximumBound = 10_000; // 100% - maximum allowed
 
-        vm.prank(timelockUser);
+        vm.prank(users.timelock);
         protocol.trustBonding.updateSystemUtilizationLowerBound(maximumBound);
 
         assertEq(
@@ -327,7 +304,7 @@ contract AccessControlTest is BaseTest {
 
         vm.expectRevert(abi.encodeWithSelector(ITrustBonding.TrustBonding_InvalidUtilizationLowerBound.selector));
 
-        vm.prank(timelockUser);
+        vm.prank(users.timelock);
         protocol.trustBonding.updateSystemUtilizationLowerBound(belowMinimum);
     }
 
@@ -336,18 +313,14 @@ contract AccessControlTest is BaseTest {
 
         vm.expectRevert(abi.encodeWithSelector(ITrustBonding.TrustBonding_InvalidUtilizationLowerBound.selector));
 
-        vm.prank(timelockUser);
+        vm.prank(users.timelock);
         protocol.trustBonding.updateSystemUtilizationLowerBound(aboveMaximum);
     }
 
     function test_updateSystemUtilizationLowerBound_shouldRevertWithUnauthorizedUser() external {
         uint256 newLowerBound = 6000;
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector, unauthorizedUser, TIMELOCK_ROLE
-            )
-        );
+        vm.expectRevert(ITrustBonding.TrustBonding_OnlyTimelock.selector);
 
         vm.prank(unauthorizedUser);
         protocol.trustBonding.updateSystemUtilizationLowerBound(newLowerBound);
@@ -356,18 +329,16 @@ contract AccessControlTest is BaseTest {
     function test_updateSystemUtilizationLowerBound_shouldRevertWithPauserRole() external {
         uint256 newLowerBound = 6000;
 
-        vm.expectRevert(
-            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, pauserUser, TIMELOCK_ROLE)
-        );
+        vm.expectRevert(ITrustBonding.TrustBonding_OnlyTimelock.selector);
 
         vm.prank(pauserUser);
         protocol.trustBonding.updateSystemUtilizationLowerBound(newLowerBound);
     }
 
-    function test_updateSystemUtilizationLowerBound_shouldSucceedWithAdminRole() external {
+    function test_updateSystemUtilizationLowerBound_shouldSucceedWithTimelockAsCaller() external {
         uint256 newLowerBound = 6000;
 
-        vm.prank(users.admin);
+        vm.prank(users.timelock);
         protocol.trustBonding.updateSystemUtilizationLowerBound(newLowerBound);
 
         assertEq(
@@ -377,14 +348,10 @@ contract AccessControlTest is BaseTest {
         );
     }
 
-    /*//////////////////////////////////////////////////////////////
-         TIMELOCK_ROLE TESTS (updatePersonalUtilizationLowerBound)
-    //////////////////////////////////////////////////////////////*/
-
     function test_updatePersonalUtilizationLowerBound_shouldSucceedWithValidBound() external {
         uint256 newLowerBound = 4000; // 40%
 
-        vm.prank(timelockUser);
+        vm.prank(users.timelock);
         protocol.trustBonding.updatePersonalUtilizationLowerBound(newLowerBound);
 
         assertEq(
@@ -397,7 +364,7 @@ contract AccessControlTest is BaseTest {
     function test_updatePersonalUtilizationLowerBound_shouldSucceedWithMinimumBound() external {
         uint256 minimumBound = 2500; // 25% - minimum allowed
 
-        vm.prank(timelockUser);
+        vm.prank(users.timelock);
         protocol.trustBonding.updatePersonalUtilizationLowerBound(minimumBound);
 
         assertEq(
@@ -410,7 +377,7 @@ contract AccessControlTest is BaseTest {
     function test_updatePersonalUtilizationLowerBound_shouldSucceedWithMaximumBound() external {
         uint256 maximumBound = 10_000; // 100% - maximum allowed
 
-        vm.prank(timelockUser);
+        vm.prank(users.timelock);
         protocol.trustBonding.updatePersonalUtilizationLowerBound(maximumBound);
 
         assertEq(
@@ -425,7 +392,7 @@ contract AccessControlTest is BaseTest {
 
         vm.expectRevert(abi.encodeWithSelector(ITrustBonding.TrustBonding_InvalidUtilizationLowerBound.selector));
 
-        vm.prank(timelockUser);
+        vm.prank(users.timelock);
         protocol.trustBonding.updatePersonalUtilizationLowerBound(belowMinimum);
     }
 
@@ -434,18 +401,14 @@ contract AccessControlTest is BaseTest {
 
         vm.expectRevert(abi.encodeWithSelector(ITrustBonding.TrustBonding_InvalidUtilizationLowerBound.selector));
 
-        vm.prank(timelockUser);
+        vm.prank(users.timelock);
         protocol.trustBonding.updatePersonalUtilizationLowerBound(aboveMaximum);
     }
 
     function test_updatePersonalUtilizationLowerBound_shouldRevertWithUnauthorizedUser() external {
         uint256 newLowerBound = 4000;
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector, unauthorizedUser, TIMELOCK_ROLE
-            )
-        );
+        vm.expectRevert(ITrustBonding.TrustBonding_OnlyTimelock.selector);
 
         vm.prank(unauthorizedUser);
         protocol.trustBonding.updatePersonalUtilizationLowerBound(newLowerBound);
@@ -454,18 +417,15 @@ contract AccessControlTest is BaseTest {
     function test_updatePersonalUtilizationLowerBound_shouldRevertWithPauserRole() external {
         uint256 newLowerBound = 4000;
 
-        vm.expectRevert(
-            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, pauserUser, TIMELOCK_ROLE)
-        );
-
+        vm.expectRevert(ITrustBonding.TrustBonding_OnlyTimelock.selector);
         vm.prank(pauserUser);
         protocol.trustBonding.updatePersonalUtilizationLowerBound(newLowerBound);
     }
 
-    function test_updatePersonalUtilizationLowerBound_shouldSucceedWithAdminRole() external {
+    function test_updatePersonalUtilizationLowerBound_shouldSucceedWithTimelockAsCaller() external {
         uint256 newLowerBound = 4000;
 
-        vm.prank(users.admin);
+        vm.prank(users.timelock);
         protocol.trustBonding.updatePersonalUtilizationLowerBound(newLowerBound);
 
         assertEq(
@@ -479,26 +439,16 @@ contract AccessControlTest is BaseTest {
                         INTEGRATION TESTS
     //////////////////////////////////////////////////////////////*/
 
-    function test_roleHierarchy_adminCanPerformAllOperations() external {
-        // Admin should be able to pause
-        vm.prank(users.admin);
-        protocol.trustBonding.pause();
-        assertTrue(protocol.trustBonding.paused(), "Admin should be able to pause");
-
-        // Admin should be able to unpause
-        vm.prank(users.admin);
-        protocol.trustBonding.unpause();
-        assertFalse(protocol.trustBonding.paused(), "Admin should be able to unpause");
-
-        // Admin should be able to set MultiVault
+    function test_roleHierarchy_timelockCanPerformAllOperations() external {
+        // Timelock should be able to set MultiVault
         address newMultiVault = address(0x111);
-        vm.prank(users.admin);
+        vm.prank(users.timelock);
         protocol.trustBonding.setMultiVault(newMultiVault);
         assertEq(protocol.trustBonding.multiVault(), newMultiVault, "Admin should be able to set MultiVault");
 
-        // Admin should be able to set SatelliteEmissionsController
+        // Timelock should be able to set SatelliteEmissionsController
         address newController = address(0x222);
-        vm.prank(users.admin);
+        vm.prank(users.timelock);
         protocol.trustBonding.updateSatelliteEmissionsController(newController);
         assertEq(
             protocol.trustBonding.satelliteEmissionsController(),
@@ -506,9 +456,9 @@ contract AccessControlTest is BaseTest {
             "Admin should be able to set SatelliteEmissionsController"
         );
 
-        // Admin should be able to update system utilization lower bound
+        // Timelock should be able to update system utilization lower bound
         uint256 newSystemBound = 6000;
-        vm.prank(users.admin);
+        vm.prank(users.timelock);
         protocol.trustBonding.updateSystemUtilizationLowerBound(newSystemBound);
         assertEq(
             protocol.trustBonding.systemUtilizationLowerBound(),
@@ -516,9 +466,9 @@ contract AccessControlTest is BaseTest {
             "Admin should be able to update system utilization lower bound"
         );
 
-        // Admin should be able to update personal utilization lower bound
+        // Timelock should be able to update personal utilization lower bound
         uint256 newPersonalBound = 4000;
-        vm.prank(users.admin);
+        vm.prank(users.timelock);
         protocol.trustBonding.updatePersonalUtilizationLowerBound(newPersonalBound);
         assertEq(
             protocol.trustBonding.personalUtilizationLowerBound(),
@@ -529,10 +479,10 @@ contract AccessControlTest is BaseTest {
 
     function test_functionsWorkAfterBoundUpdates() external {
         // Update bounds
-        vm.prank(timelockUser);
+        vm.prank(users.timelock);
         protocol.trustBonding.updateSystemUtilizationLowerBound(6000);
 
-        vm.prank(timelockUser);
+        vm.prank(users.timelock);
         protocol.trustBonding.updatePersonalUtilizationLowerBound(4000);
 
         // Verify that utilization ratio functions still work with new bounds
@@ -543,59 +493,26 @@ contract AccessControlTest is BaseTest {
         assertEq(personalRatio, BASIS_POINTS_DIVISOR, "Personal utilization ratio should work after bound update");
     }
 
-    function test_multipleRoleAssignments() external {
-        address multiRoleUser = address(0x555);
-
-        // Grant multiple roles to one user
-        vm.startPrank(users.admin);
-        protocol.trustBonding.grantRole(PAUSER_ROLE, multiRoleUser);
-        protocol.trustBonding.grantRole(TIMELOCK_ROLE, multiRoleUser);
-        vm.stopPrank();
-
-        // User should be able to perform operations from both roles
-        vm.prank(multiRoleUser);
-        protocol.trustBonding.pause();
-        assertTrue(protocol.trustBonding.paused(), "Multi-role user should be able to pause");
-
-        // Only admin can unpause, so this should still fail
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector, multiRoleUser, DEFAULT_ADMIN_ROLE
-            )
-        );
-        vm.prank(multiRoleUser);
-        protocol.trustBonding.unpause();
-
-        // But admin can unpause
-        vm.prank(users.admin);
-        protocol.trustBonding.unpause();
-
-        // Multi-role user should be able to use timelock functions
-        address newMultiVault = address(0x333);
-        vm.prank(multiRoleUser);
-        protocol.trustBonding.setMultiVault(newMultiVault);
-        assertEq(protocol.trustBonding.multiVault(), newMultiVault, "Multi-role user should be able to set MultiVault");
-    }
-
     function test_roleRevocation() external {
-        // Verify timelock user can initially perform operations
-        address newMultiVault = address(0x444);
-        vm.prank(timelockUser);
-        protocol.trustBonding.setMultiVault(newMultiVault);
+        // Verify pauser user can initially perform operations
+        vm.prank(pauserUser);
+        protocol.trustBonding.pause();
 
-        // Revoke timelock role
+        // Unpause for next test
         vm.prank(users.admin);
-        protocol.trustBonding.revokeRole(TIMELOCK_ROLE, timelockUser);
+        protocol.trustBonding.unpause();
 
-        // Now timelock user should not be able to perform operations
-        address anotherMultiVault = address(0x555);
+        // Revoke pauser role
+        vm.prank(users.admin);
+        protocol.trustBonding.revokeRole(PAUSER_ROLE, pauserUser);
+
+        // Now pauser user should not be able to perform operations
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector, timelockUser, TIMELOCK_ROLE
-            )
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, pauserUser, PAUSER_ROLE)
         );
-        vm.prank(timelockUser);
-        protocol.trustBonding.setMultiVault(anotherMultiVault);
+
+        vm.prank(pauserUser);
+        protocol.trustBonding.pause();
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -610,7 +527,7 @@ contract AccessControlTest is BaseTest {
         systemBounds[2] = 10_000; // Maximum
 
         for (uint256 i = 0; i < systemBounds.length; i++) {
-            vm.prank(timelockUser);
+            vm.prank(users.timelock);
             protocol.trustBonding.updateSystemUtilizationLowerBound(systemBounds[i]);
             assertEq(
                 protocol.trustBonding.systemUtilizationLowerBound(), systemBounds[i], "System bound should be updated"
@@ -624,7 +541,7 @@ contract AccessControlTest is BaseTest {
         personalBounds[2] = 10_000; // Maximum
 
         for (uint256 i = 0; i < personalBounds.length; i++) {
-            vm.prank(timelockUser);
+            vm.prank(users.timelock);
             protocol.trustBonding.updatePersonalUtilizationLowerBound(personalBounds[i]);
             assertEq(
                 protocol.trustBonding.personalUtilizationLowerBound(),
@@ -647,7 +564,7 @@ contract AccessControlTest is BaseTest {
         uint256 newSystemBound = 7000;
         uint256 newPersonalBound = 4500;
 
-        vm.startPrank(timelockUser);
+        vm.startPrank(users.timelock);
         protocol.trustBonding.setMultiVault(newMultiVault);
         protocol.trustBonding.updateSatelliteEmissionsController(newController);
         protocol.trustBonding.updateSystemUtilizationLowerBound(newSystemBound);

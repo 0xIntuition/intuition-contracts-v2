@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: MIT
-pragma solidity >=0.8.29 <0.9.0;
+// SPDX-License-Identifier: BUSL-1.1
+pragma solidity 0.8.29;
 
 import { console2 } from "forge-std/src/console2.sol";
 import { Test } from "forge-std/src/Test.sol";
@@ -7,7 +7,6 @@ import { Test } from "forge-std/src/Test.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
-import { IPermit2 } from "src/interfaces/IPermit2.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 import { MetaERC20DispatchInit, FinalityState } from "src/interfaces/IMetaLayer.sol";
 import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";
@@ -103,6 +102,7 @@ abstract contract BaseTest is Modifiers, Test {
     function setUp() public virtual {
         users.admin = createUser("admin");
         users.controller = createUser("controller");
+        users.timelock = createUser("timelock");
         users.alice = createUser("alice");
         users.bob = createUser("bob");
         users.charlie = createUser("charlie");
@@ -134,7 +134,7 @@ abstract contract BaseTest is Modifiers, Test {
         vm.prank(0xa28d4AAcA48bE54824dA53a19b05121DE71Ef480); // admin address set on Base
         trust.reinitialize(
             users.admin, // admin
-            users.admin // initial minter
+            users.controller // controller
         );
 
         vm.label(address(trustProxy), "TrustProxy");
@@ -265,12 +265,10 @@ abstract contract BaseTest is Modifiers, Test {
 
         protocol.satelliteEmissionsController.initialize(
             users.admin,
-            address(protocol.trustBonding),
-            address(1), // BaseEmissionsController
+            address(1), // BaseEmissionsController placeholder
             MetaERC20DispatchInit({
                 hubOrSpoke: address(metaERC20HubOrSpoke),
                 recipientDomain: 1,
-                recipientAddress: address(1),
                 gasLimit: 125_000,
                 finalityState: FinalityState.INSTANT
             }),
@@ -283,11 +281,17 @@ abstract contract BaseTest is Modifiers, Test {
             })
         );
 
+        protocol.satelliteEmissionsController.setTrustBonding(address(protocol.trustBonding));
+        protocol.satelliteEmissionsController.grantRole(
+            protocol.satelliteEmissionsController.CONTROLLER_ROLE(), address((trustBondingProxy))
+        );
+
         // Initialize AtomWalletFactory
         atomWalletFactory.initialize(address(protocol.multiVault));
 
         protocol.trustBonding.initialize(
             users.admin, // owner
+            users.timelock, // timelock
             address(protocol.wrappedTrust), // trustToken
             TRUST_BONDING_EPOCH_LENGTH, // epochLength (minimum 2 weeks required)
             address(protocol.multiVault), // multiVault
@@ -372,7 +376,6 @@ abstract contract BaseTest is Modifiers, Test {
 
     function _getDefaultWalletConfig(address _atomWalletFactory) internal returns (WalletConfig memory) {
         return WalletConfig({
-            permit2: IPermit2(address(0)),
             entryPoint: address(0),
             atomWarden: ATOM_WARDEN,
             atomWalletBeacon: address(0),

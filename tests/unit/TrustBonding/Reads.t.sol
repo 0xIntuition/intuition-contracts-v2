@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.27;
+pragma solidity 0.8.29;
 
 import { console, Vm } from "forge-std/src/Test.sol";
 
@@ -529,11 +529,6 @@ contract TrustBondingReadsTest is TrustBondingBase {
         assertGt(claimed, 0);
     }
 
-    function test_maxClaimableProtocolFeesForEpoch() external view {
-        uint256 fees = protocol.trustBonding.maxClaimableProtocolFeesForEpoch(0);
-        assertEq(fees, 0); // Should be 0 by default
-    }
-
     /* =================================================== */
     /*                   CONSTANTS                         */
     /* =================================================== */
@@ -544,6 +539,5 @@ contract TrustBondingReadsTest is TrustBondingBase {
         assertEq(protocol.trustBonding.MINIMUM_SYSTEM_UTILIZATION_LOWER_BOUND(), 4000);
         assertEq(protocol.trustBonding.MINIMUM_PERSONAL_UTILIZATION_LOWER_BOUND(), 2500);
         assertEq(protocol.trustBonding.PAUSER_ROLE(), keccak256("PAUSER_ROLE"));
-        assertEq(protocol.trustBonding.TIMELOCK_ROLE(), keccak256("TIMELOCK_ROLE"));
     }
 }

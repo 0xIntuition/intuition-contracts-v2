@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
-pragma solidity >=0.8.22;
+// SPDX-License-Identifier: BUSL-1.1
+pragma solidity 0.8.29;
 
 import { Trust } from "src/Trust.sol";
 import { TrustToken } from "src/legacy/TrustToken.sol";
@@ -20,7 +20,6 @@ struct Protocol {
     BondingCurveRegistry curveRegistry;
     MultiVault multiVault;
     SatelliteEmissionsController satelliteEmissionsController;
-    address payable permit2;
     AtomWalletFactory atomWalletFactory;
     UpgradeableBeacon atomWalletBeacon;
 }
@@ -28,6 +27,7 @@ struct Protocol {
 struct Users {
     address payable admin;
     address payable controller;
+    address payable timelock;
     address payable alice;
     address payable bob;
     address payable charlie;

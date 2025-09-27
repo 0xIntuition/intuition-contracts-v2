@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.29;
+// SPDX-License-Identifier: BUSL-1.1
+pragma solidity 0.8.29;
 
 import { Test } from "forge-std/src/Test.sol";
 import { console2 } from "forge-std/src/console2.sol";
@@ -49,8 +49,8 @@ contract WrappedTrustTest is Test {
     /*                     METADATA                        */
     /* =================================================== */
 
-    function test_metadata_Getters() public {
-        assertEq(wtr.name(), "Wrapped Trust");
+    function test_metadata_Getters() public view {
+        assertEq(wtr.name(), "Wrapped TRUST");
         assertEq(wtr.symbol(), "WTRUST");
         assertEq(wtr.decimals(), 18);
     }

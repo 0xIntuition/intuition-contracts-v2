@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
-pragma solidity >=0.8.22;
+// SPDX-License-Identifier: BUSL-1.1
+pragma solidity 0.8.29;
 
 import { console2 } from "forge-std/src/console2.sol";
 import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
