@@ -50,6 +50,7 @@ contract SatelliteEmissionsController is
     /*                    CONSTRUCTOR                      */
     /* =================================================== */
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }

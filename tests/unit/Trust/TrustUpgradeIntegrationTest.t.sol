@@ -9,12 +9,12 @@ import {
     ITransparentUpgradeableProxy
 } from "@openzeppelinV4/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
+import { ITrust } from "src/interfaces/ITrust.sol";
 import { Trust } from "src/Trust.sol";
 
 contract TrustUpgradeIntegrationTest is Test {
     // Role identifiers
     bytes32 DEFAULT_ADMIN_ROLE = 0x00;
-    bytes32 CONTROLLER_ROLE = keccak256("CONTROLLER_ROLE");
 
     // Base chain addresses (legacy TRUST token deployment & ProxyAdmin)
     address constant TRUST_PROXY = 0x6cd905dF2Ed214b22e0d48FF17CD4200C1C6d8A3;
@@ -57,13 +57,13 @@ contract TrustUpgradeIntegrationTest is Test {
         assertEq(trust.name(), "Intuition", "name override should apply post-upgrade");
         assertEq(trust.symbol(), "TRUST", "symbol should remain TRUST");
         assertTrue(trust.hasRole(DEFAULT_ADMIN_ROLE, newAdmin), "new admin should have DEFAULT_ADMIN_ROLE");
-        assertTrue(trust.hasRole(CONTROLLER_ROLE, newController), "new controller should have CONTROLLER_ROLE");
+        assertEq(trust.baseEmissionsController(), newController, "baseEmissionsController should be set");
 
         // totalSupply continuity across upgrade
         assertEq(trust.totalSupply(), supplyBefore, "totalSupply must persist across upgrade");
     }
 
-    function test_PostUpgrade_Minting_Works_WithControllerRole() external {
+    function test_PostUpgrade_Minting_Works_WhenCalledByBaseEmissionsController() external {
         uint256 balanceBefore = trust.balanceOf(recipient);
         uint256 supplyBefore = trust.totalSupply();
 
@@ -75,32 +75,12 @@ contract TrustUpgradeIntegrationTest is Test {
         assertEq(trust.totalSupply(), supplyBefore + 1e18);
     }
 
-    function test_PostUpgrade_Burning_Works_WithControllerRole() external {
-        // Pre-mint to recipient so we can burn
-        vm.prank(newController);
-        trust.mint(recipient, 2e18);
-
-        uint256 balanceBefore = trust.balanceOf(recipient);
-        uint256 supplyBefore = trust.totalSupply();
-
-        // Controller can burn
-        vm.prank(newController);
-        trust.burn(recipient, 1e18);
-
-        assertEq(trust.balanceOf(recipient), balanceBefore - 1e18);
-        assertEq(trust.totalSupply(), supplyBefore - 1e18);
-    }
-
-    function test_PostUpgrade_Minting_Reverts_WithoutControllerRole() external {
+    function test_PostUpgrade_Minting_Reverts_WhenNotCalledByBaseEmissionsController() external {
         // Non-controller attempt
         address rando = address(0xDEAD);
-        bytes memory expected = abi.encodeWithSignature(
-            "Error(string)",
-            string.concat("AccessControl: account ", _addr(rando), " is missing role ", _roleHex(CONTROLLER_ROLE))
-        );
 
         vm.prank(rando);
-        vm.expectRevert(expected);
+        vm.expectRevert(ITrust.Trust_OnlyBaseEmissionsController.selector);
         trust.mint(address(0xFEED), 1);
     }
 

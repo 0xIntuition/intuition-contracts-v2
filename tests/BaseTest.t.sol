@@ -102,6 +102,7 @@ abstract contract BaseTest is Modifiers, Test {
     function setUp() public virtual {
         users.admin = createUser("admin");
         users.controller = createUser("controller");
+        users.timelock = createUser("timelock");
         users.alice = createUser("alice");
         users.bob = createUser("bob");
         users.charlie = createUser("charlie");
@@ -133,7 +134,7 @@ abstract contract BaseTest is Modifiers, Test {
         vm.prank(0xa28d4AAcA48bE54824dA53a19b05121DE71Ef480); // admin address set on Base
         trust.reinitialize(
             users.admin, // admin
-            users.admin // initial minter
+            users.controller // controller
         );
 
         vm.label(address(trustProxy), "TrustProxy");
@@ -290,6 +291,7 @@ abstract contract BaseTest is Modifiers, Test {
 
         protocol.trustBonding.initialize(
             users.admin, // owner
+            users.timelock, // timelock
             address(protocol.wrappedTrust), // trustToken
             TRUST_BONDING_EPOCH_LENGTH, // epochLength (minimum 2 weeks required)
             address(protocol.multiVault), // multiVault

@@ -7,6 +7,7 @@ import { SetupScript } from "../SetupScript.s.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
+import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
 import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 
 import { Trust } from "src/Trust.sol";
@@ -132,10 +133,12 @@ contract IntuitionDeployAndSetup is SetupScript {
         atomWalletFactory = AtomWalletFactory(address(atomWalletFactoryProxy));
         info("AtomWalletFactory Proxy", address(atomWalletFactoryProxy));
 
+        // Deploy TimelockController
+        timelockController = _deployTimelockController();
+
         // Deploy AtomWarden implementation and proxy
         AtomWarden atomWardenImpl = new AtomWarden();
         info("AtomWarden Implementation", address(atomWardenImpl));
-
         TransparentUpgradeableProxy atomWardenProxy = new TransparentUpgradeableProxy(
             address(atomWardenImpl),
             ADMIN,
@@ -231,6 +234,7 @@ contract IntuitionDeployAndSetup is SetupScript {
         bytes memory trustBondingInitData = abi.encodeWithSelector(
             TrustBonding.initialize.selector,
             ADMIN, // owner
+            address(timelockController), // timelock controller
             address(trust), // WTRUST token if deploying on Intuition Sepolia
             BONDING_EPOCH_LENGTH, // epochLength
             address(multiVault), // multiVault
@@ -290,5 +294,18 @@ contract IntuitionDeployAndSetup is SetupScript {
         vaultFees = VaultFees({ entryFee: ENTRY_FEE, exitFee: EXIT_FEE, protocolFee: PROTOCOL_FEE });
 
         bondingCurveConfig = BondingCurveConfig({ registry: address(bondingCurveRegistry), defaultCurveId: 1 });
+    }
+
+    function _deployTimelockController() internal returns (TimelockController) {
+        address[] memory proposers = new address[](1);
+        proposers[0] = ADMIN;
+
+        address[] memory executors = new address[](1);
+        executors[0] = ADMIN;
+
+        // Deploy TimelockController
+        TimelockController timelock = new TimelockController(TIMELOCK_MIN_DELAY, proposers, executors, address(0));
+        info("TimelockController", address(timelock));
+        return timelock;
     }
 }

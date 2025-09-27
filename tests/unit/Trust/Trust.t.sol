@@ -5,6 +5,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
 
+import { ITrust } from "src/interfaces/ITrust.sol";
 import { Trust } from "src/Trust.sol";
 import { BaseTest } from "tests/BaseTest.t.sol";
 
@@ -14,14 +15,12 @@ contract TrustTest is BaseTest {
     /* =================================================== */
 
     bytes32 DEFAULT_ADMIN_ROLE = 0x00;
-    bytes32 CONTROLLER_ROLE = keccak256("CONTROLLER_ROLE");
 
     /* =================================================== */
     /*                     VARIABLES                       */
     /* =================================================== */
 
     address public admin;
-    address public minter;
     address public user;
 
     // Event mirror (ERC20)
@@ -36,7 +35,6 @@ contract TrustTest is BaseTest {
         vm.stopPrank();
 
         admin = users.admin;
-        minter = users.admin; // in your env admin is also controller by default
         user = users.alice;
     }
 
@@ -61,7 +59,6 @@ contract TrustTest is BaseTest {
 
     function test_AccessControl_Roles_Setup() public view {
         assertTrue(protocol.trust.hasRole(DEFAULT_ADMIN_ROLE, admin), "Admin should have DEFAULT_ADMIN_ROLE");
-        assertTrue(protocol.trust.hasRole(CONTROLLER_ROLE, minter), "Minter should have CONTROLLER_ROLE");
     }
 
     function test_AccessControl_OnlyAdmin_WithRoleFallback() public {
@@ -71,11 +68,6 @@ contract TrustTest is BaseTest {
         protocol.trust.grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
 
         assertTrue(protocol.trust.hasRole(DEFAULT_ADMIN_ROLE, newAdmin), "newAdmin should have DEFAULT_ADMIN_ROLE");
-
-        resetPrank(newAdmin);
-        protocol.trust.grantRole(CONTROLLER_ROLE, user);
-
-        assertTrue(protocol.trust.hasRole(CONTROLLER_ROLE, user), "newAdmin should be able to set controller via role");
     }
 
     /* =================================================== */
@@ -89,7 +81,7 @@ contract TrustTest is BaseTest {
         uint256 bal0 = protocol.trust.balanceOf(recipient);
         uint256 sup0 = protocol.trust.totalSupply();
 
-        resetPrank(minter);
+        resetPrank(users.controller);
         protocol.trust.mint(recipient, amount);
 
         assertEq(protocol.trust.balanceOf(recipient), bal0 + amount);
@@ -101,7 +93,7 @@ contract TrustTest is BaseTest {
         address recipient = makeAddr("recipient");
 
         resetPrank(user);
-        vm.expectRevert(_missingRoleRevert(user, CONTROLLER_ROLE));
+        vm.expectRevert(ITrust.Trust_OnlyBaseEmissionsController.selector);
         protocol.trust.mint(recipient, amount);
     }
 
@@ -111,7 +103,7 @@ contract TrustTest is BaseTest {
         uint256 bal0 = protocol.trust.balanceOf(recipient);
         uint256 sup0 = protocol.trust.totalSupply();
 
-        resetPrank(minter);
+        resetPrank(users.controller);
         protocol.trust.mint(recipient, 0);
 
         assertEq(protocol.trust.balanceOf(recipient), bal0);
@@ -119,7 +111,7 @@ contract TrustTest is BaseTest {
     }
 
     function test_Mint_ToZeroAddress_Revert() public {
-        resetPrank(minter);
+        resetPrank(users.controller);
         vm.expectRevert(abi.encodeWithSignature("Error(string)", "ERC20: mint to the zero address"));
         protocol.trust.mint(address(0), 1e18);
     }
@@ -131,76 +123,11 @@ contract TrustTest is BaseTest {
         uint256 bal0 = protocol.trust.balanceOf(recipient);
         uint256 sup0 = protocol.trust.totalSupply();
 
-        resetPrank(minter);
+        resetPrank(users.controller);
         protocol.trust.mint(recipient, amount);
 
         assertEq(protocol.trust.balanceOf(recipient), bal0 + amount);
         assertEq(protocol.trust.totalSupply(), sup0 + amount);
-    }
-
-    function test_Mint_MultipleControllers() public {
-        address newMinter = makeAddr("newMinter");
-        uint256 amount = 500e18;
-        address r1 = makeAddr("r1");
-        address r2 = makeAddr("r2");
-
-        resetPrank(admin);
-        protocol.trust.grantRole(CONTROLLER_ROLE, newMinter);
-
-        uint256 sup0 = protocol.trust.totalSupply();
-
-        resetPrank(minter);
-        protocol.trust.mint(r1, amount);
-
-        resetPrank(newMinter);
-        protocol.trust.mint(r2, amount);
-
-        assertEq(protocol.trust.balanceOf(r1), amount);
-        assertEq(protocol.trust.balanceOf(r2), amount);
-        assertEq(protocol.trust.totalSupply(), sup0 + 2 * amount);
-    }
-
-    function test_Mint_RevokeRole() public {
-        uint256 amount = 1000e18;
-        address recipient = makeAddr("recipient");
-
-        resetPrank(minter);
-        protocol.trust.mint(recipient, amount);
-
-        resetPrank(admin);
-        protocol.trust.revokeRole(CONTROLLER_ROLE, minter);
-
-        resetPrank(minter);
-        vm.expectRevert(_missingRoleRevert(minter, CONTROLLER_ROLE));
-        protocol.trust.mint(recipient, amount);
-
-        assertFalse(protocol.trust.hasRole(CONTROLLER_ROLE, minter));
-    }
-
-    function test_Mint_AdminCanGrantController() public {
-        address newMinter = makeAddr("newMinter");
-        uint256 amount = 1000e18;
-        address recipient = makeAddr("recipient");
-
-        resetPrank(admin);
-        protocol.trust.grantRole(CONTROLLER_ROLE, newMinter);
-
-        assertTrue(protocol.trust.hasRole(CONTROLLER_ROLE, newMinter));
-
-        resetPrank(newMinter);
-        protocol.trust.mint(recipient, amount);
-
-        assertEq(protocol.trust.balanceOf(recipient), amount);
-    }
-
-    function test_Mint_NonAdminCannotGrantController() public {
-        address newMinter = makeAddr("newMinter");
-
-        resetPrank(user);
-        vm.expectRevert(_missingRoleRevert(user, DEFAULT_ADMIN_ROLE));
-        protocol.trust.grantRole(CONTROLLER_ROLE, newMinter);
-
-        assertFalse(protocol.trust.hasRole(CONTROLLER_ROLE, newMinter));
     }
 
     function test_Mint_EmitsTransferEvent() public {
@@ -210,7 +137,7 @@ contract TrustTest is BaseTest {
         vm.expectEmit(true, true, false, true);
         emit Transfer(address(0), recipient, amount);
 
-        resetPrank(minter);
+        resetPrank(users.controller);
         protocol.trust.mint(recipient, amount);
     }
 
@@ -218,11 +145,13 @@ contract TrustTest is BaseTest {
     /*                      BURN TESTS                     */
     /* =================================================== */
 
-    function test_Burn_Success_ByController() public {
+    function test_Burn_Success_ByHolder() public {
         uint256 amount = 500e18;
 
-        resetPrank(minter);
+        resetPrank(users.controller);
         protocol.trust.mint(user, amount);
+
+        resetPrank(user);
 
         uint256 bal0 = protocol.trust.balanceOf(user);
         uint256 sup0 = protocol.trust.totalSupply();
@@ -230,30 +159,21 @@ contract TrustTest is BaseTest {
         vm.expectEmit(true, true, false, true);
         emit Transfer(user, address(0), 200e18);
 
-        protocol.trust.burn(user, 200e18);
+        protocol.trust.burn(200e18);
 
         assertEq(protocol.trust.balanceOf(user), bal0 - 200e18);
         assertEq(protocol.trust.totalSupply(), sup0 - 200e18);
     }
 
-    function test_Burn_Revert_NotController() public {
-        resetPrank(minter);
-        protocol.trust.mint(user, 1e18);
-
-        resetPrank(user);
-        vm.expectRevert(_missingRoleRevert(user, CONTROLLER_ROLE));
-        protocol.trust.burn(user, 1e18);
-    }
-
     function test_Burn_Revert_InsufficientBalance() public {
-        resetPrank(minter);
+        resetPrank(users.controller);
         protocol.trust.mint(user, 1e18);
 
         uint256 userBalance = protocol.trust.balanceOf(user);
 
-        resetPrank(minter);
+        resetPrank(user);
         vm.expectRevert(abi.encodeWithSignature("Error(string)", "ERC20: burn amount exceeds balance"));
-        protocol.trust.burn(user, userBalance + 1);
+        protocol.trust.burn(userBalance + 1);
     }
 
     /* =================================================== */
@@ -279,7 +199,6 @@ contract TrustTest is BaseTest {
         fresh.reinitialize(newAdmin, controller);
 
         assertTrue(fresh.hasRole(DEFAULT_ADMIN_ROLE, newAdmin));
-        assertTrue(fresh.hasRole(CONTROLLER_ROLE, controller));
 
         vm.startPrank(controller);
         fresh.mint(user, 1e18);
@@ -292,10 +211,10 @@ contract TrustTest is BaseTest {
         Trust fresh = _deployTrustProxy();
         fresh.init();
 
-        vm.expectRevert(Trust.Trust_ZeroAddress.selector);
+        vm.expectRevert(ITrust.Trust_ZeroAddress.selector);
         fresh.reinitialize(address(0), makeAddr("controller"));
 
-        vm.expectRevert(Trust.Trust_ZeroAddress.selector);
+        vm.expectRevert(ITrust.Trust_ZeroAddress.selector);
         fresh.reinitialize(makeAddr("admin"), address(0));
     }
 
@@ -307,6 +226,33 @@ contract TrustTest is BaseTest {
 
         vm.expectRevert(abi.encodeWithSignature("Error(string)", "Initializable: contract is already initialized"));
         fresh.reinitialize(makeAddr("admin2"), makeAddr("controller2"));
+    }
+
+    /* =================================================== */
+    /*                      ADMIN TESTS                    */
+    /* =================================================== */
+
+    function test_setBaseEmissionsController_Success() public {
+        address newController = makeAddr("newController");
+
+        resetPrank(admin);
+        protocol.trust.setBaseEmissionsController(newController);
+
+        assertEq(protocol.trust.baseEmissionsController(), newController);
+    }
+
+    function test_setBaseEmissionsController_Revert_NotAdmin() public {
+        address newController = makeAddr("newController");
+
+        resetPrank(user);
+        vm.expectRevert(_missingRoleRevert(user, DEFAULT_ADMIN_ROLE));
+        protocol.trust.setBaseEmissionsController(newController);
+    }
+
+    function test_setBaseEmissionsController_Revert_ZeroAddress() public {
+        resetPrank(admin);
+        vm.expectRevert(ITrust.Trust_ZeroAddress.selector);
+        protocol.trust.setBaseEmissionsController(address(0));
     }
 
     /* =================================================== */
