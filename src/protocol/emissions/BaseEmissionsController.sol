@@ -64,14 +64,13 @@ contract BaseEmissionsController is
         address admin,
         address controller,
         address token,
-        address satellite,
         MetaERC20DispatchInit memory metaERC20DispatchInit,
         CoreEmissionsControllerInit memory checkpointInit
     )
         external
         initializer
     {
-        if (admin == address(0) || controller == address(0) || token == address(0) || satellite == address(0)) {
+        if (admin == address(0) || controller == address(0) || token == address(0)) {
             revert BaseEmissionsController_InvalidAddress();
         }
 
@@ -100,9 +99,6 @@ contract BaseEmissionsController is
 
         // Set the Trust token contract address
         _setTrustToken(token);
-
-        // Set the Satellite Emissions Controller contract address
-        _setSatelliteEmissionsController(satellite);
     }
 
     /* =================================================== */
@@ -135,6 +131,10 @@ contract BaseEmissionsController is
 
     /// @inheritdoc IBaseEmissionsController
     function mintAndBridge(uint256 epoch) external payable nonReentrant onlyRole(CONTROLLER_ROLE) {
+        if (_SATELLITE_EMISSIONS_CONTROLLER == address(0)) {
+            revert BaseEmissionsController_SatelliteEmissionsControllerNotSet();
+        }
+
         uint256 currentEpoch = _currentEpoch();
 
         if (epoch > currentEpoch) {

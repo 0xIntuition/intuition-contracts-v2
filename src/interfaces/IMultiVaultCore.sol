@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { IPermit2 } from "src/interfaces/IPermit2.sol";
-
 /* =================================================== */
 /*                   CONFIG STRUCTS                    */
 /* =================================================== */
@@ -47,8 +45,6 @@ struct TripleConfig {
 
 /// @dev Atom wallet configuration struct
 struct WalletConfig {
-    /// @dev Permit2
-    IPermit2 permit2;
     /// @dev Entry Point contract address used for the erc4337 atom accounts
     address entryPoint;
     /// @dev AtomWallet Warden address, address that is the initial owner of all atom accounts
@@ -139,7 +135,7 @@ interface IMultiVaultCore {
 
     /**
      * @notice Returns the wallet configuration settings for ERC-4337 compatibility
-     * @return WalletConfig struct containing Permit2, EntryPoint, and AtomWallet factory addresses
+     * @return WalletConfig struct containing EntryPoint, AtomWarden, AtomWallet beacon and AtomWallet factory addresses
      */
     function getWalletConfig() external view returns (WalletConfig memory);
 

@@ -87,15 +87,16 @@ contract MintAndBridgeTest is BaseTest {
         });
 
         baseEmissionsController.initialize(
-            users.admin,
-            users.controller,
-            address(protocol.trust),
-            satelliteController,
-            metaERC20DispatchInit,
-            coreEmissionsInit
+            users.admin, users.controller, address(protocol.trust), metaERC20DispatchInit, coreEmissionsInit
         );
 
         vm.label(address(baseEmissionsController), "BaseEmissionsController");
+
+        vm.stopPrank();
+
+        // Set the satellite controller address
+        vm.prank(users.admin);
+        baseEmissionsController.setSatelliteEmissionsController(satelliteController);
     }
 
     /* =================================================== */
@@ -210,6 +211,21 @@ contract MintAndBridgeTest is BaseTest {
     /* =================================================== */
     /*              FAILED MINT AND BRIDGE TESTS          */
     /* =================================================== */
+
+    function test_mintAndBridge_revertWhen_satelliteEmissionsControllerNotSet() external {
+        vm.warp(TEST_START_TIMESTAMP + 1 days);
+
+        // Set satellite emissions controller to zero address by directly manipulating storage
+        vm.store(address(baseEmissionsController), bytes32(uint256(108)), bytes32(0));
+
+        resetPrank(users.controller);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBaseEmissionsController.BaseEmissionsController_SatelliteEmissionsControllerNotSet.selector
+            )
+        );
+        baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(0);
+    }
 
     function test_mintAndBridge_revertWhen_unauthorized() external {
         vm.warp(TEST_START_TIMESTAMP + 1 days);

@@ -74,12 +74,7 @@ contract AccessControlTest is BaseTest {
         BaseEmissionsController baseEmissionsControllerInstance = _deployBaseEmissionsController();
 
         baseEmissionsControllerInstance.initialize(
-            users.admin,
-            users.controller,
-            address(protocol.trust),
-            satelliteController,
-            metaERC20DispatchInit,
-            coreEmissionsInit
+            users.admin, users.controller, address(protocol.trust), metaERC20DispatchInit, coreEmissionsInit
         );
 
         baseEmissionsController = baseEmissionsControllerInstance;
@@ -112,12 +107,7 @@ contract AccessControlTest is BaseTest {
         );
 
         baseEmissionsControllerInstance.initialize(
-            address(0),
-            users.controller,
-            address(protocol.trust),
-            satelliteController,
-            metaERC20DispatchInit,
-            coreEmissionsInit
+            address(0), users.controller, address(protocol.trust), metaERC20DispatchInit, coreEmissionsInit
         );
     }
 
@@ -129,12 +119,7 @@ contract AccessControlTest is BaseTest {
         );
 
         baseEmissionsControllerInstance.initialize(
-            users.admin,
-            address(0),
-            address(protocol.trust),
-            satelliteController,
-            metaERC20DispatchInit,
-            coreEmissionsInit
+            users.admin, address(0), address(protocol.trust), metaERC20DispatchInit, coreEmissionsInit
         );
     }
 
@@ -146,19 +131,7 @@ contract AccessControlTest is BaseTest {
         );
 
         baseEmissionsControllerInstance.initialize(
-            users.admin, users.controller, address(0), satelliteController, metaERC20DispatchInit, coreEmissionsInit
-        );
-    }
-
-    function test_initialize_shouldRevertIfSatelliteIsZero() external {
-        BaseEmissionsController baseEmissionsControllerInstance = _deployBaseEmissionsController();
-
-        vm.expectRevert(
-            abi.encodeWithSelector(IBaseEmissionsController.BaseEmissionsController_InvalidAddress.selector)
-        );
-
-        baseEmissionsControllerInstance.initialize(
-            users.admin, users.controller, address(protocol.trust), address(0), metaERC20DispatchInit, coreEmissionsInit
+            users.admin, users.controller, address(0), metaERC20DispatchInit, coreEmissionsInit
         );
     }
 

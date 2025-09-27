@@ -7,7 +7,6 @@ import { Test } from "forge-std/src/Test.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
-import { IPermit2 } from "src/interfaces/IPermit2.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 import { MetaERC20DispatchInit, FinalityState } from "src/interfaces/IMetaLayer.sol";
 import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";
@@ -266,8 +265,7 @@ abstract contract BaseTest is Modifiers, Test {
 
         protocol.satelliteEmissionsController.initialize(
             users.admin,
-            address(protocol.trustBonding),
-            address(1), // BaseEmissionsController
+            address(1), // BaseEmissionsController placeholder
             MetaERC20DispatchInit({
                 hubOrSpoke: address(metaERC20HubOrSpoke),
                 recipientDomain: 1,
@@ -281,6 +279,11 @@ abstract contract BaseTest is Modifiers, Test {
                 emissionsReductionCliff: EMISSIONS_CONTROLLER_CLIFF,
                 emissionsReductionBasisPoints: EMISSIONS_CONTROLLER_REDUCTION_BP
             })
+        );
+
+        protocol.satelliteEmissionsController.setTrustBonding(address(protocol.trustBonding));
+        protocol.satelliteEmissionsController.grantRole(
+            protocol.satelliteEmissionsController.CONTROLLER_ROLE(), address((trustBondingProxy))
         );
 
         // Initialize AtomWalletFactory
@@ -373,7 +376,6 @@ abstract contract BaseTest is Modifiers, Test {
 
     function _getDefaultWalletConfig() internal returns (WalletConfig memory) {
         return WalletConfig({
-            permit2: IPermit2(address(0)),
             entryPoint: address(0),
             atomWarden: ATOM_WARDEN,
             atomWalletBeacon: address(0),

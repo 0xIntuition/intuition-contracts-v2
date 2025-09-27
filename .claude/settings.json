@@ -24,7 +24,7 @@
   },
   "solidity": {
     "version": "0.8.29",
-    "evmVersion": "shanghai",
+    "evmVersion": "cancun",
     "optimizer": {
       "enabled": true,
       "runs": 10000

@@ -467,9 +467,19 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         // Fetch the target utilization for the previous epoch
         uint256 userUtilizationTarget = userClaimedRewardsForEpoch[_account][_epoch - 1];
 
-        // If the utilizationDelta is greater than the target, we return the max ratio
+        if (userUtilizationTarget == 0) {
+            // If the user had nothing claimable last epoch, don't penalize them as it's their first ever claim
+            if (_userEligibleRewardsForEpoch(_account, _epoch - 1) == 0) {
+                return BASIS_POINTS_DIVISOR; // 100%
+            }
+
+            // They did have eligibility last epoch but chose not to claim --> give them only the floor allocation
+            return personalUtilizationLowerBound;
+        }
+
+        // If the userUtilizationDelta is greater than the target, we also return the max ratio.
         if (userUtilizationDelta >= userUtilizationTarget) {
-            return BASIS_POINTS_DIVISOR;
+            return BASIS_POINTS_DIVISOR; // 100%
         }
 
         // Normalize the final utilizationRatio to be within the bounds of the personalUtilizationLowerBound and

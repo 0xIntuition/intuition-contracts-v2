@@ -90,23 +90,7 @@ contract AccessControlTest is BaseTest {
         );
 
         satelliteEmissionsController.initialize(
-            address(0),
-            address(protocol.trust),
-            address(baseEmissionsController),
-            metaERC20DispatchInit,
-            coreEmissionsInit
-        );
-    }
-
-    function test_initialize_shouldRevertIfTrustBondingIsZeroAddress() external {
-        SatelliteEmissionsController satelliteEmissionsController = _deploySatelliteEmissionsController();
-
-        vm.expectRevert(
-            abi.encodeWithSelector(ISatelliteEmissionsController.SatelliteEmissionsController_InvalidAddress.selector)
-        );
-
-        satelliteEmissionsController.initialize(
-            users.admin, address(0), address(baseEmissionsController), metaERC20DispatchInit, coreEmissionsInit
+            address(0), address(baseEmissionsController), metaERC20DispatchInit, coreEmissionsInit
         );
     }
 
@@ -117,9 +101,7 @@ contract AccessControlTest is BaseTest {
             abi.encodeWithSelector(ISatelliteEmissionsController.SatelliteEmissionsController_InvalidAddress.selector)
         );
 
-        satelliteEmissionsController.initialize(
-            users.admin, address(protocol.trust), address(0), metaERC20DispatchInit, coreEmissionsInit
-        );
+        satelliteEmissionsController.initialize(users.admin, address(0), metaERC20DispatchInit, coreEmissionsInit);
     }
 
     /*//////////////////////////////////////////////////////////////
