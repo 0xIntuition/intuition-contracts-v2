@@ -16,13 +16,8 @@
     "solhint": "^5.1"
   },
   "keywords": [
-    "blockchain",
-    "ethereum",
-    "forge",
-    "foundry",
-    "smart-contracts",
-    "solidity",
-    "template"
+    "intuition",
+    "ethereum"
   ],
   "private": true,
   "scripts": {
