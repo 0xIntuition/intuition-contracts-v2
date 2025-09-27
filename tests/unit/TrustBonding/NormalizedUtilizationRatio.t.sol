@@ -188,7 +188,6 @@ contract NormalizedUtilizationRatioTest is TrustBondingBase {
             assertLe(result, BASIS_POINTS_DIVISOR, "Result should be less than 100% when delta < target");
         }
 
-        // Mathematical property: result should be monotonically increasing with delta
         if (delta > 0 && delta < target) {
             uint256 smallerResult =
                 trustBondingMock.exposed_getNormalizedUtilizationRatio(delta - 1, target, lowerBound);

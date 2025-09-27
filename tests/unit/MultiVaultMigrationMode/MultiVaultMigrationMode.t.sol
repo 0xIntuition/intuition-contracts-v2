@@ -120,7 +120,7 @@ contract MultiVaultMigrationModeTest is BaseTest {
         multiVaultMigrationMode = MultiVaultMigrationMode(address(multiVaultProxy));
 
         // Prepare wallet config
-        WalletConfig memory walletConfig = _getDefaultWalletConfig();
+        WalletConfig memory walletConfig = _getDefaultWalletConfig(address(atomWalletFactory));
         walletConfig.atomWalletFactory = address(atomWalletFactory);
         walletConfig.atomWalletBeacon = address(atomWalletBeacon);
 

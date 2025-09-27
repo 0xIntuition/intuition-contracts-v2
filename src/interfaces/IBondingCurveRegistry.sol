@@ -119,10 +119,18 @@ interface IBondingCurveRegistry {
         returns (uint256 assets);
 
     /// @notice Get the current price of a share
-    /// @param totalShares Total quantity of shares already awarded by the curve
     /// @param id Curve ID to use for the calculation
+    /// @param totalShares Total quantity of shares already awarded by the curve
+    /// @param totalAssets Total quantity of assets already staked into the curve
     /// @return sharePrice The current price of a share
-    function currentPrice(uint256 totalShares, uint256 id) external view returns (uint256 sharePrice);
+    function currentPrice(
+        uint256 id,
+        uint256 totalShares,
+        uint256 totalAssets
+    )
+        external
+        view
+        returns (uint256 sharePrice);
 
     /// @notice Get the name of a curve
     /// @param id Curve ID to query

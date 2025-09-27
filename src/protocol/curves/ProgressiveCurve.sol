@@ -185,7 +185,15 @@ contract ProgressiveCurve is BaseCurve {
     /// @dev This is the basic linear price function where the price increases linearly with the total supply
     /// @dev And the slope ($m$) determines how quickly the price increases
     /// @dev TLDR: Each new share costs more than the last
-    function currentPrice(uint256 totalShares) public view override returns (uint256 sharePrice) {
+    function currentPrice(
+        uint256 totalShares,
+        uint256 /* totalAssets */
+    )
+        public
+        view
+        override
+        returns (uint256 sharePrice)
+    {
         return convert(totalShares).mul(SLOPE).unwrap();
     }
 
