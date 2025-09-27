@@ -76,9 +76,6 @@ abstract contract BaseTest is Modifiers, Test {
     // Curve Configurations
     uint256 internal PROGRESSIVE_CURVE_SLOPE = 1e15; // 0.001 slope
 
-    // Emissions Configurations
-    uint256 internal MAX_ANNUAL_EMISSION = 1_000_000e18;
-
     // CoreEmissions Controller
     uint256 internal constant EMISSIONS_CONTROLLER_EPOCH_LENGTH = 1 days * 14;
     uint256 internal constant EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH = 1_000_000 * 1e18; // 1M tokens

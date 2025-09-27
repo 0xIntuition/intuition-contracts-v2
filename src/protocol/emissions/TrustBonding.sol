@@ -174,8 +174,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
 
     /// @inheritdoc ITrustBonding
     function previousEpoch() public view returns (uint256) {
-        uint256 curr = _currentEpoch();
-        return curr == 0 ? 0 : curr - 1;
+        return _previousEpoch();
     }
 
     /// @inheritdoc ITrustBonding
@@ -271,8 +270,8 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         if (userRewards == 0 || locked <= 0) {
             return (currentApy, maxApy);
         }
-        currentApy = (userRewards * personalUtilization * _epochsPerYear()) * BASIS_POINTS_DIVISOR / uint256(locked);
-        maxApy = (userRewards * _epochsPerYear()) * BASIS_POINTS_DIVISOR / uint256(locked);
+        currentApy = (userRewards * personalUtilization * _epochsPerYear()) / (uint256(locked) * BASIS_POINTS_DIVISOR);
+        maxApy = (userRewards * _epochsPerYear()) / uint256(locked);
         return (currentApy, maxApy);
     }
 
