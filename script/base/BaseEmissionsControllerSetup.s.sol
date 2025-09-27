@@ -12,7 +12,7 @@ import { BaseEmissionsController } from "src/protocol/emissions/BaseEmissionsCon
 LOCAL
 forge script script/base/BaseEmissionsControllerSetup.s.sol:BaseEmissionsControllerSetup \
 --optimizer-runs 10000 \
---rpc-url anvil \
+--rpc-url base_sepolia \
 --broadcast \
 --slow
 
@@ -36,6 +36,9 @@ contract BaseEmissionsControllerSetup is SetupScript {
         if (block.chainid == vm.envUint("ANVIL_CHAIN_ID")) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("ANVIL_BASE_EMISSIONS_CONTROLLER");
             SATELLITE_EMISSIONS_CONTROLLER = vm.envAddress("ANVIL_SATELLITE_EMISSIONS_CONTROLLER");
+        } else if (block.chainid == vm.envUint("BASE_SEPOLIA_CHAIN_ID")) {
+            BASE_EMISSIONS_CONTROLLER = vm.envAddress("BASE_SEPOLIA_BASE_EMISSIONS_CONTROLLER");
+            SATELLITE_EMISSIONS_CONTROLLER = vm.envAddress("BASE_SEPOLIA_SATELLITE_EMISSIONS_CONTROLLER");
         } else if (block.chainid == vm.envUint("INTUITION_SEPOLIA_CHAIN_ID")) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("INTUITION_SEPOLIA_BASE_EMISSIONS_CONTROLLER");
             SATELLITE_EMISSIONS_CONTROLLER = vm.envAddress("INTUITION_SEPOLIA_SATELLITE_EMISSIONS_CONTROLLER");

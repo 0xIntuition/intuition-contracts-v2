@@ -12,10 +12,11 @@ interface IERC20 {
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
 }
 
-contract BaseSepoliaMinterAndBridge is MetaERC20Dispatcher, AccessControl {
+contract BaseSepoliaBridge is MetaERC20Dispatcher, AccessControl {
     address public token;
-
     address public metaERC20Hub;
+
+    error NotEnoughValueSent();
 
     constructor(address _owner, address _token, address _metaERC20Hub) {
         token = _token;
@@ -37,14 +38,16 @@ contract BaseSepoliaMinterAndBridge is MetaERC20Dispatcher, AccessControl {
         } catch {
             gasLimit = 34_750_000_000_000;
         }
-        require(msg.value >= gasLimit, "Not enough value sent");
+        if (msg.value < gasLimit + amount) {
+            revert NotEnoughValueSent();
+        }
 
         _bridgeTokensViaERC20(
             metaERC20Hub, domain, bytes32(uint256(uint160(to))), amount, gasLimit, FinalityState.INSTANT
         );
 
         if (msg.value > gasLimit) {
-            Address.sendValue(payable(msg.sender), msg.value - gasLimit);
+            Address.sendValue(payable(msg.sender), msg.value - gasLimit); // refund excess
         }
     }
 }
