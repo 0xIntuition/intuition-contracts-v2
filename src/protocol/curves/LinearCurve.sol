@@ -17,11 +17,6 @@ import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
  * @notice This implementation offers a low-volatility approach to value accrual,
  *         suitable for scenarios where predictable, steady returns are preferred
  *         over dynamic pricing mechanisms.
- *
- * @dev This curve is not currently used in the MultiVault implementation to preserve
- *      audited code. It serves as a reference implementation demonstrating how traditional
- *      pro-rata share pricing can be adapted to the bonding curve architecture for future
- *      versions.
  */
 contract LinearCurve is BaseCurve {
     using FixedPointMathLib for uint256;
