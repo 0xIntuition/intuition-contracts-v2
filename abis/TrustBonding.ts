@@ -1185,7 +1185,7 @@ export const TrustBondingAbi = [
   },
   {
     "type": "function",
-    "name": "trustPerEpoch",
+    "name": "emissionsForEpoch",
     "inputs": [
       {
         "name": "epoch",

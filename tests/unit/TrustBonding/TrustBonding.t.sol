@@ -309,8 +309,8 @@ contract TrustBondingTest is BaseTest {
         _bondSomeTokens(users.charlie);
 
         uint256 currentEpoch = protocol.trustBonding.currentEpoch();
-        uint256 trustPerEpoch = protocol.trustBonding.trustPerEpoch(currentEpoch);
-        uint256 expectedRewards = trustPerEpoch / 3; // 1/3 of the total rewards for each user
+        uint256 emissionsForEpoch = protocol.trustBonding.emissionsForEpoch(currentEpoch);
+        uint256 expectedRewards = emissionsForEpoch / 3; // 1/3 of the total rewards for each user
 
         uint256 eligibleRewards = protocol.trustBonding.userEligibleRewardsForEpoch(users.alice, currentEpoch);
 
@@ -350,7 +350,7 @@ contract TrustBondingTest is BaseTest {
         uint256 currentEpoch = protocol.trustBonding.currentEpoch();
         uint256 currentApy = protocol.trustBonding.getSystemApy();
 
-        uint256 trustPerYear = protocol.trustBonding.trustPerEpoch(currentEpoch) * protocol.trustBonding.epochsPerYear();
+        uint256 trustPerYear = protocol.trustBonding.emissionsForEpoch(currentEpoch) * protocol.trustBonding.epochsPerYear();
         uint256 expectedAPR =
             (trustPerYear * protocol.trustBonding.BASIS_POINTS_DIVISOR()) / protocol.trustBonding.totalLocked();
 

@@ -362,7 +362,7 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
 
         // Verify that emissions are affected by system utilization ratio
         uint256 maxEpochEmissions = protocol.satelliteEmissionsController.getEmissionsAtEpoch(2);
-        uint256 actualEmissions = protocol.trustBonding.trustPerEpoch(2);
+        uint256 actualEmissions = protocol.trustBonding.emissionsForEpoch(2);
         uint256 expectedEmissions = maxEpochEmissions * systemRatio / BASIS_POINTS_DIVISOR;
         assertEq(actualEmissions, expectedEmissions, "Emissions calculation mismatch");
     }

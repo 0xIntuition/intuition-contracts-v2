@@ -299,7 +299,7 @@ contract ClaimRewardsTest is TrustBondingBase {
         assertEq(systemRatio, expectedSystemRatio, "System utilization ratio should be calculated correctly");
 
         uint256 maxEmissions = protocol.satelliteEmissionsController.getEmissionsAtEpoch(prevEpoch);
-        uint256 actualEmissions = protocol.trustBonding.trustPerEpoch(prevEpoch);
+        uint256 actualEmissions = protocol.trustBonding.emissionsForEpoch(prevEpoch);
         uint256 expectedEmissions = maxEmissions * expectedSystemRatio / BASIS_POINTS_DIVISOR;
 
         assertEq(actualEmissions, expectedEmissions, "Emissions should be reduced by system utilization ratio");

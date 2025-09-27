@@ -3,8 +3,8 @@ pragma solidity 0.8.29;
 
 struct UserInfo {
     uint256 personalUtilization;
-    uint256 adjustedRewards;
-    uint256 rawRewards;
+    uint256 eligibleRewards;
+    uint256 maxRewards;
     uint256 lockedAmount;
     uint256 lockEnd;
     uint256 bondedBalance;
@@ -152,15 +152,10 @@ interface ITrustBonding {
     /// @return The previous epoch number
     function previousEpoch() external view returns (uint256);
 
-    /// @notice Returns the eligible rewards for a specific user
-    /// @param account The address of the user
-    /// @return The eligible rewards for the user
-    function eligibleRewards(address account) external view returns (uint256);
-
     /// @notice Returns the amount of TRUST tokens emitted per epoch
     /// @param epoch The epoch to query
     /// @return The amount of TRUST tokens emitted in the specified epoch
-    function trustPerEpoch(uint256 epoch) external view returns (uint256);
+    function emissionsForEpoch(uint256 epoch) external view returns (uint256);
 
     /**
      * @notice Returns the total amount of tokens currently locked in the system
@@ -220,18 +215,25 @@ interface ITrustBonding {
      */
     function getPersonalUtilizationRatio(address _account, uint256 _epoch) external view returns (uint256);
 
-    /// @notice Returns the eligible rewards for a specific user
-    /// @param account The address of the user
-    /// @return The eligible rewards for the user
-    function getUserEligibleRewards(address account) external view returns (uint256);
-
     /**
      * @notice Returns comprehensive user information including rewards and lock details
      * @param account The user's address
-     * @return UserInfo struct containing personal utilization, adjusted rewards, raw rewards,
+     * @return UserInfo struct containing personal utilization, adjusted rewards, max rewards,
      *         locked amount, lock end, and bonded balance
      */
     function getUserInfo(address account) external view returns (UserInfo memory);
+
+    /// @notice Returns the eligible rewards for a specific user
+    /// @param account The address of the user
+    /// @return The eligible rewards for the user
+    function getUserCurrentClaimableRewards(address account) external view returns (uint256);
+
+    /// @notice Returns the eligible rewards for a specific user
+    /// @param account The address of the user
+    /// @param epoch The epoch number to query
+    /// @return eligible The total rewards the user is eligible for in the specified epoch
+    /// @return available The rewards available for the user to claim in the specified epoch
+    function getUserRewardsForEpoch(address account, uint256 epoch) external view returns (uint256 eligible, uint256 available);
 
     /**
      * @notice Returns the Annual Percentage Yield (APY) for a specific epoch

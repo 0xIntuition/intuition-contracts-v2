@@ -173,14 +173,14 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /// @inheritdoc ITrustBonding
-    function trustPerEpoch(uint256 epoch) public view returns (uint256) {
-        return _emissionsForEpoch(epoch);
-    }
-
-    /// @inheritdoc ITrustBonding
     function previousEpoch() public view returns (uint256) {
         uint256 curr = _currentEpoch();
         return curr == 0 ? 0 : curr - 1;
+    }
+
+    /// @inheritdoc ITrustBonding
+    function emissionsForEpoch(uint256 epoch) public view returns (uint256) {
+        return _emissionsForEpoch(epoch);
     }
 
     /// @inheritdoc ITrustBonding
@@ -191,17 +191,6 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     /// @inheritdoc ITrustBonding
     function totalBondedBalance() external view returns (uint256) {
         return _totalSupply(block.timestamp);
-    }
-
-    /// @inheritdoc ITrustBonding
-    function eligibleRewards(address account) public view returns (uint256) {
-        uint256 currentEpochLocal = _currentEpoch();
-        if (currentEpochLocal == 0) {
-            return 0;
-        }
-        uint256 prevEpoch = currentEpochLocal > 1 ? currentEpochLocal - 1 : 0;
-        return _userEligibleRewardsForEpoch(account, prevEpoch) * _getPersonalUtilizationRatio(account, prevEpoch)
-            / BASIS_POINTS_DIVISOR;
     }
 
     /// @inheritdoc ITrustBonding
@@ -246,6 +235,90 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         return _getPersonalUtilizationRatio(account, epoch);
     }
 
+    function getUserInfo(address account) external view returns (UserInfo memory) {
+        uint256 _currEpoch = _currentEpoch();
+
+        uint256 userRewards;
+        uint256 personalUtilization;
+        if (_currEpoch > 0) {
+            uint256 prevEpoch = _previousEpoch(_currEpoch);
+            userRewards = _userEligibleRewardsForEpoch(account, prevEpoch);
+            personalUtilization = _getPersonalUtilizationRatio(account, prevEpoch);
+        }
+
+        LockedBalance memory userLocked = locked[account];
+        return UserInfo({
+            personalUtilization: personalUtilization,
+            eligibleRewards: (userRewards * personalUtilization) / BASIS_POINTS_DIVISOR,
+            maxRewards: userRewards,
+            lockedAmount: userLocked.amount >= 0 ? uint256(uint128(userLocked.amount)) : 0,
+            lockEnd: userLocked.end,
+            bondedBalance: _balanceOf(account, block.timestamp)
+        });
+    }
+
+    /// @inheritdoc ITrustBonding
+    function getUserApy(address account) external view returns (uint256 currentApy, uint256 maxApy) {
+        uint256 _currEpoch = _currentEpoch();
+        if (_currEpoch == 0) {
+            return (currentApy, maxApy);
+        }
+        uint256 prevEpoch = _previousEpoch(_currEpoch);
+        uint256 userRewards = _userEligibleRewardsForEpoch(account, prevEpoch);
+        uint256 personalUtilization = _getPersonalUtilizationRatio(account, prevEpoch);
+
+        int256 locked = locked[account].amount;
+        if (userRewards == 0 || locked <= 0) {
+            return (currentApy, maxApy);
+        }
+        currentApy = (userRewards * personalUtilization * _epochsPerYear()) * BASIS_POINTS_DIVISOR / uint256(locked);
+        maxApy = (userRewards * _epochsPerYear()) * BASIS_POINTS_DIVISOR / uint256(locked);
+        return (currentApy, maxApy);
+    }
+
+    /// @inheritdoc ITrustBonding
+    function getUserCurrentClaimableRewards(address account) external view returns (uint256) {
+        uint256 _currEpoch = _currentEpoch();
+        if (_currEpoch == 0) {
+            return 0;
+        }
+        uint256 prevEpoch = _previousEpoch(_currEpoch);
+        uint256 userClaimedReward = userClaimedRewardsForEpoch[account][prevEpoch];
+        uint256 userEligibleReward = _userEligibleRewardsForEpoch(account, prevEpoch)
+            * _getPersonalUtilizationRatio(account, prevEpoch) / BASIS_POINTS_DIVISOR;
+        if (userEligibleReward <= userClaimedReward) {
+            return 0;
+        }
+        return userEligibleReward - userClaimedReward;
+    }
+
+    /// @inheritdoc ITrustBonding
+    function getUserRewardsForEpoch(address account, uint256 epoch) public view returns (uint256 eligible, uint256 available) {
+        uint256 _currEpoch = _currentEpoch();
+        if (_currEpoch == 0 || epoch >= _currEpoch) {
+            return (0, 0);
+        }
+        uint256 userRewards = _userEligibleRewardsForEpoch(account, epoch);
+        uint256 personalUtilization = _getPersonalUtilizationRatio(account, epoch);
+
+        return (
+            userRewards,
+            (userRewards * personalUtilization) / BASIS_POINTS_DIVISOR
+        );
+    }
+
+    /// @inheritdoc ITrustBonding
+    function getSystemApy() external view returns (uint256) {
+        uint256 _supply = supply;
+        if (_supply == 0) {
+            return 0;
+        }
+
+        uint256 emissionsPerYear = _emissionsForEpoch(_currentEpoch()) * _epochsPerYear();
+
+        return emissionsPerYear * BASIS_POINTS_DIVISOR / _supply;
+    }
+
     /// @inheritdoc ITrustBonding
     function getUnclaimedRewardsForEpoch(uint256 epoch) external view returns (uint256) {
         uint256 currentEpochLocal = currentEpoch();
@@ -264,73 +337,6 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         uint256 epochRewards = _emissionsForEpoch(epoch);
         uint256 claimedRewards = totalClaimedRewardsForEpoch[epoch];
         return epochRewards - claimedRewards;
-    }
-
-    function getUserInfo(address account) external view returns (UserInfo memory) {
-        uint256 currentEpochLocal = _currentEpoch();
-        if (currentEpochLocal == 0) {
-            return UserInfo(0, 0, 0, 0, 0, 0);
-        }
-
-        uint256 prevEpoch = currentEpochLocal > 1 ? currentEpochLocal - 1 : 0;
-        uint256 userRewards = _userEligibleRewardsForEpoch(account, prevEpoch);
-        uint256 personalUtilization = _getPersonalUtilizationRatio(account, prevEpoch);
-        LockedBalance memory userLocked = locked[account];
-
-        return UserInfo({
-            personalUtilization: personalUtilization,
-            adjustedRewards: (userRewards * personalUtilization) / BASIS_POINTS_DIVISOR,
-            rawRewards: userRewards,
-            lockedAmount: userLocked.amount >= 0 ? uint256(uint128(userLocked.amount)) : 0,
-            lockEnd: userLocked.end,
-            bondedBalance: _balanceOf(account, block.timestamp)
-        });
-    }
-
-    /// @inheritdoc ITrustBonding
-    function getUserEligibleRewards(address account) external view returns (uint256) {
-        uint256 _currEpoch = _currentEpoch();
-        if (_currEpoch == 0) {
-            return 0;
-        }
-        uint256 prevEpoch = _previousEpoch();
-        uint256 userClaimedReward = userClaimedRewardsForEpoch[account][prevEpoch];
-        uint256 userEligibleReward = _userEligibleRewardsForEpoch(account, prevEpoch)
-            * _getPersonalUtilizationRatio(account, prevEpoch) / BASIS_POINTS_DIVISOR;
-        if (userEligibleReward <= userClaimedReward) {
-            return 0;
-        }
-        return userEligibleReward - userClaimedReward;
-    }
-
-    /// @inheritdoc ITrustBonding
-    function getUserApy(address account) external view returns (uint256 currentApy, uint256 maxApy) {
-        uint256 _currEpoch = _currentEpoch();
-        if (_currEpoch == 0) {
-            return (0, 0);
-        }
-        uint256 prevEpoch = _previousEpoch();
-        uint256 userRewards = _userEligibleRewardsForEpoch(account, prevEpoch);
-        uint256 personalUtilization = _getPersonalUtilizationRatio(account, prevEpoch);
-
-        int256 locked = locked[account].amount;
-        if (userRewards == 0 || locked <= 0) {
-            return (0, 0);
-        }
-        currentApy = (userRewards * personalUtilization * _epochsPerYear()) * BASIS_POINTS_DIVISOR / uint256(locked);
-        maxApy = (userRewards * _epochsPerYear()) * BASIS_POINTS_DIVISOR / uint256(locked);
-        return (currentApy, maxApy);
-    }
-
-    /// @inheritdoc ITrustBonding
-    function getSystemApy() external view returns (uint256) {
-        if (supply == 0) {
-            return 0;
-        }
-
-        uint256 emissionsPerYear = _emissionsForEpoch(_currentEpoch()) * _epochsPerYear();
-
-        return emissionsPerYear * BASIS_POINTS_DIVISOR / supply;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -646,5 +652,9 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     function _previousEpoch() internal view returns (uint256) {
         uint256 curr = _currentEpoch();
         return curr == 0 ? 0 : curr - 1;
+    }
+
+    function _previousEpoch(uint256 _currEpoch) internal view returns (uint256) {
+        return _currEpoch == 0 ? 0 : _currEpoch - 1;
     }
 }
