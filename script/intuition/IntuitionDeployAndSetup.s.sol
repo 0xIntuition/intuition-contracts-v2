@@ -100,7 +100,7 @@ contract IntuitionDeployAndSetup is SetupScript {
 
         console2.log("");
         console2.log("DEPLOYMENT COMPLETE: =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+");
-        console2.log("Trust", address(trust));
+        contractInfo("Trust", address(trust));
         contractInfo("MultiVault", address(multiVault));
         contractInfo("AtomWalletFactory", address(atomWalletFactory));
         contractInfo("SatelliteEmissionsController", address(satelliteEmissionsController));
