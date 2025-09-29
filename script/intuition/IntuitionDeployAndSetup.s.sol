@@ -73,15 +73,12 @@ contract IntuitionDeployAndSetup is SetupScript {
         if (block.chainid == vm.envUint("ANVIL_CHAIN_ID")) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("ANVIL_BASE_EMISSIONS_CONTROLLER");
             MIGRATOR = vm.envAddress("ANVIL_MULTI_VAULT_ROLE_MIGRATOR");
-            TRUST_TOKEN = vm.envAddress("ANVIL_TRUST_TOKEN");
         } else if (block.chainid == vm.envUint("INTUITION_SEPOLIA_CHAIN_ID")) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("INTUITION_SEPOLIA_BASE_EMISSIONS_CONTROLLER");
             MIGRATOR = vm.envAddress("INTUITION_SEPOLIA_MULTI_VAULT_ROLE_MIGRATOR");
-            TRUST_TOKEN = vm.envAddress("INTUITION_SEPOLIA_TRUST_TOKEN");
         } else if (block.chainid == vm.envUint("INTUITION_MAINNET_CHAIN_ID")) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("BASE_MAINNET_BASE_EMISSIONS_CONTROLLER");
             MIGRATOR = vm.envAddress("INTUITION_MAINNET_MULTI_VAULT_ROLE_MIGRATOR");
-            TRUST_TOKEN = vm.envAddress("INTUITION_MAINNET_TRUST_TOKEN");
         } else {
             revert("Unsupported chain for broadcasting");
         }
@@ -91,11 +88,19 @@ contract IntuitionDeployAndSetup is SetupScript {
         console2.log("");
         console2.log("DEPLOYMENTS: =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+");
 
+        // Deploy Trust token if not provided
+        if (TRUST_TOKEN == address(0)) {
+            trust = Trust(_deployTrustToken());
+        } else {
+            trust = Trust(TRUST_TOKEN);
+        }
+
         // Deploy the complete MultiVault system
         _deployMultiVaultSystem();
 
         console2.log("");
         console2.log("DEPLOYMENT COMPLETE: =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+");
+        console2.log("Trust", address(trust));
         contractInfo("MultiVault", address(multiVault));
         contractInfo("AtomWalletFactory", address(atomWalletFactory));
         contractInfo("SatelliteEmissionsController", address(satelliteEmissionsController));
@@ -228,7 +233,7 @@ contract IntuitionDeployAndSetup is SetupScript {
             TrustBonding.initialize.selector,
             ADMIN, // owner
             address(timelockController), // timelock controller
-            address(TRUST_TOKEN), // WTRUST token if deploying on Intuition Sepolia
+            address(trust), // WTRUST token if deploying on Intuition Sepolia
             BONDING_EPOCH_LENGTH, // epochLength
             address(multiVault), // multiVault
             address(satelliteEmissionsController),
