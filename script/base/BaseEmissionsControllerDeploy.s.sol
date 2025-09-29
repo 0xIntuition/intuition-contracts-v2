@@ -5,6 +5,7 @@ import { Script, console2 } from "forge-std/src/Script.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { SetupScript } from "../SetupScript.s.sol";
 import { BaseEmissionsController } from "src/protocol/emissions/BaseEmissionsController.sol";
+import { Trust } from "src/Trust.sol";
 import { MetaERC20DispatchInit, FinalityState } from "src/interfaces/IMetaLayer.sol";
 import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";
 
@@ -40,15 +41,23 @@ contract BaseEmissionsControllerDeploy is SetupScript {
         _deployContracts();
         console2.log("");
         console2.log("DEPLOYMENTS: =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+");
+        console2.log("Trust Token:", address(trust));
         console2.log("BaseEmissionsController Implementation:", address(baseEmissionsControllerImpl));
         console2.log("BaseEmissionsController Proxy:", address(baseEmissionsControllerProxy));
     }
 
     function _deployContracts() internal {
-        // 1. Deploy the BaseEmissionsController implementation contract
+        // 1. Deploy Trust token if not provided
+        if (TRUST_TOKEN == address(0)) {
+            trust = Trust(_deployTrustToken());
+        } else {
+            trust = Trust(TRUST_TOKEN);
+        }
+
+        // 2. Deploy the BaseEmissionsController implementation contract
         baseEmissionsControllerImpl = new BaseEmissionsController();
 
-        // 2. Prepare initialization params for the BaseEmissionsController
+        // 3. Prepare initialization params for the BaseEmissionsController
         MetaERC20DispatchInit memory metaERC20DispatchInit = MetaERC20DispatchInit({
             hubOrSpoke: METALAYER_HUB_OR_SPOKE,
             recipientDomain: SATELLITE_METALAYER_RECIPIENT_DOMAIN,
@@ -73,7 +82,7 @@ contract BaseEmissionsControllerDeploy is SetupScript {
             coreEmissionsInit
         );
 
-        // 3. Deploy the TransparentUpgradeableProxy with the BaseEmissionsController implementation
+        // 4. Deploy the TransparentUpgradeableProxy with the BaseEmissionsController implementation
         baseEmissionsControllerProxy =
             new TransparentUpgradeableProxy(address(baseEmissionsControllerImpl), ADMIN, initData);
     }
