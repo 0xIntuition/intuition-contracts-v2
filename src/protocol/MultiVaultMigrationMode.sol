@@ -35,19 +35,6 @@ contract MultiVaultMigrationMode is MultiVault {
         uint256 totalShares;
     }
 
-    /**
-     * @notice Struct representing the parameters for batch setting user balances
-     * @param termIds The term IDs of the vaults
-     * @param bondingCurveId The bonding curve ID of all of the vaults
-     * @param user The user whose balances are being set
-     * @param userBalances The user balances for each vault
-     */
-    struct BatchSetUserBalancesParams {
-        bytes32[] termIds;
-        uint256 bondingCurveId;
-        address user;
-        uint256[] userBalances;
-    }
 
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
@@ -164,39 +151,77 @@ contract MultiVaultMigrationMode is MultiVault {
     }
 
     /**
-     * @notice Sets the user balances for each vault
-     * @param params The parameters for the batch set user balances.
+     * @notice Sets the user balances for multiple users across multiple vaults
+     * @param users Array of user addresses
+     * @param termIds Array of term IDs (vault identifiers)
+     * @param bondingCurveId The bonding curve ID for all vaults
+     * @param userBalances 2D array where userBalances[i][j] = balance for users[i] in termIds[j]
      */
-    function batchSetUserBalances(BatchSetUserBalancesParams calldata params) external onlyRole(MIGRATOR_ROLE) {
-        if (params.bondingCurveId == 0) {
+    function batchSetUserBalances(
+        address[] calldata users,
+        bytes32[] calldata termIds,
+        uint256 bondingCurveId,
+        uint256[][] calldata userBalances
+    ) external onlyRole(MIGRATOR_ROLE) {
+        if (bondingCurveId == 0) {
             revert MultiVault_InvalidBondingCurveId();
         }
 
-        if (params.user == address(0)) {
-            revert MultiVault_ZeroAddress();
-        }
+        uint256 usersLength = users.length;
+        uint256 termIdsLength = termIds.length;
 
-        uint256 length = params.termIds.length;
-
-        if (length != params.userBalances.length) {
+        if (usersLength == 0 || termIdsLength == 0) {
             revert MultiVault_ArraysNotSameLength();
         }
 
-        for (uint256 i = 0; i < length;) {
-            _vaults[params.termIds[i]][params.bondingCurveId].balanceOf[params.user] = params.userBalances[i];
-            uint256 assets = _convertToAssets(params.termIds[i], params.bondingCurveId, params.userBalances[i]);
+        if (usersLength != userBalances.length) {
+            revert MultiVault_ArraysNotSameLength();
+        }
 
-            emit Deposited(
-                address(this),
-                params.user,
-                params.termIds[i],
-                params.bondingCurveId,
-                assets,
-                assets,
-                params.userBalances[i],
-                getShares(params.user, params.termIds[i], params.bondingCurveId),
-                getVaultType(params.termIds[i])
-            );
+        // Cache vault types to avoid repeated calculations
+        VaultType[] memory vaultTypes = new VaultType[](termIdsLength);
+        for (uint256 j = 0; j < termIdsLength;) {
+            vaultTypes[j] = getVaultType(termIds[j]);
+            unchecked {
+                ++j;
+            }
+        }
+
+        // Process each user
+        for (uint256 i = 0; i < usersLength;) {
+            address user = users[i];
+
+            if (user == address(0)) {
+                revert MultiVault_ZeroAddress();
+            }
+
+            if (userBalances[i].length != termIdsLength) {
+                revert MultiVault_ArraysNotSameLength();
+            }
+
+            // Process each vault for this user
+            for (uint256 j = 0; j < termIdsLength;) {
+                bytes32 termId = termIds[j];
+                uint256 balance = userBalances[i][j];
+
+                _vaults[termId][bondingCurveId].balanceOf[user] = balance;
+                uint256 assets = _convertToAssets(termId, bondingCurveId, balance);
+
+                emit Deposited(
+                    address(this),
+                    user,
+                    termId,
+                    bondingCurveId,
+                    assets,
+                    assets,
+                    balance,
+                    getShares(user, termId, bondingCurveId),
+                    vaultTypes[j]
+                );
+                unchecked {
+                    ++j;
+                }
+            }
             unchecked {
                 ++i;
             }
