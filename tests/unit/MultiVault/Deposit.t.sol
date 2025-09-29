@@ -2,7 +2,7 @@
 pragma solidity 0.8.29;
 
 import { console2 } from "forge-std/src/console2.sol";
-import { Test } from "forge-std/src/Test.sol";
+import { Test, console } from "forge-std/src/Test.sol";
 
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
@@ -313,5 +313,193 @@ contract DepositTest is BaseTest {
         gc.minDeposit = 1; // Set to very small value for testing
         gc.trustBonding = protocol.multiVault.getGeneralConfig().trustBonding; // Preserve existing TrustBonding setting
         return gc;
+    }
+}
+
+contract DefaultCurveEntryFeeImpactTest is BaseTest {
+    uint256 internal DEFAULT_CURVE_ID;
+    uint256 internal NON_DEFAULT_CURVE_ID; // offset progressive = 2 in our setup
+
+    function setUp() public override {
+        super.setUp();
+
+        (, uint256 defaultCurveId) = protocol.multiVault.bondingCurveConfig();
+        DEFAULT_CURVE_ID = defaultCurveId; // expected 1 (linear)
+        NON_DEFAULT_CURVE_ID = (defaultCurveId == 1) ? 2 : 1; // pick 2 as non-default if possible
+        // sanity in case registry changed later:
+        if (NON_DEFAULT_CURVE_ID == DEFAULT_CURVE_ID) {
+            NON_DEFAULT_CURVE_ID = DEFAULT_CURVE_ID == 1 ? 2 : 1;
+        }
+    }
+
+    /// Proves: first deposit on a brand-new non-default vault waives entry fee,
+    /// so default curve does NOT accrue fee on that first deposit.
+    function test_defaultCurve_NoFeeOnFirstNonDefaultDeposit() public {
+        // Create atom with only atomCost -> default curve vault has only minShare assets&shares
+        bytes32 atomId = createSimpleAtom("atom-fee-first", ATOM_COST[0], users.alice);
+
+        // Snapshot default vault state
+        (uint256 defAssetsBefore, uint256 defSharesBefore) = protocol.multiVault.getVault(atomId, DEFAULT_CURVE_ID);
+        uint256 priceBefore = protocol.multiVault.currentSharePrice(atomId, DEFAULT_CURVE_ID);
+
+        // 1st non-default deposit (isNew = true on curveId=2) -> entry fee waived
+        uint256 firstAmt = 5 ether;
+        makeDeposit(users.alice, users.alice, atomId, NON_DEFAULT_CURVE_ID, firstAmt, 0);
+
+        // Default vault must be unchanged
+        (uint256 defAssetsAfter, uint256 defSharesAfter) = protocol.multiVault.getVault(atomId, DEFAULT_CURVE_ID);
+        uint256 priceAfter = protocol.multiVault.currentSharePrice(atomId, DEFAULT_CURVE_ID);
+
+        assertEq(defSharesAfter, defSharesBefore, "default shares should not change on first non-default deposit");
+        assertEq(defAssetsAfter, defAssetsBefore, "default assets should not change on first non-default deposit");
+        assertEq(priceAfter, priceBefore, "default price unchanged on first non-default deposit");
+    }
+
+    /// Proves: subsequent non-default deposits *do* drip entry fee into default curve,
+    /// increasing default assets (not shares), raising price and reducing shares/asset on default curve.
+    function test_defaultCurve_FeeDripFromSubsequentNonDefaultDeposits() public {
+        bytes32 atomId = createSimpleAtom("atom-fee-next", ATOM_COST[0], users.alice);
+
+        // Initialize the non-default vault with a first deposit (no entry fee)
+        makeDeposit(users.alice, users.alice, atomId, NON_DEFAULT_CURVE_ID, 3 ether, 0);
+
+        // Baselines on the default curve
+        (uint256 defAssets0, uint256 defShares0) = protocol.multiVault.getVault(atomId, DEFAULT_CURVE_ID);
+        uint256 previewFixedAssets = 10 ether;
+        (uint256 sharesBefore,) = protocol.multiVault.previewDeposit(atomId, DEFAULT_CURVE_ID, previewFixedAssets);
+
+        // 2nd non-default deposit (now isNew=false) -> entry fee applies and drips to default
+        uint256 secondAmt = 20 ether;
+        makeDeposit(users.alice, users.alice, atomId, NON_DEFAULT_CURVE_ID, secondAmt, 0);
+
+        (uint256 defAssets1, uint256 defShares1) = protocol.multiVault.getVault(atomId, DEFAULT_CURVE_ID);
+
+        // expected fee drip = ceil(secondAmt * entryFeeBps / feeDenominator)
+        (uint256 entryFeeBps,, uint256 protocolFeeBps, uint256 feeDen) = _readVaultFees(); // we’ll write helper below
+            // to fetch fees
+
+        uint256 expectedDrip = _mulDivUp(secondAmt, entryFeeBps, feeDen);
+
+        assertEq(defShares1, defShares0, "default shares remain constant");
+        assertEq(defAssets1, defAssets0 + expectedDrip, "default assets increased by entry fee drip");
+
+        // price (or more robustly: shares minted for fixed assets) should reflect it
+        (uint256 sharesAfter,) = protocol.multiVault.previewDeposit(atomId, DEFAULT_CURVE_ID, previewFixedAssets);
+        assertLe(sharesAfter, sharesBefore, "default curve should mint <= shares for same assets after drip");
+    }
+
+    uint256 previewAmt = 1 ether;
+
+    /// A simple staircase test: multiple non-default deposits add up linearly on the default
+    /// curve’s assets, and previewed shares on default for a fixed asset amount is non-increasing.
+    function test_defaultCurve_StaircaseIncreasingDeposits() public {
+        bytes32 atomId = createSimpleAtom("atom-stair", ATOM_COST[0], users.alice);
+
+        // prime non-default
+        makeDeposit(users.alice, users.alice, atomId, NON_DEFAULT_CURVE_ID, 2 ether, 0);
+
+        (uint256 entryFeeBps,,, uint256 feeDen) = _readVaultFees();
+
+        // baseline on default
+        (uint256 defAssetsBase, uint256 defSharesBase) = protocol.multiVault.getVault(atomId, DEFAULT_CURVE_ID);
+        // uint256 previewAmt = 5 ether;
+        (uint256 sharesPrev,) = protocol.multiVault.previewDeposit(atomId, DEFAULT_CURVE_ID, previewAmt);
+
+        // deposit ladder on non-default
+        uint256[4] memory ladder = [uint256(1 ether), 2 ether, 3 ether, 4 ether];
+
+        uint256 expectedAdded = 0;
+        for (uint256 i = 0; i < ladder.length; i++) {
+            makeDeposit(users.alice, users.alice, atomId, NON_DEFAULT_CURVE_ID, ladder[i], 0);
+            expectedAdded += _mulDivUp(ladder[i], entryFeeBps, feeDen);
+
+            (uint256 defA, uint256 defS) = protocol.multiVault.getVault(atomId, DEFAULT_CURVE_ID);
+            assertEq(defS, defSharesBase, "default shares stays constant throughout");
+            assertEq(defA, defAssetsBase + expectedAdded, "default assets must equal base + sum(entry fees)");
+
+            (uint256 sharesNow,) = protocol.multiVault.previewDeposit(atomId, DEFAULT_CURVE_ID, previewAmt);
+            assertLe(sharesNow, sharesPrev, "shares minted on default for same assets should be non-increasing");
+            sharesPrev = sharesNow;
+            console.log("Step: ", i);
+            console.log("Total assets: ", defA);
+            console.log("Total shares: ", defS);
+            console.log("Share price: ", protocol.multiVault.currentSharePrice(atomId, DEFAULT_CURVE_ID));
+        }
+    }
+
+    /* --------------------------- helpers --------------------------- */
+
+    function _readVaultFees() internal view returns (uint256 entry, uint256 exit, uint256 protocolBps, uint256 den) {
+        entry = protocol.multiVault.getVaultFees().entryFee; // 100
+        exit = protocol.multiVault.getVaultFees().exitFee; // 100
+        protocolBps = protocol.multiVault.getVaultFees().protocolFee; // 100
+        den = protocol.multiVault.getGeneralConfig().feeDenominator; // 10_000
+    }
+
+    function _mulDivUp(uint256 a, uint256 b, uint256 d) internal pure returns (uint256) {
+        // matches solady FixedPointMathLib.mulDivUp
+        return (a == 0 || b == 0) ? 0 : ((a * b) + (d - 1)) / d;
+    }
+}
+
+contract DefaultCurveEntryFeeImpactFuzzTest is BaseTest {
+    uint256 internal DEFAULT_CURVE_ID;
+    uint256 internal NON_DEFAULT_CURVE_ID;
+
+    function setUp() public override {
+        super.setUp();
+        (, uint256 defaultCurveId) = protocol.multiVault.bondingCurveConfig();
+        DEFAULT_CURVE_ID = defaultCurveId;
+        NON_DEFAULT_CURVE_ID = (defaultCurveId == 1) ? 2 : 1;
+    }
+
+    /// For a sequence of non-default deposits:
+    ///  - default curve’s totalAssets must equal minShare + sum(ceil(entryFee * amount)) excluding the first deposit
+    ///  - previewed shares on the default curve for a fixed assets amount must be non-increasing
+    function testFuzz_DefaultCurve_AccruesEntryFeeAndReducesSharesPerAsset(uint96[10] memory raw) public {
+        bytes32 atomId = createSimpleAtom("atom-fuzz", ATOM_COST[0], users.alice);
+
+        // prime non-default (no entry fee dripped)
+        uint256 firstAmt = _sanitize(raw[0]);
+        makeDeposit(users.alice, users.alice, atomId, NON_DEFAULT_CURVE_ID, firstAmt, 0);
+
+        // snapshot default base
+        (uint256 defAssetsBase, uint256 defSharesBase) = protocol.multiVault.getVault(atomId, DEFAULT_CURVE_ID);
+
+        uint256 feeDen = protocol.multiVault.getGeneralConfig().feeDenominator;
+        uint256 entryFeeBps = 50; // default from your test harness
+
+        uint256 expectedAdded; // sum of subsequent fee drips
+        uint256 previewAmt = 3 ether;
+        (uint256 prevShares,) = protocol.multiVault.previewDeposit(atomId, DEFAULT_CURVE_ID, previewAmt);
+
+        for (uint256 i = 1; i < raw.length; i++) {
+            uint256 amt = _sanitize(raw[i]);
+            makeDeposit(users.alice, users.alice, atomId, NON_DEFAULT_CURVE_ID, amt, 0);
+            expectedAdded += _mulDivUp(amt, entryFeeBps, feeDen);
+
+            (uint256 defA, uint256 defS) = protocol.multiVault.getVault(atomId, DEFAULT_CURVE_ID);
+            assertEq(defS, defSharesBase, "default shares immutable across non-default deposits");
+            assertEq(defA, defAssetsBase + expectedAdded, "default assets == base + sum(drips)");
+
+            (uint256 nowShares,) = protocol.multiVault.previewDeposit(atomId, DEFAULT_CURVE_ID, previewAmt);
+            assertLe(nowShares, prevShares, "shares minted for same assets must be non-increasing");
+            prevShares = nowShares;
+        }
+    }
+
+    function _sanitize(uint96 x) internal view returns (uint256) {
+        // keep deposits in a safe and meaningful band:
+        //  >= minDeposit + minShare (to avoid min-share check on non-default new vault)
+        //  and cap to avoid curve max-asset surprises in extreme fuzz
+        uint256 min =
+            protocol.multiVault.getGeneralConfig().minDeposit + protocol.multiVault.getGeneralConfig().minShare;
+        uint256 capped = uint256(x) % (50 ether);
+        if (capped < min) capped = min;
+        return capped;
+    }
+
+    function _mulDivUp(uint256 a, uint256 b, uint256 d) internal pure returns (uint256) {
+        return (a == 0 || b == 0) ? 0 : ((a * b) + (d - 1)) / d;
     }
 }
