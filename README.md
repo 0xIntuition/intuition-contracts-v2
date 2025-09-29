@@ -14,10 +14,9 @@ The Intuition V2 smart contracts for the Intuition protocol, built using [Foundr
 ## Deploy Smart Contracts on Intuition Testnet
 
 1. Execute script/base/BaseEmissionsControllerDeploy.s.sol
-   - Update the `INTUITION_SEPOLIA_BASE_EMISSIONS_CONTROLLER` or `ANVIL_BASE_EMISSIONS_CONTROLLER` in .env
-   - Update the `ANVIL_TRUST_TOKEN` in .env if deploying on Anvil
+   - Update the `INTUITION_SEPOLIA_BASE_EMISSIONS_CONTROLLER` in .env
 2. Execute script/intuition/IntuitionDeployAndSetup.s.sol
-   - Update the `BASE_SEPOLIA_SATELLITE_EMISSIONS_CONTROLLER` or `ANVIL_SATELLITE_EMISSIONS_CONTROLLER` in .env
+   - Update the `BASE_SEPOLIA_SATELLITE_EMISSIONS_CONTROLLER` in .env
 3. Execute script/base/BaseEmissionsControllerSetup.s.sol
 
 ## Upgrade MultiVaultMigrationMode to MultiVault contract post-migration
