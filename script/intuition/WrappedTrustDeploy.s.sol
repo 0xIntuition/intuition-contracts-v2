@@ -9,8 +9,10 @@ import { WrappedTrust } from "src/WrappedTrust.sol";
 /*
 TESTNET
 forge script script/intuition/WrappedTrustDeploy.s.sol:WrappedTrustDeploy \
+--optimizer-runs 10000 \
 --rpc-url intuition_sepolia \
---broadcast
+--broadcast \
+--slow
 */
 contract WrappedTrustDeploy is SetupScript {
     function run() public broadcast returns (bool) {
