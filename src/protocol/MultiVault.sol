@@ -1001,14 +1001,14 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         uint256 _fees = _feeOnRaw(_assets, vaultFees.protocolFee);
         uint256 epoch = currentEpoch();
         accumulatedProtocolFees[epoch] += _fees;
-        emit ProtocolFeeAccrued(epoch, _fees);
+        emit ProtocolFeeAccrued(epoch, msg.sender, _fees);
     }
 
     /// @dev Increase the accumulated protocol fees in a given epoch by an absolute amount
     function _accumulateStaticProtocolFees(uint256 _assets) internal {
         uint256 epoch = currentEpoch();
         accumulatedProtocolFees[epoch] += _assets;
-        emit ProtocolFeeAccrued(epoch, _assets);
+        emit ProtocolFeeAccrued(epoch, msg.sender, _assets);
     }
 
     /// @dev Increase the accumulated atom wallet fees
