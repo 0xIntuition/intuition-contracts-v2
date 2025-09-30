@@ -170,8 +170,7 @@ contract MultiVaultMigrationMode is MultiVault {
      * @param params The parameters for the batch set user balances.
      */
     function batchSetUserBalances(BatchSetUserBalancesParams calldata params) external onlyRole(MIGRATOR_ROLE) {
-        uint256 curveId = params.bondingCurveId;
-        if (curveId == 0) {
+        if (params.bondingCurveId == 0) {
             revert MultiVault_InvalidBondingCurveId();
         }
 
@@ -181,39 +180,34 @@ contract MultiVaultMigrationMode is MultiVault {
         }
 
         for (uint256 i = 0; i < usersLength;) {
-            address user = params.users[i];
-            if (user == address(0)) {
+            if (params.users[i] == address(0)) {
                 revert MultiVault_ZeroAddress();
             }
 
             bytes32[] calldata terms = params.termIds[i];
             uint256[] calldata balances = params.userBalances[i];
 
-            uint256 termsLength = terms.length;
-            if (termsLength != balances.length) {
+            if (terms.length != balances.length) {
                 revert MultiVault_InvalidArrayLength();
             }
 
-            for (uint256 j = 0; j < termsLength;) {
-                bytes32 termId = terms[j];
-                uint256 shares = balances[j];
-
+            for (uint256 j = 0; j < terms.length;) {
                 // Write user balance
-                _vaults[termId][curveId].balanceOf[user] = shares;
+                _vaults[terms[j]][params.bondingCurveId].balanceOf[params.users[i]] = balances[j];
 
                 // Compute assets at current share price
-                uint256 assets = _convertToAssets(termId, curveId, shares);
+                uint256 assets = _convertToAssets(terms[j], params.bondingCurveId, balances[j]);
 
                 emit Deposited(
                     address(this), // sender (migration)
-                    user, // receiver
-                    termId,
-                    curveId,
+                    params.users[i], // receiver
+                    terms[j],
+                    params.bondingCurveId,
                     assets, // assets
                     assets, // assetsAfterFees (equivalent to assets for migration)
-                    shares, // shares that were minted (i.e. set during migration)
-                    shares, // totalShares (equivalent to shares for migration)
-                    getVaultType(termId)
+                    balances[j], // shares that were minted (i.e. set during migration)
+                    balances[j], // totalShares (equivalent to shares for migration)
+                    getVaultType(terms[j])
                 );
 
                 unchecked {
