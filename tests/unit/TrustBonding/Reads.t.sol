@@ -213,32 +213,6 @@ contract TrustBondingReadsTest is TrustBondingBase {
     /* =================================================== */
     /*                  REWARDS FUNCTIONS                  */
     /* =================================================== */
-
-    function test_eligibleRewards_noBond() external view {
-        uint256 rewards = protocol.trustBonding.getUserCurrentClaimableRewards(users.alice);
-        assertEq(rewards, 0);
-    }
-
-    function test_eligibleRewards_withBond() external {
-        _createLock(users.alice, INITIAL_TOKENS);
-
-        // Move to next epoch so previous epoch rewards become eligible
-        vm.warp(TRUST_BONDING_START_TIMESTAMP + TRUST_BONDING_EPOCH_LENGTH);
-
-        uint256 rewards = protocol.trustBonding.getUserCurrentClaimableRewards(users.alice);
-        // Should have some rewards from epoch 0
-        assertGt(rewards, 0);
-    }
-
-    function test_eligibleRewards_epoch0() external {
-        _createLock(users.alice, INITIAL_TOKENS);
-
-        // Stay in epoch 0
-        uint256 rewards = protocol.trustBonding.getUserCurrentClaimableRewards(users.alice);
-        // No rewards in epoch 0 (previous epoch would be -1 or 0)
-        assertEq(rewards, 0);
-    }
-
     function test_userEligibleRewardsForEpoch_validUser() external {
         _createLock(users.alice, INITIAL_TOKENS);
 

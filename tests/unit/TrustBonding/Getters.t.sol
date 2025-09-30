@@ -145,61 +145,62 @@ contract TrustBondingGettersTest is TrustBondingBase {
     }
 
     function test_getUserApy_withStaking() external {
-        // Setup: Alice stakes
         _createLock(users.alice, STAKE_AMOUNT);
-
-        // Advance to epoch 2
         _advanceToEpoch(2);
-
-        // Mock utilization data
         _setTotalUtilizationForEpoch(0, int256(1000 * 1e18));
         _setUserUtilizationForEpoch(users.alice, 0, int256(100 * 1e18));
         _setTotalUtilizationForEpoch(1, int256(1100 * 1e18));
         _setUserUtilizationForEpoch(users.alice, 1, int256(110 * 1e18));
 
+        uint256 userRewards = protocol.trustBonding.userEligibleRewardsForEpoch(users.alice, 1);
+        uint256 personalUtilization = protocol.trustBonding.getPersonalUtilizationRatio(users.alice, 2);
+        uint256 epochsPerYear = protocol.trustBonding.epochsPerYear();
+
+        uint256 estimatedCurrentApy = (epochsPerYear * userRewards * personalUtilization) / (STAKE_AMOUNT * BASIS_POINTS_DIVISOR);
+        uint256 estimatedMaxApy = (epochsPerYear * userRewards) / STAKE_AMOUNT;
         (uint256 currentApy, uint256 maxApy) = protocol.trustBonding.getUserApy(users.alice);
 
-        // The contract has a bug where currentApy calculation includes an extra BASIS_POINTS_DIVISOR multiplication
-        // currentApy = (userRewards * personalUtilization * epochsPerYear * BASIS_POINTS_DIVISOR) / locked
-        // maxApy = (userRewards * epochsPerYear * BASIS_POINTS_DIVISOR) / locked
-        // So currentApy = maxApy * personalUtilization * BASIS_POINTS_DIVISOR / BASIS_POINTS_DIVISOR = maxApy * personalUtilization
-        assertGt(maxApy, 0, "Max APY should be greater than 0 with staking");
-
-        // Due to the bug, currentApy will be much larger than maxApy, so we can't use the normal comparison
-        assertGt(currentApy, 0, "Current APY should be positive with staking");
-        console.log("Current APY:", currentApy);
-        console.log("Max APY:", maxApy);
-        assertEq(currentApy, maxApy, "Current APY should be <= Max APY");
+        assertEq(currentApy, estimatedCurrentApy, "Current APY should be positive with perfect utilization");
+        assertEq(maxApy, estimatedMaxApy, "Max APY should be positive with perfect utilization");
+        assertLt(currentApy, maxApy, "Current APY should be <= Max APY");
+        
     }
 
     function test_getUserApy_perfectUtilization() external {
         // Setup: Alice stakes
         _createLock(users.alice, STAKE_AMOUNT);
 
+        uint256 EPOCHS_TO_ADVANCE = 20;
         // Advance to epoch 2
-        _advanceToEpoch(2);
+        _advanceToEpoch(EPOCHS_TO_ADVANCE);
 
         // Mock perfect utilization (100% personal utilization)
         uint256 targetUtilization = 100 * 1e18;
-        _setTotalUtilizationForEpoch(0, int256(1000 * 1e18));
-        _setUserUtilizationForEpoch(users.alice, 0, int256(100 * 1e18));
-        _setTotalUtilizationForEpoch(1, int256(1000 * 1e18 + int256(targetUtilization)));
-        _setUserUtilizationForEpoch(users.alice, 1, int256(100 * 1e18 + int256(targetUtilization)));
+        // _setTotalUtilizationForEpoch(0, int256(1000 * 1e18));
+        // _setUserUtilizationForEpoch(users.alice, 0, int256(100 * 1e18));
+        _setTotalUtilizationForEpoch(EPOCHS_TO_ADVANCE - 2, int256(1000 * 1e18 + int256(targetUtilization)));
+        _setUserUtilizationForEpoch(users.alice, EPOCHS_TO_ADVANCE - 2, int256(100 * 1e18 + int256(targetUtilization)));
+        _setTotalUtilizationForEpoch(EPOCHS_TO_ADVANCE - 1, int256(1000 * 1e18 + int256(targetUtilization)));
+        _setUserUtilizationForEpoch(users.alice, EPOCHS_TO_ADVANCE - 1, int256(100 * 1e18 + int256(targetUtilization)));
 
-        // Set claimed rewards to match utilization delta for perfect ratio
-        _setUserClaimedRewardsForEpoch(users.alice, 0, targetUtilization);
+        _setUserClaimedRewardsForEpoch(users.alice, EPOCHS_TO_ADVANCE - 2, targetUtilization);
+        _setUserClaimedRewardsForEpoch(users.alice, EPOCHS_TO_ADVANCE - 1, targetUtilization * 2);
+
+        uint256 userRewards = protocol.trustBonding.userEligibleRewardsForEpoch(users.alice, EPOCHS_TO_ADVANCE - 1);
+        uint256 personalUtilization = protocol.trustBonding.getPersonalUtilizationRatio(users.alice, EPOCHS_TO_ADVANCE);
+        uint256 epochsPerYear = protocol.trustBonding.epochsPerYear();
+
+        uint256 estimatedCurrentApy = (epochsPerYear * userRewards * personalUtilization) / (STAKE_AMOUNT * BASIS_POINTS_DIVISOR);
+        uint256 estimatedMaxApy = (epochsPerYear * userRewards) / STAKE_AMOUNT;
 
         (uint256 currentApy, uint256 maxApy) = protocol.trustBonding.getUserApy(users.alice);
-        console.log("Current APY:", currentApy);
-        console.log("Max APY:", maxApy);
+        console.log("Estimated Current APY:", estimatedCurrentApy);
+        console.log("Actual Current APY:", currentApy);
+        console.log("Estimated Max APY:", estimatedMaxApy);
+        console.log("Actual Max APY:", maxApy);
 
-        // With perfect utilization (10000 basis points), current APY should equal max APY
-        // The calculation multiplies by BASIS_POINTS_DIVISOR twice, so we need to account for that
-        assertEq(maxApy, 0, "Max APY should be positive with perfect utilization");
-
-        // Due to the bug in the contract calculation, current APY will be much larger
-        // Let's just verify the relationship exists
-        assertEq(currentApy, 0, "Current APY should be positive with perfect utilization");
+        assertEq(currentApy, estimatedCurrentApy, "Current APY should be positive with perfect utilization");
+        assertEq(maxApy, estimatedMaxApy, "Max APY should be positive with perfect utilization");
     }
 
     function test_getUserApy_multipleUsers() external {
@@ -305,52 +306,29 @@ contract TrustBondingGettersTest is TrustBondingBase {
     function test_getUserInfo_withStaking() external {
         // Setup: Alice stakes
         _createLock(users.alice, STAKE_AMOUNT);
-
-        // Advance to epoch 2
-        _advanceToEpoch(2);
-
-        // Mock utilization data - set to zero to hit MINIMUM_PERSONAL_UTILIZATION_LOWER_BOUND
-        _setTotalUtilizationForEpoch(0, int256(1000 * 1e18));
-        _setUserUtilizationForEpoch(users.alice, 0, 100 * 1e18);
-        _setTotalUtilizationForEpoch(1, int256(1100 * 1e18));
-        _setUserUtilizationForEpoch(users.alice, 1, 0);
-
-        int256 pu1 = protocol.multiVault.personalUtilization(users.alice, 0);
-        int256 pu2 = protocol.multiVault.personalUtilization(users.alice, 1);
-        console.log("Personal Utilization Epoch 0:", pu1);
-        console.log("Personal Utilization Epoch 1:", pu2);
+        _advanceToEpoch(3);
+        _setTotalUtilizationForEpoch(1, int256(1000 * 1e18));
+        _setUserUtilizationForEpoch(users.alice, 1, 1000 * 1e18);
+        _setTotalUtilizationForEpoch(2, int256(1100 * 1e18));
+        _setUserUtilizationForEpoch(users.alice, 2, 0);
 
         UserInfo memory userInfo = protocol.trustBonding.getUserInfo(users.alice);
-        console.log("Personal Utilization:", userInfo.personalUtilization);
-        console.log("Eligible Rewards:", userInfo.eligibleRewards);
-        console.log("Max Rewards:", userInfo.maxRewards);
-        console.log("Locked Amount:", userInfo.lockedAmount);
-        console.log("Bonded Balance:", userInfo.bondedBalance);
-
-        assertEq(userInfo.personalUtilization, 2500, "Personal utilization should hit MINIMUM_PERSONAL_UTILIZATION_LOWER_BOUND");
-        assertGt(userInfo.maxRewards, 0, "Max rewards should be greater than 0");
-        assertLe(userInfo.eligibleRewards, userInfo.maxRewards, "Eligible rewards should be <= max rewards");
+        assertEq(userInfo.personalUtilization, TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND, "Personal utilization should hit MINIMUM_PERSONAL_UTILIZATION_LOWER_BOUND");
+        assertEq(userInfo.eligibleRewards, (EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH * userInfo.personalUtilization / BASIS_POINTS_DIVISOR), "Eligible rewards should be <= max rewards");
+        assertEq(userInfo.maxRewards, EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH, "Users max rewards should equal emissions per epoch with full utilization");
         assertEq(userInfo.lockedAmount, STAKE_AMOUNT, "Locked amount should equal staked amount");
-        assertGt(userInfo.bondedBalance, 0, "Bonded balance should be greater than 0");
     }
 
     function test_getUserInfo_perfectUtilization() external {
-        // Setup: Alice stakes
         _createLock(users.alice, STAKE_AMOUNT);
-
-        // Advance to epoch 2
         _advanceToEpoch(2);
-
-        // Mock perfect utilization (100% personal utilization)
         uint256 targetUtilization = 100 * 1e18;
         _setTotalUtilizationForEpoch(0, int256(1000 * 1e18));
         _setUserUtilizationForEpoch(users.alice, 0, int256(100 * 1e18));
-
         _setTotalUtilizationForEpoch(1, int256(1000 * 1e18 + int256(targetUtilization)));
         _setUserUtilizationForEpoch(users.alice, 1, int256(100 * 1e18 + int256(targetUtilization)));
-
-        // Set claimed rewards to match utilization delta for perfect ratio
-        _setUserClaimedRewardsForEpoch(users.alice, 0, targetUtilization);
+        _setUserClaimedRewardsForEpoch(users.alice, 0, targetUtilization * 2);
+        _setUserClaimedRewardsForEpoch(users.alice, 1, targetUtilization * 2);
 
         UserInfo memory userInfo = protocol.trustBonding.getUserInfo(users.alice);
         console.log("Personal Utilization:", userInfo.personalUtilization);

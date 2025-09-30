@@ -242,7 +242,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         if (_currEpoch > 0) {
             uint256 prevEpoch = _previousEpoch(_currEpoch);
             userRewards = _userEligibleRewardsForEpoch(account, prevEpoch);
-            personalUtilization = _getPersonalUtilizationRatio(account, prevEpoch);
+            personalUtilization = _getPersonalUtilizationRatio(account, _currEpoch);
         }
 
         LockedBalance memory userLocked = locked[account];
@@ -258,13 +258,13 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
 
     /// @inheritdoc ITrustBonding
     function getUserApy(address account) external view returns (uint256 currentApy, uint256 maxApy) {
-        uint256 _currEpoch = _currentEpoch();
-        if (_currEpoch == 0) {
+        uint256 currEpoch = _currentEpoch();
+        if (currEpoch == 0) {
             return (currentApy, maxApy);
         }
-        uint256 prevEpoch = _previousEpoch(_currEpoch);
+        uint256 prevEpoch = _previousEpoch(currEpoch);
         uint256 userRewards = _userEligibleRewardsForEpoch(account, prevEpoch);
-        uint256 personalUtilization = _getPersonalUtilizationRatio(account, prevEpoch);
+        uint256 personalUtilization = _getPersonalUtilizationRatio(account, currEpoch);
 
         int256 locked = locked[account].amount;
         if (userRewards == 0 || locked <= 0) {
