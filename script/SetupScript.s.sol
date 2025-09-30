@@ -9,9 +9,9 @@ import {
     ITransparentUpgradeableProxy
 } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
 import { EntryPoint } from "@account-abstraction/core/EntryPoint.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
-import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
 
 import { AtomWarden } from "src/protocol/wallet/AtomWarden.sol";
 import { AtomWallet } from "src/protocol/wallet/AtomWallet.sol";
@@ -116,7 +116,6 @@ abstract contract SetupScript is Script {
     LinearCurve public linearCurve;
     ProgressiveCurve public progressiveCurve;
     OffsetProgressiveCurve public offsetProgressiveCurve;
-    TimelockController public timelockController;
 
     /// @dev Initializes the transaction broadcaster like this:
     ///
@@ -231,6 +230,19 @@ abstract contract SetupScript is Script {
         info("ENTRY_FEE", ENTRY_FEE);
         info("EXIT_FEE", EXIT_FEE);
         info("PROTOCOL_FEE", PROTOCOL_FEE);
+    }
+
+    function _deployTimelockController(string memory label) internal returns (TimelockController) {
+        address[] memory proposers = new address[](1);
+        proposers[0] = ADMIN;
+
+        address[] memory executors = new address[](1);
+        executors[0] = ADMIN;
+
+        // Deploy TimelockController
+        TimelockController timelock = new TimelockController(TIMELOCK_MIN_DELAY, proposers, executors, address(0));
+        info(label, address(timelock));
+        return timelock;
     }
 
     function info(string memory label, address addr) internal pure {
