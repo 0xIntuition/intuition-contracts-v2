@@ -11,8 +11,10 @@ import { TrustToken } from "src/legacy/TrustToken.sol";
 /*
 TESTNET
 forge script script/intuition/TrustDeploy.s.sol:TrustDeploy \
+--optimizer-runs 10000 \
 --rpc-url intuition_sepolia \
---broadcast
+--broadcast \
+--slow
 */
 
 contract TrustDeploy is SetupScript {
