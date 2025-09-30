@@ -88,9 +88,9 @@ contract IntuitionDeployAndSetup is SetupScript {
         console2.log("");
         console2.log("DEPLOYMENTS: =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+");
 
-        // Deploy Trust token if not provided
+        // Get the Trust token address and cast it to the Trust interface
         if (TRUST_TOKEN == address(0)) {
-            trust = Trust(_deployTrustToken());
+            revert("TRUST_TOKEN address not provided");
         } else {
             trust = Trust(TRUST_TOKEN);
         }
