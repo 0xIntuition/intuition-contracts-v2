@@ -233,26 +233,6 @@ abstract contract SetupScript is Script {
         info("PROTOCOL_FEE", PROTOCOL_FEE);
     }
 
-    function _deployTrustToken() internal returns (address) {
-        // Deploy Trust implementation
-        Trust trustImpl = new Trust();
-        info("Trust Implementation", address(trustImpl));
-
-        // Deploy and initialize Trust tokenproxy
-        TransparentUpgradeableProxy trustProxy =
-            new TransparentUpgradeableProxy(address(trustImpl), ADMIN, abi.encodeWithSelector(TrustToken.init.selector));
-        Trust trustToken = Trust(address(trustProxy));
-        info("Trust Proxy", address(trustProxy));
-
-        // Renitialize Trust token contract (in the actual production setting, this will be handled atomically by
-        // calling `ProxyAdmin.upgradeAndCall(proxy, impl, reinitData))`
-        trustToken.reinitialize(
-            ADMIN, // admin
-            ADMIN // initial controller
-        );
-        return address(trustToken);
-    }
-
     function info(string memory label, address addr) internal pure {
         console2.log("");
         console2.log(label);
