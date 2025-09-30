@@ -3,6 +3,8 @@ pragma solidity 0.8.29;
 
 import { Script, console2 } from "forge-std/src/Script.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
+
 import { SetupScript } from "../SetupScript.s.sol";
 import { BaseEmissionsController } from "src/protocol/emissions/BaseEmissionsController.sol";
 import { MetaERC20DispatchInit, FinalityState } from "src/interfaces/IMetaLayer.sol";
@@ -23,9 +25,11 @@ forge script script/base/BaseEmissionsControllerDeploy.s.sol:BaseEmissionsContro
 --broadcast \
 --slow
 */
+
 contract BaseEmissionsControllerDeploy is SetupScript {
     BaseEmissionsController public baseEmissionsControllerImpl;
     TransparentUpgradeableProxy public baseEmissionsControllerProxy;
+    TimelockController public upgradesTimelockController;
 
     /// @notice Chain ID for the Intuition Testnet
     uint32 internal SATELLITE_METALAYER_RECIPIENT_DOMAIN = 13_579;
@@ -45,10 +49,14 @@ contract BaseEmissionsControllerDeploy is SetupScript {
     }
 
     function _deployContracts() internal {
-        // 1. Deploy the BaseEmissionsController implementation contract
+        // 1. Deploy TimelockController contract for upgrades (it should become the ProxyAdmin owner for the
+        // BaseEmissionsController proxy contract)
+        upgradesTimelockController = _deployTimelockController("Upgrades TimelockController");
+
+        // 2. Deploy the BaseEmissionsController implementation contract
         baseEmissionsControllerImpl = new BaseEmissionsController();
 
-        // 2. Prepare initialization params for the BaseEmissionsController
+        // 3. Prepare initialization params for the BaseEmissionsController
         MetaERC20DispatchInit memory metaERC20DispatchInit = MetaERC20DispatchInit({
             hubOrSpoke: METALAYER_HUB_OR_SPOKE,
             recipientDomain: SATELLITE_METALAYER_RECIPIENT_DOMAIN,
@@ -68,13 +76,14 @@ contract BaseEmissionsControllerDeploy is SetupScript {
             BaseEmissionsController.initialize.selector,
             ADMIN,
             ADMIN,
-            address(trust),
+            TRUST_TOKEN,
             metaERC20DispatchInit,
             coreEmissionsInit
         );
 
-        // 3. Deploy the TransparentUpgradeableProxy with the BaseEmissionsController implementation
-        baseEmissionsControllerProxy =
-            new TransparentUpgradeableProxy(address(baseEmissionsControllerImpl), ADMIN, initData);
+        // 4. Deploy the TransparentUpgradeableProxy with the BaseEmissionsController implementation
+        baseEmissionsControllerProxy = new TransparentUpgradeableProxy(
+            address(baseEmissionsControllerImpl), address(upgradesTimelockController), initData
+        );
     }
 }

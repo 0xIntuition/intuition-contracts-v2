@@ -66,6 +66,8 @@ contract IntuitionDeployAndSetup is SetupScript {
     WalletConfig internal walletConfig;
     VaultFees internal vaultFees;
     BondingCurveConfig internal bondingCurveConfig;
+    TimelockController public upgradesTimelockController;
+    TimelockController public parametersTimelockController;
 
     function setUp() public override {
         super.setUp();
@@ -88,9 +90,9 @@ contract IntuitionDeployAndSetup is SetupScript {
         console2.log("");
         console2.log("DEPLOYMENTS: =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+");
 
-        // Deploy Trust token if not provided
+        // Get the Trust token address and cast it to the Trust interface
         if (TRUST_TOKEN == address(0)) {
-            trust = Trust(_deployTrustToken());
+            revert("Trust token address not provided");
         } else {
             trust = Trust(TRUST_TOKEN);
         }
@@ -113,37 +115,34 @@ contract IntuitionDeployAndSetup is SetupScript {
     }
 
     function _deployMultiVaultSystem() internal {
+        // Deploy TimelockController contract for upgrades (it should become the ProxyAdmin owner for all proxies)
+        upgradesTimelockController = _deployTimelockController("Upgrades TimelockController");
+
         // Deploy AtomWallet implementation contract
         atomWalletImplementation = new AtomWallet();
         info("AtomWallet Implementation", address(atomWalletImplementation));
 
         // Deploy UpgradeableBeacon for AtomWallet
-        atomWalletBeacon = new UpgradeableBeacon(address(atomWalletImplementation), ADMIN);
+        atomWalletBeacon = new UpgradeableBeacon(address(atomWalletImplementation), address(upgradesTimelockController));
         info("AtomWallet UpgradeableBeacon", address(atomWalletBeacon));
 
         // Deploy AtomWalletFactory implementation and proxy
         AtomWalletFactory atomWalletFactoryImpl = new AtomWalletFactory();
         info("AtomWalletFactory Implementation", address(atomWalletFactoryImpl));
 
-        TransparentUpgradeableProxy atomWalletFactoryProxy = new TransparentUpgradeableProxy(
-            address(atomWalletFactoryImpl),
-            ADMIN,
-            abi.encodeWithSelector(AtomWalletFactory.initialize.selector, address(multiVault)) // encoded initData
-        );
+        TransparentUpgradeableProxy atomWalletFactoryProxy =
+            new TransparentUpgradeableProxy(address(atomWalletFactoryImpl), address(upgradesTimelockController), "");
         atomWalletFactory = AtomWalletFactory(address(atomWalletFactoryProxy));
         info("AtomWalletFactory Proxy", address(atomWalletFactoryProxy));
 
-        // Deploy TimelockController
-        timelockController = _deployTimelockController();
+        // Deploy TimelockController for parameter updates
+        parametersTimelockController = _deployTimelockController("Parameters TimelockController");
 
         // Deploy AtomWarden implementation and proxy
         AtomWarden atomWardenImpl = new AtomWarden();
         info("AtomWarden Implementation", address(atomWardenImpl));
-        TransparentUpgradeableProxy atomWardenProxy = new TransparentUpgradeableProxy(
-            address(atomWardenImpl),
-            ADMIN,
-            abi.encodeWithSelector(AtomWarden.initialize.selector, ADMIN, address(multiVault)) // encoded initData
-        );
+        TransparentUpgradeableProxy atomWardenProxy =
+            new TransparentUpgradeableProxy(address(atomWardenImpl), address(upgradesTimelockController), "");
         atomWarden = AtomWarden(address(atomWardenProxy));
         info("AtomWarden Proxy", address(atomWardenProxy));
 
@@ -183,9 +182,14 @@ contract IntuitionDeployAndSetup is SetupScript {
         MultiVaultMigrationMode multiVaultImpl = new MultiVaultMigrationMode();
         info("MultiVaultMigrationMode Implementation", address(multiVaultImpl));
 
-        TransparentUpgradeableProxy multiVaultProxy =
-            new TransparentUpgradeableProxy(address(multiVaultImpl), ADMIN, multiVaultInitData);
+        TransparentUpgradeableProxy multiVaultProxy = new TransparentUpgradeableProxy(
+            address(multiVaultImpl), address(upgradesTimelockController), multiVaultInitData
+        );
         multiVault = MultiVault(address(multiVaultProxy));
+
+        // Initialize AtomWalletFactory and AtomWarden with the MultiVault address
+        atomWalletFactory.initialize(address(multiVault));
+        atomWarden.initialize(ADMIN, address(multiVault));
 
         // Grant the MIGRATOR_ROLE to the migrator address only if we are not on the Intuition mainnet (on mainnet,
         // this will be done through an admin Safe)
@@ -222,8 +226,9 @@ contract IntuitionDeployAndSetup is SetupScript {
             coreEmissionsInit
         );
 
-        TransparentUpgradeableProxy satelliteEmissionsControllerProxy =
-            new TransparentUpgradeableProxy(address(satelliteEmissionsControllerImpl), ADMIN, satelliteInitData);
+        TransparentUpgradeableProxy satelliteEmissionsControllerProxy = new TransparentUpgradeableProxy(
+            address(satelliteEmissionsControllerImpl), address(upgradesTimelockController), satelliteInitData
+        );
         satelliteEmissionsController = SatelliteEmissionsController(payable(satelliteEmissionsControllerProxy));
         info("SatelliteEmissionsController Proxy", address(satelliteEmissionsControllerProxy));
 
@@ -234,7 +239,7 @@ contract IntuitionDeployAndSetup is SetupScript {
         bytes memory trustBondingInitData = abi.encodeWithSelector(
             TrustBonding.initialize.selector,
             ADMIN, // owner
-            address(timelockController), // timelock controller
+            address(parametersTimelockController), // timelock controller for parameter updates
             address(trust), // WTRUST token if deploying on Intuition Sepolia
             BONDING_EPOCH_LENGTH, // epochLength
             address(multiVault), // multiVault
@@ -243,8 +248,9 @@ contract IntuitionDeployAndSetup is SetupScript {
             BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound
         );
 
-        TransparentUpgradeableProxy trustBondingProxy =
-            new TransparentUpgradeableProxy(address(trustBondingImpl), ADMIN, trustBondingInitData);
+        TransparentUpgradeableProxy trustBondingProxy = new TransparentUpgradeableProxy(
+            address(trustBondingImpl), address(upgradesTimelockController), trustBondingInitData
+        );
         trustBonding = TrustBonding(address(trustBondingProxy));
         info("TrustBonding Proxy", address(trustBondingProxy));
 
@@ -294,18 +300,5 @@ contract IntuitionDeployAndSetup is SetupScript {
         vaultFees = VaultFees({ entryFee: ENTRY_FEE, exitFee: EXIT_FEE, protocolFee: PROTOCOL_FEE });
 
         bondingCurveConfig = BondingCurveConfig({ registry: address(bondingCurveRegistry), defaultCurveId: 1 });
-    }
-
-    function _deployTimelockController() internal returns (TimelockController) {
-        address[] memory proposers = new address[](1);
-        proposers[0] = ADMIN;
-
-        address[] memory executors = new address[](1);
-        executors[0] = ADMIN;
-
-        // Deploy TimelockController
-        TimelockController timelock = new TimelockController(TIMELOCK_MIN_DELAY, proposers, executors, address(0));
-        info("TimelockController", address(timelock));
-        return timelock;
     }
 }
