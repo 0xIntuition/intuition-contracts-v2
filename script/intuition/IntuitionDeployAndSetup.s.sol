@@ -60,6 +60,8 @@ contract IntuitionDeployAndSetup is SetupScript {
 
     address public BASE_EMISSIONS_CONTROLLER;
 
+    address public MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION;
+
     GeneralConfig internal generalConfig;
     AtomConfig internal atomConfig;
     TripleConfig internal tripleConfig;
@@ -75,12 +77,17 @@ contract IntuitionDeployAndSetup is SetupScript {
         if (block.chainid == vm.envUint("ANVIL_CHAIN_ID")) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("ANVIL_BASE_EMISSIONS_CONTROLLER");
             MIGRATOR = vm.envAddress("ANVIL_MULTI_VAULT_ROLE_MIGRATOR");
+            MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION = vm.envAddress("ANVIL_MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION");
         } else if (block.chainid == vm.envUint("INTUITION_SEPOLIA_CHAIN_ID")) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("INTUITION_SEPOLIA_BASE_EMISSIONS_CONTROLLER");
             MIGRATOR = vm.envAddress("INTUITION_SEPOLIA_MULTI_VAULT_ROLE_MIGRATOR");
+            MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION =
+                vm.envAddress("INTUITION_SEPOLIA_MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION");
         } else if (block.chainid == vm.envUint("INTUITION_MAINNET_CHAIN_ID")) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("BASE_MAINNET_BASE_EMISSIONS_CONTROLLER");
             MIGRATOR = vm.envAddress("INTUITION_MAINNET_MULTI_VAULT_ROLE_MIGRATOR");
+            MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION =
+                vm.envAddress("INTUITION_MAINNET_MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION");
         } else {
             revert("Unsupported chain for broadcasting");
         }
@@ -178,12 +185,11 @@ contract IntuitionDeployAndSetup is SetupScript {
             bondingCurveConfig
         );
 
-        // Deploy new MultiVault implementation and proxy
-        MultiVaultMigrationMode multiVaultImpl = new MultiVaultMigrationMode();
-        info("MultiVaultMigrationMode Implementation", address(multiVaultImpl));
+        // Deploy new proxy contract for the MultiVault
+        info("MultiVaultMigrationMode Implementation", MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION);
 
         TransparentUpgradeableProxy multiVaultProxy = new TransparentUpgradeableProxy(
-            address(multiVaultImpl), address(upgradesTimelockController), multiVaultInitData
+            MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION, address(upgradesTimelockController), multiVaultInitData
         );
         multiVault = MultiVault(address(multiVaultProxy));
 
