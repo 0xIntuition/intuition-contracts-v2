@@ -11,7 +11,7 @@ import { BaseEmissionsController } from "src/protocol/emissions/BaseEmissionsCon
 LOCAL
 forge script script/base/BaseEmissionsControllerSetup.s.sol:BaseEmissionsControllerSetup \
 --optimizer-runs 10000 \
---rpc-url base_sepolia \
+--rpc-url anvil \
 --broadcast \
 --slow
 
