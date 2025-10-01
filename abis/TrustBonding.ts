@@ -616,12 +616,12 @@ export const TrustBondingAbi = [
     ],
     "outputs": [
       {
-        "name": "eligible",
+        "name": "eligibleRewards",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "available",
+        "name": "maxRewards",
         "type": "uint256",
         "internalType": "uint256"
       }

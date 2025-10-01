@@ -89,9 +89,9 @@ abstract contract SetupScript is Script {
 
     // CoreEmissionsController Config
     uint256 internal EMISSIONS_START_TIMESTAMP = BONDING_START_TIMESTAMP;
-    uint256 internal EMISSIONS_LENGTH = 1 days;
+    uint256 internal EMISSIONS_LENGTH = 6 hours;
     uint256 internal EMISSIONS_PER_EPOCH = 1000e18; // 1000 TRUST per epoch
-    uint256 internal EMISSIONS_REDUCTION_CLIFF = 1; // 1 epoch
+    uint256 internal EMISSIONS_REDUCTION_CLIFF = 4; // 1 epoch
     uint256 internal EMISSIONS_REDUCTION_BASIS_POINTS = 1000; // 10%
 
     // Curve Configurations

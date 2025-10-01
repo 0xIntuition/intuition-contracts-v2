@@ -46,7 +46,7 @@ contract TrustBondingEventsTest is TrustBondingBase {
         // Advance to epoch 2 so rewards for epoch 1 can be claimed
         vm.warp(protocol.trustBonding.epochTimestampEnd(1) + 1);
 
-        uint256 expectedRewards = protocol.trustBonding.eligibleRewards(users.alice);
+        uint256 expectedRewards = protocol.trustBonding.getUserCurrentClaimableRewards(users.alice);
 
         // Test event emission
         vm.expectEmit(true, true, false, true);
@@ -111,7 +111,7 @@ contract TrustBondingEventsTest is TrustBondingBase {
         // Advance to epoch 2 so rewards for epoch 1 can be claimed
         vm.warp(protocol.trustBonding.epochTimestampEnd(1) + 1);
 
-        uint256 expectedRewards = protocol.trustBonding.eligibleRewards(users.alice);
+        uint256 expectedRewards = protocol.trustBonding.getUserCurrentClaimableRewards(users.alice);
 
         if (expectedRewards > 0) {
             vm.expectEmit(true, true, false, true);

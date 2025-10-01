@@ -309,8 +309,8 @@ contract TrustBondingTest is BaseTest {
         _bondSomeTokens(users.charlie);
 
         uint256 currentEpoch = protocol.trustBonding.currentEpoch();
-        uint256 trustPerEpoch = protocol.trustBonding.trustPerEpoch(currentEpoch);
-        uint256 expectedRewards = trustPerEpoch / 3; // 1/3 of the total rewards for each user
+        uint256 emissionsForEpoch = protocol.trustBonding.emissionsForEpoch(currentEpoch);
+        uint256 expectedRewards = emissionsForEpoch / 3; // 1/3 of the total rewards for each user
 
         uint256 eligibleRewards = protocol.trustBonding.userEligibleRewardsForEpoch(users.alice, currentEpoch);
 
@@ -339,22 +339,23 @@ contract TrustBondingTest is BaseTest {
 
     function test_getAprAtEpoch_whenTotalLockedIsZero() external view {
         uint256 currentEpoch = protocol.trustBonding.currentEpoch();
-        uint256 currentAPR = protocol.trustBonding.getAprAtEpoch(currentEpoch);
+        uint256 currentApy = protocol.trustBonding.getSystemApy();
 
-        assertEq(currentAPR, 0);
+        assertEq(currentApy, 0);
     }
 
     function test_getAprAtEpoch_whenTotalLockedIsAboveZero() external {
         _bondSomeTokens(users.alice);
 
         uint256 currentEpoch = protocol.trustBonding.currentEpoch();
-        uint256 currentAPR = protocol.trustBonding.getAprAtEpoch(currentEpoch);
+        uint256 currentApy = protocol.trustBonding.getSystemApy();
 
-        uint256 trustPerYear = protocol.trustBonding.trustPerEpoch(currentEpoch) * protocol.trustBonding.epochsPerYear();
+        uint256 trustPerYear =
+            protocol.trustBonding.emissionsForEpoch(currentEpoch) * protocol.trustBonding.epochsPerYear();
         uint256 expectedAPR =
             (trustPerYear * protocol.trustBonding.BASIS_POINTS_DIVISOR()) / protocol.trustBonding.totalLocked();
 
-        assertEq(currentAPR, expectedAPR);
+        assertEq(currentApy, expectedAPR);
     }
 
     function test_claimRewards_shouldRevertIfContractIsPaused() external {

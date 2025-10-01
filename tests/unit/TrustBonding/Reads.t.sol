@@ -213,32 +213,6 @@ contract TrustBondingReadsTest is TrustBondingBase {
     /* =================================================== */
     /*                  REWARDS FUNCTIONS                  */
     /* =================================================== */
-
-    function test_eligibleRewards_noBond() external view {
-        uint256 rewards = protocol.trustBonding.eligibleRewards(users.alice);
-        assertEq(rewards, 0);
-    }
-
-    function test_eligibleRewards_withBond() external {
-        _createLock(users.alice, INITIAL_TOKENS);
-
-        // Move to next epoch so previous epoch rewards become eligible
-        vm.warp(TRUST_BONDING_START_TIMESTAMP + TRUST_BONDING_EPOCH_LENGTH);
-
-        uint256 rewards = protocol.trustBonding.eligibleRewards(users.alice);
-        // Should have some rewards from epoch 0
-        assertGt(rewards, 0);
-    }
-
-    function test_eligibleRewards_epoch0() external {
-        _createLock(users.alice, INITIAL_TOKENS);
-
-        // Stay in epoch 0
-        uint256 rewards = protocol.trustBonding.eligibleRewards(users.alice);
-        // No rewards in epoch 0 (previous epoch would be -1 or 0)
-        assertEq(rewards, 0);
-    }
-
     function test_userEligibleRewardsForEpoch_validUser() external {
         _createLock(users.alice, INITIAL_TOKENS);
 
@@ -292,24 +266,24 @@ contract TrustBondingReadsTest is TrustBondingBase {
         assertEq(claimed, true);
     }
 
-    function test_trustPerEpoch_epoch0() external view {
-        uint256 trustPerEpoch = protocol.trustBonding.trustPerEpoch(0);
-        assertGt(trustPerEpoch, 0);
+    function test_emissionsForEpoch_epoch0() external view {
+        uint256 emissionsForEpoch = protocol.trustBonding.emissionsForEpoch(0);
+        assertGt(emissionsForEpoch, 0);
     }
 
-    function test_trustPerEpoch_shouldRevertForFutureEpoch() external {
+    function test_emissionsForEpoch_shouldRevertForFutureEpoch() external {
         uint256 currentEpoch = protocol.trustBonding.currentEpoch();
         uint256 futureEpoch = currentEpoch + 1;
 
         vm.expectRevert(abi.encodeWithSelector(ITrustBonding.TrustBonding_InvalidEpoch.selector));
-        protocol.trustBonding.trustPerEpoch(futureEpoch);
+        protocol.trustBonding.emissionsForEpoch(futureEpoch);
     }
 
-    function test_trustPerEpoch_multipleEpochs() external {
-        uint256 epoch0Trust = protocol.trustBonding.trustPerEpoch(0);
+    function test_emissionsForEpoch_multipleEpochs() external {
+        uint256 epoch0Trust = protocol.trustBonding.emissionsForEpoch(0);
 
         vm.warp(TRUST_BONDING_START_TIMESTAMP + TRUST_BONDING_EPOCH_LENGTH);
-        uint256 epoch1Trust = protocol.trustBonding.trustPerEpoch(1);
+        uint256 epoch1Trust = protocol.trustBonding.emissionsForEpoch(1);
 
         // Both should be positive
         assertGt(epoch0Trust, 0);
@@ -385,42 +359,33 @@ contract TrustBondingReadsTest is TrustBondingBase {
     /* =================================================== */
 
     function test_getAprAtEpoch_noLocked() external view {
-        uint256 currentEpoch = protocol.trustBonding.currentEpoch();
-        uint256 apr = protocol.trustBonding.getAprAtEpoch(currentEpoch);
+        uint256 apy = protocol.trustBonding.getSystemApy();
 
-        assertEq(apr, 0); // No APR when no tokens locked
+        assertEq(apy, 0); // No APR when no tokens locked
     }
 
     function test_getAprAtEpoch_withLocked() external {
         _createLock(users.alice, INITIAL_TOKENS);
 
         uint256 currentEpoch = protocol.trustBonding.currentEpoch();
-        uint256 apr = protocol.trustBonding.getAprAtEpoch(currentEpoch);
+        uint256 apy = protocol.trustBonding.getSystemApy();
 
-        assertGt(apr, 0); // Should have positive APR
-    }
-
-    function test_getAprAtEpoch_shouldRevertForFutureEpoch() external {
-        uint256 currentEpoch = protocol.trustBonding.currentEpoch();
-        uint256 futureEpoch = currentEpoch + 1;
-
-        vm.expectRevert(abi.encodeWithSelector(ITrustBonding.TrustBonding_InvalidEpoch.selector));
-        protocol.trustBonding.getAprAtEpoch(futureEpoch);
+        assertGt(apy, 0); // Should have positive APR
     }
 
     function test_getAprAtEpoch_calculation() external {
         _createLock(users.alice, INITIAL_TOKENS);
 
         uint256 currentEpoch = protocol.trustBonding.currentEpoch();
-        uint256 apr = protocol.trustBonding.getAprAtEpoch(currentEpoch);
+        uint256 apy = protocol.trustBonding.getSystemApy();
 
         // Calculate expected APR
-        uint256 trustPerEpoch = protocol.trustBonding.trustPerEpoch(currentEpoch);
-        uint256 trustPerYear = trustPerEpoch * protocol.trustBonding.epochsPerYear();
+        uint256 emissionsForEpoch = protocol.trustBonding.emissionsForEpoch(currentEpoch);
+        uint256 trustPerYear = emissionsForEpoch * protocol.trustBonding.epochsPerYear();
         uint256 totalLocked = protocol.trustBonding.totalLocked();
         uint256 expectedApr = trustPerYear * protocol.trustBonding.BASIS_POINTS_DIVISOR() / totalLocked;
 
-        assertEq(apr, expectedApr);
+        assertEq(apy, expectedApr);
     }
 
     /* =================================================== */

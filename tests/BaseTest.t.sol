@@ -57,7 +57,7 @@ abstract contract BaseTest is Modifiers, Test {
     // Triple Config
     uint256 internal TRIPLE_CREATION_PROTOCOL_FEE = 1e15; // 0.001 Trust (Fixed Cost)
     uint256 internal TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 1e15; // 0.001 Trust (Fixed Cost)
-    uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 300; // 3% (Percentage Cost)
+    uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 3% (Percentage Cost)
 
     // Wallet Config
     address internal ATOM_WARDEN = address(1);
@@ -76,24 +76,21 @@ abstract contract BaseTest is Modifiers, Test {
     // Curve Configurations
     uint256 internal PROGRESSIVE_CURVE_SLOPE = 1e15; // 0.001 slope
 
-    // Emissions Configurations
-    uint256 internal MAX_ANNUAL_EMISSION = 1_000_000e18;
-
     // CoreEmissions Controller
-    uint256 internal constant EMISSIONS_CONTROLLER_EPOCH_LENGTH = 1 days * 14;
-    uint256 internal constant EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH = 1_000_000 * 1e18; // 1M tokens
-    uint256 internal constant EMISSIONS_CONTROLLER_CLIFF = 3;
+    uint256 internal constant EMISSIONS_CONTROLLER_EPOCH_LENGTH = TWO_WEEKS;
+    uint256 internal constant EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH = 1_000_000 * 1e18; // 1K tokens
+    uint256 internal constant EMISSIONS_CONTROLLER_CLIFF = 26;
     uint256 internal constant EMISSIONS_CONTROLLER_REDUCTION_BP = 1000; // 10%
 
     // Time constants for easier reading
     uint256 internal constant ONE_HOUR = 1 hours;
-    uint256 internal constant ONE_DAY = 1 days;
-    uint256 internal constant ONE_WEEK = 7 days;
-    uint256 internal constant TWO_WEEKS = 14 days;
-    uint256 internal constant THREE_WEEKS = 21 days;
-    uint256 internal constant ONE_YEAR = 52 weeks;
-    uint256 internal constant TWO_YEARS = 104 weeks;
-    uint256 internal constant THREE_YEARS = 156 weeks;
+    uint256 internal constant ONE_DAY = 86_400;
+    uint256 internal constant ONE_WEEK = ONE_DAY * 7;
+    uint256 internal constant TWO_WEEKS = ONE_DAY * 14;
+    uint256 internal constant THREE_WEEKS = ONE_DAY * 21;
+    uint256 internal constant ONE_YEAR = ONE_DAY * 365;
+    uint256 internal constant TWO_YEARS = ONE_YEAR * 2;
+    uint256 internal constant THREE_YEARS = ONE_YEAR * 3;
 
     /*//////////////////////////////////////////////////////////////////////////
                                    TEST CONTRACTS
