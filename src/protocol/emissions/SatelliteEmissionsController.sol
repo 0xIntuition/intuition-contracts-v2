@@ -30,6 +30,8 @@ contract SatelliteEmissionsController is
 
     bytes32 public constant CONTROLLER_ROLE = keccak256("CONTROLLER_ROLE");
 
+    bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
+
     /* =================================================== */
     /*                  INTERNAL STATE                     */
     /* =================================================== */
@@ -174,7 +176,40 @@ contract SatelliteEmissionsController is
     }
 
     /// @inheritdoc ISatelliteEmissionsController
-    function bridgeUnclaimedEmissions(uint256 epoch) external payable onlyRole(DEFAULT_ADMIN_ROLE) {
+    function withdrawUnclaimedEmissions(
+        uint256 epoch,
+        address recipient
+    )
+        external
+        nonReentrant
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        // Prevent withdrawing zero amount if no unclaimed rewards are available.
+        uint256 amount = ITrustBonding(_TRUST_BONDING).getUnclaimedRewardsForEpoch(epoch);
+        if (amount == 0) {
+            revert SatelliteEmissionsController_InvalidWithdrawAmount();
+        }
+
+        if (recipient == address(0)) {
+            revert SatelliteEmissionsController_InvalidAddress();
+        }
+
+        // Check if rewards for this epoch have already been reclaimed and bridged.
+        if (_bridgedEmissions[epoch] > 0) {
+            revert SatelliteEmissionsController_PreviouslyBridgedUnclaimedEmissions();
+        }
+
+        // Mark the unclaimed rewards as bridged and prevent from being claimed again.
+        _bridgedEmissions[epoch] = amount;
+
+        // Transfer the unclaimed rewards to the recipient.
+        Address.sendValue(payable(recipient), amount);
+
+        emit UnclaimedRewardsWithdrawn(epoch, recipient, amount);
+    }
+
+    /// @inheritdoc ISatelliteEmissionsController
+    function bridgeUnclaimedEmissions(uint256 epoch) external payable nonReentrant onlyRole(OPERATOR_ROLE) {
         // Prevent bridging of zero amount if no unclaimed rewards are available.
         uint256 amount = ITrustBonding(_TRUST_BONDING).getUnclaimedRewardsForEpoch(epoch);
         if (amount == 0) {

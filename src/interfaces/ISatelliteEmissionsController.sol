@@ -40,6 +40,14 @@ interface ISatelliteEmissionsController {
      */
     event UnclaimedRewardsBridged(uint256 indexed epoch, uint256 amount);
 
+    /**
+     * @notice Event emitted when unclaimed rewards are withdrawn by the admin
+     * @param epoch The epoch for which unclaimed rewards were withdrawn
+     * @param recipient The address that received the unclaimed rewards
+     * @param amount The amount of unclaimed rewards withdrawn
+     */
+    event UnclaimedRewardsWithdrawn(uint256 indexed epoch, address indexed recipient, uint256 amount);
+
     /* =================================================== */
     /*                       ERRORS                        */
     /* =================================================== */
@@ -50,6 +58,7 @@ interface ISatelliteEmissionsController {
     error SatelliteEmissionsController_PreviouslyBridgedUnclaimedEmissions();
     error SatelliteEmissionsController_InsufficientBalance();
     error SatelliteEmissionsController_InsufficientGasPayment();
+    error SatelliteEmissionsController_InvalidWithdrawAmount();
 
     /* =================================================== */
     /*                      GETTERS                        */
@@ -133,9 +142,17 @@ interface ISatelliteEmissionsController {
     function setRecipientDomain(uint32 newRecipientDomain) external;
 
     /**
+     * @notice Withdraw unclaimed emissions for a specific epoch to a specified recipient
+     * @dev Only callable by addresses with DEFAULT_ADMIN_ROLE
+     * @param epoch The epoch for which to withdraw unclaimed emissions
+     * @param recipient The address to receive the unclaimed emissions
+     */
+    function withdrawUnclaimedEmissions(uint256 epoch, address recipient) external;
+
+    /**
      * @notice Bridges unclaimed emissions for a specific epoch back to the BaseEmissionsController
      * @dev The SatelliteEmissionsController can only bridge unclaimed emission once the claiming period for that epoch
-     * has ended, which is enforced in the TrustBonding contract. Only callable by addresses with DEFAULT_ADMIN_ROLE.
+     * has ended, which is enforced in the TrustBonding contract. Only callable by addresses with OPERATOR_ROLE.
      * @param epoch The epoch for which to bridge unclaimed emissions
      */
     function bridgeUnclaimedEmissions(uint256 epoch) external payable;
