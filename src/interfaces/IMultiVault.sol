@@ -152,8 +152,9 @@ interface IMultiVault {
     /// @notice emitted after protocol fee is accrued internally.
     ///
     /// @param epoch epoch in which the protocol fee was accrued (current epoch)
+    /// @param sender address of the user who paid the protocol fee
     /// @param amount amount of protocol fee accrued
-    event ProtocolFeeAccrued(uint256 indexed epoch, uint256 amount);
+    event ProtocolFeeAccrued(uint256 indexed epoch, address indexed sender, uint256 amount);
 
     /// @notice emitted after protocol fee is transferred to the protocol multisig or the TrustBonding contract
     /// @dev protocol fee is charged both when depositing assets and redeeming shares from the vault, with the only
