@@ -6,6 +6,7 @@ import * as path from 'path';
 // Add new contract names here to include them in the extraction
 const CONTRACTS_TO_EXTRACT = [
   'MultiVault',
+  'MultiVaultMigrationMode',
   'BaseEmissionsController',
   'SatelliteEmissionsController',
   'TrustBonding',

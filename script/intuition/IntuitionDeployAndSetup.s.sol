@@ -45,7 +45,7 @@ forge script script/intuition/IntuitionDeployAndSetup.s.sol:IntuitionDeployAndSe
 
 TESTNET
 forge script script/intuition/IntuitionDeployAndSetup.s.sol:IntuitionDeployAndSetup \
---optimizer-runs 10000 \
+--optimizer-runs 400 \
 --rpc-url intuition_sepolia \
 --broadcast \
 --slow
@@ -56,7 +56,7 @@ contract IntuitionDeployAndSetup is SetupScript {
 
     address public MIGRATOR;
 
-    uint32 internal BASE_METALAYER_RECIPIENT_DOMAIN = 8453;
+    uint32 internal BASE_METALAYER_RECIPIENT_DOMAIN = 84532;
 
     address public BASE_EMISSIONS_CONTROLLER;
 

@@ -1,9 +1,4 @@
-export const MultiVaultAbi = [
-  {
-    "type": "constructor",
-    "inputs": [],
-    "stateMutability": "nonpayable"
-  },
+export const MultiVaultMigrationModeAbi = [
   {
     "type": "function",
     "name": "BURN_ADDRESS",
@@ -52,6 +47,19 @@ export const MultiVaultAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIGRATOR_ROLE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "stateMutability": "view"
@@ -180,6 +188,112 @@ export const MultiVaultAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "batchSetAtomData",
+    "inputs": [
+      {
+        "name": "creators",
+        "type": "address[]",
+        "internalType": "address[]"
+      },
+      {
+        "name": "atomDataArray",
+        "type": "bytes[]",
+        "internalType": "bytes[]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "batchSetTripleData",
+    "inputs": [
+      {
+        "name": "creators",
+        "type": "address[]",
+        "internalType": "address[]"
+      },
+      {
+        "name": "tripleAtomIds",
+        "type": "bytes32[3][]",
+        "internalType": "bytes32[3][]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "batchSetUserBalances",
+    "inputs": [
+      {
+        "name": "params",
+        "type": "tuple",
+        "internalType": "struct MultiVaultMigrationMode.BatchSetUserBalancesParams",
+        "components": [
+          {
+            "name": "termIds",
+            "type": "bytes32[]",
+            "internalType": "bytes32[]"
+          },
+          {
+            "name": "bondingCurveId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "user",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "userBalances",
+            "type": "uint256[]",
+            "internalType": "uint256[]"
+          }
+        ]
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "batchSetVaultTotals",
+    "inputs": [
+      {
+        "name": "termIds",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      },
+      {
+        "name": "bondingCurveId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "vaultTotals",
+        "type": "tuple[]",
+        "internalType": "struct MultiVaultMigrationMode.VaultTotals[]",
+        "components": [
+          {
+            "name": "totalAssets",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "totalShares",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -1840,6 +1954,19 @@ export const MultiVaultAbi = [
   },
   {
     "type": "function",
+    "name": "setTermCount",
+    "inputs": [
+      {
+        "name": "_termCount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setTripleConfig",
     "inputs": [
       {
@@ -2901,6 +3028,11 @@ export const MultiVaultAbi = [
   },
   {
     "type": "error",
+    "name": "MultiVault_InvalidBondingCurveId",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "MultiVault_NoAtomDataProvided",
     "inputs": []
   },
@@ -2954,6 +3086,11 @@ export const MultiVaultAbi = [
         "internalType": "bytes32"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "MultiVault_ZeroAddress",
+    "inputs": []
   },
   {
     "type": "error",
