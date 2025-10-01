@@ -289,7 +289,14 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /// @inheritdoc ITrustBonding
-    function getUserRewardsForEpoch(address account, uint256 epoch) external view returns (uint256 eligibleRewards, uint256 maxRewards) {
+    function getUserRewardsForEpoch(
+        address account,
+        uint256 epoch
+    )
+        external
+        view
+        returns (uint256 eligibleRewards, uint256 maxRewards)
+    {
         uint256 _currEpoch = _currentEpoch();
         if (_currEpoch == 0 || epoch >= _currEpoch) {
             return (0, 0);
@@ -297,10 +304,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         uint256 userRewards = _userEligibleRewardsForEpoch(account, epoch);
         uint256 personalUtilization = _getPersonalUtilizationRatio(account, epoch);
 
-        return (
-            userRewards,
-            (userRewards * personalUtilization) / BASIS_POINTS_DIVISOR
-        );
+        return (userRewards, (userRewards * personalUtilization) / BASIS_POINTS_DIVISOR);
     }
 
     /// @inheritdoc ITrustBonding

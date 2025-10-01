@@ -84,7 +84,7 @@ abstract contract BaseTest is Modifiers, Test {
 
     // Time constants for easier reading
     uint256 internal constant ONE_HOUR = 1 hours;
-    uint256 internal constant ONE_DAY = 86400;
+    uint256 internal constant ONE_DAY = 86_400;
     uint256 internal constant ONE_WEEK = ONE_DAY * 7;
     uint256 internal constant TWO_WEEKS = ONE_DAY * 14;
     uint256 internal constant THREE_WEEKS = ONE_DAY * 21;

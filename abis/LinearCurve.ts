@@ -133,25 +133,6 @@ export const LinearCurveAbi = [
   },
   {
     "type": "function",
-    "name": "currentPrice",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "sharePrice",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "pure"
-  },
-  {
-    "type": "function",
     "name": "maxAssets",
     "inputs": [],
     "outputs": [

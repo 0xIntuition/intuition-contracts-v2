@@ -350,7 +350,8 @@ contract TrustBondingTest is BaseTest {
         uint256 currentEpoch = protocol.trustBonding.currentEpoch();
         uint256 currentApy = protocol.trustBonding.getSystemApy();
 
-        uint256 trustPerYear = protocol.trustBonding.emissionsForEpoch(currentEpoch) * protocol.trustBonding.epochsPerYear();
+        uint256 trustPerYear =
+            protocol.trustBonding.emissionsForEpoch(currentEpoch) * protocol.trustBonding.epochsPerYear();
         uint256 expectedAPR =
             (trustPerYear * protocol.trustBonding.BASIS_POINTS_DIVISOR()) / protocol.trustBonding.totalLocked();
 

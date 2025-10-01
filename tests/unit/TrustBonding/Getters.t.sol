@@ -12,7 +12,7 @@ contract TrustBondingGettersTest is TrustBondingBase {
     /// @notice Constants for testing
     uint256 public constant DEAL_AMOUNT = 100 * 1e18;
     uint256 public constant STAKE_AMOUNT = 10 * 1e18;
-    uint256 public constant LARGE_STAKE_AMOUNT = 10000 * 1e18;
+    uint256 public constant LARGE_STAKE_AMOUNT = 10_000 * 1e18;
     uint256 public constant DEFAULT_UNLOCK_DURATION = 2 * 365 days;
     uint256 public constant ADDITIONAL_TOKENS = 10_000 * 1e18;
 
@@ -56,7 +56,11 @@ contract TrustBondingGettersTest is TrustBondingBase {
         _advanceToEpoch(1);
 
         uint256 claimableRewards = protocol.trustBonding.getUserCurrentClaimableRewards(users.alice);
-        assertEq(claimableRewards, EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH, "User should have claimable rewards after staking period");
+        assertEq(
+            claimableRewards,
+            EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH,
+            "User should have claimable rewards after staking period"
+        );
     }
 
     function test_getUserCurrentClaimableRewards_alreadyClaimed() external {
@@ -112,23 +116,22 @@ contract TrustBondingGettersTest is TrustBondingBase {
     }
 
     function test_getUserApy_lowerBoundUtilization() external {
-         _createLock(users.alice, STAKE_AMOUNT);
-        
+        _createLock(users.alice, STAKE_AMOUNT);
+
         // Advance to epoch 3 to skip past maximum personal/system utilization calculation
         uint256 EPOCHS_TO_ADVANCE = 3;
         _advanceToEpoch(EPOCHS_TO_ADVANCE);
-        
+
         (uint256 estimatedCurrentApy, uint256 estimatedMaxApy) = _estimatedApy(EPOCHS_TO_ADVANCE);
         (uint256 currentApy, uint256 maxApy) = protocol.trustBonding.getUserApy(users.alice);
         assertEq(currentApy, estimatedCurrentApy, "Current APY should be positive");
         assertEq(maxApy, estimatedMaxApy, "Max APY should be positive");
         assertLt(currentApy, maxApy, "Current APY should equal Max APY");
-        
     }
 
     function test_getUserApy_perfectUtilization() external {
         _createLock(users.alice, STAKE_AMOUNT);
-        
+
         // Advance to epoch 3 to skip past maximum personal/system utilization calculation
         uint256 EPOCHS_TO_ADVANCE = 3;
         _advanceToEpoch(EPOCHS_TO_ADVANCE);
@@ -154,7 +157,11 @@ contract TrustBondingGettersTest is TrustBondingBase {
         assertEq(currentApy, maxApy, "Current APY should equal Max APY");
     }
 
-    function _estimatedApy(uint256 epoch) internal view returns (uint256 estimatedCurrentApy, uint256 estimatedMaxApy) {
+    function _estimatedApy(uint256 epoch)
+        internal
+        view
+        returns (uint256 estimatedCurrentApy, uint256 estimatedMaxApy)
+    {
         uint256 epochsPerYear = protocol.trustBonding.epochsPerYear();
         uint256 userRewards = protocol.trustBonding.userEligibleRewardsForEpoch(users.alice, epoch);
         uint256 personalUtilization = protocol.trustBonding.getPersonalUtilizationRatio(users.alice, epoch);
@@ -260,9 +267,21 @@ contract TrustBondingGettersTest is TrustBondingBase {
         _setUserUtilizationForEpoch(users.alice, 2, 0);
 
         UserInfo memory userInfo = protocol.trustBonding.getUserInfo(users.alice);
-        assertEq(userInfo.personalUtilization, TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND, "Personal utilization should hit MINIMUM_PERSONAL_UTILIZATION_LOWER_BOUND");
-        assertEq(userInfo.eligibleRewards, (EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH * userInfo.personalUtilization / BASIS_POINTS_DIVISOR), "Eligible rewards should be <= max rewards");
-        assertEq(userInfo.maxRewards, EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH, "Users max rewards should equal emissions per epoch with full utilization");
+        assertEq(
+            userInfo.personalUtilization,
+            TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND,
+            "Personal utilization should hit MINIMUM_PERSONAL_UTILIZATION_LOWER_BOUND"
+        );
+        assertEq(
+            userInfo.eligibleRewards,
+            (EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH * userInfo.personalUtilization / BASIS_POINTS_DIVISOR),
+            "Eligible rewards should be <= max rewards"
+        );
+        assertEq(
+            userInfo.maxRewards,
+            EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH,
+            "Users max rewards should equal emissions per epoch with full utilization"
+        );
         assertEq(userInfo.lockedAmount, STAKE_AMOUNT, "Locked amount should equal staked amount");
     }
 
@@ -284,7 +303,9 @@ contract TrustBondingGettersTest is TrustBondingBase {
 
         UserInfo memory userInfo = protocol.trustBonding.getUserInfo(users.alice);
         assertEq(userInfo.personalUtilization, BASIS_POINTS_DIVISOR, "Personal utilization should be 100%");
-        assertEq(userInfo.eligibleRewards, userInfo.maxRewards, "Eligible should equal max rewards with perfect utilization");
+        assertEq(
+            userInfo.eligibleRewards, userInfo.maxRewards, "Eligible should equal max rewards with perfect utilization"
+        );
     }
 
     function test_getUserInfo_multipleLocks() external {
@@ -326,7 +347,8 @@ contract TrustBondingGettersTest is TrustBondingBase {
         _createLock(users.alice, STAKE_AMOUNT);
 
         uint256 currentEpoch = protocol.trustBonding.currentEpoch();
-        (uint256 eligible, uint256 available) = protocol.trustBonding.getUserRewardsForEpoch(users.alice, currentEpoch + 1);
+        (uint256 eligible, uint256 available) =
+            protocol.trustBonding.getUserRewardsForEpoch(users.alice, currentEpoch + 1);
 
         assertEq(eligible, 0, "No rewards for future epochs");
         assertEq(available, 0, "No available rewards for future epochs");

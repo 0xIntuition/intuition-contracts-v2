@@ -233,7 +233,13 @@ interface ITrustBonding {
     /// @param epoch The epoch number to query
     /// @return eligible The total rewards the user is eligible for in the specified epoch
     /// @return available The rewards available for the user to claim in the specified epoch
-    function getUserRewardsForEpoch(address account, uint256 epoch) external view returns (uint256 eligible, uint256 available);
+    function getUserRewardsForEpoch(
+        address account,
+        uint256 epoch
+    )
+        external
+        view
+        returns (uint256 eligible, uint256 available);
 
     /**
      * @notice Returns the Annual Percentage Yield (APY) for a specific epoch

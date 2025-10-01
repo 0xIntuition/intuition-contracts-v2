@@ -407,11 +407,6 @@ export const BaseEmissionsControllerAbi = [
         "internalType": "address"
       },
       {
-        "name": "satellite",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
         "name": "metaERC20DispatchInit",
         "type": "tuple",
         "internalType": "struct MetaERC20DispatchInit",
@@ -425,11 +420,6 @@ export const BaseEmissionsControllerAbi = [
             "name": "recipientDomain",
             "type": "uint32",
             "internalType": "uint32"
-          },
-          {
-            "name": "recipientAddress",
-            "type": "address",
-            "internalType": "address"
           },
           {
             "name": "gasLimit",
@@ -575,6 +565,32 @@ export const BaseEmissionsControllerAbi = [
         "name": "newRecipientDomain",
         "type": "uint32",
         "internalType": "uint32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setSatelliteEmissionsController",
+    "inputs": [
+      {
+        "name": "newSatellite",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setTrustToken",
+    "inputs": [
+      {
+        "name": "newToken",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "outputs": [],
@@ -778,6 +794,38 @@ export const BaseEmissionsControllerAbi = [
   },
   {
     "type": "event",
+    "name": "SatelliteEmissionsControllerUpdated",
+    "inputs": [
+      {
+        "name": "newSatelliteEmissionsController",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "TrustBurned",
+    "inputs": [
+      {
+        "name": "from",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "TrustMintedAndBridged",
     "inputs": [
       {
@@ -797,6 +845,19 @@ export const BaseEmissionsControllerAbi = [
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "TrustTokenUpdated",
+    "inputs": [
+      {
+        "name": "newTrustToken",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
       }
     ],
     "anonymous": false
@@ -839,7 +900,17 @@ export const BaseEmissionsControllerAbi = [
   },
   {
     "type": "error",
+    "name": "BaseEmissionsController_InvalidAddress",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "BaseEmissionsController_InvalidEpoch",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BaseEmissionsController_SatelliteEmissionsControllerNotSet",
     "inputs": []
   },
   {
@@ -886,6 +957,11 @@ export const BaseEmissionsControllerAbi = [
   {
     "type": "error",
     "name": "InvalidInitialization",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MetaERC20Dispatcher_InvalidAddress",
     "inputs": []
   },
   {
