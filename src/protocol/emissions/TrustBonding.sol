@@ -242,7 +242,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         if (_currEpoch > 0) {
             uint256 prevEpoch = _previousEpoch(_currEpoch);
             userRewards = _userEligibleRewardsForEpoch(account, prevEpoch);
-            personalUtilization = _getPersonalUtilizationRatio(account, _currEpoch);
+            personalUtilization = _getPersonalUtilizationRatio(account, prevEpoch);
         }
 
         LockedBalance memory userLocked = locked[account];
@@ -259,19 +259,16 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     /// @inheritdoc ITrustBonding
     function getUserApy(address account) external view returns (uint256 currentApy, uint256 maxApy) {
         uint256 currEpoch = _currentEpoch();
-        if (currEpoch == 0) {
-            return (currentApy, maxApy);
-        }
-        uint256 prevEpoch = _previousEpoch(currEpoch);
-        uint256 userRewards = _userEligibleRewardsForEpoch(account, prevEpoch);
+        uint256 userRewards = _userEligibleRewardsForEpoch(account, currEpoch);
         uint256 personalUtilization = _getPersonalUtilizationRatio(account, currEpoch);
 
         int256 locked = locked[account].amount;
         if (userRewards == 0 || locked <= 0) {
             return (currentApy, maxApy);
         }
-        currentApy = (userRewards * personalUtilization * _epochsPerYear()) / (uint256(locked) * BASIS_POINTS_DIVISOR);
-        maxApy = (userRewards * _epochsPerYear()) / uint256(locked);
+        uint256 userRewardsPerYear = userRewards * _epochsPerYear();
+        currentApy = (userRewardsPerYear * personalUtilization) / uint256(locked);
+        maxApy = (userRewardsPerYear * BASIS_POINTS_DIVISOR) / uint256(locked);
         return (currentApy, maxApy);
     }
 
@@ -292,7 +289,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /// @inheritdoc ITrustBonding
-    function getUserRewardsForEpoch(address account, uint256 epoch) public view returns (uint256 eligible, uint256 available) {
+    function getUserRewardsForEpoch(address account, uint256 epoch) external view returns (uint256 eligibleRewards, uint256 maxRewards) {
         uint256 _currEpoch = _currentEpoch();
         if (_currEpoch == 0 || epoch >= _currEpoch) {
             return (0, 0);
@@ -315,7 +312,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
 
         uint256 emissionsPerYear = _emissionsForEpoch(_currentEpoch()) * _epochsPerYear();
 
-        return emissionsPerYear * BASIS_POINTS_DIVISOR / _supply;
+        return ((emissionsPerYear * BASIS_POINTS_DIVISOR) / _supply);
     }
 
     /// @inheritdoc ITrustBonding
@@ -653,7 +650,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         return curr == 0 ? 0 : curr - 1;
     }
 
-    function _previousEpoch(uint256 _currEpoch) internal view returns (uint256) {
+    function _previousEpoch(uint256 _currEpoch) internal pure returns (uint256) {
         return _currEpoch == 0 ? 0 : _currEpoch - 1;
     }
 }
