@@ -418,7 +418,7 @@ abstract contract BaseTest is Modifiers, Test {
     }
 
     function calculateAtomId(bytes memory atomData) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(atomData));
+        return keccak256(abi.encodePacked(keccak256("ATOM_SALT"), keccak256(atomData)));
     }
 
     function getAtomCreationCost() internal view returns (uint256) {

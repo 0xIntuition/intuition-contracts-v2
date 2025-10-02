@@ -24,7 +24,13 @@ abstract contract MultiVaultCore is Initializable, IMultiVault, IMultiVaultCore 
     /*                       CONSTANTS                     */
     /* =================================================== */
 
-    /// @notice Salt used for counterfactual triples
+    /// @notice Salt for atoms
+    bytes32 public constant ATOM_SALT = keccak256("ATOM_SALT");
+
+    /// @notice Salt used for positive triples
+    bytes32 public constant TRIPLE_SALT = keccak256("TRIPLE_SALT");
+
+    /// @notice Salt used for counter triples
     bytes32 public constant COUNTER_SALT = keccak256("COUNTER_SALT");
 
     /* =================================================== */
@@ -155,7 +161,7 @@ abstract contract MultiVaultCore is Initializable, IMultiVault, IMultiVaultCore 
     }
 
     function calculateAtomId(bytes memory data) public pure returns (bytes32 id) {
-        return keccak256(abi.encodePacked(data));
+        return keccak256(abi.encodePacked(ATOM_SALT, keccak256(data)));
     }
 
     function getAtom(bytes32 atomId) public view returns (bytes memory data) {
@@ -230,7 +236,7 @@ abstract contract MultiVaultCore is Initializable, IMultiVault, IMultiVaultCore 
         pure
         returns (bytes32)
     {
-        return keccak256(abi.encodePacked(subjectId, predicateId, objectId));
+        return keccak256(abi.encodePacked(TRIPLE_SALT, subjectId, predicateId, objectId));
     }
 
     function calculateCounterTripleId(
@@ -242,7 +248,7 @@ abstract contract MultiVaultCore is Initializable, IMultiVault, IMultiVaultCore 
         pure
         returns (bytes32)
     {
-        bytes32 _tripleId = keccak256(abi.encodePacked(subjectId, predicateId, objectId));
+        bytes32 _tripleId = calculateTripleId(subjectId, predicateId, objectId);
         return bytes32(keccak256(abi.encodePacked(COUNTER_SALT, _tripleId)));
     }
 
