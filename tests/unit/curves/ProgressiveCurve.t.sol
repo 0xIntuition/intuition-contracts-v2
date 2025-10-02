@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { Test } from "forge-std/src/Test.sol";
+import { Test, console } from "forge-std/src/Test.sol";
 import { UD60x18, ud60x18 } from "@prb/math/src/UD60x18.sol";
 import { ProgressiveCurve } from "src/protocol/curves/ProgressiveCurve.sol";
 import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
@@ -115,5 +115,17 @@ contract ProgressiveCurveTest is Test {
         // Since SLOPE is already in 18 decimal format (0.001e18 = 1e15)
         uint256 expectedPrice = totalShares * SLOPE;
         assertEq(price, expectedPrice);
+    }
+
+    function test_minShareMath_progressive() public view {
+        uint256 minShares = 1e20;
+        uint256 assets = curve.previewMint(minShares, 0, 0);
+        console.log("Shares for minShareMath:", assets);
+
+        uint256 assetsForMinShares = curve.previewDeposit(minShares, 0, 0);
+        console.log("Assets for minShareMath:", assetsForMinShares);
+
+        uint256 assetsForConvertToAssets = curve.convertToAssets(minShares, minShares, 0);
+        console.log("Assets for convertToAssets:", assetsForConvertToAssets);
     }
 }

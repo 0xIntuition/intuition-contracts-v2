@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { Test } from "forge-std/src/Test.sol";
+import { Test, console } from "forge-std/src/Test.sol";
 import { UD60x18, ud60x18 } from "@prb/math/src/UD60x18.sol";
 import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
 import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCurve.sol";
@@ -9,7 +9,7 @@ import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCur
 contract OffsetProgressiveCurveTest is Test {
     OffsetProgressiveCurve public curve;
     uint256 constant SLOPE = 2;
-    uint256 constant OFFSET = 5e35;
+    uint256 constant OFFSET = 100e35;
 
     function setUp() public {
         curve = new OffsetProgressiveCurve("Offset Progressive Curve Test", SLOPE, OFFSET);
@@ -63,6 +63,18 @@ contract OffsetProgressiveCurveTest is Test {
         assertGt(price1, 0);
         assertGt(price2, price1);
         assertGt(price3, price2);
+    }
+
+    function test_minShareMath_offset() public view {
+        uint256 minShares = 1e6;
+        uint256 assets = curve.previewMint(minShares, 0, 0);
+        console.log("Shares for minShareMath:", assets);
+
+        uint256 assetsForMinShares = curve.previewDeposit(minShares, 0, 0);
+        console.log("Assets for minShareMath:", assetsForMinShares);
+
+        uint256 assetsForConvertToAssets = curve.convertToAssets(minShares, minShares, 0);
+        console.log("Assets for convertToAssets:", assetsForConvertToAssets);
     }
 
     function test_currentPrice_offsetEffect() public view {
