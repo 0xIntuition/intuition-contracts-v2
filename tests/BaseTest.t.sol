@@ -44,7 +44,7 @@ abstract contract BaseTest is Modifiers, Test {
 
     uint256[] internal ATOM_COST;
     uint256[] internal TRIPLE_COST;
-    uint8 internal DECIMAL_PRECISION = 18;
+    uint256 internal DECIMAL_PRECISION = 1e18;
     uint256 internal FEE_DENOMINATOR = 10_000;
     uint256 internal MIN_DEPOSIT = 1e17; // 0.1 Trust
     uint256 internal MIN_SHARES = 1e6; // Ghost Shares
@@ -60,6 +60,7 @@ abstract contract BaseTest is Modifiers, Test {
     uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 0.9% (Percentage Cost)
 
     // Wallet Config
+    address internal ENTRY_POINT = 0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108;
     address internal ATOM_WARDEN = address(1);
 
     // Vault Config
@@ -291,7 +292,6 @@ abstract contract BaseTest is Modifiers, Test {
             users.timelock, // timelock
             address(protocol.wrappedTrust), // trustToken
             TRUST_BONDING_EPOCH_LENGTH, // epochLength (minimum 2 weeks required)
-            address(protocol.multiVault), // multiVault
             address(protocol.satelliteEmissionsController), // satelliteEmissionsController
             TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound (50%)
             TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound (30%)
@@ -321,6 +321,9 @@ abstract contract BaseTest is Modifiers, Test {
             _getDefaultVaultFees(),
             bondingCurveConfig
         );
+
+        resetPrank(users.timelock);
+        protocol.trustBonding.setMultiVault(address(protocol.multiVault));
 
         // Approve tokens for all users after deployment
         _approveTokensForUsers();
@@ -352,7 +355,7 @@ abstract contract BaseTest is Modifiers, Test {
             minDeposit: MIN_DEPOSIT,
             minShare: MIN_SHARES,
             atomDataMaxLength: 1000,
-            decimalPrecision: 18
+            decimalPrecision: 1e18
         });
     }
 
@@ -373,7 +376,7 @@ abstract contract BaseTest is Modifiers, Test {
 
     function _getDefaultWalletConfig(address _atomWalletFactory) internal returns (WalletConfig memory) {
         return WalletConfig({
-            entryPoint: address(0),
+            entryPoint: ENTRY_POINT,
             atomWarden: ATOM_WARDEN,
             atomWalletBeacon: address(0),
             atomWalletFactory: address(_atomWalletFactory)

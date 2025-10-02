@@ -54,7 +54,7 @@ abstract contract SetupScript is Script {
     address internal TRUST_TOKEN;
     // address internal METALAYER_HUB_OR_SPOKE;
 
-    uint8 internal DECIMAL_PRECISION = 18;
+    uint256 internal DECIMAL_PRECISION = 1e18;
     uint256 internal FEE_DENOMINATOR = 10_000;
     uint256 internal MIN_DEPOSIT = 1e15; // 0.001 Trust
     uint256 internal MIN_SHARES = 1e6; // Ghost Shares

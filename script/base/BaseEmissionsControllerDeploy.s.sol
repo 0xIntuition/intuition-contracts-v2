@@ -44,6 +44,7 @@ contract BaseEmissionsControllerDeploy is SetupScript {
         _deployContracts();
         console2.log("");
         console2.log("DEPLOYMENTS: =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+");
+        console2.log("Upgrades TimelockController for BaseEmissionsController:", address(upgradesTimelockController));
         console2.log("BaseEmissionsController Implementation:", address(baseEmissionsControllerImpl));
         console2.log("BaseEmissionsController Proxy:", address(baseEmissionsControllerProxy));
     }

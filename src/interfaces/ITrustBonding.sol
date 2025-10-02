@@ -99,7 +99,6 @@ interface ITrustBonding {
      * @param _timelock The address of the timelock contract
      * @param _trustToken The address of the WTRUST token
      * @param _epochLength The length of an epoch in seconds
-     * @param _multiVault The address of the MultiVault contract
      * @param _satelliteEmissionsController The address of the SatelliteEmissionsController contract
      * @param _systemUtilizationLowerBound The lower bound for the system utilization ratio
      * @param _personalUtilizationLowerBound The lower bound for the personal utilization ratio
@@ -109,7 +108,6 @@ interface ITrustBonding {
         address _timelock,
         address _trustToken,
         uint256 _epochLength,
-        address _multiVault,
         address _satelliteEmissionsController,
         uint256 _systemUtilizationLowerBound,
         uint256 _personalUtilizationLowerBound
