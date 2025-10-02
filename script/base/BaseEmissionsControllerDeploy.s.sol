@@ -21,7 +21,7 @@ forge script script/base/BaseEmissionsControllerDeploy.s.sol:BaseEmissionsContro
 TESTNET
 forge script script/base/BaseEmissionsControllerDeploy.s.sol:BaseEmissionsControllerDeploy \
 --optimizer-runs 10000 \
---rpc-url intuition_sepolia \
+--rpc-url base_sepolia \
 --broadcast \
 --slow
 */
