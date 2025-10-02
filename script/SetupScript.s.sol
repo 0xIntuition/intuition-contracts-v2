@@ -18,7 +18,6 @@ import { AtomWallet } from "src/protocol/wallet/AtomWallet.sol";
 import { AtomWalletFactory } from "src/protocol/wallet/AtomWalletFactory.sol";
 import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
-import { MultiVaultMigrationMode } from "src/protocol/MultiVaultMigrationMode.sol";
 import { Trust } from "src/Trust.sol";
 import { TrustToken } from "src/legacy/TrustToken.sol";
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
