@@ -43,10 +43,10 @@ contract MultiVaultMigrationMode is MultiVault {
      * @param userBalances The user balances for each vault
      */
     struct BatchSetUserBalancesParams {
-        bytes32[] termIds;
+        bytes32[][] termIds;
         uint256 bondingCurveId;
-        address user;
-        uint256[] userBalances;
+        address[] users;
+        uint256[][] userBalances;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -164,7 +164,9 @@ contract MultiVaultMigrationMode is MultiVault {
     }
 
     /**
-     * @notice Sets the user balances for each vault
+     * @notice Sets balances for multiple users across multiple termIds on a single bondingCurveId.
+     *         For each user i, we take termIds[i] and userBalances[i] (lengths must match),
+     *         and set balanceOf[user] for each termId.
      * @param params The parameters for the batch set user balances.
      */
     function batchSetUserBalances(BatchSetUserBalancesParams calldata params) external onlyRole(MIGRATOR_ROLE) {
@@ -172,31 +174,47 @@ contract MultiVaultMigrationMode is MultiVault {
             revert MultiVault_InvalidBondingCurveId();
         }
 
-        if (params.user == address(0)) {
-            revert MultiVault_ZeroAddress();
+        uint256 usersLength = params.users.length;
+        if (usersLength == 0 || usersLength != params.termIds.length || usersLength != params.userBalances.length) {
+            revert MultiVault_InvalidArrayLength();
         }
 
-        uint256 length = params.termIds.length;
+        for (uint256 i = 0; i < usersLength;) {
+            if (params.users[i] == address(0)) {
+                revert MultiVault_ZeroAddress();
+            }
 
-        if (length != params.userBalances.length) {
-            revert MultiVault_ArraysNotSameLength();
-        }
+            bytes32[] calldata terms = params.termIds[i];
+            uint256[] calldata balances = params.userBalances[i];
 
-        for (uint256 i = 0; i < length;) {
-            _vaults[params.termIds[i]][params.bondingCurveId].balanceOf[params.user] = params.userBalances[i];
-            uint256 assets = _convertToAssets(params.termIds[i], params.bondingCurveId, params.userBalances[i]);
+            if (terms.length != balances.length) {
+                revert MultiVault_InvalidArrayLength();
+            }
 
-            emit Deposited(
-                address(this),
-                params.user,
-                params.termIds[i],
-                params.bondingCurveId,
-                assets,
-                assets,
-                params.userBalances[i],
-                getShares(params.user, params.termIds[i], params.bondingCurveId),
-                getVaultType(params.termIds[i])
-            );
+            for (uint256 j = 0; j < terms.length;) {
+                // Write user balance
+                _vaults[terms[j]][params.bondingCurveId].balanceOf[params.users[i]] = balances[j];
+
+                // Compute assets at current share price
+                uint256 assets = _convertToAssets(terms[j], params.bondingCurveId, balances[j]);
+
+                emit Deposited(
+                    address(this), // sender (migration)
+                    params.users[i], // receiver
+                    terms[j],
+                    params.bondingCurveId,
+                    assets, // assets
+                    assets, // assetsAfterFees (equivalent to assets for migration)
+                    balances[j], // shares that were minted (i.e. set during migration)
+                    balances[j], // totalShares (equivalent to shares for migration)
+                    getVaultType(terms[j])
+                );
+
+                unchecked {
+                    ++j;
+                }
+            }
+
             unchecked {
                 ++i;
             }

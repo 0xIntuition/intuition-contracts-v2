@@ -202,17 +202,22 @@ contract MultiVaultMigrationModeTest is BaseTest {
     }
 
     function test_batchSetUserBalances_onlyMigratorRole() external {
-        bytes32[] memory termIds = new bytes32[](1);
-        uint256[] memory userBalances = new uint256[](1);
+        bytes32[][] memory termIds = new bytes32[][](1);
+        termIds[0] = new bytes32[](1);
+        termIds[0][0] = keccak256("test");
 
-        termIds[0] = keccak256("test");
-        userBalances[0] = 1e18;
+        uint256[][] memory userBalances = new uint256[][](1);
+        userBalances[0] = new uint256[](1);
+        userBalances[0][0] = 1e18;
+
+        address[] memory users_array = new address[](1);
+        users_array[0] = users.alice;
 
         MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
             .BatchSetUserBalancesParams({
             termIds: termIds,
             bondingCurveId: 1,
-            user: users.alice,
+            users: users_array,
             userBalances: userBalances
         });
 
@@ -402,41 +407,50 @@ contract MultiVaultMigrationModeTest is BaseTest {
         multiVaultMigrationMode.batchSetVaultTotals(atomIds, 1, vaultTotals);
 
         // Finally set user balances
-        uint256[] memory userBalances = new uint256[](2);
-        userBalances[0] = 1e18;
-        userBalances[1] = 15e17; // 1.5e18
+        bytes32[][] memory termIds = new bytes32[][](1);
+        termIds[0] = new bytes32[](2);
+        termIds[0][0] = atomIds[0];
+        termIds[0][1] = atomIds[1];
+
+        uint256[][] memory userBalances = new uint256[][](1);
+        userBalances[0] = new uint256[](2);
+        userBalances[0][0] = 1e18;
+        userBalances[0][1] = 15e17; // 1.5e18
+
+        address[] memory users_array = new address[](1);
+        users_array[0] = users.alice;
 
         vm.expectEmit(true, true, true, true);
         emit Deposited(
-            address(multiVaultMigrationMode), // sender is the contract itself in migration mode
-            users.alice, // receiver
+            address(multiVaultMigrationMode),
+            users.alice,
             atomIds[0],
             1,
-            multiVaultMigrationMode.convertToAssets(atomIds[0], 1, userBalances[0]),
-            multiVaultMigrationMode.convertToAssets(atomIds[0], 1, userBalances[0]),
-            userBalances[0],
-            userBalances[0], // totalShares after deposit is the user balance since it's migration
+            multiVaultMigrationMode.convertToAssets(atomIds[0], 1, userBalances[0][0]),
+            multiVaultMigrationMode.convertToAssets(atomIds[0], 1, userBalances[0][0]),
+            userBalances[0][0],
+            userBalances[0][0],
             IMultiVault.VaultType.ATOM
         );
 
         vm.expectEmit(true, true, true, true);
         emit Deposited(
-            address(multiVaultMigrationMode), // sender is the contract itself in migration mode
-            users.alice, // receiver
+            address(multiVaultMigrationMode),
+            users.alice,
             atomIds[1],
             1,
-            multiVaultMigrationMode.convertToAssets(atomIds[1], 1, userBalances[1]),
-            multiVaultMigrationMode.convertToAssets(atomIds[1], 1, userBalances[1]),
-            userBalances[1],
-            userBalances[1], // totalShares after deposit is the user balance since it's migration
+            multiVaultMigrationMode.convertToAssets(atomIds[1], 1, userBalances[0][1]),
+            multiVaultMigrationMode.convertToAssets(atomIds[1], 1, userBalances[0][1]),
+            userBalances[0][1],
+            userBalances[0][1],
             IMultiVault.VaultType.ATOM
         );
 
         MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
             .BatchSetUserBalancesParams({
-            termIds: atomIds,
+            termIds: termIds,
             bondingCurveId: 1,
-            user: users.alice,
+            users: users_array,
             userBalances: userBalances
         });
 
@@ -444,22 +458,27 @@ contract MultiVaultMigrationModeTest is BaseTest {
         multiVaultMigrationMode.batchSetUserBalances(params);
 
         // Verify user balances
-        assertEq(multiVaultMigrationMode.getShares(users.alice, atomIds[0], 1), userBalances[0]);
-        assertEq(multiVaultMigrationMode.getShares(users.alice, atomIds[1], 1), userBalances[1]);
+        assertEq(multiVaultMigrationMode.getShares(users.alice, atomIds[0], 1), userBalances[0][0]);
+        assertEq(multiVaultMigrationMode.getShares(users.alice, atomIds[1], 1), userBalances[0][1]);
     }
 
     function test_batchSetUserBalances_revertsOnInvalidBondingCurveId() external {
-        bytes32[] memory termIds = new bytes32[](1);
-        uint256[] memory userBalances = new uint256[](1);
+        bytes32[][] memory termIds = new bytes32[][](1);
+        termIds[0] = new bytes32[](1);
+        termIds[0][0] = keccak256("test");
 
-        termIds[0] = keccak256("test");
-        userBalances[0] = 1e18;
+        uint256[][] memory userBalances = new uint256[][](1);
+        userBalances[0] = new uint256[](1);
+        userBalances[0][0] = 1e18;
+
+        address[] memory users_array = new address[](1);
+        users_array[0] = users.alice;
 
         MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
             .BatchSetUserBalancesParams({
             termIds: termIds,
             bondingCurveId: 0,
-            user: users.alice,
+            users: users_array,
             userBalances: userBalances
         });
 
@@ -469,39 +488,267 @@ contract MultiVaultMigrationModeTest is BaseTest {
     }
 
     function test_batchSetUserBalances_revertsOnZeroAddress() external {
-        bytes32[] memory termIds = new bytes32[](1);
-        uint256[] memory userBalances = new uint256[](1);
+        bytes32[][] memory termIds = new bytes32[][](1);
+        termIds[0] = new bytes32[](1);
+        termIds[0][0] = keccak256("test");
 
-        termIds[0] = keccak256("test");
-        userBalances[0] = 1e18;
+        uint256[][] memory userBalances = new uint256[][](1);
+        userBalances[0] = new uint256[](1);
+        userBalances[0][0] = 1e18;
+
+        address[] memory users_array = new address[](1);
+        users_array[0] = address(0);
 
         MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
-            .BatchSetUserBalancesParams({ termIds: termIds, bondingCurveId: 1, user: address(0), userBalances: userBalances });
+            .BatchSetUserBalancesParams({
+            termIds: termIds,
+            bondingCurveId: 1,
+            users: users_array,
+            userBalances: userBalances
+        });
 
         vm.expectRevert(abi.encodeWithSelector(MultiVaultMigrationMode.MultiVault_ZeroAddress.selector));
         vm.prank(users.admin);
         multiVaultMigrationMode.batchSetUserBalances(params);
     }
 
-    function test_batchSetUserBalances_revertsOnArraysNotSameLength() external {
-        bytes32[] memory termIds = new bytes32[](2);
-        uint256[] memory userBalances = new uint256[](1);
+    function test_batchSetUserBalances_revertsOnInvalidArrayLength_outerArrays() external {
+        bytes32[][] memory termIds = new bytes32[][](2);
+        termIds[0] = new bytes32[](1);
+        termIds[0][0] = keccak256("test1");
+        termIds[1] = new bytes32[](1);
+        termIds[1][0] = keccak256("test2");
 
-        termIds[0] = keccak256("test1");
-        termIds[1] = keccak256("test2");
-        userBalances[0] = 1e18;
+        uint256[][] memory userBalances = new uint256[][](1);
+        userBalances[0] = new uint256[](1);
+        userBalances[0][0] = 1e18;
+
+        address[] memory users_array = new address[](1);
+        users_array[0] = users.alice;
 
         MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
             .BatchSetUserBalancesParams({
             termIds: termIds,
             bondingCurveId: 1,
-            user: users.alice,
+            users: users_array,
             userBalances: userBalances
         });
 
-        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_ArraysNotSameLength.selector));
+        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_InvalidArrayLength.selector));
         vm.prank(users.admin);
         multiVaultMigrationMode.batchSetUserBalances(params);
+    }
+
+    function test_batchSetUserBalances_revertsOnInvalidArrayLength_innerArrays() external {
+        bytes32[][] memory termIds = new bytes32[][](1);
+        termIds[0] = new bytes32[](2);
+        termIds[0][0] = keccak256("test1");
+        termIds[0][1] = keccak256("test2");
+
+        uint256[][] memory userBalances = new uint256[][](1);
+        userBalances[0] = new uint256[](1);
+        userBalances[0][0] = 1e18;
+
+        address[] memory users_array = new address[](1);
+        users_array[0] = users.alice;
+
+        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
+            .BatchSetUserBalancesParams({
+            termIds: termIds,
+            bondingCurveId: 1,
+            users: users_array,
+            userBalances: userBalances
+        });
+
+        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_InvalidArrayLength.selector));
+        vm.prank(users.admin);
+        multiVaultMigrationMode.batchSetUserBalances(params);
+    }
+
+    function test_batchSetUserBalances_revertsOnInvalidArrayLength_emptyUsers() external {
+        bytes32[][] memory termIds = new bytes32[][](0);
+        uint256[][] memory userBalances = new uint256[][](0);
+        address[] memory users_array = new address[](0);
+
+        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
+            .BatchSetUserBalancesParams({
+            termIds: termIds,
+            bondingCurveId: 1,
+            users: users_array,
+            userBalances: userBalances
+        });
+
+        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_InvalidArrayLength.selector));
+        vm.prank(users.admin);
+        multiVaultMigrationMode.batchSetUserBalances(params);
+    }
+
+    function test_batchSetUserBalances_revertsOnInvalidArrayLength_usersMismatch() external {
+        bytes32[][] memory termIds = new bytes32[][](1);
+        termIds[0] = new bytes32[](1);
+        termIds[0][0] = keccak256("test1");
+
+        uint256[][] memory userBalances = new uint256[][](1);
+        userBalances[0] = new uint256[](1);
+        userBalances[0][0] = 1e18;
+
+        address[] memory users_array = new address[](2);
+        users_array[0] = users.alice;
+        users_array[1] = users.bob;
+
+        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
+            .BatchSetUserBalancesParams({
+            termIds: termIds,
+            bondingCurveId: 1,
+            users: users_array,
+            userBalances: userBalances
+        });
+
+        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_InvalidArrayLength.selector));
+        vm.prank(users.admin);
+        multiVaultMigrationMode.batchSetUserBalances(params);
+    }
+
+    function test_batchSetUserBalances_multipleUsersWithDifferentVaults() external {
+        // CRITICAL: Create atoms FIRST
+        bytes32[] memory atomIds = _createTestAtoms();
+
+        // Set vault totals
+        MultiVaultMigrationMode.VaultTotals[] memory vaultTotals = new MultiVaultMigrationMode.VaultTotals[](2);
+        vaultTotals[0] = MultiVaultMigrationMode.VaultTotals(2e18, 2e18);
+        vaultTotals[1] = MultiVaultMigrationMode.VaultTotals(3e18, 3e18);
+
+        vm.prank(users.admin);
+        multiVaultMigrationMode.batchSetVaultTotals(atomIds, 1, vaultTotals);
+
+        // Set balances for multiple users with different vault sets
+        bytes32[][] memory termIds = new bytes32[][](2);
+        termIds[0] = new bytes32[](2);
+        termIds[0][0] = atomIds[0];
+        termIds[0][1] = atomIds[1];
+        termIds[1] = new bytes32[](1);
+        termIds[1][0] = atomIds[0];
+
+        uint256[][] memory userBalances = new uint256[][](2);
+        userBalances[0] = new uint256[](2);
+        userBalances[0][0] = 1e18;
+        userBalances[0][1] = 15e17;
+        userBalances[1] = new uint256[](1);
+        userBalances[1][0] = 5e17;
+
+        address[] memory users_array = new address[](2);
+        users_array[0] = users.alice;
+        users_array[1] = users.bob;
+
+        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
+            .BatchSetUserBalancesParams({
+            termIds: termIds,
+            bondingCurveId: 1,
+            users: users_array,
+            userBalances: userBalances
+        });
+
+        vm.prank(users.admin);
+        multiVaultMigrationMode.batchSetUserBalances(params);
+
+        // Verify alice balances
+        assertEq(multiVaultMigrationMode.getShares(users.alice, atomIds[0], 1), userBalances[0][0]);
+        assertEq(multiVaultMigrationMode.getShares(users.alice, atomIds[1], 1), userBalances[0][1]);
+
+        // Verify bob balances
+        assertEq(multiVaultMigrationMode.getShares(users.bob, atomIds[0], 1), userBalances[1][0]);
+        assertEq(multiVaultMigrationMode.getShares(users.bob, atomIds[1], 1), 0);
+    }
+
+    function testFuzz_batchSetUserBalances_singleUser(uint256 balance1, uint256 balance2) external {
+        balance1 = bound(balance1, 1e6, type(uint128).max);
+        balance2 = bound(balance2, 1e6, type(uint128).max);
+
+        // Create atoms
+        bytes32[] memory atomIds = _createTestAtoms();
+
+        // Set vault totals
+        MultiVaultMigrationMode.VaultTotals[] memory vaultTotals = new MultiVaultMigrationMode.VaultTotals[](2);
+        vaultTotals[0] = MultiVaultMigrationMode.VaultTotals(10e18, 10e18);
+        vaultTotals[1] = MultiVaultMigrationMode.VaultTotals(10e18, 10e18);
+
+        vm.prank(users.admin);
+        multiVaultMigrationMode.batchSetVaultTotals(atomIds, 1, vaultTotals);
+
+        // Set user balances
+        bytes32[][] memory termIds = new bytes32[][](1);
+        termIds[0] = new bytes32[](2);
+        termIds[0][0] = atomIds[0];
+        termIds[0][1] = atomIds[1];
+
+        uint256[][] memory userBalances = new uint256[][](1);
+        userBalances[0] = new uint256[](2);
+        userBalances[0][0] = balance1;
+        userBalances[0][1] = balance2;
+
+        address[] memory users_array = new address[](1);
+        users_array[0] = users.alice;
+
+        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
+            .BatchSetUserBalancesParams({
+            termIds: termIds,
+            bondingCurveId: 1,
+            users: users_array,
+            userBalances: userBalances
+        });
+
+        vm.prank(users.admin);
+        multiVaultMigrationMode.batchSetUserBalances(params);
+
+        assertEq(multiVaultMigrationMode.getShares(users.alice, atomIds[0], 1), balance1);
+        assertEq(multiVaultMigrationMode.getShares(users.alice, atomIds[1], 1), balance2);
+    }
+
+    function testFuzz_batchSetUserBalances_multipleUsers(uint256 aliceBalance, uint256 bobBalance) external {
+        aliceBalance = bound(aliceBalance, 1e6, type(uint128).max);
+        bobBalance = bound(bobBalance, 1e6, type(uint128).max);
+
+        // Create atoms
+        bytes32[] memory atomIds = _createTestAtoms();
+
+        // Set vault totals
+        MultiVaultMigrationMode.VaultTotals[] memory vaultTotals = new MultiVaultMigrationMode.VaultTotals[](2);
+        vaultTotals[0] = MultiVaultMigrationMode.VaultTotals(10e18, 10e18);
+        vaultTotals[1] = MultiVaultMigrationMode.VaultTotals(10e18, 10e18);
+
+        vm.prank(users.admin);
+        multiVaultMigrationMode.batchSetVaultTotals(atomIds, 1, vaultTotals);
+
+        // Set balances for multiple users
+        bytes32[][] memory termIds = new bytes32[][](2);
+        termIds[0] = new bytes32[](1);
+        termIds[0][0] = atomIds[0];
+        termIds[1] = new bytes32[](1);
+        termIds[1][0] = atomIds[1];
+
+        uint256[][] memory userBalances = new uint256[][](2);
+        userBalances[0] = new uint256[](1);
+        userBalances[0][0] = aliceBalance;
+        userBalances[1] = new uint256[](1);
+        userBalances[1][0] = bobBalance;
+
+        address[] memory users_array = new address[](2);
+        users_array[0] = users.alice;
+        users_array[1] = users.bob;
+
+        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
+            .BatchSetUserBalancesParams({
+            termIds: termIds,
+            bondingCurveId: 1,
+            users: users_array,
+            userBalances: userBalances
+        });
+
+        vm.prank(users.admin);
+        multiVaultMigrationMode.batchSetUserBalances(params);
+
+        assertEq(multiVaultMigrationMode.getShares(users.alice, atomIds[0], 1), aliceBalance);
+        assertEq(multiVaultMigrationMode.getShares(users.bob, atomIds[1], 1), bobBalance);
     }
 
     /* =================================================== */
@@ -717,17 +964,28 @@ contract MultiVaultMigrationModeTest is BaseTest {
         multiVaultMigrationMode.batchSetVaultTotals(allTermIds, 1, vaultTotals);
 
         // Step 5: Set user balances
-        uint256[] memory userBalances = new uint256[](4);
-        userBalances[0] = 5e18;
-        userBalances[1] = 10e18;
-        userBalances[2] = 15e18;
-        userBalances[3] = 50e18;
+        bytes32[][] memory termIds = new bytes32[][](1);
+        termIds[0] = new bytes32[](4);
+        termIds[0][0] = allTermIds[0];
+        termIds[0][1] = allTermIds[1];
+        termIds[0][2] = allTermIds[2];
+        termIds[0][3] = allTermIds[3];
+
+        uint256[][] memory userBalances = new uint256[][](1);
+        userBalances[0] = new uint256[](4);
+        userBalances[0][0] = 5e18;
+        userBalances[0][1] = 10e18;
+        userBalances[0][2] = 15e18;
+        userBalances[0][3] = 50e18;
+
+        address[] memory users_array = new address[](1);
+        users_array[0] = users.alice;
 
         MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
             .BatchSetUserBalancesParams({
-            termIds: allTermIds,
+            termIds: termIds,
             bondingCurveId: 1,
-            user: users.alice,
+            users: users_array,
             userBalances: userBalances
         });
 
