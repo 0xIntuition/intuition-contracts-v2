@@ -7,7 +7,6 @@
         "@openzeppelinV4/contracts-upgradeable/=node_modules/@openzeppelin/contracts-upgradeable/",
         "solady/=lib/solady/src/",
         "@prb/math/=lib/prb-math/",
-        "@account-abstraction/=lib/account-abstraction/contracts/",
-        "@metalayer/=node_modules/@metalayer/contracts/src/"
+        "@account-abstraction/=lib/account-abstraction/contracts/"
     ]
 }

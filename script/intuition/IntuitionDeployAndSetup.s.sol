@@ -14,7 +14,6 @@ import { Trust } from "src/Trust.sol";
 import { TestTrust } from "tests/mocks/TestTrust.sol";
 import { WrappedTrust } from "src/WrappedTrust.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
-import { MultiVaultMigrationMode } from "src/protocol/MultiVaultMigrationMode.sol";
 import { AtomWarden } from "src/protocol/wallet/AtomWarden.sol";
 import { AtomWallet } from "src/protocol/wallet/AtomWallet.sol";
 import { AtomWalletFactory } from "src/protocol/wallet/AtomWalletFactory.sol";
@@ -60,6 +59,8 @@ contract IntuitionDeployAndSetup is SetupScript {
 
     address public BASE_EMISSIONS_CONTROLLER;
 
+    address public MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION;
+
     GeneralConfig internal generalConfig;
     AtomConfig internal atomConfig;
     TripleConfig internal tripleConfig;
@@ -75,12 +76,17 @@ contract IntuitionDeployAndSetup is SetupScript {
         if (block.chainid == vm.envUint("ANVIL_CHAIN_ID")) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("ANVIL_BASE_EMISSIONS_CONTROLLER");
             MIGRATOR = vm.envAddress("ANVIL_MULTI_VAULT_ROLE_MIGRATOR");
+            MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION = vm.envAddress("ANVIL_MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION");
         } else if (block.chainid == vm.envUint("INTUITION_SEPOLIA_CHAIN_ID")) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("INTUITION_SEPOLIA_BASE_EMISSIONS_CONTROLLER");
             MIGRATOR = vm.envAddress("INTUITION_SEPOLIA_MULTI_VAULT_ROLE_MIGRATOR");
+            MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION =
+                vm.envAddress("INTUITION_SEPOLIA_MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION");
         } else if (block.chainid == vm.envUint("INTUITION_MAINNET_CHAIN_ID")) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("BASE_MAINNET_BASE_EMISSIONS_CONTROLLER");
             MIGRATOR = vm.envAddress("INTUITION_MAINNET_MULTI_VAULT_ROLE_MIGRATOR");
+            MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION =
+                vm.envAddress("INTUITION_MAINNET_MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION");
         } else {
             revert("Unsupported chain for broadcasting");
         }
@@ -163,40 +169,7 @@ contract IntuitionDeployAndSetup is SetupScript {
         // Add curves to registry
         bondingCurveRegistry.addBondingCurve(address(linearCurve));
         bondingCurveRegistry.addBondingCurve(address(offsetProgressiveCurve));
-        bondingCurveRegistry.addBondingCurve(address(progressiveCurve)); // review if still required
-
-        // Prepare MultiVault init data
-        _prepareMultiVaultInitData();
-
-        bytes memory multiVaultInitData = abi.encodeWithSelector(
-            MultiVault.initialize.selector,
-            generalConfig,
-            atomConfig,
-            tripleConfig,
-            walletConfig,
-            vaultFees,
-            bondingCurveConfig
-        );
-
-        // Deploy new MultiVault implementation and proxy
-        MultiVaultMigrationMode multiVaultImpl = new MultiVaultMigrationMode();
-        info("MultiVaultMigrationMode Implementation", address(multiVaultImpl));
-
-        TransparentUpgradeableProxy multiVaultProxy = new TransparentUpgradeableProxy(
-            address(multiVaultImpl), address(upgradesTimelockController), multiVaultInitData
-        );
-        multiVault = MultiVault(address(multiVaultProxy));
-
-        // Initialize AtomWalletFactory and AtomWarden with the MultiVault address
-        atomWalletFactory.initialize(address(multiVault));
-        atomWarden.initialize(ADMIN, address(multiVault));
-
-        // Grant the MIGRATOR_ROLE to the migrator address only if we are not on the Intuition mainnet (on mainnet,
-        // this will be done through an admin Safe)
-        if (block.chainid != vm.envUint("INTUITION_MAINNET_CHAIN_ID")) {
-            IAccessControl(address(multiVault)).grantRole(MIGRATOR_ROLE, MIGRATOR);
-            console2.log("MIGRATOR_ROLE granted to:", MIGRATOR);
-        }
+        bondingCurveRegistry.addBondingCurve(address(progressiveCurve)); // review if this curve is still required
 
         // Deploy SatelliteEmissionsController implementation and proxy
         SatelliteEmissionsController satelliteEmissionsControllerImpl = new SatelliteEmissionsController();
@@ -239,10 +212,10 @@ contract IntuitionDeployAndSetup is SetupScript {
         bytes memory trustBondingInitData = abi.encodeWithSelector(
             TrustBonding.initialize.selector,
             ADMIN, // owner
-            address(parametersTimelockController), // timelock controller for parameter updates
+            address(ADMIN), // temporary assign admin as the timelock address to be able to set initial MultiVault
+                // address without timelock delay
             address(trust), // WTRUST token if deploying on Intuition Sepolia
             BONDING_EPOCH_LENGTH, // epochLength
-            address(multiVault), // multiVault
             address(satelliteEmissionsController),
             BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound
             BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound
@@ -265,6 +238,46 @@ contract IntuitionDeployAndSetup is SetupScript {
             );
             console2.log("CONTROLLER_ROLE in SatelliteEmissionsController granted to TrustBonding");
         }
+
+        // Prepare MultiVault init data
+        _prepareMultiVaultInitData();
+
+        bytes memory multiVaultInitData = abi.encodeWithSelector(
+            MultiVault.initialize.selector,
+            generalConfig,
+            atomConfig,
+            tripleConfig,
+            walletConfig,
+            vaultFees,
+            bondingCurveConfig
+        );
+
+        // Deploy new proxy contract for the MultiVault
+        info("MultiVaultMigrationMode Implementation", MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION);
+
+        TransparentUpgradeableProxy multiVaultProxy = new TransparentUpgradeableProxy(
+            MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION, address(upgradesTimelockController), multiVaultInitData
+        );
+        multiVault = MultiVault(address(multiVaultProxy));
+
+        // Initialize AtomWalletFactory and AtomWarden with the MultiVault address
+        atomWalletFactory.initialize(address(multiVault));
+        atomWarden.initialize(ADMIN, address(multiVault));
+
+        // Set the MultiVault and parameters Timelock addresses in TrustBonding only if we are not on the Intuition
+        // mainnet (on mainnet, this will be done through an admin Safe)
+        if (block.chainid != vm.envUint("INTUITION_MAINNET_CHAIN_ID")) {
+            trustBonding.setMultiVault(address(multiVault));
+            trustBonding.setTimelock(address(parametersTimelockController));
+        }
+
+        // Grant the MIGRATOR_ROLE to the migrator address only if we are not on the Intuition mainnet (on mainnet,
+        // this will be done through an admin Safe)
+        if (block.chainid != vm.envUint("INTUITION_MAINNET_CHAIN_ID")) {
+            IAccessControl(address(multiVault)).grantRole(MIGRATOR_ROLE, MIGRATOR);
+            console2.log("MIGRATOR_ROLE granted to:", MIGRATOR);
+        }
+
     }
 
     function _prepareMultiVaultInitData() internal {

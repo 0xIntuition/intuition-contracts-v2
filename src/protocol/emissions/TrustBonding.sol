@@ -118,7 +118,6 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         address _timelock,
         address _trustToken,
         uint256 _epochLength,
-        address _multiVault,
         address _satelliteEmissionsController,
         uint256 _systemUtilizationLowerBound,
         uint256 _personalUtilizationLowerBound
@@ -137,7 +136,6 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         _grantRole(PAUSER_ROLE, _owner);
 
         _setTimelock(_timelock);
-        _setMultiVault(_multiVault);
         _updateSatelliteEmissionsController(_satelliteEmissionsController);
         _updateSystemUtilizationLowerBound(_systemUtilizationLowerBound);
         _updatePersonalUtilizationLowerBound(_personalUtilizationLowerBound);
@@ -406,13 +404,13 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /// @inheritdoc ITrustBonding
-    function setTimelock(address _timelock) external onlyTimelock {
-        _setTimelock(_timelock);
+    function setMultiVault(address _multiVault) external onlyTimelock {
+        _setMultiVault(_multiVault);
     }
 
     /// @inheritdoc ITrustBonding
-    function setMultiVault(address _multiVault) external onlyTimelock {
-        _setMultiVault(_multiVault);
+    function setTimelock(address _timelock) external onlyTimelock {
+        _setTimelock(_timelock);
     }
 
     /// @inheritdoc ITrustBonding

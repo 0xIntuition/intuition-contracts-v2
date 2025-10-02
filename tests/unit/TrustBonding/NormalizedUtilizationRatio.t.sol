@@ -16,6 +16,9 @@ contract NormalizedUtilizationRatioTest is TrustBondingBase {
     function setUp() public override {
         super.setUp();
         _deployTrustBondingMock();
+        vm.stopPrank();
+        vm.prank(users.timelock);
+        trustBondingMock.setMultiVault(address(protocol.multiVault));
     }
 
     function _deployTrustBondingMock() internal {
@@ -31,7 +34,6 @@ contract NormalizedUtilizationRatioTest is TrustBondingBase {
             users.timelock,
             address(protocol.wrappedTrust),
             TRUST_BONDING_EPOCH_LENGTH,
-            address(protocol.multiVault),
             address(protocol.satelliteEmissionsController),
             TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND,
             TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND

@@ -18,7 +18,6 @@ import { AtomWallet } from "src/protocol/wallet/AtomWallet.sol";
 import { AtomWalletFactory } from "src/protocol/wallet/AtomWalletFactory.sol";
 import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
-import { MultiVaultMigrationMode } from "src/protocol/MultiVaultMigrationMode.sol";
 import { Trust } from "src/Trust.sol";
 import { TrustToken } from "src/legacy/TrustToken.sol";
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
@@ -54,7 +53,7 @@ abstract contract SetupScript is Script {
     address internal TRUST_TOKEN;
     // address internal METALAYER_HUB_OR_SPOKE;
 
-    uint8 internal DECIMAL_PRECISION = 18;
+    uint256 internal DECIMAL_PRECISION = 1e18;
     uint256 internal FEE_DENOMINATOR = 10_000;
     uint256 internal MIN_DEPOSIT = 1e15; // 0.001 Trust
     uint256 internal MIN_SHARES = 1e6; // Ghost Shares
@@ -67,7 +66,7 @@ abstract contract SetupScript is Script {
     // Triple Config
     uint256 internal TRIPLE_CREATION_PROTOCOL_FEE = 1e15; // 0.001 Trust (Fixed Cost)
     uint256 internal TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 1e15; // 0.001 Trust (Fixed Cost)
-    uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 300; // 3% (Percentage Cost)
+    uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 0.9% (Percentage Cost)
 
     // Wallet Config
     address internal ENTRY_POINT = 0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108; // deterministic address of the

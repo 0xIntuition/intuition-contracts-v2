@@ -67,7 +67,6 @@ contract TrustBondingTest is BaseTest {
             users.timelock, // timelock
             address(protocol.wrappedTrust), // protocol.wrappedTrust
             TRUST_BONDING_EPOCH_LENGTH, // epochLength (minimum 2 weeks required)
-            address(protocol.multiVault), // multiVault
             address(protocol.satelliteEmissionsController), // satelliteEmissionsController
             TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound (50%)
             TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound (30%)
@@ -87,7 +86,6 @@ contract TrustBondingTest is BaseTest {
             address(0), // timelock
             address(protocol.wrappedTrust), // protocol.wrappedTrust
             TRUST_BONDING_EPOCH_LENGTH, // epochLength (minimum 2 weeks required)
-            address(protocol.multiVault), // multiVault
             address(protocol.satelliteEmissionsController), // satelliteEmissionsController
             TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound (50%)
             TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound (30%)
@@ -107,7 +105,6 @@ contract TrustBondingTest is BaseTest {
             users.timelock, // timelock
             address(0), // protocol.wrappedTrust
             TRUST_BONDING_EPOCH_LENGTH, // epochLength (minimum 2 weeks required)
-            address(protocol.multiVault), // multiVault
             address(protocol.satelliteEmissionsController), // satelliteEmissionsController
             TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound (50%)
             TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound (30%)
@@ -129,7 +126,6 @@ contract TrustBondingTest is BaseTest {
             users.timelock, // timelock
             address(protocol.wrappedTrust), // protocol.wrappedTrust
             invalidEpochLength, // epochLength (minimum 2 weeks required)
-            address(protocol.multiVault), // multiVault
             address(protocol.satelliteEmissionsController), // satelliteEmissionsController
             TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound (50%)
             TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound (30%)

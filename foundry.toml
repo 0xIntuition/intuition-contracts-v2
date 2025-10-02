@@ -25,7 +25,6 @@
     "solady/=lib/solady/src/",
     "@prb/math/=lib/prb-math/",
     "@account-abstraction/=lib/account-abstraction/contracts/",
-    "@metalayer/=node_modules/@metalayer/contracts/src/",
     "permit2/=lib/permit2/src/"
   ]
 

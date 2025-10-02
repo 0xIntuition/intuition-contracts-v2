@@ -7,7 +7,6 @@
     "url": "https://github.com/0xIntuition/intuition-contracts-v2"
   },
   "dependencies": {
-    "@metalayer/contracts": "^1.1.0-beta",
     "@openzeppelin/contracts": "^4.9.6",
     "@openzeppelin/contracts-upgradeable": "^4.9.6"
   },
