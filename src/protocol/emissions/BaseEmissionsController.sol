@@ -101,9 +101,18 @@ contract BaseEmissionsController is
         _setTrustToken(token);
     }
 
+    /// @notice Receive native gas token to fund cross-chain messages
+    receive() external payable {
+        emit Transfer(msg.sender, address(this), msg.value);
+     }
+
     /* =================================================== */
     /*                      GETTERS                        */
     /* =================================================== */
+
+    function getBalance() external view returns (uint256) {
+        return address(this).balance;
+    }
 
     /// @inheritdoc IBaseEmissionsController
     function getTrustToken() external view returns (address) {
@@ -130,48 +139,15 @@ contract BaseEmissionsController is
     /* =================================================== */
 
     /// @inheritdoc IBaseEmissionsController
-    function mintAndBridge(uint256 epoch) external payable nonReentrant onlyRole(CONTROLLER_ROLE) {
-        if (_SATELLITE_EMISSIONS_CONTROLLER == address(0)) {
-            revert BaseEmissionsController_SatelliteEmissionsControllerNotSet();
-        }
-
+    function mintAndBridgeCurrentEpoch() external nonReentrant onlyRole(CONTROLLER_ROLE) {
         uint256 currentEpoch = _currentEpoch();
-
-        if (epoch > currentEpoch) {
-            revert BaseEmissionsController_InvalidEpoch();
-        }
-
-        if (_epochToMintedAmount[epoch] > 0) {
-            revert BaseEmissionsController_EpochMintingLimitExceeded();
-        }
-
-        uint256 amount = _emissionsAtEpoch(epoch);
-        _totalMintedAmount += amount;
-        _epochToMintedAmount[epoch] = amount;
-
-        // Mint new TRUST using the calculated epoch emissions
-        ITrust(_TRUST_TOKEN).mint(address(this), amount);
-        IERC20(_TRUST_TOKEN).approve(_metaERC20SpokeOrHub, amount);
-
-        // Bridge new emissions to the Satellite Emissions Controller
         uint256 gasLimit = _quoteGasPayment(_recipientDomain, GAS_CONSTANT + _messageGasCost);
-        if (msg.value < gasLimit) {
-            revert BaseEmissionsController_InsufficientGasPayment();
-        }
+        _mintAndBridge(currentEpoch, gasLimit);
+    }
 
-        _bridgeTokensViaERC20(
-            _metaERC20SpokeOrHub,
-            _recipientDomain,
-            bytes32(uint256(uint160(_SATELLITE_EMISSIONS_CONTROLLER))),
-            amount,
-            gasLimit,
-            _finalityState
-        );
-        if (msg.value > gasLimit) {
-            Address.sendValue(payable(msg.sender), msg.value - gasLimit);
-        }
-
-        emit TrustMintedAndBridged(_SATELLITE_EMISSIONS_CONTROLLER, amount, epoch);
+    /// @inheritdoc IBaseEmissionsController
+    function mintAndBridge(uint256 epoch) external payable nonReentrant onlyRole(CONTROLLER_ROLE) {
+        _mintAndBridge(epoch, msg.value);
     }
 
     /* =================================================== */
@@ -219,9 +195,60 @@ contract BaseEmissionsController is
         emit TrustBurned(address(this), amount);
     }
 
+    /// @inheritdoc IBaseEmissionsController
+    function withdraw(uint256 amount) external nonReentrant onlyRole(DEFAULT_ADMIN_ROLE) {
+        emit Transfer(address(this), msg.sender, amount);
+        Address.sendValue(payable(msg.sender), amount);
+    }
+
     /* =================================================== */
     /*                      INTERNAL                       */
     /* =================================================== */
+
+    function _mintAndBridge(uint256 epoch, uint256 value) internal onlyRole(CONTROLLER_ROLE) {
+        if (_SATELLITE_EMISSIONS_CONTROLLER == address(0)) {
+            revert BaseEmissionsController_SatelliteEmissionsControllerNotSet();
+        }
+
+        uint256 currentEpoch = _currentEpoch();
+
+        if (epoch > currentEpoch) {
+            revert BaseEmissionsController_InvalidEpoch();
+        }
+
+        if (_epochToMintedAmount[epoch] > 0) {
+            revert BaseEmissionsController_EpochMintingLimitExceeded();
+        }
+
+        uint256 amount = _emissionsAtEpoch(epoch);
+        _totalMintedAmount += amount;
+        _epochToMintedAmount[epoch] = amount;
+
+        // Mint new TRUST using the calculated epoch emissions
+        ITrust(_TRUST_TOKEN).mint(address(this), amount);
+        IERC20(_TRUST_TOKEN).approve(_metaERC20SpokeOrHub, amount);
+
+        // Bridge new emissions to the Satellite Emissions Controller
+        uint256 gasLimit = _quoteGasPayment(_recipientDomain, GAS_CONSTANT + _messageGasCost);
+        if (value < gasLimit) {
+            revert BaseEmissionsController_InsufficientGasPayment();
+        }
+
+        _bridgeTokensViaERC20(
+            _metaERC20SpokeOrHub,
+            _recipientDomain,
+            bytes32(uint256(uint160(_SATELLITE_EMISSIONS_CONTROLLER))),
+            amount,
+            gasLimit,
+            _finalityState
+        );
+
+        if (value > gasLimit) {
+            Address.sendValue(payable(msg.sender), value - gasLimit);
+        }
+
+        emit TrustMintedAndBridged(_SATELLITE_EMISSIONS_CONTROLLER, amount, epoch);
+    }
 
     function _setTrustToken(address newToken) internal {
         if (newToken == address(0)) {
