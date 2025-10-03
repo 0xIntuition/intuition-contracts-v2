@@ -626,7 +626,8 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
             } else {
                 d_slope = slope_changes[t_i];
             }
-            last_point.bias -= last_point.slope * int128(int256(t_i - last_point.ts));
+            int256 dt = int256(t_i) - int256(last_point.ts);
+            last_point.bias -= int128(int256(last_point.slope) * dt);
             if (t_i == t) {
                 break;
             }
