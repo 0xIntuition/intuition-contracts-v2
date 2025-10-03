@@ -135,6 +135,8 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
     error MultiVault_CannotDirectlyInitializeCounterTriple();
 
+    error MultiVault_TermDoesNotExist(bytes32 termId);
+
     /* =================================================== */
     /*                    CONSTRUCTOR                      */
     /* =================================================== */
@@ -173,7 +175,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /* =================================================== */
 
     /// @inheritdoc IMultiVault
-    function isTermCreated(bytes32 id) external view returns (bool) {
+    function isTermCreated(bytes32 id) public view returns (bool) {
         return _atoms[id].length > 0 || isTriple(id);
     }
 
@@ -578,9 +580,10 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     {
         tripleId = calculateTripleId(subjectId, predicateId, objectId);
         _tripleExists(tripleId, subjectId, predicateId, objectId);
-        _requireAtom(subjectId);
-        _requireAtom(predicateId);
-        _requireAtom(objectId);
+
+        _requireTermExists(subjectId);
+        _requireTermExists(predicateId);
+        _requireTermExists(objectId);
 
         // Initialize the triple vault state.
         bytes32[3] memory _atomsArray = [subjectId, predicateId, objectId];
@@ -1221,9 +1224,9 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
         uint256 amountPerAtom = amount / 3; // negligible dust amount stays in the contract (i.e. only one or a few wei)
 
-        _increaseProRataVaultAssets(subjectId, amountPerAtom, VaultType.ATOM);
-        _increaseProRataVaultAssets(predicateId, amountPerAtom, VaultType.ATOM);
-        _increaseProRataVaultAssets(objectId, amountPerAtom, VaultType.ATOM);
+        _increaseProRataVaultAssets(subjectId, amountPerAtom, getVaultType(subjectId));
+        _increaseProRataVaultAssets(predicateId, amountPerAtom, getVaultType(predicateId));
+        _increaseProRataVaultAssets(objectId, amountPerAtom, getVaultType(objectId));
     }
 
     function _increaseProRataVaultAssets(bytes32 termId, uint256 amount, VaultType vaultType) internal {
@@ -1245,15 +1248,15 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         return amount.mulDivUp(fee, generalConfig.feeDenominator);
     }
 
-    function _requireAtom(bytes32 termId) internal view {
-        if (_atoms[termId].length == 0) {
-            revert MultiVault_AtomDoesNotExist(termId);
-        }
-    }
-
     function _tripleExists(bytes32 termId, bytes32 subjectId, bytes32 predicateId, bytes32 objectId) internal view {
         if (_triples[termId][0] != bytes32(0)) {
             revert MultiVault_TripleExists(termId, subjectId, predicateId, objectId);
+        }
+    }
+
+    function _requireTermExists(bytes32 termId) internal view {
+        if (!isTermCreated(termId)) {
+            revert MultiVault_TermDoesNotExist(termId);
         }
     }
 
