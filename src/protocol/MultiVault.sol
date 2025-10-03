@@ -176,7 +176,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
     /// @inheritdoc IMultiVault
     function isTermCreated(bytes32 id) public view returns (bool) {
-        return _atoms[id].length > 0 || isTriple(id);
+        return _isTermCreated(id);
     }
 
     /// @notice returns amount of assets that would be charged by a vault on protocol fee given amount of 'assets'
@@ -1222,11 +1222,11 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     function _increaseProRataVaultsAssets(bytes32 tripleId, uint256 amount) internal {
         (bytes32 subjectId, bytes32 predicateId, bytes32 objectId) = getTriple(tripleId);
 
-        uint256 amountPerAtom = amount / 3; // negligible dust amount stays in the contract (i.e. only one or a few wei)
+        uint256 amountPerTerm = amount / 3; // negligible dust amount stays in the contract (i.e. only one or a few wei)
 
-        _increaseProRataVaultAssets(subjectId, amountPerAtom, getVaultType(subjectId));
-        _increaseProRataVaultAssets(predicateId, amountPerAtom, getVaultType(predicateId));
-        _increaseProRataVaultAssets(objectId, amountPerAtom, getVaultType(objectId));
+        _increaseProRataVaultAssets(subjectId, amountPerTerm, getVaultType(subjectId));
+        _increaseProRataVaultAssets(predicateId, amountPerTerm, getVaultType(predicateId));
+        _increaseProRataVaultAssets(objectId, amountPerTerm, getVaultType(objectId));
     }
 
     function _increaseProRataVaultAssets(bytes32 termId, uint256 amount, VaultType vaultType) internal {
@@ -1238,6 +1238,10 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /* =================================================== */
     /*                      INTERNAL                       */
     /* =================================================== */
+
+    function _isTermCreated(bytes32 id) internal view returns (bool) {
+        return _atoms[id].length > 0 || isTriple(id);
+    }
 
     function _requireVaultType(bytes32 termId) internal view returns (bool isAtomType, VaultType vaultType) {
         vaultType = getVaultType(termId);
