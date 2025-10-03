@@ -100,7 +100,7 @@ abstract contract SetupScript is Script {
 
     // MetaLayer Configurations
     address internal METALAYER_HUB_OR_SPOKE = 0x007700aa28A331B91219Ffa4A444711F0D9E57B5;
-    uint256 internal METALAYER_GAS_LIMIT = 200_000; // Gas limit for cross-chain operations
+    uint256 internal METALAYER_GAS_LIMIT = 125_000; // Gas limit for cross-chain operations
 
     // Deployed contracts
     Trust public trust;

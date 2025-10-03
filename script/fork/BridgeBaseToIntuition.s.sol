@@ -17,14 +17,14 @@ interface IERC20 {
 }
 
 /**
- * forge script script/fork/BridgeBaseToIntuition.s.sol:BridgeBaseToIntuition \
- * --fork-url https://sepolia.base.org \
- * -vvvv
- *
- * forge script script/fork/BridgeBaseToIntuition.s.sol:BridgeBaseToIntuition \
- * --fork-url https://sepolia.base.org \
- * --sig "runForkTest()" \
- * -vvvv
+forge script script/fork/BridgeBaseToIntuition.s.sol:BridgeBaseToIntuition \
+--fork-url https://sepolia.base.org \
+-vvvv
+
+forge script script/fork/BridgeBaseToIntuition.s.sol:BridgeBaseToIntuition \
+--fork-url https://sepolia.base.org \
+--sig "runForkTest()" \
+-vvvv
  */
 contract BridgeBaseToIntuition is SetupScript, Test {
     // Network constants
@@ -80,6 +80,7 @@ contract BridgeBaseToIntuition is SetupScript, Test {
         // Get gas quote
         IIGP igp = IIGP(IMetalayerRouter(hub.metalayerRouter()).igp());
         uint256 gasQuote = igp.quoteGasPayment(INTUITION_SEPOLIA_CHAIN_ID, GAS_LIMIT);
+        console2.log("Gas quote (wei):", gasQuote);
 
         // Ensure sender has enough ETH for gas
         require(broadcaster.balance >= gasQuote, "Insufficient ETH for gas payment");
