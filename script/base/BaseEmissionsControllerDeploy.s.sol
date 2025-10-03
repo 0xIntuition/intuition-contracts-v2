@@ -26,7 +26,6 @@ forge script script/base/BaseEmissionsControllerDeploy.s.sol:BaseEmissionsContro
 --slow
 */
 
-
 contract BaseEmissionsControllerDeploy is SetupScript {
     BaseEmissionsController public baseEmissionsControllerImpl;
     TransparentUpgradeableProxy public baseEmissionsControllerProxy;

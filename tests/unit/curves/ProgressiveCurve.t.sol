@@ -116,16 +116,4 @@ contract ProgressiveCurveTest is Test {
         uint256 expectedPrice = totalShares * SLOPE;
         assertEq(price, expectedPrice);
     }
-
-    function test_minShareMath_progressive() public view {
-        uint256 minShares = 1e20;
-        uint256 assets = curve.previewMint(minShares, 0, 0);
-        console.log("Shares for minShareMath:", assets);
-
-        uint256 assetsForMinShares = curve.previewDeposit(minShares, 0, 0);
-        console.log("Assets for minShareMath:", assetsForMinShares);
-
-        uint256 assetsForConvertToAssets = curve.convertToAssets(minShares, minShares, 0);
-        console.log("Assets for convertToAssets:", assetsForConvertToAssets);
-    }
 }

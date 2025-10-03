@@ -757,7 +757,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         (uint256 sharesForReceiver, uint256 assetsAfterFees) = _calculateDeposit(termId, curveId, assets, isAtomVault);
 
         /* --- Account for the minShare cost only for non-default curve vaults --- */
-        if (isNew && !isDefault) assets -= _minShareCostFor(_vaultType);
+        if (isNew && !isDefault) assets -= _minShareCostFor(_vaultType, curveId);
 
         /* --- Accumulate dynamic fees --- */
         _accumulateVaultProtocolFees(assets);
@@ -1084,7 +1084,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
         // Account for the minShare cost only for non-default curve
         if (isNew && !isDefault) {
-            uint256 minShareCost = generalConfig.minShare;
+            uint256 minShareCost = _minShareCostFor(VaultType.ATOM, curveId);
             if (assets <= minShareCost) revert MultiVault_DepositTooSmallToCoverMinShares();
             base = assets - minShareCost;
         }
@@ -1144,7 +1144,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
         // Account for the minShare cost only for non-default curve
         if (isNew && !isDefault) {
-            uint256 minShareCost = generalConfig.minShare * 2; // positive + counter triple min shares
+            uint256 minShareCost = _minShareCostFor(VaultType.TRIPLE, curveId);
             if (assets <= minShareCost) revert MultiVault_DepositTooSmallToCoverMinShares();
             base = assets - minShareCost;
         }
@@ -1293,13 +1293,13 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         _setVaultTotals(
             counterTripleId,
             curveId,
-            vaultState.totalAssets + minShare,
+            vaultState.totalAssets + _minAssetsForCurve(curveId),
             vaultState.totalShares + minShare,
             VaultType.COUNTER_TRIPLE
         );
 
         // Mint min shares to the burn address for the counter vault
-        _mint(BURN_ADDRESS, counterTripleId, curveId, generalConfig.minShare);
+        _mint(BURN_ADDRESS, counterTripleId, curveId, minShare);
     }
 
     /// @dev mint vault shares to address `to`
@@ -1431,21 +1431,21 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         internal
         returns (uint256)
     {
-        uint256 minShares = generalConfig.minShare;
+        uint256 minShare = generalConfig.minShare;
         VaultState storage vaultState = _vaults[termId][curveId];
 
         _setVaultTotals(
             termId,
             curveId,
-            vaultState.totalAssets + assets + minShares,
-            vaultState.totalShares + shares + minShares,
+            vaultState.totalAssets + assets + _minAssetsForCurve(curveId),
+            vaultState.totalShares + shares + minShare,
             vaultType
         );
 
         uint256 sharesTotal = _mint(receiver, termId, curveId, shares);
 
         // Mint min shares to the burn address. Once created, the vault can never have less than min shares.
-        _mint(BURN_ADDRESS, termId, curveId, minShares);
+        _mint(BURN_ADDRESS, termId, curveId, minShare);
 
         return sharesTotal;
     }
@@ -1544,7 +1544,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
         bool isNew = _isNewVault(_termId, _curveId);
         bool isDefault = _curveId == bondingCurveConfig.defaultCurveId;
-        uint256 minShareCost = (isNew && !isDefault) ? generalConfig.minShare : 0;
+        uint256 minShareCost = (isNew && !isDefault) ? _minAssetsForCurve(_curveId) : 0;
 
         uint256 projectedAssets = _vaults[_termId][_curveId].totalAssets + netAssetsToVault + minShareCost;
         if (projectedAssets > maxAssets) revert MultiVault_ActionExceedsMaxAssets();
@@ -1619,9 +1619,17 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
     /// @notice Get the min shares cost for creating an atom or triple vault
     /// @param vaultType The type of vault
+    /// @param curveId The ID of the bonding curve
     /// @return uint256 The min shares cost for a given vault
-    function _minShareCostFor(VaultType vaultType) internal view returns (uint256) {
-        uint256 minShare = generalConfig.minShare;
-        return vaultType == VaultType.ATOM ? minShare : minShare * 2;
+    function _minShareCostFor(VaultType vaultType, uint256 curveId) internal view returns (uint256) {
+        uint256 minShareCost = _minAssetsForCurve(curveId);
+        return vaultType == VaultType.ATOM ? minShareCost : minShareCost * 2;
+    }
+
+    /// @notice Get the amount of assets required to mint minShare shares for a given bonding curve
+    /// @param curveId The ID of the bonding curve
+    /// @return uint256 The amount of assets required to mint minShare shares
+    function _minAssetsForCurve(uint256 curveId) internal view returns (uint256) {
+        return IBondingCurveRegistry(bondingCurveConfig.registry).previewMint(generalConfig.minShare, 0, 0, curveId);
     }
 }
