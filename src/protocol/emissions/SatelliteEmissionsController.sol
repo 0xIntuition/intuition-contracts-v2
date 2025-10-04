@@ -175,6 +175,10 @@ contract SatelliteEmissionsController is
 
     /// @inheritdoc ISatelliteEmissionsController
     function bridgeUnclaimedEmissions(uint256 epoch) external payable onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (_TRUST_BONDING == address(0)) {
+            revert SatelliteEmissionsController_TrustBondingNotSet();
+        }
+
         // Prevent bridging of zero amount if no unclaimed rewards are available.
         uint256 amount = ITrustBonding(_TRUST_BONDING).getUnclaimedRewardsForEpoch(epoch);
         if (amount == 0) {

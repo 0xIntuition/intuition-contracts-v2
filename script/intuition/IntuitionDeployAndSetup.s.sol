@@ -277,7 +277,6 @@ contract IntuitionDeployAndSetup is SetupScript {
             IAccessControl(address(multiVault)).grantRole(MIGRATOR_ROLE, MIGRATOR);
             console2.log("MIGRATOR_ROLE granted to:", MIGRATOR);
         }
-
     }
 
     function _prepareMultiVaultInitData() internal {

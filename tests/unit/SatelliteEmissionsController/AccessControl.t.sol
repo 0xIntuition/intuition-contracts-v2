@@ -3,29 +3,15 @@ pragma solidity 0.8.29;
 
 import { console, Vm } from "forge-std/src/Test.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
-import { BaseTest } from "tests/BaseTest.t.sol";
+import { TrustBondingBase } from "tests/unit/TrustBonding/TrustBondingBase.t.sol";
 import { ISatelliteEmissionsController } from "src/interfaces/ISatelliteEmissionsController.sol";
 import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
 import { MetaERC20Dispatcher } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
 import { MetaERC20DispatchInit, FinalityState } from "src/interfaces/IMetaLayer.sol";
-import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 /// @dev forge test --match-path 'tests/unit/SatelliteEmissionsController/AccessControl.t.sol'
-contract AccessControlTest is BaseTest {
-    // Test constants
-    uint256 internal constant TEST_START_TIMESTAMP = 1_640_995_200; // Jan 1, 2022
-    uint256 internal constant TEST_EPOCH_LENGTH = 14 days;
-    uint256 internal constant TEST_EMISSIONS_PER_EPOCH = 1_000_000 * 1e18;
-    uint256 internal constant TEST_REDUCTION_CLIFF = 26;
-    uint256 internal constant TEST_REDUCTION_BASIS_POINTS = 1000; // 10%
-    uint32 internal constant TEST_RECIPIENT_DOMAIN = 1;
-    uint256 internal constant TEST_GAS_LIMIT = 125_000;
-
-    // Initializer structs
-    MetaERC20DispatchInit public metaERC20DispatchInit;
-    CoreEmissionsControllerInit public coreEmissionsInit;
-
+contract AccessControlTest is TrustBondingBase {
     /// @notice Test addresses
     address public unauthorizedUser = address(0x999);
     address public baseEmissionsController = address(0xABC);
@@ -44,38 +30,6 @@ contract AccessControlTest is BaseTest {
     function setUp() public override {
         super.setUp();
         vm.deal(unauthorizedUser, 1 ether);
-    }
-
-    function _deploySatelliteEmissionsController() internal returns (SatelliteEmissionsController) {
-        // Deploy SatelliteEmissionsController implementation
-        SatelliteEmissionsController satelliteEmissionsControllerImpl = new SatelliteEmissionsController();
-
-        // Deploy proxy
-        TransparentUpgradeableProxy satelliteEmissionsControllerProxyContract =
-            new TransparentUpgradeableProxy(address(satelliteEmissionsControllerImpl), users.admin, "");
-
-        SatelliteEmissionsController satelliteEmissionsController =
-            SatelliteEmissionsController(payable(address(satelliteEmissionsControllerProxyContract)));
-
-        // Initialize the contract
-        metaERC20DispatchInit = MetaERC20DispatchInit({
-            hubOrSpoke: address(0x123), // Mock meta spoke
-            recipientDomain: TEST_RECIPIENT_DOMAIN,
-            gasLimit: TEST_GAS_LIMIT,
-            finalityState: FinalityState.INSTANT
-        });
-
-        coreEmissionsInit = CoreEmissionsControllerInit({
-            startTimestamp: TEST_START_TIMESTAMP,
-            emissionsLength: TEST_EPOCH_LENGTH,
-            emissionsPerEpoch: TEST_EMISSIONS_PER_EPOCH,
-            emissionsReductionCliff: TEST_REDUCTION_CLIFF,
-            emissionsReductionBasisPoints: TEST_REDUCTION_BASIS_POINTS
-        });
-
-        vm.label(address(satelliteEmissionsController), "SatelliteEmissionsController");
-
-        return satelliteEmissionsController;
     }
 
     /*//////////////////////////////////////////////////////////////
