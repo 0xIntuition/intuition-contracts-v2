@@ -237,8 +237,9 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
 
         uint256 userRewards;
         uint256 personalUtilization;
+
         if (_currEpoch > 0) {
-            uint256 prevEpoch = _previousEpoch(_currEpoch);
+            uint256 prevEpoch = _currEpoch - 1;
             userRewards = _userEligibleRewardsForEpoch(account, prevEpoch);
             personalUtilization = _getPersonalUtilizationRatio(account, prevEpoch);
         }
@@ -276,13 +277,16 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         if (_currEpoch == 0) {
             return 0;
         }
-        uint256 prevEpoch = _previousEpoch(_currEpoch);
+
+        uint256 prevEpoch = _currEpoch - 1;
         uint256 userClaimedReward = userClaimedRewardsForEpoch[account][prevEpoch];
         uint256 userEligibleReward = _userEligibleRewardsForEpoch(account, prevEpoch)
             * _getPersonalUtilizationRatio(account, prevEpoch) / BASIS_POINTS_DIVISOR;
+
         if (userEligibleReward <= userClaimedReward) {
             return 0;
         }
+
         return userEligibleReward - userClaimedReward;
     }
 
@@ -650,9 +654,5 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     function _previousEpoch() internal view returns (uint256) {
         uint256 curr = _currentEpoch();
         return curr == 0 ? 0 : curr - 1;
-    }
-
-    function _previousEpoch(uint256 _currEpoch) internal pure returns (uint256) {
-        return _currEpoch == 0 ? 0 : _currEpoch - 1;
     }
 }
