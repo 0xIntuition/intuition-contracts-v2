@@ -1038,7 +1038,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     )
         internal
         view
-        returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees)
+        returns (uint256 shares, uint256 assetsAfterMinSharesCost, uint256 assetsAfterFees)
     {
         if (isAtomVault) {
             return _calculateAtomDeposit(termId, curveId, assets);
