@@ -737,7 +737,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         _validateMinDeposit(assets);
 
         // --- discover vault type and basic flags up front ---
-        (, VaultType _vaultType) = _requireVaultType(termId);
+        VaultType _vaultType = getVaultType(termId);
         bool isNew = _isNewVault(termId, curveId);
         bool isDefault = curveId == bondingCurveConfig.defaultCurveId;
 
@@ -886,7 +886,8 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         internal
         returns (uint256, uint256)
     {
-        (bool _isAtom, VaultType _vaultType) = _requireVaultType(termId);
+        VaultType _vaultType = getVaultType(termId);
+        bool _isAtom = _vaultType != VaultType.ATOM;
         _validateRedeem(termId, curveId, receiver, shares, minAssets);
 
         uint256 rawAssetsBeforeFees = _convertToAssets(termId, curveId, shares);
@@ -1255,11 +1256,6 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /* =================================================== */
     /*                      INTERNAL                       */
     /* =================================================== */
-
-    function _requireVaultType(bytes32 termId) internal view returns (bool isAtomType, VaultType vaultType) {
-        vaultType = getVaultType(termId);
-        return (vaultType == VaultType.ATOM, vaultType);
-    }
 
     function _feeOnRaw(uint256 amount, uint256 fee) internal view returns (uint256) {
         return amount.mulDivUp(fee, generalConfig.feeDenominator);
