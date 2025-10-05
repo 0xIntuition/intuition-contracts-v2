@@ -887,7 +887,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         returns (uint256, uint256)
     {
         VaultType _vaultType = getVaultType(termId);
-        bool _isAtom = _vaultType != VaultType.ATOM;
+        bool _isAtom = _vaultType == VaultType.ATOM;
         _validateRedeem(termId, curveId, receiver, shares, minAssets);
 
         uint256 rawAssetsBeforeFees = _convertToAssets(termId, curveId, shares);
