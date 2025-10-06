@@ -388,8 +388,6 @@ contract DefaultCurveEntryFeeImpactTest is BaseTest {
         assertLe(sharesAfter, sharesBefore, "default curve should mint <= shares for same assets after drip");
     }
 
-    uint256 previewAmt = 1 ether;
-
     /// A simple staircase test: multiple non-default deposits add up linearly on the default
     /// curve’s assets, and previewed shares on default for a fixed asset amount is non-increasing.
     function test_defaultCurve_StaircaseIncreasingDeposits() public {
@@ -402,7 +400,7 @@ contract DefaultCurveEntryFeeImpactTest is BaseTest {
 
         // baseline on default
         (uint256 defAssetsBase, uint256 defSharesBase) = protocol.multiVault.getVault(atomId, DEFAULT_CURVE_ID);
-        (uint256 sharesPrev,) = protocol.multiVault.previewDeposit(atomId, DEFAULT_CURVE_ID, previewAmt);
+        (uint256 sharesPrev,) = protocol.multiVault.previewDeposit(atomId, DEFAULT_CURVE_ID, 1 ether);
 
         // deposit ladder on non-default
         uint256[4] memory ladder = [uint256(1 ether), 2 ether, 3 ether, 4 ether];
@@ -416,7 +414,7 @@ contract DefaultCurveEntryFeeImpactTest is BaseTest {
             assertEq(defS, defSharesBase, "default shares stays constant throughout");
             assertEq(defA, defAssetsBase + expectedAdded, "default assets must equal base + sum(entry fees)");
 
-            (uint256 sharesNow,) = protocol.multiVault.previewDeposit(atomId, DEFAULT_CURVE_ID, previewAmt);
+            (uint256 sharesNow,) = protocol.multiVault.previewDeposit(atomId, DEFAULT_CURVE_ID, 1 ether);
             assertLe(sharesNow, sharesPrev, "shares minted on default for same assets should be non-increasing");
             sharesPrev = sharesNow;
         }
@@ -462,7 +460,7 @@ contract DefaultCurveEntryFeeImpactFuzzTest is BaseTest {
         (uint256 defAssetsBase, uint256 defSharesBase) = protocol.multiVault.getVault(atomId, DEFAULT_CURVE_ID);
 
         uint256 feeDen = protocol.multiVault.getGeneralConfig().feeDenominator;
-        (, uint256 entryFeeBps,,,) = protocol.multiVault.vaultFees(DEFAULT_CURVE_ID);
+        (uint256 entryFeeBps,,) = protocol.multiVault.vaultFees();
 
         uint256 expectedAdded; // sum of subsequent fee drips
         uint256 previewAmt = 3 ether;
