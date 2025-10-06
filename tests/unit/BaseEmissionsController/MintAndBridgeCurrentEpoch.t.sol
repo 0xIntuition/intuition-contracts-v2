@@ -11,8 +11,8 @@ import { MetaERC20DispatchInit, FinalityState } from "src/interfaces/IMetaLayer.
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { MetalayerRouterMock, IIGPMock, MetaERC20HubOrSpokeMock } from "tests/mocks/MetalayerRouterMock.sol";
 
-/// @dev forge test --match-path 'tests/unit/BaseEmissionsController/MintAndBridge.t.sol'
-contract MintAndBridgeTest is BaseTest {
+/// @dev forge test --match-path 'tests/unit/BaseEmissionsController/MintAndBridgeCurrentEpoch.t.sol'
+contract MintAndBridgeCurrentEpochTest is BaseTest {
     /* =================================================== */
     /*                     VARIABLES                       */
     /* =================================================== */
@@ -49,7 +49,7 @@ contract MintAndBridgeTest is BaseTest {
         _deployBaseEmissionsController();
         vm.deal(unauthorizedUser, 1 ether);
         vm.deal(users.controller, 10 ether);
-
+        vm.deal(address(baseEmissionsController), 100 ether);
         // Set BaseEmissionsController directly in Trust storage slot
         vm.store(
             address(protocol.trust), bytes32(uint256(203)), bytes32(uint256(uint160(address(baseEmissionsController))))
@@ -100,12 +100,15 @@ contract MintAndBridgeTest is BaseTest {
     }
 
     /* =================================================== */
-    /*              SUCCESSFUL MINT AND BRIDGE            */
+    /*        SUCCESSFUL MINT AND BRIDGE CURRENT EPOCH    */
     /* =================================================== */
 
-    function test_mintAndBridge_successfulMinting_epoch0() external {
+    function test_mintAndBridgeCurrentEpoch_successfulMinting_epoch0() external {
         // Set time to epoch 0
         vm.warp(TEST_START_TIMESTAMP + 1 days);
+
+        uint256 currentEpoch = baseEmissionsController.getCurrentEpoch();
+        assertEq(currentEpoch, 0, "Should be in epoch 0");
 
         uint256 expectedEmissions = baseEmissionsController.getEmissionsAtEpoch(0);
         assertEq(expectedEmissions, TEST_EMISSIONS_PER_EPOCH, "Should have base emissions for epoch 0");
@@ -122,7 +125,7 @@ contract MintAndBridgeTest is BaseTest {
         emit TrustMintedAndBridged(address(satelliteController), expectedEmissions, 0);
 
         resetPrank(users.controller);
-        baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(0);
+        baseEmissionsController.mintAndBridgeCurrentEpoch();
 
         // Verify state changes
         uint256 totalMintedAfter = baseEmissionsController.getTotalMinted();
@@ -132,15 +135,18 @@ contract MintAndBridgeTest is BaseTest {
         assertEq(epochMintedAfter, expectedEmissions, "Epoch minted should equal expected emissions");
     }
 
-    function test_mintAndBridge_successfulMinting_laterEpoch() external {
+    function test_mintAndBridgeCurrentEpoch_successfulMinting_laterEpoch() external {
         // Set time to epoch 2
         vm.warp(TEST_START_TIMESTAMP + (2 * TEST_EPOCH_LENGTH) + 1 days);
+
+        uint256 currentEpoch = baseEmissionsController.getCurrentEpoch();
+        assertEq(currentEpoch, 2, "Should be in epoch 2");
 
         uint256 expectedEmissions = baseEmissionsController.getEmissionsAtEpoch(2);
         assertEq(expectedEmissions, TEST_EMISSIONS_PER_EPOCH, "Should have base emissions for epoch 2");
 
         resetPrank(users.controller);
-        baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(2);
+        baseEmissionsController.mintAndBridgeCurrentEpoch();
 
         // Verify state changes
         uint256 totalMintedAfter = baseEmissionsController.getTotalMinted();
@@ -154,34 +160,40 @@ contract MintAndBridgeTest is BaseTest {
         assertEq(baseEmissionsController.getEpochMintedAmount(1), 0, "Epoch 1 should remain unminted");
     }
 
-    function test_mintAndBridge_successfulMinting_afterCliff() external {
+    function test_mintAndBridgeCurrentEpoch_successfulMinting_afterCliff() external {
         // Set time to epoch at first reduction cliff
         vm.warp(TEST_START_TIMESTAMP + (TEST_REDUCTION_CLIFF * TEST_EPOCH_LENGTH) + 1 days);
+
+        uint256 currentEpoch = baseEmissionsController.getCurrentEpoch();
+        assertEq(currentEpoch, TEST_REDUCTION_CLIFF, "Should be at reduction cliff epoch");
 
         uint256 expectedEmissions = baseEmissionsController.getEmissionsAtEpoch(TEST_REDUCTION_CLIFF);
         assertEq(expectedEmissions, 900_000 * 1e18, "Should have reduced emissions after cliff");
 
         resetPrank(users.controller);
-        baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(TEST_REDUCTION_CLIFF);
+        baseEmissionsController.mintAndBridgeCurrentEpoch();
 
         // Verify reduced emissions were minted
         uint256 epochMintedAfter = baseEmissionsController.getEpochMintedAmount(TEST_REDUCTION_CLIFF);
         assertEq(epochMintedAfter, expectedEmissions, "Should mint reduced emissions amount");
     }
 
-    function test_mintAndBridge_successfulMinting_multipleEpochs() external {
-        // Set time to epoch 3
-        vm.warp(TEST_START_TIMESTAMP + (3 * TEST_EPOCH_LENGTH) + 1 days);
+    function test_mintAndBridgeCurrentEpoch_successfulMinting_multipleEpochsSequential() external {
+        // Start at epoch 0
+        vm.warp(TEST_START_TIMESTAMP + 1 days);
 
         uint256 runningTotal = 0;
 
-        // Mint for epochs 0, 1, 2 sequentially
+        // Mint for epochs 0, 1, 2 sequentially by advancing time
         for (uint256 i = 0; i < 3; i++) {
+            uint256 currentEpoch = baseEmissionsController.getCurrentEpoch();
+            assertEq(currentEpoch, i, "Should be in correct epoch");
+
             uint256 expectedEmissions = baseEmissionsController.getEmissionsAtEpoch(i);
             runningTotal += expectedEmissions;
 
             resetPrank(users.controller);
-            baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(i);
+            baseEmissionsController.mintAndBridgeCurrentEpoch();
 
             assertEq(
                 baseEmissionsController.getEpochMintedAmount(i),
@@ -189,30 +201,36 @@ contract MintAndBridgeTest is BaseTest {
                 "Each epoch should have correct minted amount"
             );
             assertEq(baseEmissionsController.getTotalMinted(), runningTotal, "Total should accumulate correctly");
+
+            // Move to next epoch
+            if (i < 2) {
+                vm.warp(TEST_START_TIMESTAMP + ((i + 1) * TEST_EPOCH_LENGTH) + 1 days);
+            }
         }
     }
 
-    function test_mintAndBridge_gasRefund() external {
+    function test_mintAndBridgeCurrentEpoch_usesContractBalance() external {
         vm.warp(TEST_START_TIMESTAMP + 1 days);
 
-        uint256 excessGas = GAS_QUOTE * 2; // Send double the required gas
-        uint256 controllerBalanceBefore = users.controller.balance;
+        uint256 contractBalanceBefore = address(baseEmissionsController).balance;
+        assertGt(contractBalanceBefore, 0, "Contract should have ETH balance from setup");
 
         resetPrank(users.controller);
-        baseEmissionsController.mintAndBridge{ value: excessGas }(0);
+        baseEmissionsController.mintAndBridgeCurrentEpoch();
 
-        uint256 controllerBalanceAfter = users.controller.balance;
-        uint256 gasUsed = controllerBalanceBefore - controllerBalanceAfter;
+        uint256 contractBalanceAfter = address(baseEmissionsController).balance;
+        assertLt(contractBalanceAfter, contractBalanceBefore, "Contract balance should decrease after bridging");
 
-        assertLt(gasUsed, excessGas, "Should refund excess gas");
-        assertGe(gasUsed, GAS_QUOTE, "Should use at least the minimum required gas");
+        // Verify state changes
+        uint256 epochMinted = baseEmissionsController.getEpochMintedAmount(0);
+        assertGt(epochMinted, 0, "Should have minted for current epoch");
     }
 
     /* =================================================== */
-    /*              FAILED MINT AND BRIDGE TESTS          */
+    /*        FAILED MINT AND BRIDGE CURRENT EPOCH TESTS  */
     /* =================================================== */
 
-    function test_mintAndBridge_revertWhen_satelliteEmissionsControllerNotSet() external {
+    function test_mintAndBridgeCurrentEpoch_revertWhen_satelliteEmissionsControllerNotSet() external {
         vm.warp(TEST_START_TIMESTAMP + 1 days);
 
         // Set satellite emissions controller to zero address by directly manipulating storage
@@ -224,10 +242,10 @@ contract MintAndBridgeTest is BaseTest {
                 IBaseEmissionsController.BaseEmissionsController_SatelliteEmissionsControllerNotSet.selector
             )
         );
-        baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(0);
+        baseEmissionsController.mintAndBridgeCurrentEpoch();
     }
 
-    function test_mintAndBridge_revertWhen_unauthorized() external {
+    function test_mintAndBridgeCurrentEpoch_revertWhen_unauthorized() external {
         vm.warp(TEST_START_TIMESTAMP + 1 days);
 
         vm.expectRevert(
@@ -237,10 +255,10 @@ contract MintAndBridgeTest is BaseTest {
         );
 
         resetPrank(unauthorizedUser);
-        baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(0);
+        baseEmissionsController.mintAndBridgeCurrentEpoch();
     }
 
-    function test_mintAndBridge_revertWhen_adminRole() external {
+    function test_mintAndBridgeCurrentEpoch_revertWhen_adminRole() external {
         vm.warp(TEST_START_TIMESTAMP + 1 days);
 
         // Even admin cannot call this function, only controller
@@ -251,32 +269,15 @@ contract MintAndBridgeTest is BaseTest {
         );
 
         resetPrank(users.admin);
-        baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(0);
+        baseEmissionsController.mintAndBridgeCurrentEpoch();
     }
 
-    function test_mintAndBridge_revertWhen_futureEpoch() external {
-        // Set time to epoch 2
-        vm.warp(TEST_START_TIMESTAMP + (2 * TEST_EPOCH_LENGTH) + 1 days);
-
-        // Try to mint for epoch 3 (future)
-        vm.expectRevert(abi.encodeWithSelector(IBaseEmissionsController.BaseEmissionsController_InvalidEpoch.selector));
-
-        resetPrank(users.controller);
-        baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(3);
-
-        // Try to mint for epoch 10 (far future)
-        vm.expectRevert(abi.encodeWithSelector(IBaseEmissionsController.BaseEmissionsController_InvalidEpoch.selector));
-
-        resetPrank(users.controller);
-        baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(10);
-    }
-
-    function test_mintAndBridge_revertWhen_epochAlreadyMinted() external {
+    function test_mintAndBridgeCurrentEpoch_revertWhen_epochAlreadyMinted() external {
         vm.warp(TEST_START_TIMESTAMP + 1 days);
 
         // First mint should succeed
         resetPrank(users.controller);
-        baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(0);
+        baseEmissionsController.mintAndBridgeCurrentEpoch();
 
         // Second mint for same epoch should fail
         vm.expectRevert(
@@ -284,36 +285,28 @@ contract MintAndBridgeTest is BaseTest {
         );
 
         resetPrank(users.controller);
-        baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(0);
+        baseEmissionsController.mintAndBridgeCurrentEpoch();
     }
 
-    function test_mintAndBridge_revertWhen_insufficientGasPayment() external {
+    function test_mintAndBridgeCurrentEpoch_revertWhen_insufficientContractBalance() external {
         vm.warp(TEST_START_TIMESTAMP + 1 days);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(IBaseEmissionsController.BaseEmissionsController_InsufficientGasPayment.selector)
-        );
+        // Drain the contract balance
+        vm.prank(users.admin);
+        baseEmissionsController.withdraw(address(baseEmissionsController).balance);
+
+        assertEq(address(baseEmissionsController).balance, 0, "Contract should have no ETH balance");
 
         resetPrank(users.controller);
-        baseEmissionsController.mintAndBridge{ value: GAS_QUOTE / 2 }(0); // Insufficient gas
-    }
-
-    function test_mintAndBridge_revertWhen_zeroGasPayment() external {
-        vm.warp(TEST_START_TIMESTAMP + 1 days);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(IBaseEmissionsController.BaseEmissionsController_InsufficientGasPayment.selector)
-        );
-
-        resetPrank(users.controller);
-        baseEmissionsController.mintAndBridge{ value: 0 }(0);
+        vm.expectRevert();
+        baseEmissionsController.mintAndBridgeCurrentEpoch();
     }
 
     /* =================================================== */
     /*              EDGE CASE TESTS                       */
     /* =================================================== */
 
-    function test_mintAndBridge_currentEpoch() external {
+    function test_mintAndBridgeCurrentEpoch_exactlyAtEpochStart() external {
         // Set time exactly at epoch 3 start
         vm.warp(TEST_START_TIMESTAMP + (3 * TEST_EPOCH_LENGTH));
 
@@ -322,39 +315,13 @@ contract MintAndBridgeTest is BaseTest {
 
         // Should be able to mint for current epoch
         resetPrank(users.controller);
-        baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(3);
+        baseEmissionsController.mintAndBridgeCurrentEpoch();
 
         uint256 epochMinted = baseEmissionsController.getEpochMintedAmount(3);
         assertGt(epochMinted, 0, "Should have minted for current epoch");
     }
 
-    function test_mintAndBridge_exactGasPayment() external {
-        vm.warp(TEST_START_TIMESTAMP + 1 days);
-
-        // Calculate exact gas needed (this is approximate, actual implementation may differ)
-        uint256 exactGas = GAS_QUOTE;
-
-        resetPrank(users.controller);
-        baseEmissionsController.mintAndBridge{ value: exactGas }(0);
-
-        // Should succeed with exact gas payment
-        uint256 epochMinted = baseEmissionsController.getEpochMintedAmount(0);
-        assertGt(epochMinted, 0, "Should have minted with exact gas");
-    }
-
-    function test_mintAndBridge_oldEpoch() external {
-        // Set time to epoch 5
-        vm.warp(TEST_START_TIMESTAMP + (5 * TEST_EPOCH_LENGTH) + 1 days);
-
-        // Should be able to mint for old epoch 1
-        resetPrank(users.controller);
-        baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(1);
-
-        uint256 epochMinted = baseEmissionsController.getEpochMintedAmount(1);
-        assertEq(epochMinted, TEST_EMISSIONS_PER_EPOCH, "Should mint old epoch emissions");
-    }
-
-    function test_mintAndBridge_veryLargeEpoch() external {
+    function test_mintAndBridgeCurrentEpoch_veryLateEpoch() external {
         // Set time to far future - year 2030
         uint256 futureTime = TEST_START_TIMESTAMP + (365 * 8 * 24 * 60 * 60); // ~8 years
         vm.warp(futureTime);
@@ -362,62 +329,46 @@ contract MintAndBridgeTest is BaseTest {
         uint256 currentEpoch = baseEmissionsController.getCurrentEpoch();
         assertGt(currentEpoch, 100, "Should be in a high epoch number");
 
-        // Try to mint for very high epoch - should have very reduced emissions
-        uint256 highEpoch = currentEpoch - 1; // Just to be safe it's not future
-        uint256 expectedEmissions = baseEmissionsController.getEmissionsAtEpoch(highEpoch);
+        uint256 expectedEmissions = baseEmissionsController.getEmissionsAtEpoch(currentEpoch);
 
         resetPrank(users.controller);
-        baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(highEpoch);
+        baseEmissionsController.mintAndBridgeCurrentEpoch();
 
-        uint256 epochMinted = baseEmissionsController.getEpochMintedAmount(highEpoch);
+        uint256 epochMinted = baseEmissionsController.getEpochMintedAmount(currentEpoch);
         assertEq(epochMinted, expectedEmissions, "Should mint reduced emissions for high epoch");
         assertLt(epochMinted, TEST_EMISSIONS_PER_EPOCH, "High epoch emissions should be reduced");
     }
 
-    function test_mintAndBridge_multipleEpochsNonSequential() external {
-        // Set time to epoch 5
-        vm.warp(TEST_START_TIMESTAMP + (5 * TEST_EPOCH_LENGTH) + 1 days);
+    function test_mintAndBridgeCurrentEpoch_epochBoundary() external {
+        // Set time to exactly epoch boundary (start of epoch 1)
+        vm.warp(TEST_START_TIMESTAMP + TEST_EPOCH_LENGTH);
 
-        // Mint for epochs 0, 3, 1, 4, 2 in non-sequential order
-        uint256[] memory epochs = new uint256[](5);
-        epochs[0] = 0;
-        epochs[1] = 3;
-        epochs[2] = 1;
-        epochs[3] = 4;
-        epochs[4] = 2;
+        uint256 currentEpoch = baseEmissionsController.getCurrentEpoch();
+        assertEq(currentEpoch, 1, "Should be epoch 1 at boundary");
 
-        uint256 expectedTotal = 0;
+        // Should mint for epoch 1 (current epoch)
+        resetPrank(users.controller);
+        baseEmissionsController.mintAndBridgeCurrentEpoch();
 
-        for (uint256 i = 0; i < epochs.length; i++) {
-            uint256 epoch = epochs[i];
-            uint256 expectedEmissions = baseEmissionsController.getEmissionsAtEpoch(epoch);
-            expectedTotal += expectedEmissions;
-
-            resetPrank(users.controller);
-            baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(epoch);
-
-            assertEq(
-                baseEmissionsController.getEpochMintedAmount(epoch),
-                expectedEmissions,
-                "Each epoch should have correct amount minted"
-            );
-        }
-
-        assertEq(baseEmissionsController.getTotalMinted(), expectedTotal, "Total minted should equal sum of all epochs");
+        assertGt(baseEmissionsController.getEpochMintedAmount(1), 0, "Epoch 1 should be minted");
+        assertEq(baseEmissionsController.getEpochMintedAmount(0), 0, "Epoch 0 should not be minted");
     }
 
     /* =================================================== */
     /*              STATE VERIFICATION TESTS              */
     /* =================================================== */
 
-    function test_mintAndBridge_stateConsistency() external {
-        vm.warp(TEST_START_TIMESTAMP + (3 * TEST_EPOCH_LENGTH) + 1 days);
+    function test_mintAndBridgeCurrentEpoch_stateConsistency() external {
+        vm.warp(TEST_START_TIMESTAMP + (2 * TEST_EPOCH_LENGTH) + 1 days);
 
-        // Mint for epoch 2
+        uint256 currentEpoch = baseEmissionsController.getCurrentEpoch();
+        assertEq(currentEpoch, 2, "Should be in epoch 2");
+
+        // Mint for current epoch
         uint256 expectedEmissions = baseEmissionsController.getEmissionsAtEpoch(2);
 
         resetPrank(users.controller);
-        baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(2);
+        baseEmissionsController.mintAndBridgeCurrentEpoch();
 
         // Verify all state variables are consistent
         assertEq(baseEmissionsController.getTotalMinted(), expectedEmissions, "Total minted should match");
@@ -429,8 +380,11 @@ contract MintAndBridgeTest is BaseTest {
         assertEq(baseEmissionsController.getEpochMintedAmount(3), 0, "Epoch 3 should be 0");
     }
 
-    function test_mintAndBridge_emissionsCalculationAccuracy() external {
+    function test_mintAndBridgeCurrentEpoch_emissionsCalculationAccuracy() external {
         vm.warp(TEST_START_TIMESTAMP + 1 days);
+
+        uint256 currentEpoch = baseEmissionsController.getCurrentEpoch();
+        assertEq(currentEpoch, 0, "Should be in epoch 0");
 
         // Get expected emissions from view function
         uint256 expectedFromView = baseEmissionsController.getEmissionsAtEpoch(0);
@@ -441,25 +395,22 @@ contract MintAndBridgeTest is BaseTest {
 
         // Mint and verify actual minted amount matches expectation
         resetPrank(users.controller);
-        baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(0);
+        baseEmissionsController.mintAndBridgeCurrentEpoch();
 
         uint256 actualMinted = baseEmissionsController.getEpochMintedAmount(0);
         assertEq(actualMinted, expectedFromView, "Actual minted should match expected");
     }
 
-    function test_mintAndBridge_tokenApprovalAndBalance() external {
+    function test_mintAndBridgeCurrentEpoch_tokenSupplyIncrease() external {
         vm.warp(TEST_START_TIMESTAMP + 1 days);
 
         uint256 trustSupplyBefore = protocol.trust.totalSupply();
-        uint256 controllerBalanceBefore = protocol.trust.balanceOf(address(baseEmissionsController));
-
-        assertEq(controllerBalanceBefore, 0, "Controller should start with 0 tokens");
+        uint256 expectedEmissions = TEST_EMISSIONS_PER_EPOCH;
 
         resetPrank(users.controller);
-        baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(0);
+        baseEmissionsController.mintAndBridgeCurrentEpoch();
 
         uint256 trustSupplyAfter = protocol.trust.totalSupply();
-        uint256 expectedEmissions = TEST_EMISSIONS_PER_EPOCH;
 
         // Total supply should have increased
         assertEq(
@@ -471,7 +422,7 @@ contract MintAndBridgeTest is BaseTest {
     /*              BOUNDARY VALUE TESTS                  */
     /* =================================================== */
 
-    function test_mintAndBridge_boundaryValues_zeroEpoch() external {
+    function test_mintAndBridgeCurrentEpoch_boundaryValues_zeroEpoch() external {
         vm.warp(TEST_START_TIMESTAMP);
 
         // At exactly start timestamp, should be epoch 0
@@ -479,31 +430,13 @@ contract MintAndBridgeTest is BaseTest {
         assertEq(currentEpoch, 0, "Should be epoch 0 at start");
 
         resetPrank(users.controller);
-        baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(0);
+        baseEmissionsController.mintAndBridgeCurrentEpoch();
 
         uint256 epochMinted = baseEmissionsController.getEpochMintedAmount(0);
         assertGt(epochMinted, 0, "Should mint for epoch 0");
     }
 
-    function test_mintAndBridge_boundaryValues_epochTransition() external {
-        // Set time to exactly epoch boundary (start of epoch 1)
-        vm.warp(TEST_START_TIMESTAMP + TEST_EPOCH_LENGTH);
-
-        uint256 currentEpoch = baseEmissionsController.getCurrentEpoch();
-        assertEq(currentEpoch, 1, "Should be epoch 1 at boundary");
-
-        // Should be able to mint for both epoch 0 and 1
-        resetPrank(users.controller);
-        baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(0);
-
-        resetPrank(users.controller);
-        baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(1);
-
-        assertGt(baseEmissionsController.getEpochMintedAmount(0), 0, "Epoch 0 should be minted");
-        assertGt(baseEmissionsController.getEpochMintedAmount(1), 0, "Epoch 1 should be minted");
-    }
-
-    function test_mintAndBridge_rolePermissions() external {
+    function test_mintAndBridgeCurrentEpoch_rolePermissions() external {
         vm.warp(TEST_START_TIMESTAMP + 1 days);
 
         // Test that only CONTROLLER_ROLE can call
@@ -520,14 +453,81 @@ contract MintAndBridgeTest is BaseTest {
             );
 
             resetPrank(testUsers[i]);
-            baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(0);
+            baseEmissionsController.mintAndBridgeCurrentEpoch();
         }
 
         // But controller should succeed
         resetPrank(users.controller);
-        baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(0);
+        baseEmissionsController.mintAndBridgeCurrentEpoch();
 
         uint256 epochMinted = baseEmissionsController.getEpochMintedAmount(0);
         assertGt(epochMinted, 0, "Controller should successfully mint");
+    }
+
+    /* =================================================== */
+    /*        COMPARISON WITH MINTANDBRIDGE TESTS         */
+    /* =================================================== */
+
+    function test_mintAndBridgeCurrentEpoch_vs_mintAndBridge_sameResult() external {
+        vm.warp(TEST_START_TIMESTAMP + (2 * TEST_EPOCH_LENGTH) + 1 days);
+
+        uint256 currentEpoch = baseEmissionsController.getCurrentEpoch();
+        assertEq(currentEpoch, 2, "Should be in epoch 2");
+
+        uint256 expectedEmissions = baseEmissionsController.getEmissionsAtEpoch(2);
+
+        // Use mintAndBridgeCurrentEpoch
+        resetPrank(users.controller);
+        baseEmissionsController.mintAndBridgeCurrentEpoch();
+
+        uint256 epoch2Minted = baseEmissionsController.getEpochMintedAmount(2);
+        assertEq(epoch2Minted, expectedEmissions, "Should mint expected amount");
+
+        // Move to next epoch and use mintAndBridge with explicit epoch
+        vm.warp(TEST_START_TIMESTAMP + (3 * TEST_EPOCH_LENGTH) + 1 days);
+
+        resetPrank(users.controller);
+        baseEmissionsController.mintAndBridge{ value: GAS_QUOTE }(3);
+
+        uint256 epoch3Minted = baseEmissionsController.getEpochMintedAmount(3);
+        assertEq(epoch3Minted, expectedEmissions, "Both methods should mint same amount per epoch");
+
+        // Total should be sum of both
+        assertEq(
+            baseEmissionsController.getTotalMinted(),
+            epoch2Minted + epoch3Minted,
+            "Total should be sum of both mints"
+        );
+    }
+
+    function test_mintAndBridgeCurrentEpoch_multipleReductionCliffs() external {
+        // Test emissions at multiple reduction cliffs
+        uint256[] memory cliffEpochs = new uint256[](3);
+        cliffEpochs[0] = TEST_REDUCTION_CLIFF; // First cliff
+        cliffEpochs[1] = TEST_REDUCTION_CLIFF * 2; // Second cliff
+        cliffEpochs[2] = TEST_REDUCTION_CLIFF * 3; // Third cliff
+
+        uint256 totalMinted = 0;
+
+        for (uint256 i = 0; i < cliffEpochs.length; i++) {
+            uint256 epoch = cliffEpochs[i];
+            vm.warp(TEST_START_TIMESTAMP + (epoch * TEST_EPOCH_LENGTH) + 1 days);
+
+            uint256 currentEpoch = baseEmissionsController.getCurrentEpoch();
+            assertEq(currentEpoch, epoch, "Should be at correct cliff epoch");
+
+            uint256 expectedEmissions = baseEmissionsController.getEmissionsAtEpoch(epoch);
+
+            resetPrank(users.controller);
+            baseEmissionsController.mintAndBridgeCurrentEpoch();
+
+            totalMinted += expectedEmissions;
+
+            uint256 epochMinted = baseEmissionsController.getEpochMintedAmount(epoch);
+            assertEq(epochMinted, expectedEmissions, "Should mint correct reduced amount at cliff");
+            assertLt(expectedEmissions, TEST_EMISSIONS_PER_EPOCH, "Should be reduced emissions");
+        }
+
+        assertEq(baseEmissionsController.getTotalMinted(), totalMinted, "Total should match accumulated mints");
     }
 }

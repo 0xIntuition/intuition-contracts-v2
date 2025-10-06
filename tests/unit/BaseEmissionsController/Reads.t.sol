@@ -40,7 +40,7 @@ contract BaseEmissionsControllerGettersTest is BaseTest {
         TransparentUpgradeableProxy baseEmissionsControllerProxy =
             new TransparentUpgradeableProxy(address(baseEmissionsControllerImpl), users.admin, "");
 
-        baseEmissionsController = BaseEmissionsController(address(baseEmissionsControllerProxy));
+        baseEmissionsController = BaseEmissionsController(payable(baseEmissionsControllerProxy));
 
         // Initialize the contract
         MetaERC20DispatchInit memory metaERC20DispatchInit = MetaERC20DispatchInit({
