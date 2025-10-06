@@ -419,10 +419,6 @@ contract DefaultCurveEntryFeeImpactTest is BaseTest {
             (uint256 sharesNow,) = protocol.multiVault.previewDeposit(atomId, DEFAULT_CURVE_ID, previewAmt);
             assertLe(sharesNow, sharesPrev, "shares minted on default for same assets should be non-increasing");
             sharesPrev = sharesNow;
-            console.log("Step: ", i);
-            console.log("Total assets: ", defA);
-            console.log("Total shares: ", defS);
-            console.log("Share price: ", protocol.multiVault.currentSharePrice(atomId, DEFAULT_CURVE_ID));
         }
     }
 
