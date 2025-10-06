@@ -402,7 +402,6 @@ contract DefaultCurveEntryFeeImpactTest is BaseTest {
 
         // baseline on default
         (uint256 defAssetsBase, uint256 defSharesBase) = protocol.multiVault.getVault(atomId, DEFAULT_CURVE_ID);
-        // uint256 previewAmt = 5 ether;
         (uint256 sharesPrev,) = protocol.multiVault.previewDeposit(atomId, DEFAULT_CURVE_ID, previewAmt);
 
         // deposit ladder on non-default
