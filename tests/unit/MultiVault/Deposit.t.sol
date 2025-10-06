@@ -462,7 +462,7 @@ contract DefaultCurveEntryFeeImpactFuzzTest is BaseTest {
         (uint256 defAssetsBase, uint256 defSharesBase) = protocol.multiVault.getVault(atomId, DEFAULT_CURVE_ID);
 
         uint256 feeDen = protocol.multiVault.getGeneralConfig().feeDenominator;
-        uint256 entryFeeBps = 50; // default from your test harness
+        (, uint256 entryFeeBps,,,) = protocol.multiVault.vaultFees(DEFAULT_CURVE_ID);
 
         uint256 expectedAdded; // sum of subsequent fee drips
         uint256 previewAmt = 3 ether;
