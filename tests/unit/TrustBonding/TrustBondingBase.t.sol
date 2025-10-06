@@ -8,15 +8,32 @@ import {
 } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 import { BaseTest } from "tests/BaseTest.t.sol";
+import { MetaERC20Dispatcher } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
+import { MetaERC20DispatchInit, FinalityState } from "src/interfaces/IMetaLayer.sol";
+import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";
 import { ITrustBonding } from "src/interfaces/ITrustBonding.sol";
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
+import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
 
 contract TrustBondingBase is BaseTest {
-    /// @notice Test constants
+    /// @notice Test constants for TrustBonding
     uint256 public constant SYSTEM_UTILIZATION_LOWER_BOUND = 5000; // 50%
     uint256 public constant PERSONAL_UTILIZATION_LOWER_BOUND = 3000; // 30%
     uint256 public initialTokens = 10_000 * 1e18;
     uint256 public lockDuration = 2 * 365 days; // 2 years
+
+    /// @notice Test constants for SatelliteEmissionsController
+    uint256 internal constant TEST_START_TIMESTAMP = 1_640_995_200; // Jan 1, 2022
+    uint256 internal constant TEST_EPOCH_LENGTH = 14 days;
+    uint256 internal constant TEST_EMISSIONS_PER_EPOCH = 1_000_000 * 1e18;
+    uint256 internal constant TEST_REDUCTION_CLIFF = 26;
+    uint256 internal constant TEST_REDUCTION_BASIS_POINTS = 1000; // 10%
+    uint32 internal constant TEST_RECIPIENT_DOMAIN = 1;
+    uint256 internal constant TEST_GAS_LIMIT = 125_000;
+
+    // Initializer structs
+    MetaERC20DispatchInit public metaERC20DispatchInit;
+    CoreEmissionsControllerInit public coreEmissionsInit;
 
     /* =================================================== */
     /*                       SETUP                         */
@@ -27,6 +44,38 @@ contract TrustBondingBase is BaseTest {
         _setupUserWrappedTokenAndTrustBonding(users.alice);
         _setupUserWrappedTokenAndTrustBonding(users.bob);
         _setupUserWrappedTokenAndTrustBonding(users.charlie);
+    }
+
+    function _deploySatelliteEmissionsController() internal returns (SatelliteEmissionsController) {
+        // Deploy SatelliteEmissionsController implementation
+        SatelliteEmissionsController satelliteEmissionsControllerImpl = new SatelliteEmissionsController();
+
+        // Deploy proxy
+        TransparentUpgradeableProxy satelliteEmissionsControllerProxyContract =
+            new TransparentUpgradeableProxy(address(satelliteEmissionsControllerImpl), users.admin, "");
+
+        SatelliteEmissionsController satelliteEmissionsController =
+            SatelliteEmissionsController(payable(address(satelliteEmissionsControllerProxyContract)));
+
+        // Initialize the contract
+        metaERC20DispatchInit = MetaERC20DispatchInit({
+            hubOrSpoke: address(0x123), // Mock meta spoke
+            recipientDomain: TEST_RECIPIENT_DOMAIN,
+            gasLimit: TEST_GAS_LIMIT,
+            finalityState: FinalityState.INSTANT
+        });
+
+        coreEmissionsInit = CoreEmissionsControllerInit({
+            startTimestamp: TEST_START_TIMESTAMP,
+            emissionsLength: TEST_EPOCH_LENGTH,
+            emissionsPerEpoch: TEST_EMISSIONS_PER_EPOCH,
+            emissionsReductionCliff: TEST_REDUCTION_CLIFF,
+            emissionsReductionBasisPoints: TEST_REDUCTION_BASIS_POINTS
+        });
+
+        vm.label(address(satelliteEmissionsController), "SatelliteEmissionsController");
+
+        return satelliteEmissionsController;
     }
 
     function _deployNewTrustBondingContract() internal returns (TrustBonding) {
