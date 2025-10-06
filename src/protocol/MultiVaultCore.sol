@@ -250,7 +250,7 @@ abstract contract MultiVaultCore is Initializable, IMultiVault, IMultiVaultCore 
     /// @param termId atom or triple (term) id to check
     /// @return bool whether the supplied term id is a triple
     function isTriple(bytes32 termId) public view returns (bool) {
-        return isCounterTriple(termId) ? _isTriple[getTripleIdFromCounterId(termId)] : _isTriple[termId];
+        return _isTriple[termId];
     }
 
     /// @notice returns whether the supplied vault id is a counter triple

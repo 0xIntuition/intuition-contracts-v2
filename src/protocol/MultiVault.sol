@@ -1240,7 +1240,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /* =================================================== */
 
     function _isTermCreated(bytes32 id) internal view returns (bool) {
-        return _atoms[id].length > 0 || isTriple(id);
+        return _atoms[id].length > 0 || _isTriple[id];
     }
 
     function _requireVaultType(bytes32 termId) internal view returns (bool isAtomType, VaultType vaultType) {
@@ -1259,13 +1259,13 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     }
 
     function _requireTermExists(bytes32 termId) internal view {
-        if (!isTermCreated(termId)) {
+        if (!_isTermCreated(termId)) {
             revert MultiVault_TermDoesNotExist(termId);
         }
     }
 
     function _hasCounterStake(bytes32 tripleId, uint256 curveId, address receiver) internal view returns (bool) {
-        if (!isTriple(tripleId)) {
+        if (!_isTriple[tripleId]) {
             revert MultiVault_TermNotTriple();
         }
 
