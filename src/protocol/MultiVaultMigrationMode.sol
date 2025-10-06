@@ -155,7 +155,7 @@ contract MultiVaultMigrationMode is MultiVault {
                 bondingCurveId,
                 vaultTotals[i].totalAssets,
                 vaultTotals[i].totalShares,
-                getVaultType(termIds[i])
+                _getVaultType(termIds[i])
             );
             unchecked {
                 ++i;
@@ -195,7 +195,7 @@ contract MultiVaultMigrationMode is MultiVault {
                 assets,
                 params.userBalances[i],
                 getShares(params.user, params.termIds[i], params.bondingCurveId),
-                getVaultType(params.termIds[i])
+                _getVaultType(params.termIds[i])
             );
             unchecked {
                 ++i;

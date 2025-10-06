@@ -737,7 +737,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         _validateMinDeposit(assets);
 
         // --- discover vault type and basic flags up front ---
-        VaultType _vaultType = getVaultType(termId);
+        VaultType _vaultType = _getVaultType(termId);
         bool isNew = _isNewVault(termId, curveId);
         bool isDefault = curveId == bondingCurveConfig.defaultCurveId;
 
@@ -886,7 +886,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         internal
         returns (uint256, uint256)
     {
-        VaultType _vaultType = getVaultType(termId);
+        VaultType _vaultType = _getVaultType(termId);
         bool _isAtom = _vaultType == VaultType.ATOM;
         _validateRedeem(termId, curveId, receiver, shares, minAssets);
 
@@ -1162,9 +1162,8 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         }
 
         uint256 protocolFee = _feeOnRaw(assetsAfterMinSharesCost, vaultFees.protocolFee);
-        uint256 entryFee = _isNewVault(termId, curveId) ? 0 : _feeOnRaw(assetsAfterMinSharesCost, vaultFees.entryFee); // waive
-            // entry fee on
-            // brand-new vaults
+        // no entry fees on brand-new vaults
+        uint256 entryFee = _isNewVault(termId, curveId) ? 0 : _feeOnRaw(assetsAfterMinSharesCost, vaultFees.entryFee);
         uint256 atomDepositFraction = _feeOnRaw(assetsAfterMinSharesCost, tripleConfig.atomDepositFractionForTriple);
 
         assetsAfterFees = assetsAfterMinSharesCost - protocolFee - entryFee - atomDepositFraction;
