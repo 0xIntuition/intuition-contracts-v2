@@ -93,8 +93,8 @@ contract SatelliteEmissionsControllerGettersTest is BaseTest {
         assertEq(baseEmissionsController, TEST_BASE_EMISSIONS_CONTROLLER);
     }
 
-    function test_getBridgedEmissions_InitiallyReturnsZero() public {
-        uint256 bridgedEmissions = satelliteEmissionsController.getBridgedEmissions(0);
+    function test_getUnclaimedEmissions_InitiallyReturnsZero() public {
+        uint256 bridgedEmissions = satelliteEmissionsController.getReclaimedEmissions(0);
         assertEq(bridgedEmissions, 0);
     }
 
