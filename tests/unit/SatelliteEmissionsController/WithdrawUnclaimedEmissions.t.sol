@@ -14,7 +14,7 @@ import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 /// @dev forge test --match-path 'tests/unit/SatelliteEmissionsController/WithdrawUnclaimedEmissions.t.sol'
 contract WithdrawUnclaimedEmissionsTest is TrustBondingBase {
     /// @notice Events to test
-    event UnclaimedRewardsWithdrawn(uint256 indexed epoch, address indexed recipient, uint256 amount);
+    event UnclaimedEmissionsWithdrawn(uint256 indexed epoch, address indexed recipient, uint256 amount);
 
     function setUp() public override {
         super.setUp();
@@ -49,7 +49,7 @@ contract WithdrawUnclaimedEmissionsTest is TrustBondingBase {
 
         resetPrank(users.admin);
         vm.expectEmit(true, true, false, true);
-        emit UnclaimedRewardsWithdrawn(2, users.bob, unclaimedRewardsBefore);
+        emit UnclaimedEmissionsWithdrawn(2, users.bob, unclaimedRewardsBefore);
         protocol.satelliteEmissionsController.withdrawUnclaimedEmissions(2, users.bob);
 
         uint256 satelliteBalanceAfter = address(protocol.satelliteEmissionsController).balance;
@@ -85,7 +85,7 @@ contract WithdrawUnclaimedEmissionsTest is TrustBondingBase {
 
         resetPrank(users.admin);
         vm.expectEmit(true, true, false, true);
-        emit UnclaimedRewardsWithdrawn(3, users.charlie, unclaimedRewardsBefore);
+        emit UnclaimedEmissionsWithdrawn(3, users.charlie, unclaimedRewardsBefore);
         protocol.satelliteEmissionsController.withdrawUnclaimedEmissions(3, users.charlie);
 
         uint256 satelliteBalanceAfter = address(protocol.satelliteEmissionsController).balance;
@@ -114,7 +114,7 @@ contract WithdrawUnclaimedEmissionsTest is TrustBondingBase {
 
         resetPrank(users.admin);
         vm.expectEmit(true, true, false, true);
-        emit UnclaimedRewardsWithdrawn(2, users.bob, totalEpochRewards);
+        emit UnclaimedEmissionsWithdrawn(2, users.bob, totalEpochRewards);
         protocol.satelliteEmissionsController.withdrawUnclaimedEmissions(2, users.bob);
 
         uint256 satelliteBalanceAfter = address(protocol.satelliteEmissionsController).balance;
@@ -140,7 +140,7 @@ contract WithdrawUnclaimedEmissionsTest is TrustBondingBase {
 
         resetPrank(users.admin);
         vm.expectEmit(true, true, false, true);
-        emit UnclaimedRewardsWithdrawn(2, address(mockRecipient), unclaimedRewards);
+        emit UnclaimedEmissionsWithdrawn(2, address(mockRecipient), unclaimedRewards);
         protocol.satelliteEmissionsController.withdrawUnclaimedEmissions(2, address(mockRecipient));
 
         uint256 recipientBalanceAfter = address(mockRecipient).balance;
@@ -307,7 +307,7 @@ contract WithdrawUnclaimedEmissionsTest is TrustBondingBase {
 
         resetPrank(users.admin);
         vm.expectEmit(true, true, false, true);
-        emit UnclaimedRewardsWithdrawn(2, users.charlie, unclaimedEpoch2);
+        emit UnclaimedEmissionsWithdrawn(2, users.charlie, unclaimedEpoch2);
         protocol.satelliteEmissionsController.withdrawUnclaimedEmissions(2, users.charlie);
 
         // Withdraw epoch 3 rewards (should have Bob's unclaimed rewards)
@@ -315,7 +315,7 @@ contract WithdrawUnclaimedEmissionsTest is TrustBondingBase {
         assertGt(unclaimedEpoch3, 0, "Should have Bob's unclaimed epoch 3 rewards");
 
         vm.expectEmit(true, true, false, true);
-        emit UnclaimedRewardsWithdrawn(3, users.charlie, unclaimedEpoch3);
+        emit UnclaimedEmissionsWithdrawn(3, users.charlie, unclaimedEpoch3);
         protocol.satelliteEmissionsController.withdrawUnclaimedEmissions(3, users.charlie);
     }
 
@@ -343,7 +343,7 @@ contract WithdrawUnclaimedEmissionsTest is TrustBondingBase {
 
         resetPrank(users.admin);
         vm.expectEmit(true, true, false, true);
-        emit UnclaimedRewardsWithdrawn(0, users.bob, 1_000_000 * 1e18);
+        emit UnclaimedEmissionsWithdrawn(0, users.bob, 1_000_000 * 1e18);
         protocol.satelliteEmissionsController.withdrawUnclaimedEmissions(0, users.bob);
     }
 
@@ -377,7 +377,7 @@ contract WithdrawUnclaimedEmissionsTest is TrustBondingBase {
 
         resetPrank(users.admin);
         vm.expectEmit(true, true, false, true);
-        emit UnclaimedRewardsWithdrawn(2, users.bob, expectedUnclaimed);
+        emit UnclaimedEmissionsWithdrawn(2, users.bob, expectedUnclaimed);
         protocol.satelliteEmissionsController.withdrawUnclaimedEmissions(2, users.bob);
 
         uint256 satelliteBalanceAfter = address(protocol.satelliteEmissionsController).balance;

@@ -34,19 +34,19 @@ interface ISatelliteEmissionsController {
     event NativeTokenTransferred(address indexed recipient, uint256 amount);
 
     /**
-     * @notice Event emitted when unclaimed rewards are bridged back to the BaseEmissionsController
-     * @param epoch The epoch for which unclaimed rewards were bridged
-     * @param amount The amount of unclaimed rewards bridged
+     * @notice Event emitted when unclaimed emissions are bridged back to the BaseEmissionsController
+     * @param epoch The epoch for which unclaimed emissions were bridged
+     * @param amount The amount of unclaimed emissions bridged
      */
-    event UnclaimedRewardsBridged(uint256 indexed epoch, uint256 amount);
+    event UnclaimedEmissionsBridged(uint256 indexed epoch, uint256 amount);
 
     /**
-     * @notice Event emitted when unclaimed rewards are withdrawn by the admin
-     * @param epoch The epoch for which unclaimed rewards were withdrawn
-     * @param recipient The address that received the unclaimed rewards
-     * @param amount The amount of unclaimed rewards withdrawn
+     * @notice Event emitted when unclaimed emissions are withdrawn by the admin
+     * @param epoch The epoch for which unclaimed emissions were withdrawn
+     * @param recipient The address that received the unclaimed emissions
+     * @param amount The amount of unclaimed emissions withdrawn
      */
-    event UnclaimedRewardsWithdrawn(uint256 indexed epoch, address indexed recipient, uint256 amount);
+    event UnclaimedEmissionsWithdrawn(uint256 indexed epoch, address indexed recipient, uint256 amount);
 
     /* =================================================== */
     /*                       ERRORS                        */
@@ -77,11 +77,11 @@ interface ISatelliteEmissionsController {
     function getBaseEmissionsController() external view returns (address);
 
     /**
-     * @notice Get the amount of emissions bridged back to Base for a specific epoch
+     * @notice Get the amount of emissions reclaimed for a specific epoch
      * @param epoch The epoch to query
-     * @return The amount of emissions bridged back to Base for the given epoch
+     * @return The amount of emissions reclaimed for the given epoch
      */
-    function getBridgedEmissions(uint256 epoch) external view returns (uint256);
+    function getReclaimedEmissions(uint256 epoch) external view returns (uint256);
 
     /* =================================================== */
     /*                    CONTROLLER                       */
