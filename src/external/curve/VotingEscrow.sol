@@ -11,7 +11,7 @@ pragma solidity 0.8.29;
  * @notice Votes have a weight depending on time, so that users are
  *         committed to the future of (whatever they are voting for)
  * @dev Vote weight decays linearly over time. Lock time cannot be
- *      more than `MAXTIME` (3 years).
+ *      more than `MAXTIME` (2 years).
  *
  * # Voting escrow to have time-weighted votes
  * # Votes have a weight depending on time, so that users are committed
@@ -24,7 +24,7 @@ pragma solidity 0.8.29;
  * #   |  /
  * #   |/
  * # 0 +--------+------> time
- * #       maxtime (3 years?)
+ * #       maxtime (2 years?)
  */
 import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -72,8 +72,8 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     event Supply(uint256 prevSupply, uint256 supply);
 
     uint256 internal constant WEEK = 1 weeks;
-    uint256 public constant MAXTIME = 3 * 365 * 86_400;
-    int128 internal constant iMAXTIME = 3 * 365 * 86_400;
+    uint256 public constant MAXTIME = 2 * 365 * 86_400;
+    int128 internal constant iMAXTIME = 2 * 365 * 86_400;
     uint256 internal constant MULTIPLIER = 1 ether;
 
     uint256 public MINTIME;
@@ -390,7 +390,7 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
 
         uint256 unlock_time = (_unlock_time / WEEK) * WEEK; // Locktime is rounded down to weeks
         require(unlock_time >= block.timestamp + MINTIME, "Voting lock must be at least MINTIME");
-        require(unlock_time <= block.timestamp + MAXTIME, "Voting lock can be 3 years max");
+        require(unlock_time <= block.timestamp + MAXTIME, "Voting lock can be 2 years max");
 
         _deposit_for(msg.sender, _value, unlock_time, _locked, DepositType.CREATE_LOCK_TYPE);
     }
@@ -431,7 +431,7 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         require(_locked.end > block.timestamp, "Lock expired");
         require(_locked.amount > 0, "Nothing is locked");
         require(unlock_time > _locked.end, "Can only increase lock duration");
-        require(unlock_time <= block.timestamp + MAXTIME, "Voting lock can be 3 years max");
+        require(unlock_time <= block.timestamp + MAXTIME, "Voting lock can be 2 years max");
 
         _deposit_for(msg.sender, 0, unlock_time, _locked, DepositType.INCREASE_UNLOCK_TIME);
     }

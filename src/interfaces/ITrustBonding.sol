@@ -249,7 +249,7 @@ interface ITrustBonding {
      * @notice Returns the Annual Percentage Yield (APY) for a specific epoch
      * @return The APY for the specified epoch (scaled by 1e18)
      */
-    function getSystemApy() external view returns (uint256);
+    function getSystemApy() external view returns (uint256, uint256);
 
     /**
      * @notice Calculates the amount of unclaimed rewards for a specific epoch.

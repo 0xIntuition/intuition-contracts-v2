@@ -234,7 +234,6 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
 
     function getUserInfo(address account) external view returns (UserInfo memory) {
         uint256 _currEpoch = _currentEpoch();
-
         uint256 userRewards;
         uint256 personalUtilization;
 
@@ -310,15 +309,22 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /// @inheritdoc ITrustBonding
-    function getSystemApy() external view returns (uint256) {
+    function getSystemApy() external view returns (uint256 currentApy, uint256 maxApy) {
         uint256 _supply = supply;
         if (_supply == 0) {
-            return 0;
+            return (0, 0);
         }
+        uint256 _currEpoch = _currentEpoch();
 
-        uint256 emissionsPerYear = _emissionsForEpoch(_currentEpoch()) * _epochsPerYear();
+        uint256 maxEmissions = ICoreEmissionsController(satelliteEmissionsController).getEmissionsAtEpoch(_currEpoch);
+        uint256 maxEmissionsPerYear = maxEmissions * _epochsPerYear();
 
-        return ((emissionsPerYear * BASIS_POINTS_DIVISOR) / _supply);
+        uint256 emissionsPerYear = _emissionsForEpoch(_currEpoch) * _epochsPerYear();
+
+        currentApy = (emissionsPerYear * BASIS_POINTS_DIVISOR) / _supply;
+        maxApy = (maxEmissionsPerYear * BASIS_POINTS_DIVISOR) / _supply;
+
+        return (currentApy, maxApy);
     }
 
     /// @inheritdoc ITrustBonding
