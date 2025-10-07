@@ -315,11 +315,11 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
             return (0, 0);
         }
         uint256 _currEpoch = _currentEpoch();
+        
+        uint256 emissionsPerYear = _emissionsForEpoch(_currEpoch) * _epochsPerYear();
 
         uint256 maxEmissions = ICoreEmissionsController(satelliteEmissionsController).getEmissionsAtEpoch(_currEpoch);
         uint256 maxEmissionsPerYear = maxEmissions * _epochsPerYear();
-
-        uint256 emissionsPerYear = _emissionsForEpoch(_currEpoch) * _epochsPerYear();
 
         currentApy = (emissionsPerYear * BASIS_POINTS_DIVISOR) / _supply;
         maxApy = (maxEmissionsPerYear * BASIS_POINTS_DIVISOR) / _supply;
