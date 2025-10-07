@@ -229,15 +229,15 @@ interface ITrustBonding {
     /// @notice Returns the eligible rewards for a specific user
     /// @param account The address of the user
     /// @param epoch The epoch number to query
-    /// @return eligible The total rewards the user is eligible for in the specified epoch
-    /// @return available The rewards available for the user to claim in the specified epoch
+    /// @return eligibleRewards The rewards the user is eligible for in the specified epoch
+    /// @return maxRewards The maximum possible rewards before utilization adjustment
     function getUserRewardsForEpoch(
         address account,
         uint256 epoch
     )
         external
         view
-        returns (uint256 eligible, uint256 available);
+        returns (uint256 eligibleRewards, uint256 maxRewards);
 
     /**
      * @notice Returns the Annual Percentage Yield (APY) for a specific epoch
