@@ -256,6 +256,7 @@ contract ClaimRewardsTest is TrustBondingBase {
         _setUserUtilizationForEpoch(users.alice, 1, 1000e18);
         _setUserUtilizationForEpoch(users.alice, 2, 1500e18); // Delta = 500
         _setUserClaimedRewardsForEpoch(users.alice, 1, 1000e18); // Target = 1000
+        _setLastActiveEpochForUser(users.alice, 2); // Ensure last active epoch is set
 
         // Expected ratio = 3000 + (500 * 7000) / 1000 = 3000 + 3500 = 6500
         uint256 expectedRatio = 6500;

@@ -217,6 +217,11 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     }
 
     /// @inheritdoc IMultiVault
+    function getUserLastActiveEpoch(address user) external view returns (uint256) {
+        return lastActiveEpoch[user];
+    }
+
+    /// @inheritdoc IMultiVault
     function getAtomWarden() external view returns (address) {
         return walletConfig.atomWarden;
     }

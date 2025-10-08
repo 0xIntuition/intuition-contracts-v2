@@ -319,6 +319,13 @@ interface IMultiVault {
     /* =================================================== */
 
     /**
+     * @notice Returns the total system utilization for a specific epoch
+     * @param epoch The epoch number to query
+     * @return The total utilization value for the epoch (can be positive or negative)
+     */
+    function getTotalUtilizationForEpoch(uint256 epoch) external view returns (int256);
+
+    /**
      * @notice Returns a user's utilization for a specific epoch
      * @param user The user address to query
      * @param epoch The epoch number to query
@@ -327,11 +334,11 @@ interface IMultiVault {
     function getUserUtilizationForEpoch(address user, uint256 epoch) external view returns (int256);
 
     /**
-     * @notice Returns the total system utilization for a specific epoch
-     * @param epoch The epoch number to query
-     * @return The total utilization value for the epoch (can be positive or negative)
+     * @notice Returns the last active epoch for a user
+     * @param user The user address to query
+     * @return The last epoch number in which the user had activity
      */
-    function getTotalUtilizationForEpoch(uint256 epoch) external view returns (int256);
+    function getUserLastActiveEpoch(address user) external view returns (uint256);
 
     /**
      * @notice Returns the accumulated protocol fees for a specific epoch
