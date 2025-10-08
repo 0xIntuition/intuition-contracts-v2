@@ -166,7 +166,7 @@ abstract contract SetupScript is Script {
             revert("Unsupported chain for broadcasting");
         }
 
-       _initializeValuesFromEnv();
+        _initializeValuesFromEnv();
 
         console2.log("");
         console2.log("CONFIGURATION: =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+");
@@ -293,7 +293,7 @@ abstract contract SetupScript is Script {
     }
 
     function _initializeValuesFromEnv() internal {
-         // Load optional configuration from environment
+        // Load optional configuration from environment
         MIN_SHARES = vm.envOr("MIN_SHARES", MIN_SHARES);
         MIN_DEPOSIT = vm.envOr("MIN_DEPOSIT", MIN_DEPOSIT);
 
