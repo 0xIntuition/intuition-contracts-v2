@@ -135,7 +135,7 @@ contract MultiVaultHelpersTest is BaseTest {
         bytes32 atomId = createSimpleAtom("price-atom", getAtomCreationCost(), users.admin);
         uint256 curveId = getDefaultCurveId();
 
-        uint256 oneShareAssets = protocol.multiVault.convertToAssets(atomId, curveId, protocol.multiVault.ONE_SHARE());
+        uint256 oneShareAssets = protocol.multiVault.convertToAssets(atomId, curveId, ONE_SHARE);
         uint256 reported = protocol.multiVault.currentSharePrice(atomId, curveId);
 
         assertEq(reported, oneShareAssets);

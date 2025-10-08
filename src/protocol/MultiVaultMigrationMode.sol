@@ -89,7 +89,7 @@ contract MultiVaultMigrationMode is MultiVault {
         for (uint256 i = 0; i < length;) {
             bytes32 atomId = calculateAtomId(atomDataArray[i]);
             _atoms[atomId] = atomDataArray[i];
-            emit AtomCreated(creators[i], atomId, atomDataArray[i], computeAtomWalletAddr(atomId));
+            emit AtomCreated(creators[i], atomId, atomDataArray[i], _computeAtomWalletAddr(atomId));
             unchecked {
                 ++i;
             }

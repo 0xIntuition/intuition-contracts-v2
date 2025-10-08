@@ -41,6 +41,7 @@ abstract contract BaseTest is Modifiers, Test {
                                      VARIABLES
     //////////////////////////////////////////////////////////////////////////*/
     uint256 internal BASIS_POINTS_DIVISOR = 10_000;
+    uint256 internal ONE_SHARE = 1e18;
 
     uint256[] internal ATOM_COST;
     uint256[] internal TRIPLE_COST;

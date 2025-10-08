@@ -109,13 +109,120 @@ abstract contract MultiVaultCore is Initializable, IMultiVault, IMultiVaultCore 
     }
 
     /* =================================================== */
-    /*                    HELPER FUNCTIONS                 */
+    /*                    INTERNAL FUNCTIONS                 */
     /* =================================================== */
 
     /// @dev Internal function to set and validate the general configuration struct
     function _setGeneralConfig(GeneralConfig memory _generalConfig) internal {
         if (_generalConfig.admin == address(0)) revert MultiVaultCore_InvalidAdmin();
         generalConfig = _generalConfig;
+    }
+
+    /// @dev Internal function to check if an atom exists
+    /// @param atomId atom id to check
+    function _isAtom(bytes32 atomId) internal view returns (bool) {
+        return _atoms[atomId].length != 0;
+    }
+
+    /// @dev Internal function to calculate the atom id from the atom data
+    /// @param data The data of the atom
+    function _calculateAtomId(bytes memory data) internal pure returns (bytes32 id) {
+        return keccak256(abi.encodePacked(ATOM_SALT, keccak256(data)));
+    }
+
+    /// @dev Internal function to calculate the triple id from the subject, predicate, and object atom ids
+    /// @param subjectId The atom id of the subject
+    /// @param predicateId The atom id of the predicate
+    /// @param objectId The atom id of the object
+    /// @return id The calculated triple id
+    function _calculateTripleId(
+        bytes32 subjectId,
+        bytes32 predicateId,
+        bytes32 objectId
+    )
+        public
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encodePacked(TRIPLE_SALT, subjectId, predicateId, objectId));
+    }
+
+    /// @dev Internal function to calculate the counter triple id from the triple id
+    /// @param tripleId The id of the triple
+    /// @return id The calculated counter triple id
+    function _calculateCounterTripleId(bytes32 tripleId) internal pure returns (bytes32) {
+        return bytes32(keccak256(abi.encodePacked(COUNTER_SALT, tripleId)));
+    }
+
+    /// @dev Internal function to get the triple id from the given counter id
+    /// @param termId term id of the counter triple
+    /// @return tripleId the triple vault id from the given counter id
+    function _isCounterTriple(bytes32 termId) internal view returns (bool) {
+        return _tripleIdFromCounterId[termId] != bytes32(0);
+    }
+
+    /// @dev Internal function to get the atom data for a given atom id
+    /// @dev If the atom does not exist, this function reverts
+    /// @param atomId The id of the atom
+    /// @return data The data of the atom
+    function _getAtom(bytes32 atomId) internal view returns (bytes memory data) {
+        bytes memory _data = _atoms[atomId];
+        if (_data.length == 0) {
+            revert MultiVaultCore_AtomDoesNotExist(atomId);
+        }
+        return _data;
+    }
+
+    /// @dev Internal function to get the underlying atom ids for a given triple id
+    /// @dev If the triple does not exist, this function reverts
+    /// @param tripleId term id of the triple
+    /// @return The underlying atom ids of the triple
+    function _getTriple(bytes32 tripleId) internal view returns (bytes32, bytes32, bytes32) {
+        bytes32[3] memory atomIds = _triples[tripleId];
+        if (atomIds[0] == bytes32(0) && atomIds[1] == bytes32(0) && atomIds[2] == bytes32(0)) {
+            revert MultiVaultCore_TripleDoesNotExist(tripleId);
+        }
+        return (atomIds[0], atomIds[1], atomIds[2]);
+    }
+
+    /// @dev Internal function to get the opposite triple id (counter or positive) for a given triple id
+    /// @param tripleId The id of the triple or counter triple
+    /// @return The opposite triple id
+    function _getOppositeTripleId(bytes32 tripleId) internal view returns (bytes32) {
+        if (_isCounterTriple(tripleId)) {
+            return _tripleIdFromCounterId[tripleId];
+        } else {
+            return _calculateCounterTripleId(tripleId);
+        }
+    }
+
+    /// @dev Internal function to get the vault type for a given term ID
+    /// @param termId The term ID to check
+    function _getVaultType(bytes32 termId) internal view returns (VaultType) {
+        bool _isVaultAtom = _isAtom(termId);
+        bool _isVaultTriple = _isTriple[termId];
+        bool _isVaultCounterTriple = _isCounterTriple(termId);
+
+        if (!_isVaultAtom && !_isVaultTriple && !_isVaultCounterTriple) {
+            revert MultiVaultCore_TermDoesNotExist(termId);
+        }
+
+        if (_isVaultAtom) return VaultType.ATOM;
+        if (_isVaultCounterTriple) return VaultType.COUNTER_TRIPLE;
+        return VaultType.TRIPLE;
+    }
+
+    /// @dev Internal function to get the static costs that go into creating an atom
+    /// @return atomCost the static costs of creating an atom
+    function _getAtomCost() internal view returns (uint256) {
+        return atomConfig.atomCreationProtocolFee + generalConfig.minShare;
+    }
+
+    /// @dev Internal function to get the static costs that go into creating a triple
+    /// @return tripleCost the static costs of creating a triple
+    function _getTripleCost() internal view returns (uint256) {
+        return tripleConfig.tripleCreationProtocolFee + tripleConfig.totalAtomDepositsOnTripleCreation
+            + generalConfig.minShare * 2;
     }
 
     /* =================================================== */
@@ -156,30 +263,35 @@ abstract contract MultiVaultCore is Initializable, IMultiVault, IMultiVaultCore 
     /*                     Atom Getters                    */
     /* =================================================== */
 
+    /// @notice returns the atom data for a given atom id
+    /// @dev If the atom does not exist, instead of reverting, this function returns an empty bytes
     function atom(bytes32 atomId) public view returns (bytes memory data) {
         return _atoms[atomId];
     }
 
-    function calculateAtomId(bytes memory data) public pure returns (bytes32 id) {
-        return keccak256(abi.encodePacked(ATOM_SALT, keccak256(data)));
+    /// @notice returns the atom data for a given atom id
+    /// @dev If the atom does not exist, this function reverts
+    function getAtom(bytes32 atomId) public view returns (bytes memory data) {
+        return _getAtom(atomId);
     }
 
-    function getAtom(bytes32 atomId) public view returns (bytes memory data) {
-        bytes memory _data = _atoms[atomId];
-        if (_data.length == 0) {
-            revert MultiVaultCore_AtomDoesNotExist(atomId);
-        }
-        return _data;
+    /// @notice calculates the atom id from the atom data
+    /// @param data The data of the atom
+    function calculateAtomId(bytes memory data) public pure returns (bytes32 id) {
+        return _calculateAtomId(data);
     }
 
     /// @notice Returns the static costs that go into creating an atom
     /// @return atomCost the static costs of creating an atom
     function getAtomCost() public view returns (uint256) {
-        return atomConfig.atomCreationProtocolFee + generalConfig.minShare;
+        return _getAtomCost();
     }
 
+    /// @notice returns whether the supplied vault id is an atom
+    /// @param atomId atom id to check
+    /// @return bool whether the supplied atom id is an atom
     function isAtom(bytes32 atomId) public view returns (bool) {
-        return _atoms[atomId].length != 0;
+        return _isAtom(atomId);
     }
 
     /* =================================================== */
@@ -195,13 +307,6 @@ abstract contract MultiVaultCore is Initializable, IMultiVault, IMultiVaultCore 
         return (atomIds[0], atomIds[1], atomIds[2]);
     }
 
-    /// @notice Returns the static costs that go into creating a triple
-    /// @return tripleCost the static costs of creating a triple
-    function getTripleCost() public view returns (uint256) {
-        return tripleConfig.tripleCreationProtocolFee + tripleConfig.totalAtomDepositsOnTripleCreation
-            + generalConfig.minShare * 2;
-    }
-
     /// @notice returns the underlying atom ids for a given triple id
     /// @dev If the triple does not exist, this function reverts
     /// @param tripleId term id of the triple
@@ -213,11 +318,17 @@ abstract contract MultiVaultCore is Initializable, IMultiVault, IMultiVaultCore 
         return (atomIds[0], atomIds[1], atomIds[2]);
     }
 
+    /// @notice Returns the static costs that go into creating a triple
+    /// @return tripleCost the static costs of creating a triple
+    function getTripleCost() public view returns (uint256) {
+        return _getTripleCost();
+    }
+
     /// @notice returns the counter id from the given triple id
     /// @param tripleId term id of the triple
     /// @return counterId the counter vault id from the given triple id
     function getCounterIdFromTripleId(bytes32 tripleId) public pure returns (bytes32) {
-        return bytes32(keccak256(abi.encodePacked(COUNTER_SALT, tripleId)));
+        return _calculateCounterTripleId(tripleId);
     }
 
     /// @notice returns the triple id from the given counter id
@@ -227,6 +338,11 @@ abstract contract MultiVaultCore is Initializable, IMultiVault, IMultiVaultCore 
         return _tripleIdFromCounterId[counterId];
     }
 
+    /// @notice calculates the triple id from the subject, predicate, and object atom ids
+    /// @param subjectId The atom id of the subject
+    /// @param predicateId The atom id of the predicate
+    /// @param objectId The atom id of the object
+    /// @return id The calculated triple id
     function calculateTripleId(
         bytes32 subjectId,
         bytes32 predicateId,
@@ -236,9 +352,14 @@ abstract contract MultiVaultCore is Initializable, IMultiVault, IMultiVaultCore 
         pure
         returns (bytes32)
     {
-        return keccak256(abi.encodePacked(TRIPLE_SALT, subjectId, predicateId, objectId));
+        return _calculateTripleId(subjectId, predicateId, objectId);
     }
 
+    /// @notice calculates the counter triple id from the subject, predicate, and object atom ids
+    /// @param subjectId The atom id of the subject
+    /// @param predicateId The atom id of the predicate
+    /// @param objectId The atom id of the object
+    /// @return id The calculated counter triple id
     function calculateCounterTripleId(
         bytes32 subjectId,
         bytes32 predicateId,
@@ -248,38 +369,39 @@ abstract contract MultiVaultCore is Initializable, IMultiVault, IMultiVaultCore 
         pure
         returns (bytes32)
     {
-        bytes32 _tripleId = calculateTripleId(subjectId, predicateId, objectId);
-        return bytes32(keccak256(abi.encodePacked(COUNTER_SALT, _tripleId)));
+        bytes32 tripleId = _calculateTripleId(subjectId, predicateId, objectId);
+        return _calculateCounterTripleId(tripleId);
     }
 
     /// @notice returns whether the supplied vault id is a triple
     /// @param termId atom or triple (term) id to check
     /// @return bool whether the supplied term id is a triple
     function isTriple(bytes32 termId) public view returns (bool) {
-        return isCounterTriple(termId) ? _isTriple[getTripleIdFromCounterId(termId)] : _isTriple[termId];
+        return _isTriple[termId];
     }
 
     /// @notice returns whether the supplied vault id is a counter triple
     /// @param termId atom or triple (term) id to check
     /// @return bool whether the supplied term id is a counter triple
     function isCounterTriple(bytes32 termId) public view returns (bool) {
-        return _tripleIdFromCounterId[termId] != bytes32(0);
+        return _isCounterTriple(termId);
     }
+
+    /// @notice returns the opposite triple id (counter or positive) for a given triple id
+    /// @param tripleId The id of the triple or counter triple
+    /// @return The opposite triple id
+    function getOppositeTripleId(bytes32 tripleId) external view returns (bytes32) {
+        return _getOppositeTripleId(tripleId);
+    }
+
+    /* =================================================== */
+    /*                     Other Getters                   */
+    /* =================================================== */
 
     /// @notice Get the vault type for a given term ID
     /// @param termId The term ID to check
     /// @return vaultType The type of vault (ATOM, TRIPLE, or COUNTER_TRIPLE)
     function getVaultType(bytes32 termId) public view returns (VaultType) {
-        bool _isVaultAtom = isAtom(termId);
-        bool _isVaultTriple = _isTriple[termId];
-        bool _isVaultCounterTriple = isCounterTriple(termId);
-
-        if (!_isVaultAtom && !_isVaultTriple && !_isVaultCounterTriple) {
-            revert MultiVaultCore_TermDoesNotExist(termId);
-        }
-
-        if (_isVaultAtom) return VaultType.ATOM;
-        if (_isVaultCounterTriple) return VaultType.COUNTER_TRIPLE;
-        return VaultType.TRIPLE;
+        return _getVaultType(termId);
     }
 }
