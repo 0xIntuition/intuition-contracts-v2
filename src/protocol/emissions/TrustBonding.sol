@@ -238,9 +238,8 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         uint256 personalUtilization;
 
         if (_currEpoch > 0) {
-            uint256 prevEpoch = _currEpoch - 1;
-            userRewards = _userEligibleRewardsForEpoch(account, prevEpoch);
-            personalUtilization = _getPersonalUtilizationRatio(account, prevEpoch);
+            userRewards = _userEligibleRewardsForEpoch(account, _currEpoch);
+            personalUtilization = _getPersonalUtilizationRatio(account, _currEpoch);
         }
 
         LockedBalance memory userLocked = locked[account];
@@ -259,11 +258,12 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         uint256 currEpoch = _currentEpoch();
         uint256 userRewards = _userEligibleRewardsForEpoch(account, currEpoch);
         uint256 personalUtilization = _getPersonalUtilizationRatio(account, currEpoch);
-
         int256 locked = locked[account].amount;
+        
         if (userRewards == 0 || locked <= 0) {
             return (currentApy, maxApy);
         }
+
         uint256 userRewardsPerYear = userRewards * _epochsPerYear();
         currentApy = (userRewardsPerYear * personalUtilization) / uint256(locked);
         maxApy = (userRewardsPerYear * BASIS_POINTS_DIVISOR) / uint256(locked);
@@ -273,6 +273,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     /// @inheritdoc ITrustBonding
     function getUserCurrentClaimableRewards(address account) external view returns (uint256) {
         uint256 _currEpoch = _currentEpoch();
+
         if (_currEpoch == 0) {
             return 0;
         }
@@ -297,7 +298,6 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         }
         uint256 userRewards = _userEligibleRewardsForEpoch(account, epoch);
         uint256 personalUtilization = _getPersonalUtilizationRatio(account, epoch);
-
         return ((userRewards * personalUtilization) / BASIS_POINTS_DIVISOR, userRewards);
     }
 
@@ -308,15 +308,11 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
             return (0, 0);
         }
         uint256 _currEpoch = _currentEpoch();
-
         uint256 emissionsPerYear = _emissionsForEpoch(_currEpoch) * _epochsPerYear();
-
         uint256 maxEmissions = ICoreEmissionsController(satelliteEmissionsController).getEmissionsAtEpoch(_currEpoch);
         uint256 maxEmissionsPerYear = maxEmissions * _epochsPerYear();
-
         currentApy = (emissionsPerYear * BASIS_POINTS_DIVISOR) / _supply;
         maxApy = (maxEmissionsPerYear * BASIS_POINTS_DIVISOR) / _supply;
-
         return (currentApy, maxApy);
     }
 

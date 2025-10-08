@@ -6,6 +6,19 @@ export const MultiVaultAbi = [
   },
   {
     "type": "function",
+    "name": "ATOM_SALT",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "BURN_ADDRESS",
     "inputs": [],
     "outputs": [
@@ -65,6 +78,19 @@ export const MultiVaultAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "TRIPLE_SALT",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "stateMutability": "view"
@@ -2371,6 +2397,12 @@ export const MultiVaultAbi = [
         "type": "uint256",
         "indexed": true,
         "internalType": "uint256"
+      },
+      {
+        "name": "sender",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
       },
       {
         "name": "amount",

@@ -45,7 +45,6 @@ abstract contract SetupScript is Script {
     TrustBonding public trustBonding;
     BondingCurveRegistry public bondingCurveRegistry;
     LinearCurve public linearCurve;
-    ProgressiveCurve public progressiveCurve;
     OffsetProgressiveCurve public offsetProgressiveCurve;
 
     uint256 internal constant ONE_DAY = 86_400;
@@ -277,15 +276,6 @@ abstract contract SetupScript is Script {
                 vm.toString(block.chainid),
                 "]: '",
                 vm.toString(address(offsetProgressiveCurve)),
-                "' }"
-            )
-        );
-        console2.log(
-            string.concat(
-                "  ProgressiveCurve: { [",
-                vm.toString(block.chainid),
-                "]: '",
-                vm.toString(address(progressiveCurve)),
                 "' }"
             )
         );

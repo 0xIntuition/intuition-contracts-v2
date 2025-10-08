@@ -14,10 +14,11 @@ The Intuition V2 smart contracts for the Intuition protocol, built using [Foundr
 ## Deploy Smart Contracts on Intuition Testnet
 
 1. Execute script/base/BaseEmissionsControllerDeploy.s.sol
-   - Update the `INTUITION_SEPOLIA_BASE_EMISSIONS_CONTROLLER` in .env
+   - Update the `BASE_SEPOLIA_BASE_EMISSIONS_CONTROLLER` in .env
 2. Execute script/intuition/MultiVaultMigrationModeDeploy.s.sol
    - Update the `INTUITION_SEPOLIA_MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION` in .env
 3. Execute script/intuition/IntuitionDeployAndSetup.s.sol
+   - Update the `INTUITION_SEPOLIA_MULTI_VAULT_MIGRATION_MODE_PROXY` in .env
    - Update the `BASE_SEPOLIA_SATELLITE_EMISSIONS_CONTROLLER` in .env
 4. Execute script/base/BaseEmissionsControllerSetup.s.sol
 

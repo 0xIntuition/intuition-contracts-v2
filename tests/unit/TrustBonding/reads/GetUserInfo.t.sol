@@ -57,6 +57,8 @@ contract TrustBondingGetUserInfoTest is TrustBondingBase {
         _setTotalUtilizationForEpoch(2, int256(1100 * 1e18));
         _setUserUtilizationForEpoch(users.alice, 2, 0);
 
+        uint256 emissionsForEpoch = protocol.trustBonding.emissionsForEpoch(3);
+
         UserInfo memory userInfo = protocol.trustBonding.getUserInfo(users.alice);
         assertEq(
             userInfo.personalUtilization,
@@ -65,12 +67,12 @@ contract TrustBondingGetUserInfoTest is TrustBondingBase {
         );
         assertEq(
             userInfo.eligibleRewards,
-            (EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH * userInfo.personalUtilization / BASIS_POINTS_DIVISOR),
+            (emissionsForEpoch * userInfo.personalUtilization) / BASIS_POINTS_DIVISOR,
             "Eligible rewards should be <= max rewards"
         );
         assertEq(
             userInfo.maxRewards,
-            EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH,
+            emissionsForEpoch,
             "Users max rewards should equal emissions per epoch with full utilization"
         );
         assertEq(userInfo.lockedAmount, DEFAULT_DEPOSIT_AMOUNT, "Locked amount should equal staked amount");
@@ -83,14 +85,14 @@ contract TrustBondingGetUserInfoTest is TrustBondingBase {
         _advanceToEpoch(EPOCHS_TO_ADVANCE);
 
         uint256 targetUtilization = 100 * 1e18;
-        _setTotalUtilizationForEpoch(EPOCHS_TO_ADVANCE - 2, int256(100 * 1e18));
-        _setTotalUtilizationForEpoch(EPOCHS_TO_ADVANCE - 1, int256(100 * 1e18 + int256(targetUtilization)));
+        _setTotalUtilizationForEpoch(EPOCHS_TO_ADVANCE - 1, int256(100 * 1e18));
+        _setTotalUtilizationForEpoch(EPOCHS_TO_ADVANCE, int256(100 * 1e18 + int256(targetUtilization)));
 
-        _setUserUtilizationForEpoch(users.alice, EPOCHS_TO_ADVANCE - 2, int256(100 * 1e18));
-        _setUserUtilizationForEpoch(users.alice, EPOCHS_TO_ADVANCE - 1, int256(100 * 1e18 + int256(targetUtilization)));
+        _setUserUtilizationForEpoch(users.alice, EPOCHS_TO_ADVANCE - 1, int256(100 * 1e18));
+        _setUserUtilizationForEpoch(users.alice, EPOCHS_TO_ADVANCE, int256(100 * 1e18 + int256(targetUtilization)));
 
-        _setUserClaimedRewardsForEpoch(users.alice, EPOCHS_TO_ADVANCE - 2, targetUtilization);
         _setUserClaimedRewardsForEpoch(users.alice, EPOCHS_TO_ADVANCE - 1, targetUtilization);
+        _setUserClaimedRewardsForEpoch(users.alice, EPOCHS_TO_ADVANCE, targetUtilization);
 
         UserInfo memory userInfo = protocol.trustBonding.getUserInfo(users.alice);
         assertEq(userInfo.personalUtilization, BASIS_POINTS_DIVISOR, "Personal utilization should be 100%");
