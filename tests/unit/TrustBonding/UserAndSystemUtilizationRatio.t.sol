@@ -335,7 +335,7 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
     function test_systemAndPersonalUtilizationRatio_integration() external {
         _addToTrustBondingWhiteList(users.alice);
         // Bond some tokens to create eligible rewards
-        _bondTokens(users.alice, initialTokens);
+        _createLock(users.alice, initialTokens);
 
         // Advance to epoch 2 for utilization calculations
         _advanceToEpoch(2);
