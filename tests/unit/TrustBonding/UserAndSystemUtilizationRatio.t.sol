@@ -399,15 +399,4 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
             systemRatio, SYSTEM_UTILIZATION_LOWER_BOUND, "Minimal delta should result in lower bound due to rounding"
         );
     }
-
-    /*//////////////////////////////////////////////////////////////
-                            HELPER FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    function _setupUserForTrustBonding(address user) internal {
-        vm.startPrank(user);
-        protocol.wrappedTrust.deposit{ value: initialTokens * 10 }();
-        protocol.wrappedTrust.approve(address(protocol.trustBonding), type(uint256).max);
-        vm.stopPrank();
-    }
 }

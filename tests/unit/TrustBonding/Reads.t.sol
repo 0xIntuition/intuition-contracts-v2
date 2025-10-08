@@ -2,8 +2,6 @@
 pragma solidity 0.8.29;
 
 import { console, Vm } from "forge-std/src/Test.sol";
-
-import { BaseTest } from "tests/BaseTest.t.sol";
 import { TrustBondingBase } from "tests/unit/TrustBonding/TrustBondingBase.t.sol";
 import { ITrustBonding } from "src/interfaces/ITrustBonding.sol";
 
@@ -359,7 +357,7 @@ contract TrustBondingReadsTest is TrustBondingBase {
     /* =================================================== */
 
     function test_getAprAtEpoch_noLocked() external view {
-        uint256 apy = protocol.trustBonding.getSystemApy();
+        (uint256 apy, uint256 maximumApy) = protocol.trustBonding.getSystemApy();
 
         assertEq(apy, 0); // No APR when no tokens locked
     }
@@ -368,7 +366,7 @@ contract TrustBondingReadsTest is TrustBondingBase {
         _createLock(users.alice, INITIAL_TOKENS);
 
         uint256 currentEpoch = protocol.trustBonding.currentEpoch();
-        uint256 apy = protocol.trustBonding.getSystemApy();
+        (uint256 apy, uint256 maximumApy) = protocol.trustBonding.getSystemApy();
 
         assertGt(apy, 0); // Should have positive APR
     }
@@ -377,7 +375,7 @@ contract TrustBondingReadsTest is TrustBondingBase {
         _createLock(users.alice, INITIAL_TOKENS);
 
         uint256 currentEpoch = protocol.trustBonding.currentEpoch();
-        uint256 apy = protocol.trustBonding.getSystemApy();
+        (uint256 apy, uint256 maximumApy) = protocol.trustBonding.getSystemApy();
 
         // Calculate expected APR
         uint256 emissionsForEpoch = protocol.trustBonding.emissionsForEpoch(currentEpoch);

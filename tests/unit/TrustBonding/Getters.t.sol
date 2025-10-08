@@ -176,7 +176,7 @@ contract TrustBondingGettersTest is TrustBondingBase {
     /* =================================================== */
 
     function test_getSystemApy_noLocked() external view {
-        uint256 systemApy = protocol.trustBonding.getSystemApy();
+        (uint256 systemApy, uint256 maximumApy) = protocol.trustBonding.getSystemApy();
         assertEq(systemApy, 0, "System APY should be 0 when no tokens are locked");
     }
 
@@ -190,7 +190,7 @@ contract TrustBondingGettersTest is TrustBondingBase {
         uint256 estimatedSystemApy = (emissionsPerYear * BASIS_POINTS_DIVISOR) / STAKE_AMOUNT;
         console.log("Estimated System APY:", estimatedSystemApy);
 
-        uint256 systemApy = protocol.trustBonding.getSystemApy();
+        (uint256 systemApy, uint256 maximumApy) = protocol.trustBonding.getSystemApy();
         assertEq(systemApy, estimatedSystemApy, "System APY should be greater than 0 when tokens are locked");
     }
 
@@ -204,7 +204,7 @@ contract TrustBondingGettersTest is TrustBondingBase {
         uint256 emissions = protocol.trustBonding.emissionsForEpoch(0);
         uint256 emissionsPerYear = emissions * epochsPerYear;
         uint256 estimatedSystemApy = (emissionsPerYear * BASIS_POINTS_DIVISOR) / (STAKE_AMOUNT * 3);
-        uint256 systemApy = protocol.trustBonding.getSystemApy();
+        (uint256 systemApy, uint256 maximumApy) = protocol.trustBonding.getSystemApy();
         console.log("Estimated System APY:", estimatedSystemApy);
         console.log("System APY:", systemApy);
 
@@ -218,12 +218,12 @@ contract TrustBondingGettersTest is TrustBondingBase {
     function test_getSystemApy_increaseStake() external {
         // Setup: Alice stakes initial amount
         _createLock(users.alice, STAKE_AMOUNT);
-        uint256 initialSystemApy = protocol.trustBonding.getSystemApy();
+        (uint256 initialSystemApy, uint256 maximumApy) = protocol.trustBonding.getSystemApy();
 
         // Bob also stakes, effectively increasing total locked
         _createLock(users.bob, STAKE_AMOUNT);
 
-        uint256 newSystemApy = protocol.trustBonding.getSystemApy();
+        (uint256 newSystemApy, uint256 newMaximumApy) = protocol.trustBonding.getSystemApy();
 
         // System APY should decrease as more tokens are locked
         assertLt(newSystemApy, initialSystemApy, "System APY should decrease when more tokens are locked");

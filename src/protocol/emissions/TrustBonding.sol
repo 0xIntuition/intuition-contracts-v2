@@ -310,7 +310,8 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
 
     /// @inheritdoc ITrustBonding
     function getSystemApy() external view returns (uint256 currentApy, uint256 maxApy) {
-        uint256 _supply = supply;
+        // uint256 _supply = supply;
+        uint256 _supply = _totalSupply(block.timestamp);
         if (_supply == 0) {
             return (0, 0);
         }

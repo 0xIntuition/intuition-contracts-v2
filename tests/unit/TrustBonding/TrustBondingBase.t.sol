@@ -21,6 +21,8 @@ contract TrustBondingBase is BaseTest {
     uint256 public constant PERSONAL_UTILIZATION_LOWER_BOUND = 3000; // 30%
     uint256 public initialTokens = 10_000 * 1e18;
     uint256 public lockDuration = 2 * 365 days; // 2 years
+    uint256 public defaultUnlockDuration = 2 * 365 days; // 2 years
+    uint256 public additionalTokens = 10_000 * 1e18;
 
     /// @notice Test constants for SatelliteEmissionsController
     uint256 internal constant TEST_START_TIMESTAMP = 1_640_995_200; // Jan 1, 2022
@@ -158,5 +160,31 @@ contract TrustBondingBase is BaseTest {
         uint256 rawRewards = protocol.trustBonding.userEligibleRewardsForEpoch(user, epoch);
         uint256 utilizationRatio = protocol.trustBonding.getPersonalUtilizationRatio(user, epoch);
         return rawRewards * utilizationRatio / BASIS_POINTS_DIVISOR;
+    }
+
+    /// @dev Internal function to bond some tokens for a given user
+    function _bondSomeTokens(address user) internal {
+        vm.startPrank(user, user);
+        uint256 unlockTime = block.timestamp + defaultUnlockDuration;
+        protocol.trustBonding.create_lock(initialTokens, unlockTime);
+        vm.stopPrank();
+    }
+
+    /// @dev Internal function to advance the epoch by a given number of epochs
+    function _advanceEpochs(uint256 epochs) internal {
+        uint256 currentEpoch = protocol.trustBonding.currentEpoch();
+        uint256 currentEpochEndTimestamp = protocol.trustBonding.epochTimestampEnd(currentEpoch);
+        uint256 targetTimestamp = currentEpochEndTimestamp + epochs * protocol.trustBonding.epochLength();
+        vm.warp(targetTimestamp - 1);
+    }
+
+    function _setupUserForTrustBonding(address user) internal {
+        resetPrank({ msgSender: user });
+
+        // Give plenty of balance so initial + additional locks always succeed
+        protocol.wrappedTrust.deposit{ value: additionalTokens * 10 }();
+
+        // Approve once for all TrustBonding tests
+        protocol.wrappedTrust.approve(address(protocol.trustBonding), type(uint256).max);
     }
 }
