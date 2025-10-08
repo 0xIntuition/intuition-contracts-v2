@@ -138,3 +138,45 @@ $ bun run test:coverage:report
 ## License
 
 This project is licensed under BUSL-1.1
+
+## Utility Scripts
+
+### `getReinitializeCalldata.ts`
+
+Generates the **encoded calldata** for the `reinitialize()` function for the TRUST token upgrade.
+
+```bash
+npx ts-node script/upgrades/getReinitializeCalldata.ts <ADMIN_ADDRESS> <BASE_EMISSIONS_CONTROLLER_ADDRESS>
+```
+
+---
+
+### `getUpdateDelayData.ts`
+
+Prepares the **`TimelockController` schedule parameters** for updating the minimum delay within the `TimelockController` contract.
+
+```bash
+npx ts-node script/upgrades/getUpdateDelayData.ts <RPC_URL> <NEW_DELAY_IN_SECONDS>
+```
+
+Example:
+
+```bash
+npx ts-node script/upgrades/getUpdateDelayData.ts "https://mainnet.base.org" 259200
+```
+
+---
+
+### `getUpgradeAndCallData.ts`
+
+Builds the **`TimelockController` schedule parameters** for a `ProxyAdmin.upgradeAndCall()` execution, optionally including the `reinitialize()` calldata from script #1 (`getReinitializeCalldata.ts`).
+
+```bash
+npx ts-node script/upgrades/getUpgradeAndCallData.ts <RPC_URL> "<PROXY_ADDRESS,IMPLEMENTATION_ADDRESS>" <REINITIALIZE_CALLDATA_OR_0x>
+```
+
+Example:
+
+```bash
+npx ts-node script/upgrades/getUpgradeAndCallData.ts "https://mainnet.base.org" "0xProxy,0xNewImpl" 0x1234abcd...
+```
