@@ -185,10 +185,10 @@ abstract contract MultiVaultCore is Initializable, IMultiVault, IMultiVaultCore 
         return (atomIds[0], atomIds[1], atomIds[2]);
     }
 
-    /// @dev Internal function to get the opposite triple id (counter or positive) for a given triple id
+    /// @dev Internal function to get the inverse triple id (counter or positive) for a given triple id
     /// @param tripleId The id of the triple or counter triple
-    /// @return The opposite triple id
-    function _getOppositeTripleId(bytes32 tripleId) internal view returns (bytes32) {
+    /// @return The inverse triple id
+    function _getInverseTripleId(bytes32 tripleId) internal view returns (bytes32) {
         if (_isCounterTriple(tripleId)) {
             return _tripleIdFromCounterId[tripleId];
         } else {
@@ -387,11 +387,11 @@ abstract contract MultiVaultCore is Initializable, IMultiVault, IMultiVaultCore 
         return _isCounterTriple(termId);
     }
 
-    /// @notice returns the opposite triple id (counter or positive) for a given triple id
+    /// @notice returns the inverse triple id (counter or positive) for a given triple id
     /// @param tripleId The id of the triple or counter triple
-    /// @return The opposite triple id
-    function getOppositeTripleId(bytes32 tripleId) external view returns (bytes32) {
-        return _getOppositeTripleId(tripleId);
+    /// @return The inverse triple id
+    function getInverseTripleId(bytes32 tripleId) external view returns (bytes32) {
+        return _getInverseTripleId(tripleId);
     }
 
     /* =================================================== */

@@ -1341,7 +1341,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     }
 
     function _requireVaultType(bytes32 termId) internal view returns (bool isAtomType, VaultType vaultType) {
-        vaultType = getVaultType(termId);
+        vaultType = _getVaultType(termId);
         return (vaultType == VaultType.ATOM, vaultType);
     }
 
@@ -1382,7 +1382,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         }
 
         // Find the "other side" of this triple
-        bytes32 oppositeId = _getOppositeTripleId(tripleId);
+        bytes32 oppositeId = _getInverseTripleId(tripleId);
 
         return _vaults[oppositeId][curveId].balanceOf[receiver] > 0;
     }
@@ -1709,7 +1709,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         uint256 maxAssets = IBondingCurveRegistry(bondingCurveConfig.registry).getCurveMaxAssets(_curveId);
 
         (uint256 expectedShares, uint256 netAssetsToVault) =
-            _calculateDeposit(_termId, _curveId, _assets, isAtom(_termId));
+            _calculateDeposit(_termId, _curveId, _assets, _isAtom(_termId));
         if (expectedShares == 0) revert MultiVault_DepositOrRedeemZeroShares();
 
         bool isNew = _isNewVault(_termId, _curveId);
