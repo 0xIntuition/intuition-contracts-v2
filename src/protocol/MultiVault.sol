@@ -471,9 +471,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
             _updateVaultOnCreation(sender, atomId, curveId, assetsAfterFees, sharesForReceiver, VaultType.ATOM);
 
         /* --- Add entry fee to Atom Vault (Protocol Owned) --- */
-        if (_shouldChargeFees(atomId)) {
-            _increaseProRataVaultAssets(atomId, _feeOnRaw(assetsAfterFixedFees, vaultFees.entryFee), VaultType.ATOM);
-        }
+        _increaseProRataVaultAssets(atomId, _feeOnRaw(assetsAfterFixedFees, vaultFees.entryFee), VaultType.ATOM);
 
         /* --- Emit Events --- */
         emit AtomCreated(sender, atomId, data, atomWallet);
@@ -605,9 +603,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
             _updateVaultOnCreation(sender, tripleId, curveId, assetsAfterFees, sharesForReceiver, VaultType.TRIPLE);
 
         /* --- Add vault and triple fees to vault (Protocol Owned) --- */
-        if (_shouldChargeFees(tripleId)) {
-            _increaseProRataVaultAssets(tripleId, _feeOnRaw(assetsAfterFixedFees, vaultFees.entryFee), VaultType.TRIPLE);
-        }
+        _increaseProRataVaultAssets(tripleId, _feeOnRaw(assetsAfterFixedFees, vaultFees.entryFee), VaultType.TRIPLE);
 
         if (_shouldChargeAtomDepositFraction(tripleId)) {
             _increaseProRataVaultsAssets(
@@ -1072,7 +1068,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         assetsAfterFixedFees = assets - atomCost;
 
         uint256 protocolFee = _feeOnRaw(assetsAfterFixedFees, vaultFees.protocolFee);
-        uint256 entryFee = _shouldChargeFees(termId) ? _feeOnRaw(assetsAfterFixedFees, vaultFees.entryFee) : 0;
+        uint256 entryFee = _feeOnRaw(assetsAfterFixedFees, vaultFees.entryFee);
         uint256 atomWalletDepositFee = _feeOnRaw(assetsAfterFixedFees, atomConfig.atomWalletDepositFee);
 
         assetsAfterFees = assetsAfterFixedFees - entryFee - protocolFee - atomWalletDepositFee;
@@ -1103,7 +1099,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         }
 
         uint256 protocolFee = _feeOnRaw(base, vaultFees.protocolFee);
-        uint256 entryFee = _shouldChargeFees(termId) ? _feeOnRaw(base, vaultFees.entryFee) : 0;
+        uint256 entryFee = _feeOnRaw(base, vaultFees.entryFee);
         uint256 atomWalletDepositFee = _feeOnRaw(base, atomConfig.atomWalletDepositFee);
 
         uint256 assetsAfterFees = base - protocolFee - entryFee - atomWalletDepositFee;
@@ -1128,7 +1124,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         uint256 assetsAfterFixedFees = assets - tripleCost;
 
         uint256 protocolFee = _feeOnRaw(assetsAfterFixedFees, vaultFees.protocolFee);
-        uint256 entryFee = _shouldChargeFees(termId) ? _feeOnRaw(assetsAfterFixedFees, vaultFees.entryFee) : 0;
+        uint256 entryFee = _feeOnRaw(assetsAfterFixedFees, vaultFees.entryFee);
         uint256 atomDepositFraction = _shouldChargeAtomDepositFraction(termId)
             ? _feeOnRaw(assetsAfterFixedFees, tripleConfig.atomDepositFractionForTriple)
             : 0;
@@ -1661,7 +1657,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /// @param tripleId The ID of the triple
     /// @return bool Whether the atom deposit fraction should be charged or not
     function _shouldChargeAtomDepositFraction(bytes32 tripleId) internal view returns (bool) {
-        (bytes32 subjectId, bytes32 predicateId, bytes32 objectId) = getTriple(tripleId);
+        (bytes32 subjectId, bytes32 predicateId, bytes32 objectId) = triple(tripleId);
         bool shouldChargeForSubject = _shouldChargeFees(subjectId);
         bool shouldChargeForPredicate = _shouldChargeFees(predicateId);
         bool shouldChargeForObject = _shouldChargeFees(objectId);
