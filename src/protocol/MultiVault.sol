@@ -439,11 +439,6 @@ contract MultiVault is
         uint256 userSharesAfter =
             _updateVaultOnCreation(sender, atomId, curveId, assetsAfterFees, sharesForReceiver, VaultType.ATOM);
 
-        /* --- Add entry fee to Atom Vault (Protocol Owned) --- */
-        if (_shouldChargeFees(atomId)) {
-            _increaseProRataVaultAssets(atomId, _feeOnRaw(assetsAfterFixedFees, vaultFees.entryFee), VaultType.ATOM);
-        }
-
         /* --- Emit Events --- */
         emit AtomCreated(sender, atomId, data, atomWallet);
 
@@ -571,10 +566,6 @@ contract MultiVault is
             _updateVaultOnCreation(sender, tripleId, curveId, assetsAfterFees, sharesForReceiver, VaultType.TRIPLE);
 
         /* --- Add vault and triple fees to vault (Protocol Owned) --- */
-        if (_shouldChargeFees(tripleId)) {
-            _increaseProRataVaultAssets(tripleId, _feeOnRaw(assetsAfterFixedFees, vaultFees.entryFee), VaultType.TRIPLE);
-        }
-
         if (_shouldChargeAtomDepositFraction(tripleId)) {
             _increaseProRataVaultsAssets(
                 tripleId, _feeOnRaw(assetsAfterFixedFees, tripleConfig.atomDepositFractionForTriple)
@@ -889,7 +880,7 @@ contract MultiVault is
         _accumulateVaultProtocolFees(rawAssetsBeforeFees);
 
         /* --- Add vault and triple fees to vault (Protocol Owned) --- */
-        if (_shouldChargeFees(termId)) {
+        if (_shouldChargeExitFees(termId, curveId, shares)) {
             _increaseProRataVaultAssets(termId, _feeOnRaw(rawAssetsBeforeFees, vaultFees.exitFee), _vaultType);
         }
 
@@ -1078,10 +1069,9 @@ contract MultiVault is
         assetsAfterFixedFees = assets - atomCost;
 
         uint256 protocolFee = _feeOnRaw(assetsAfterFixedFees, vaultFees.protocolFee);
-        uint256 entryFee = _shouldChargeFees(termId) ? _feeOnRaw(assetsAfterFixedFees, vaultFees.entryFee) : 0;
         uint256 atomWalletDepositFee = _feeOnRaw(assetsAfterFixedFees, atomConfig.atomWalletDepositFee);
 
-        assetsAfterFees = assetsAfterFixedFees - entryFee - protocolFee - atomWalletDepositFee;
+        assetsAfterFees = assetsAfterFixedFees - protocolFee - atomWalletDepositFee;
         shares = _convertToShares(termId, curveId, assetsAfterFees);
 
         return (shares, assetsAfterFixedFees, assetsAfterFees);
@@ -1147,12 +1137,11 @@ contract MultiVault is
         uint256 assetsAfterFixedFees = assets - tripleCost;
 
         uint256 protocolFee = _feeOnRaw(assetsAfterFixedFees, vaultFees.protocolFee);
-        uint256 entryFee = _shouldChargeFees(termId) ? _feeOnRaw(assetsAfterFixedFees, vaultFees.entryFee) : 0;
         uint256 atomDepositFraction = _shouldChargeAtomDepositFraction(termId)
             ? _feeOnRaw(assetsAfterFixedFees, tripleConfig.atomDepositFractionForTriple)
             : 0;
 
-        uint256 assetsAfterFees = assetsAfterFixedFees - protocolFee - entryFee - atomDepositFraction;
+        uint256 assetsAfterFees = assetsAfterFixedFees - protocolFee - atomDepositFraction;
         uint256 shares = _convertToShares(termId, _curveId, assetsAfterFees);
 
         return (shares, assetsAfterFixedFees, assetsAfterFees);
@@ -1217,7 +1206,7 @@ contract MultiVault is
         uint256 assets = _convertToAssets(_termId, _curveId, _shares);
 
         uint256 protocolFee = _feeOnRaw(assets, vaultFees.protocolFee);
-        uint256 exitFee = _shouldChargeFees(_termId) ? _feeOnRaw(assets, vaultFees.exitFee) : 0;
+        uint256 exitFee = _shouldChargeExitFees(_termId, _curveId, _shares) ? _feeOnRaw(assets, vaultFees.exitFee) : 0;
 
         uint256 assetsAfterFees = assets - protocolFee - exitFee;
 
@@ -1676,14 +1665,14 @@ contract MultiVault is
             revert MultiVault_DepositOrRedeemZeroShares();
         }
 
+        if (_maxRedeem(_account, _termId, _curveId) < _shares) {
+            revert MultiVault_InsufficientSharesInVault();
+        }
+
         (uint256 expectedAssets,) = _calculateRedeem(_termId, _curveId, _shares);
 
         if (expectedAssets < _minAssets) {
             revert MultiVault_SlippageExceeded();
-        }
-
-        if (_maxRedeem(_account, _termId, _curveId) < _shares) {
-            revert MultiVault_InsufficientSharesInVault();
         }
 
         uint256 remainingShares = _vaults[_termId][_curveId].totalShares - _shares;
@@ -1731,9 +1720,31 @@ contract MultiVault is
     /// @return bool Whether fees should be charged or not
     function _shouldChargeFees(bytes32 termId) internal view returns (bool) {
         uint256 defaultCurveId = bondingCurveConfig.defaultCurveId;
-        uint256 threshold = generalConfig.feeThreshold;
         uint256 totalShares = _vaults[termId][defaultCurveId].totalShares;
-        if (totalShares < threshold) return false;
+        if (totalShares < generalConfig.feeThreshold) return false;
+        return true;
+    }
+
+    /// @notice Determine if exit fees should be charged based on the remaining total shares in the default curve vault
+    /// after redemption
+    /// @param termId The ID of the atom or triple
+    /// @param curveId The ID of the bonding curve
+    /// @param sharesToRedeem The number of shares to be redeemed
+    /// @return bool Whether exit fees should be charged or not
+    function _shouldChargeExitFees(
+        bytes32 termId,
+        uint256 curveId,
+        uint256 sharesToRedeem
+    )
+        internal
+        view
+        returns (bool)
+    {
+        uint256 defaultCurveId = bondingCurveConfig.defaultCurveId;
+        uint256 totalShares = _vaults[termId][defaultCurveId].totalShares;
+        uint256 remainingSharesInDefaultVault =
+            (curveId == defaultCurveId) ? (totalShares - sharesToRedeem) : totalShares;
+        if (remainingSharesInDefaultVault < generalConfig.feeThreshold) return false;
         return true;
     }
 
