@@ -108,7 +108,8 @@ interface IMultiVault {
     /// @param receiver The address of the receiver
     /// @param termId The ID of the term (atom or triple)
     /// @param curveId The ID of the bonding curve
-    /// @param assets The amount of assets deposited (gross assets deposited by the sender, including atomCost or tripleCost where applicable)
+    /// @param assets The amount of assets deposited (gross assets deposited by the sender, including atomCost or
+    /// tripleCost where applicable)
     /// @param assetsAfterFees The amount of assets after all deposit fees are deducted
     /// @param shares The amount of shares minted to the receiver
     /// @param totalShares The user's share balance in the vault after the deposit
@@ -213,13 +214,6 @@ interface IMultiVault {
     /*                        GETTERS                      */
     /* =================================================== */
 
-    /**
-     * @notice Returns the accumulated protocol fees for a specific epoch
-     * @param epoch The epoch number to query
-     * @return The accumulated protocol fees for the epoch
-     */
-    function accumulatedProtocolFees(uint256 epoch) external view returns (uint256);
-
     /// @notice Returns the amount of assets deposited into underlying atoms when depositing into a triple vault
     function atomDepositFractionAmount(uint256 assets) external view returns (uint256);
 
@@ -272,7 +266,8 @@ interface IMultiVault {
     function entryFeeAmount(uint256 assets) external view returns (uint256);
 
     /// @notice Returns the amount of assets that would be charged as an exit fee for a given redemption amount
-    /// @dev If redeeming the shares would result in zero total shares remaining in the vault, the exit fee is not applied
+    /// @dev If redeeming the shares would result in zero total shares remaining in the vault, the exit fee is not
+    /// applied
     /// @param assets The amount of assets to calculate the fee on
     /// @return feeAmount The amount of assets that would be charged as the exit fee
     function exitFeeAmount(uint256 assets) external view returns (uint256);
@@ -305,6 +300,13 @@ interface IMultiVault {
      */
     function getUserUtilizationForEpoch(address user, uint256 epoch) external view returns (int256);
 
+    /**
+     * @notice Returns the last active epoch for a user
+     * @param user The user address to query
+     * @return The last epoch number in which the user had activity
+     */
+    function getUserLastActiveEpoch(address user) external view returns (uint256);
+
     /// @notice Returns the total assets and total shares in a vault for a given term and bonding curve
     /// @param termId The ID of the term (atom or triple)
     /// @param curveId The ID of the bonding curve
@@ -332,7 +334,8 @@ interface IMultiVault {
     /// @param curveId The ID of the bonding curve
     /// @param assets The amount of assets the user would send
     /// @return shares The expected shares to be minted for the user
-    /// @return assetsAfterFixedFees The net assets that will be added to the vault (after fixed fees, before dynamic fees)
+    /// @return assetsAfterFixedFees The net assets that will be added to the vault (after fixed fees, before dynamic
+    /// fees)
     /// @return assetsAfterFees The net assets that will be added to the vault (after all fees)
     function previewAtomCreate(
         bytes32 termId,
@@ -381,7 +384,8 @@ interface IMultiVault {
     /// @param curveId The ID of the bonding curve
     /// @param assets The amount of assets the user would send
     /// @return shares The expected shares to be minted for the user
-    /// @return assetsAfterFixedFees The net assets that will be added to the vault (after fixed fees like protocol and entry fees)
+    /// @return assetsAfterFixedFees The net assets that will be added to the vault (after fixed fees like protocol and
+    /// entry fees)
     /// @return assetsAfterFees The net assets that will be added to the vault (after all fees)
     function previewTripleCreate(
         bytes32 termId,
@@ -519,28 +523,6 @@ interface IMultiVault {
     /* =================================================== */
 
     /**
-     * @notice Returns the total system utilization for a specific epoch
-     * @param epoch The epoch number to query
-     * @return The total utilization value for the epoch (can be positive or negative)
-     */
-    function getTotalUtilizationForEpoch(uint256 epoch) external view returns (int256);
-
-    /**
-     * @notice Returns a user's utilization for a specific epoch
-     * @param user The user address to query
-     * @param epoch The epoch number to query
-     * @return The user's utilization value (can be positive or negative)
-     */
-    function getUserUtilizationForEpoch(address user, uint256 epoch) external view returns (int256);
-
-    /**
-     * @notice Returns the last active epoch for a user
-     * @param user The user address to query
-     * @return The last epoch number in which the user had activity
-     */
-    function getUserLastActiveEpoch(address user) external view returns (uint256);
-
-    /**
      * @notice Returns the accumulated protocol fees for a specific epoch
      * @param epoch The epoch number to query
      * @return The accumulated protocol fees for the epoch
@@ -549,7 +531,7 @@ interface IMultiVault {
 
     /// @notice Sweeps the accumulated protocol fees for a specified epoch to the protocol multisig
     function sweepAccumulatedProtocolFees(uint256 epoch) external;
-    
+
     /// @notice Pauses the contract, preventing deposits and redemptions
     function pause() external;
 

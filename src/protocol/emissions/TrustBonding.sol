@@ -259,7 +259,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         uint256 userRewards = _userEligibleRewardsForEpoch(account, currEpoch);
         uint256 personalUtilization = _getPersonalUtilizationRatio(account, currEpoch);
         int256 locked = locked[account].amount;
-        
+
         if (userRewards == 0 || locked <= 0) {
             return (currentApy, maxApy);
         }
