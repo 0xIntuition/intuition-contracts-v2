@@ -220,7 +220,7 @@ contract BaseEmissionsController is
     }
 
     /* =================================================== */
-    /*                      INTERNAL                       */
+    /*                 INTERNAL FUNCTIONS                  */
     /* =================================================== */
 
     function _setTrustToken(address newToken) internal {

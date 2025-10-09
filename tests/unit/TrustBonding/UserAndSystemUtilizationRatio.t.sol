@@ -345,7 +345,7 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
     function test_systemAndPersonalUtilizationRatio_integration() external {
         _addToTrustBondingWhiteList(users.alice);
         // Bond some tokens to create eligible rewards
-        _bondTokens(users.alice, initialTokens);
+        _createLock(users.alice, initialTokens);
 
         // Advance to epoch 2 for utilization calculations
         _advanceToEpoch(2);
@@ -409,16 +409,5 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         assertEq(
             systemRatio, SYSTEM_UTILIZATION_LOWER_BOUND, "Minimal delta should result in lower bound due to rounding"
         );
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                            HELPER FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    function _setupUserForTrustBonding(address user) internal {
-        vm.startPrank(user);
-        protocol.wrappedTrust.deposit{ value: initialTokens * 10 }();
-        protocol.wrappedTrust.approve(address(protocol.trustBonding), type(uint256).max);
-        vm.stopPrank();
     }
 }

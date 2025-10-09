@@ -87,9 +87,9 @@ contract MultiVaultMigrationMode is MultiVault {
         }
 
         for (uint256 i = 0; i < length;) {
-            bytes32 atomId = calculateAtomId(atomDataArray[i]);
+            bytes32 atomId = _calculateAtomId(atomDataArray[i]);
             _atoms[atomId] = atomDataArray[i];
-            emit AtomCreated(creators[i], atomId, atomDataArray[i], computeAtomWalletAddr(atomId));
+            emit AtomCreated(creators[i], atomId, atomDataArray[i], _computeAtomWalletAddr(atomId));
             unchecked {
                 ++i;
             }
@@ -115,8 +115,8 @@ contract MultiVaultMigrationMode is MultiVault {
         }
 
         for (uint256 i = 0; i < length;) {
-            bytes32 tripleId = calculateTripleId(tripleAtomIds[i][0], tripleAtomIds[i][1], tripleAtomIds[i][2]);
-            bytes32 counterTripleId = getCounterIdFromTripleId(tripleId);
+            bytes32 tripleId = _calculateTripleId(tripleAtomIds[i][0], tripleAtomIds[i][1], tripleAtomIds[i][2]);
+            bytes32 counterTripleId = _calculateCounterTripleId(tripleId);
             _initializeTripleState(tripleId, counterTripleId, tripleAtomIds[i]);
             emit TripleCreated(creators[i], tripleId, tripleAtomIds[i][0], tripleAtomIds[i][1], tripleAtomIds[i][2]);
             unchecked {
@@ -155,7 +155,7 @@ contract MultiVaultMigrationMode is MultiVault {
                 bondingCurveId,
                 vaultTotals[i].totalAssets,
                 vaultTotals[i].totalShares,
-                getVaultType(termIds[i])
+                _getVaultType(termIds[i])
             );
             unchecked {
                 ++i;
@@ -207,7 +207,7 @@ contract MultiVaultMigrationMode is MultiVault {
                     assets, // assetsAfterFees (equivalent to assets for migration)
                     balances[j], // shares that were minted (i.e. set during migration)
                     balances[j], // totalShares (equivalent to shares for migration)
-                    getVaultType(terms[j])
+                    _getVaultType(terms[j])
                 );
 
                 unchecked {

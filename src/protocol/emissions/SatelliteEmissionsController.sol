@@ -218,7 +218,7 @@ contract SatelliteEmissionsController is
     }
 
     /* =================================================== */
-    /*                       INTERNAL                      */
+    /*                 INTERNAL FUNCTIONS                  */
     /* =================================================== */
 
     function _setTrustBonding(address newTrustBonding) internal {

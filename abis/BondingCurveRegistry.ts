@@ -145,14 +145,14 @@ export const BondingCurveRegistryAbi = [
     "name": "curveAddresses",
     "inputs": [
       {
-        "name": "",
+        "name": "curveId",
         "type": "uint256",
         "internalType": "uint256"
       }
     ],
     "outputs": [
       {
-        "name": "",
+        "name": "curveAddress",
         "type": "address",
         "internalType": "address"
       }
@@ -164,14 +164,14 @@ export const BondingCurveRegistryAbi = [
     "name": "curveIds",
     "inputs": [
       {
-        "name": "",
+        "name": "curveAddress",
         "type": "address",
         "internalType": "address"
       }
     ],
     "outputs": [
       {
-        "name": "",
+        "name": "curveId",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -402,14 +402,14 @@ export const BondingCurveRegistryAbi = [
     "name": "registeredCurveNames",
     "inputs": [
       {
-        "name": "",
+        "name": "curveName",
         "type": "string",
         "internalType": "string"
       }
     ],
     "outputs": [
       {
-        "name": "",
+        "name": "registered",
         "type": "bool",
         "internalType": "bool"
       }
