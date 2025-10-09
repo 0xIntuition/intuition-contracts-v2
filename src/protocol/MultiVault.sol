@@ -7,7 +7,7 @@ import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/P
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 
-import { IMultiVault } from "src/interfaces/IMultiVault.sol";
+import { IMultiVault, ApprovalTypes, VaultState, VaultType } from "src/interfaces/IMultiVault.sol";
 import { IAtomWalletFactory } from "src/interfaces/IAtomWalletFactory.sol";
 import { IBondingCurveRegistry } from "src/interfaces/IBondingCurveRegistry.sol";
 import { IAtomWallet } from "src/interfaces/IAtomWallet.sol";
@@ -29,7 +29,13 @@ import { MultiVaultCore } from "src/protocol/MultiVaultCore.sol";
  * @notice Core contract of the Intuition protocol. Manages the creation and management of vaults
  *         associated with atoms & triples using TRUST as the base asset.
  */
-contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuardUpgradeable, PausableUpgradeable {
+contract MultiVault is
+    IMultiVault,
+    MultiVaultCore,
+    AccessControlUpgradeable,
+    ReentrancyGuardUpgradeable,
+    PausableUpgradeable
+{
     using FixedPointMathLib for uint256;
 
     /* =================================================== */
@@ -174,7 +180,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     }
 
     /* =================================================== */
-    /*                        Public                       */
+    /*                        VIEWS                        */
     /* =================================================== */
 
     /// @inheritdoc IMultiVault
@@ -182,31 +188,22 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         return _isTermCreated(id);
     }
 
-    /// @notice returns amount of assets that would be charged by a vault on protocol fee given amount of 'assets'
-    ///         provided
-    /// @param assets amount of assets to calculate fee on
-    /// @return feeAmount amount of assets that would be charged by vault on protocol fee
+    /// @inheritdoc IMultiVault
     function protocolFeeAmount(uint256 assets) external view returns (uint256) {
         return _feeOnRaw(assets, vaultFees.protocolFee);
     }
 
-    /// @notice returns amount of assets that would be charged for the entry fee given an amount of 'assets' provided
-    /// @dev if the vault being deposited on has a vault total shares of 0, the entry fee is not applied
-    /// @param assets amount of assets to calculate fee on
-    /// @return feeAmount amount of assets that would be charged for the entry fee
+    /// @inheritdoc IMultiVault
     function entryFeeAmount(uint256 assets) external view returns (uint256) {
         return _feeOnRaw(assets, vaultFees.entryFee);
     }
 
-    /// @notice returns amount of assets that would be charged for the exit fee given an amount of 'assets' provided
-    /// @dev if the vault  being redeemed from given the shares to redeem results in a total shares after of 0,
-    ///      the exit fee is not applied
-    /// @param assets amount of assets to calculate fee on
-    /// @return feeAmount amount of assets that would be charged for the exit fee
+    /// @inheritdoc IMultiVault
     function exitFeeAmount(uint256 assets) external view returns (uint256) {
         return _feeOnRaw(assets, vaultFees.exitFee);
     }
 
+    /// @inheritdoc IMultiVault
     function atomDepositFractionAmount(uint256 assets) external view returns (uint256) {
         return _feeOnRaw(assets, tripleConfig.atomDepositFractionForTriple);
     }
@@ -226,60 +223,33 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         return walletConfig.atomWarden;
     }
 
-    /// @notice returns the total assets and total shares in a vault for a given term and curve
-    /// @param termId atom or triple (term) id to get corresponding vault for
-    /// @param curveId bonding curve ID to get corresponding vault for
-    /// @return totalAssets total assets held in the vault
-    /// @return totalShares total shares issued by the vault
+    /// @inheritdoc IMultiVault
     function getVault(bytes32 termId, uint256 curveId) external view returns (uint256, uint256) {
         VaultState storage vault = _vaults[termId][curveId];
         return (vault.totalAssets, vault.totalShares);
     }
 
-    /// @notice number of shares held by an account in a term and curve
-    ///
-    /// @param account address of the account to get shares for
-    /// @param termId atom or triple (term) id to get corresponding shares for
-    /// @param curveId bonding curve ID to get corresponding shares for
-    ///
-    /// @return shares amount of shares that can be redeemed.address
+    /// @inheritdoc IMultiVault
     function getShares(address account, bytes32 termId, uint256 curveId) public view returns (uint256) {
         return _vaults[termId][curveId].balanceOf[account];
     }
 
-    /// @notice computes the address of the atom wallet for the given atom id
-    /// @param atomId the id of the atom to compute the wallet address for
-    /// @return address the computed address of the atom wallet
+    /// @inheritdoc IMultiVault
     function computeAtomWalletAddr(bytes32 atomId) external view returns (address) {
         return _computeAtomWalletAddr(atomId);
     }
 
-    /// @notice Get the maximum redeemable shares for a user in a vault
-    /// @param sender The address of the user
-    /// @param termId The ID of the atom or triple
-    /// @param curveId The ID of the bonding curve
-    /// @return uint256 The maximum redeemable shares for a user in a vault
+    /// @inheritdoc IMultiVault
     function maxRedeem(address sender, bytes32 termId, uint256 curveId) external view returns (uint256) {
         return _maxRedeem(sender, termId, curveId);
     }
 
-    /* =================================================== */
-    /*                    Utilities                        */
-    /* =================================================== */
-
-    /// @dev returns the current epoch
-    /// @return uint256 the current epoch
+    /// @inheritdoc IMultiVault
     function currentEpoch() external view returns (uint256) {
         return _currentEpoch();
     }
 
-    /// @notice returns the current share price for the given vault id
-    /// @dev This method is here mostly for ERC4626 compatibility reasons, and is not called internally anywhere
-    ///
-    /// @param termId atom or triple (term) id to get corresponding share price for
-    /// @param curveId bonding curve ID to get corresponding share price for
-    ///
-    /// @return price current share price for the given vault id
+    /// @inheritdoc IMultiVault
     function currentSharePrice(bytes32 termId, uint256 curveId) external view returns (uint256) {
         VaultState storage vaultState = _vaults[termId][curveId];
         return IBondingCurveRegistry(bondingCurveConfig.registry).currentPrice(
@@ -287,14 +257,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         );
     }
 
-    /// @notice Simulates the creation of an atom with a deposit of `assets`.
-    /// @dev Returns the expected shares to be minted and the net assets credited after fees.
-    /// @param termId Atom ID
-    /// @param curveId Bonding curve ID
-    /// @param assets Assets the user would send
-    /// @return shares Expected shares minted for the user
-    /// @return assetsAfterFixedFees Net assets that will be added to the vault (post fixed fees, pre dynamic fees)
-    /// @return assetsAfterFees Net assets that will be added to the vault (post all fees)
+    /// @inheritdoc IMultiVault
     function previewAtomCreate(
         bytes32 termId,
         uint256 curveId,
@@ -307,14 +270,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         return _calculateAtomCreate(termId, curveId, assets);
     }
 
-    /// @notice Simulates the creation of a triple with an initial deposit of `assets`.
-    /// @dev Returns the expected shares to be minted and the net assets credited after fees.
-    /// @param termId Triple ID
-    /// @param curveId Bonding curve ID
-    /// @param assets Assets the user would send
-    /// @return shares Expected shares minted for the user
-    /// @return assetsAfterFixedFees Net assets that will be added to the vault after fixed fees (protocol + entry)
-    /// @return assetsAfterFees Net assets that will be added to the vault (post all fees)
+    /// @inheritdoc IMultiVault
     function previewTripleCreate(
         bytes32 termId,
         uint256 curveId,
@@ -327,13 +283,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         return _calculateTripleCreate(termId, curveId, assets);
     }
 
-    /// @notice Simulates a deposit of `assets`.
-    /// @dev Returns the expected shares to be minted and the net assets credited after fees.
-    /// @param termId Atom or triple ID
-    /// @param curveId Bonding curve ID
-    /// @param assets Assets the user would send
-    /// @return shares Expected shares minted for the user
-    /// @return assetsAfterFees Net assets that will be added to the vault (post all fees)
+    /// @inheritdoc IMultiVault
     function previewDeposit(
         bytes32 termId,
         uint256 curveId,
@@ -347,13 +297,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         return _calculateDeposit(termId, curveId, assets, isAtomVault);
     }
 
-    /// @notice Simulates a redemption of `shares`.
-    /// @dev Returns the net assets the user would receive after fees, and the shares burned (i.e. used for redemption).
-    /// @param termId Atom or triple ID
-    /// @param curveId Bonding curve ID
-    /// @param shares Shares the user would redeem
-    /// @return assetsAfterFees Net assets that would be sent to the user (post protocol + exit fees)
-    /// @return sharesUsed The shares that would be burned (echo of the input for convenience)
+    /// @inheritdoc IMultiVault
     function previewRedeem(
         bytes32 termId,
         uint256 curveId,
@@ -366,24 +310,12 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         return _calculateRedeem(termId, curveId, shares);
     }
 
-    /// @notice returns amount of shares that would be exchanged by vault given amount of 'assets' provided
-    ///
-    /// @param assets amount of assets to calculate shares on
-    /// @param termId atom or triple (term) id to get corresponding shares for
-    /// @param curveId bonding curve ID to get corresponding shares for
-    ///
-    /// @return shares amount of shares that would be exchanged by vault given amount of 'assets' provided
+    /// @inheritdoc IMultiVault
     function convertToShares(bytes32 termId, uint256 curveId, uint256 assets) external view returns (uint256) {
         return _convertToShares(termId, curveId, assets);
     }
 
-    /// @notice returns amount of assets that would be exchanged by vault given amount of 'shares' provided
-    ///
-    /// @param shares amount of shares to calculate assets on
-    /// @param termId atom or triple (term) id to get corresponding assets for
-    /// @param curveId bonding curve ID to get corresponding assets for
-    ///
-    /// @return assets amount of assets that would be exchanged by vault given amount of 'shares' provided
+    /// @inheritdoc IMultiVault
     function convertToAssets(bytes32 termId, uint256 curveId, uint256 shares) external view returns (uint256) {
         return _convertToAssets(termId, curveId, shares);
     }
@@ -392,9 +324,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /*                      Approvals                      */
     /* =================================================== */
 
-    /// @notice Set the approval type for a sender to act on behalf of the receiver
-    /// @param sender address to set approval for
-    /// @param approvalType type of approval to grant (NONE = 0, DEPOSIT = 1, REDEMPTION = 2, BOTH = 3)
+    /// @inheritdoc IMultiVault
     function approve(address sender, ApprovalTypes approvalType) external {
         address receiver = msg.sender;
 
@@ -431,11 +361,9 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     }
 
     /// @notice Internal utility function to handle the creation of multiple atom vaults
-    ///
     /// @param _data The array of atom data to create atoms with
     /// @param _assets The total value sent with the transaction
     /// @param _payment The total value sent with the transaction
-    ///
     /// @return ids The new term IDs created for the atoms
     function _createAtoms(
         bytes[] calldata _data,
@@ -473,11 +401,9 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     }
 
     /// @notice Internal utility function to create an atom and handle vault creation
-    ///
     /// @param data The atom data to create the atom with
     /// @param assets The value to deposit into the atom
     /// @param sender The address of the sender
-    ///
     /// @return atomId The new vault ID created for the atom
     function _createAtom(address sender, bytes calldata data, uint256 assets) internal returns (bytes32 atomId) {
         uint256 length = data.length;
@@ -551,12 +477,10 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     }
 
     /// @notice Internal utility function to create triples and handle vault creation
-    ///
     /// @param _subjectIds vault ids array of subject atoms
     /// @param _predicateIds vault ids array of predicate atoms
     /// @param _objectIds vault ids array of object atoms
     /// @param _assets The total value sent with the transaction
-    ///
     /// @return ids The new vault IDs created for the triples
     function _createTriples(
         bytes32[] calldata _subjectIds,
@@ -602,13 +526,11 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     }
 
     /// @notice Internal utility function to create a triple and handle vault creation
-    ///
     /// @param subjectId vault id of the subject atom
     /// @param predicateId vault id of the predicate atom
     /// @param objectId vault id of the object atom
     /// @param assets The value to deposit into the triple
     /// @param sender The address of the sender
-    ///
     /// @return tripleId The new vault ID created for the triple
     function _createTriple(
         address sender,
@@ -628,7 +550,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
 
         // Initialize the triple vault state.
         bytes32[3] memory _atomsArray = [subjectId, predicateId, objectId];
-        bytes32 _counterTripleId = getCounterIdFromTripleId(tripleId);
+        bytes32 _counterTripleId = _calculateCounterTripleId(tripleId);
 
         // Set the triple mappings.
         _initializeTripleState(tripleId, _counterTripleId, _atomsArray);
@@ -1009,42 +931,42 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     /*                        Protocol                     */
     /* =================================================== */
 
-    /// @notice Pauses the contract, preventing deposits and redemptions from being made
+    /// @inheritdoc IMultiVault
     function pause() external onlyRole(DEFAULT_ADMIN_ROLE) whenNotPaused {
         _pause();
     }
 
-    /// @notice Unpauses the contract, allowing deposits and redemptions to be made
+    /// @inheritdoc IMultiVault
     function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) whenPaused {
         _unpause();
     }
 
-    /// @notice Sets the general configuration struct
+    /// @inheritdoc IMultiVault
     function setGeneralConfig(GeneralConfig memory _generalConfig) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setGeneralConfig(_generalConfig);
     }
 
-    /// @notice Sets the atom configuration struct
+    /// @inheritdoc IMultiVault
     function setAtomConfig(AtomConfig memory _atomConfig) external onlyRole(DEFAULT_ADMIN_ROLE) {
         atomConfig = _atomConfig;
     }
 
-    /// @notice Sets the triple configuration struct
+    /// @inheritdoc IMultiVault
     function setTripleConfig(TripleConfig memory _tripleConfig) external onlyRole(DEFAULT_ADMIN_ROLE) {
         tripleConfig = _tripleConfig;
     }
 
-    /// @notice Sets the vault fees struct
+    /// @inheritdoc IMultiVault
     function setVaultFees(VaultFees memory _vaultFees) external onlyRole(DEFAULT_ADMIN_ROLE) {
         vaultFees = _vaultFees;
     }
 
-    /// @notice Sets the wallet configuration struct
+    /// @inheritdoc IMultiVault
     function setWalletConfig(WalletConfig memory _walletConfig) external onlyRole(DEFAULT_ADMIN_ROLE) {
         walletConfig = _walletConfig;
     }
 
-    /// @notice Sets the bonding curve configuration struct
+    /// @inheritdoc IMultiVault
     function setBondingCurveConfig(BondingCurveConfig memory _bondingCurveConfig)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
@@ -1052,10 +974,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
         bondingCurveConfig = _bondingCurveConfig;
     }
 
-    /// @notice Permissionless function to sweep the accumulated protocol fees for a given epoch to the protocol
-    /// multisig
-    /// @dev This function serves as a fallback in case `_claimAccumulatedProtocolFees` is not called automatically
-    /// during utilization rollover, or in case of an extended period of inactivity in the protocol
+    /// @inheritdoc IMultiVault
     function sweepAccumulatedProtocolFees(uint256 epoch) external {
         _claimAccumulatedProtocolFees(epoch);
     }
@@ -1318,7 +1237,7 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     }
 
     /* =================================================== */
-    /*                      INTERNAL                       */
+    /*                 INTERNAL FUNCTIONS                  */
     /* =================================================== */
 
     /// @dev internal function to compute the address of the atom wallet for a given atom ID
@@ -1433,7 +1352,6 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     }
 
     /// @dev mint vault shares to address `to`
-    ///
     /// @param to address to mint shares to
     /// @param termId atom or triple ID to mint shares for (term)
     /// @param curveId bonding curve ID to mint shares for
@@ -1444,7 +1362,6 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     }
 
     /// @dev burn `amount` vault shares from address `from`
-    ///
     /// @param from address to burn shares from
     /// @param termId atom or triple ID to burn shares from (term)
     /// @param curveId bonding curve ID to burn shares from
@@ -1469,7 +1386,6 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     }
 
     /// @dev Adds the new utilization of the system and the user
-    ///
     /// @param user the address of the user
     /// @param totalValue the total value of the deposit
     function _addUtilization(address user, int256 totalValue) internal {
@@ -1489,7 +1405,6 @@ contract MultiVault is MultiVaultCore, AccessControlUpgradeable, ReentrancyGuard
     }
 
     /// @dev Removes the utilization of the system and the user
-    ///
     /// @param user the address of the user
     /// @param amountToRemove the amount of utilization to remove
     function _removeUtilization(address user, int256 amountToRemove) internal {

@@ -782,11 +782,6 @@ export const TrustBondingAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "_multiVault",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
         "name": "_satelliteEmissionsController",
         "type": "address",
         "internalType": "address"

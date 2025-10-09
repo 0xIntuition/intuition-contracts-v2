@@ -3,7 +3,7 @@ pragma solidity 0.8.29;
 
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
-import { IMultiVault } from "src/interfaces/IMultiVault.sol";
+import { IMultiVault, VaultType } from "src/interfaces/IMultiVault.sol";
 import {
     IMultiVaultCore,
     GeneralConfig,
@@ -19,7 +19,7 @@ import {
  * @author 0xIntuition
  * @notice Core contract of the Intuition protocol. Manages atom state, triple state, and protocol configuration.
  */
-abstract contract MultiVaultCore is Initializable, IMultiVault, IMultiVaultCore {
+abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
     /* =================================================== */
     /*                       CONSTANTS                     */
     /* =================================================== */
@@ -109,7 +109,151 @@ abstract contract MultiVaultCore is Initializable, IMultiVault, IMultiVaultCore 
     }
 
     /* =================================================== */
-    /*                    INTERNAL FUNCTIONS                 */
+    /*                 PROTOCOL GETTERS                    */
+    /* =================================================== */
+
+    /// @inheritdoc IMultiVaultCore
+    function getGeneralConfig() external view returns (GeneralConfig memory) {
+        return generalConfig;
+    }
+
+    /// @inheritdoc IMultiVaultCore
+    function getAtomConfig() external view returns (AtomConfig memory) {
+        return atomConfig;
+    }
+
+    /// @inheritdoc IMultiVaultCore
+    function getTripleConfig() external view returns (TripleConfig memory) {
+        return tripleConfig;
+    }
+
+    /// @inheritdoc IMultiVaultCore
+    function getWalletConfig() external view returns (WalletConfig memory) {
+        return walletConfig;
+    }
+
+    /// @inheritdoc IMultiVaultCore
+    function getVaultFees() external view returns (VaultFees memory) {
+        return vaultFees;
+    }
+
+    /// @inheritdoc IMultiVaultCore
+    function getBondingCurveConfig() external view returns (BondingCurveConfig memory) {
+        return bondingCurveConfig;
+    }
+
+    /* =================================================== */
+    /*                      ATOM GETTERS                   */
+    /* =================================================== */
+
+    /// @inheritdoc IMultiVaultCore
+    function atom(bytes32 atomId) external view returns (bytes memory data) {
+        return _atoms[atomId];
+    }
+
+    /// @inheritdoc IMultiVaultCore
+    function getAtom(bytes32 atomId) external view returns (bytes memory data) {
+        return _getAtom(atomId);
+    }
+
+    /// @inheritdoc IMultiVaultCore
+    function calculateAtomId(bytes memory data) external pure returns (bytes32 id) {
+        return _calculateAtomId(data);
+    }
+
+    /// @inheritdoc IMultiVaultCore
+    function getAtomCost() external view returns (uint256) {
+        return _getAtomCost();
+    }
+
+    /// @inheritdoc IMultiVaultCore
+    function isAtom(bytes32 atomId) external view returns (bool) {
+        return _isAtom(atomId);
+    }
+
+    /* =================================================== */
+    /*                    TRIPLE GETTERS                   */
+    /* =================================================== */
+
+    /// @inheritdoc IMultiVaultCore
+    function triple(bytes32 tripleId) external view returns (bytes32, bytes32, bytes32) {
+        bytes32[3] memory atomIds = _triples[tripleId];
+        return (atomIds[0], atomIds[1], atomIds[2]);
+    }
+
+    /// @inheritdoc IMultiVaultCore
+    function getTriple(bytes32 tripleId) external view returns (bytes32, bytes32, bytes32) {
+        bytes32[3] memory atomIds = _triples[tripleId];
+        if (atomIds[0] == bytes32(0) && atomIds[1] == bytes32(0) && atomIds[2] == bytes32(0)) {
+            revert MultiVaultCore_TripleDoesNotExist(tripleId);
+        }
+        return (atomIds[0], atomIds[1], atomIds[2]);
+    }
+
+    /// @inheritdoc IMultiVaultCore
+    function getTripleCost() external view returns (uint256) {
+        return _getTripleCost();
+    }
+
+    /// @inheritdoc IMultiVaultCore
+    function getCounterIdFromTripleId(bytes32 tripleId) external pure returns (bytes32) {
+        return _calculateCounterTripleId(tripleId);
+    }
+
+    /// @inheritdoc IMultiVaultCore
+    function getTripleIdFromCounterId(bytes32 counterId) external view returns (bytes32) {
+        return _tripleIdFromCounterId[counterId];
+    }
+
+    /// @inheritdoc IMultiVaultCore
+    function calculateTripleId(
+        bytes32 subjectId,
+        bytes32 predicateId,
+        bytes32 objectId
+    )
+        external
+        pure
+        returns (bytes32)
+    {
+        return _calculateTripleId(subjectId, predicateId, objectId);
+    }
+
+    /// @inheritdoc IMultiVaultCore
+    function calculateCounterTripleId(
+        bytes32 subjectId,
+        bytes32 predicateId,
+        bytes32 objectId
+    )
+        external
+        pure
+        returns (bytes32)
+    {
+        bytes32 tripleId = _calculateTripleId(subjectId, predicateId, objectId);
+        return _calculateCounterTripleId(tripleId);
+    }
+
+    /// @inheritdoc IMultiVaultCore
+    function isTriple(bytes32 termId) external view returns (bool) {
+        return _isTriple[termId];
+    }
+
+    /// @inheritdoc IMultiVaultCore
+    function isCounterTriple(bytes32 termId) external view returns (bool) {
+        return _isCounterTriple(termId);
+    }
+
+    /// @inheritdoc IMultiVaultCore
+    function getInverseTripleId(bytes32 tripleId) external view returns (bytes32) {
+        return _getInverseTripleId(tripleId);
+    }
+
+    /// @inheritdoc IMultiVaultCore
+    function getVaultType(bytes32 termId) external view returns (VaultType) {
+        return _getVaultType(termId);
+    }
+
+    /* =================================================== */
+    /*                 INTERNAL FUNCTIONS                  */
     /* =================================================== */
 
     /// @dev Internal function to set and validate the general configuration struct
@@ -140,7 +284,7 @@ abstract contract MultiVaultCore is Initializable, IMultiVault, IMultiVaultCore 
         bytes32 predicateId,
         bytes32 objectId
     )
-        public
+        internal
         pure
         returns (bytes32)
     {
@@ -223,185 +367,5 @@ abstract contract MultiVaultCore is Initializable, IMultiVault, IMultiVaultCore 
     function _getTripleCost() internal view returns (uint256) {
         return tripleConfig.tripleCreationProtocolFee + tripleConfig.totalAtomDepositsOnTripleCreation
             + generalConfig.minShare * 2;
-    }
-
-    /* =================================================== */
-    /*                  Protocol Getters                   */
-    /* =================================================== */
-
-    /// @inheritdoc IMultiVaultCore
-    function getGeneralConfig() external view returns (GeneralConfig memory) {
-        return generalConfig;
-    }
-
-    /// @inheritdoc IMultiVaultCore
-    function getAtomConfig() external view returns (AtomConfig memory) {
-        return atomConfig;
-    }
-
-    /// @inheritdoc IMultiVaultCore
-    function getTripleConfig() external view returns (TripleConfig memory) {
-        return tripleConfig;
-    }
-
-    /// @inheritdoc IMultiVaultCore
-    function getWalletConfig() external view returns (WalletConfig memory) {
-        return walletConfig;
-    }
-
-    /// @inheritdoc IMultiVaultCore
-    function getVaultFees() external view returns (VaultFees memory) {
-        return vaultFees;
-    }
-
-    /// @inheritdoc IMultiVaultCore
-    function getBondingCurveConfig() external view returns (BondingCurveConfig memory) {
-        return bondingCurveConfig;
-    }
-
-    /* =================================================== */
-    /*                     Atom Getters                    */
-    /* =================================================== */
-
-    /// @notice returns the atom data for a given atom id
-    /// @dev If the atom does not exist, instead of reverting, this function returns an empty bytes
-    function atom(bytes32 atomId) public view returns (bytes memory data) {
-        return _atoms[atomId];
-    }
-
-    /// @notice returns the atom data for a given atom id
-    /// @dev If the atom does not exist, this function reverts
-    function getAtom(bytes32 atomId) public view returns (bytes memory data) {
-        return _getAtom(atomId);
-    }
-
-    /// @notice calculates the atom id from the atom data
-    /// @param data The data of the atom
-    function calculateAtomId(bytes memory data) public pure returns (bytes32 id) {
-        return _calculateAtomId(data);
-    }
-
-    /// @notice Returns the static costs that go into creating an atom
-    /// @return atomCost the static costs of creating an atom
-    function getAtomCost() public view returns (uint256) {
-        return _getAtomCost();
-    }
-
-    /// @notice returns whether the supplied vault id is an atom
-    /// @param atomId atom id to check
-    /// @return bool whether the supplied atom id is an atom
-    function isAtom(bytes32 atomId) public view returns (bool) {
-        return _isAtom(atomId);
-    }
-
-    /* =================================================== */
-    /*                   Triple Getters                    */
-    /* =================================================== */
-
-    /// @notice returns the underlying atom ids for a given triple id
-    /// @dev If the triple does not exist, instead of reverting, this function returns (bytes32(0), bytes32(0),
-    /// bytes32(0))
-    /// @param tripleId term id of the triple
-    function triple(bytes32 tripleId) public view returns (bytes32, bytes32, bytes32) {
-        bytes32[3] memory atomIds = _triples[tripleId];
-        return (atomIds[0], atomIds[1], atomIds[2]);
-    }
-
-    /// @notice returns the underlying atom ids for a given triple id
-    /// @dev If the triple does not exist, this function reverts
-    /// @param tripleId term id of the triple
-    function getTriple(bytes32 tripleId) public view returns (bytes32, bytes32, bytes32) {
-        bytes32[3] memory atomIds = _triples[tripleId];
-        if (atomIds[0] == bytes32(0) && atomIds[1] == bytes32(0) && atomIds[2] == bytes32(0)) {
-            revert MultiVaultCore_TripleDoesNotExist(tripleId);
-        }
-        return (atomIds[0], atomIds[1], atomIds[2]);
-    }
-
-    /// @notice Returns the static costs that go into creating a triple
-    /// @return tripleCost the static costs of creating a triple
-    function getTripleCost() public view returns (uint256) {
-        return _getTripleCost();
-    }
-
-    /// @notice returns the counter id from the given triple id
-    /// @param tripleId term id of the triple
-    /// @return counterId the counter vault id from the given triple id
-    function getCounterIdFromTripleId(bytes32 tripleId) public pure returns (bytes32) {
-        return _calculateCounterTripleId(tripleId);
-    }
-
-    /// @notice returns the triple id from the given counter id
-    /// @param counterId term id of the counter triple
-    /// @return tripleId the triple vault id from the given counter id
-    function getTripleIdFromCounterId(bytes32 counterId) public view returns (bytes32) {
-        return _tripleIdFromCounterId[counterId];
-    }
-
-    /// @notice calculates the triple id from the subject, predicate, and object atom ids
-    /// @param subjectId The atom id of the subject
-    /// @param predicateId The atom id of the predicate
-    /// @param objectId The atom id of the object
-    /// @return id The calculated triple id
-    function calculateTripleId(
-        bytes32 subjectId,
-        bytes32 predicateId,
-        bytes32 objectId
-    )
-        public
-        pure
-        returns (bytes32)
-    {
-        return _calculateTripleId(subjectId, predicateId, objectId);
-    }
-
-    /// @notice calculates the counter triple id from the subject, predicate, and object atom ids
-    /// @param subjectId The atom id of the subject
-    /// @param predicateId The atom id of the predicate
-    /// @param objectId The atom id of the object
-    /// @return id The calculated counter triple id
-    function calculateCounterTripleId(
-        bytes32 subjectId,
-        bytes32 predicateId,
-        bytes32 objectId
-    )
-        public
-        pure
-        returns (bytes32)
-    {
-        bytes32 tripleId = _calculateTripleId(subjectId, predicateId, objectId);
-        return _calculateCounterTripleId(tripleId);
-    }
-
-    /// @notice returns whether the supplied vault id is a triple
-    /// @param termId atom or triple (term) id to check
-    /// @return bool whether the supplied term id is a triple
-    function isTriple(bytes32 termId) public view returns (bool) {
-        return _isTriple[termId];
-    }
-
-    /// @notice returns whether the supplied vault id is a counter triple
-    /// @param termId atom or triple (term) id to check
-    /// @return bool whether the supplied term id is a counter triple
-    function isCounterTriple(bytes32 termId) public view returns (bool) {
-        return _isCounterTriple(termId);
-    }
-
-    /// @notice returns the inverse triple id (counter or positive) for a given triple id
-    /// @param tripleId The id of the triple or counter triple
-    /// @return The inverse triple id
-    function getInverseTripleId(bytes32 tripleId) external view returns (bytes32) {
-        return _getInverseTripleId(tripleId);
-    }
-
-    /* =================================================== */
-    /*                     Other Getters                   */
-    /* =================================================== */
-
-    /// @notice Get the vault type for a given term ID
-    /// @param termId The term ID to check
-    /// @return vaultType The type of vault (ATOM, TRIPLE, or COUNTER_TRIPLE)
-    function getVaultType(bytes32 termId) public view returns (VaultType) {
-        return _getVaultType(termId);
     }
 }

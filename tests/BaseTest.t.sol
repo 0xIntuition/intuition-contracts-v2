@@ -7,7 +7,7 @@ import { Test } from "forge-std/src/Test.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
-import { IMultiVault } from "src/interfaces/IMultiVault.sol";
+import { IMultiVault, ApprovalTypes } from "src/interfaces/IMultiVault.sol";
 import { MetaERC20DispatchInit, FinalityState } from "src/interfaces/IMetaLayer.sol";
 import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";
 import {
@@ -537,7 +537,7 @@ abstract contract BaseTest is Modifiers, Test {
     }
 
     // Helper to set up approval for another user
-    function setupApproval(address owner, address spender, IMultiVault.ApprovalTypes approvalType) internal {
+    function setupApproval(address owner, address spender, ApprovalTypes approvalType) internal {
         resetPrank({ msgSender: owner });
         protocol.multiVault.approve(spender, approvalType);
     }

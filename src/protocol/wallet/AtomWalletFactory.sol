@@ -8,6 +8,7 @@ import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/I
 import { AtomWallet } from "src/protocol/wallet/AtomWallet.sol";
 import { IAtomWalletFactory } from "src/interfaces/IAtomWalletFactory.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
+import { IMultiVaultCore } from "src/interfaces/IMultiVaultCore.sol";
 
 /**
  * @title AtomWalletFactory
@@ -29,7 +30,7 @@ contract AtomWalletFactory is IAtomWalletFactory, Initializable {
     /* =================================================== */
 
     /// @notice The MultiVault contract
-    IMultiVault public multiVault;
+    address public multiVault;
 
     /// @dev Gap for upgrade safety
     uint256[50] private __gap;
@@ -54,7 +55,7 @@ contract AtomWalletFactory is IAtomWalletFactory, Initializable {
             revert AtomWalletFactory_ZeroAddress();
         }
 
-        multiVault = IMultiVault(_multiVault);
+        multiVault = _multiVault;
     }
 
     /* =================================================== */
@@ -67,11 +68,11 @@ contract AtomWalletFactory is IAtomWalletFactory, Initializable {
     /// @param atomId id of atom
     /// @return atomWallet the address of the atom wallet
     function deployAtomWallet(bytes32 atomId) external returns (address) {
-        if (!multiVault.isTermCreated(atomId)) {
+        if (!IMultiVault(multiVault).isTermCreated(atomId)) {
             revert AtomWalletFactory_TermDoesNotExist();
         }
 
-        if (multiVault.isTriple(atomId)) {
+        if (IMultiVaultCore(multiVault).isTriple(atomId)) {
             revert AtomWalletFactory_TermNotAtom();
         }
 
@@ -134,7 +135,7 @@ contract AtomWalletFactory is IAtomWalletFactory, Initializable {
     /// @return bytes memory the deployment data for the AtomWallet contract (using BeaconProxy pattern)
     function _getDeploymentData(bytes32 atomId) internal view returns (bytes memory) {
         // Addresses of the atomWalletBeacon and entryPoint contracts
-        (address entryPoint,, address atomWalletBeacon,) = multiVault.walletConfig();
+        (address entryPoint,, address atomWalletBeacon,) = IMultiVaultCore(multiVault).walletConfig();
 
         // BeaconProxy creation code
         bytes memory code = type(BeaconProxy).creationCode;

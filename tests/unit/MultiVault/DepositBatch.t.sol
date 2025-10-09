@@ -7,7 +7,7 @@ import { Test } from "forge-std/src/Test.sol";
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { MultiVaultCore } from "src/protocol/MultiVaultCore.sol";
-import { IMultiVault } from "src/interfaces/IMultiVault.sol";
+import { IMultiVault, ApprovalTypes } from "src/interfaces/IMultiVault.sol";
 
 contract DepositBatchTest is BaseTest {
     uint256 internal CURVE_ID;
@@ -94,7 +94,7 @@ contract DepositBatchTest is BaseTest {
     function test_depositBatch_DifferentReceiver_Success() public {
         bytes32 atomId = createSimpleAtom("Different receiver batch", ATOM_COST[0], users.alice);
 
-        setupApproval(users.bob, users.alice, IMultiVault.ApprovalTypes.BOTH);
+        setupApproval(users.bob, users.alice, ApprovalTypes.BOTH);
 
         bytes32[] memory termIds = new bytes32[](1);
         termIds[0] = atomId;
