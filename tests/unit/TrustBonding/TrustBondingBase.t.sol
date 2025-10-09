@@ -16,24 +16,32 @@ import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
 
 contract TrustBondingBase is BaseTest {
-    /// @notice Test constants for TrustBonding
+    // Initializer structs
+    MetaERC20DispatchInit public metaERC20DispatchInit;
+    CoreEmissionsControllerInit public coreEmissionsInit;
+
     uint256 public constant SYSTEM_UTILIZATION_LOWER_BOUND = 5000; // 50%
     uint256 public constant PERSONAL_UTILIZATION_LOWER_BOUND = 3000; // 30%
-    uint256 public initialTokens = 10_000 * 1e18;
+
+    uint256 public initialTokens = 10_000 ether;
     uint256 public lockDuration = 2 * 365 days; // 2 years
+    uint256 public DEFAULT_LOCK_DURATION = 2 * 365 days; // 2 years
+    uint256 public additionalTokens = 1000 ether;
 
     /// @notice Test constants for SatelliteEmissionsController
     uint256 internal constant TEST_START_TIMESTAMP = 1_640_995_200; // Jan 1, 2022
     uint256 internal constant TEST_EPOCH_LENGTH = 14 days;
-    uint256 internal constant TEST_EMISSIONS_PER_EPOCH = 1_000_000 * 1e18;
+    uint256 internal constant TEST_EMISSIONS_PER_EPOCH = 1_000_000 ether;
     uint256 internal constant TEST_REDUCTION_CLIFF = 26;
     uint256 internal constant TEST_REDUCTION_BASIS_POINTS = 1000; // 10%
     uint32 internal constant TEST_RECIPIENT_DOMAIN = 1;
     uint256 internal constant TEST_GAS_LIMIT = 125_000;
 
-    // Initializer structs
-    MetaERC20DispatchInit public metaERC20DispatchInit;
-    CoreEmissionsControllerInit public coreEmissionsInit;
+    uint256 public constant DEAL_AMOUNT = 1_000_000 ether;
+    uint256 public constant SMALL_DEPOSIT_AMOUNT = 10 ether;
+    uint256 public constant DEFAULT_DEPOSIT_AMOUNT = 100 ether;
+    uint256 public constant LARGE_DEPOSIT_AMOUNT = 5000 ether;
+    uint256 public constant XLARGE_DEPOSIT_AMOUNT = 10_000 ether;
 
     /* =================================================== */
     /*                       SETUP                         */
@@ -87,11 +95,12 @@ contract TrustBondingBase is BaseTest {
         return TrustBonding(address(proxy));
     }
 
-    function _bondTokens(address user, uint256 amount) internal {
-        vm.startPrank(user);
-        uint256 unlockTime = block.timestamp + 2 * 365 days; // 2 years
-        protocol.trustBonding.create_lock(amount, unlockTime);
-        vm.stopPrank();
+    /// @dev Internal function to advance the epoch by a given number of epochs
+    function _advanceEpochs(uint256 epochs) internal {
+        uint256 currentEpoch = protocol.trustBonding.currentEpoch();
+        uint256 currentEpochEndTimestamp = protocol.trustBonding.epochTimestampEnd(currentEpoch);
+        uint256 targetTimestamp = currentEpochEndTimestamp + epochs * protocol.trustBonding.epochLength();
+        vm.warp(targetTimestamp - 1);
     }
 
     function _advanceToEpoch(uint256 targetEpoch) internal {
@@ -101,6 +110,67 @@ contract TrustBondingBase is BaseTest {
         uint256 epochsToAdvance = targetEpoch - currentEpoch;
         uint256 timeToAdvance = epochsToAdvance * protocol.trustBonding.epochLength();
         vm.warp(block.timestamp + timeToAdvance);
+    }
+
+    function _createLock(address user) internal {
+        _createLock(user, initialTokens);
+    }
+
+    function _createLock(address user, uint256 amount) internal {
+        vm.startPrank(user);
+        uint256 unlockTime = block.timestamp + DEFAULT_LOCK_DURATION;
+        protocol.wrappedTrust.approve(address(protocol.trustBonding), amount);
+        protocol.trustBonding.create_lock(amount, unlockTime);
+        vm.stopPrank();
+    }
+
+    function _createLockWithDuration(address user, uint256 amount, uint256 unlockTime) internal {
+        vm.startPrank(user);
+        protocol.wrappedTrust.approve(address(protocol.trustBonding), amount);
+        protocol.trustBonding.create_lock(amount, unlockTime);
+        vm.stopPrank();
+    }
+
+    function _createLockWithDurationWithBlockTimestamp(address user, uint256 amount, uint256 unlockTime) internal {
+        vm.startPrank(user);
+        unlockTime = block.timestamp + unlockTime;
+        protocol.wrappedTrust.approve(address(protocol.trustBonding), amount);
+        protocol.trustBonding.create_lock(amount, unlockTime);
+        vm.stopPrank();
+    }
+
+    function _calculateExpectedRewards(address user, uint256 epoch) internal view returns (uint256) {
+        uint256 rawRewards = protocol.trustBonding.userEligibleRewardsForEpoch(user, epoch);
+        uint256 utilizationRatio = protocol.trustBonding.getPersonalUtilizationRatio(user, epoch);
+        return rawRewards * utilizationRatio / BASIS_POINTS_DIVISOR;
+    }
+
+    function _setupUserForTrustBonding(address user) internal {
+        resetPrank({ msgSender: user });
+
+        // Give plenty of balance so initial + additional locks always succeed
+        protocol.wrappedTrust.deposit{ value: additionalTokens * 10 }();
+
+        // Approve once for all TrustBonding tests
+        protocol.wrappedTrust.approve(address(protocol.trustBonding), type(uint256).max);
+    }
+
+    function _calculateUnlockTime(uint256 duration) internal view returns (uint256) {
+        uint256 currentTime = block.timestamp;
+
+        // Calculate the raw unlock time
+        uint256 rawUnlockTime = currentTime + duration;
+
+        // Round down to nearest week
+        uint256 roundedUnlockTime = (rawUnlockTime / ONE_WEEK) * ONE_WEEK;
+
+        // Check if rounding reduced the duration below MINTIME
+        if (roundedUnlockTime - currentTime < TRUST_BONDING_EPOCH_LENGTH) {
+            // Add one week to ensure we're above MINTIME after rounding
+            roundedUnlockTime += ONE_WEEK;
+        }
+
+        return roundedUnlockTime;
     }
 
     /// @dev Set total utilization for a specific epoch using vm.store
@@ -144,19 +214,5 @@ contract TrustBondingBase is BaseTest {
         bytes32 userSlot = keccak256(abi.encode(user, uint256(63)));
         bytes32 finalSlot = keccak256(abi.encode(epoch, userSlot));
         vm.store(address(protocol.trustBonding), finalSlot, bytes32(claimedRewards));
-    }
-
-    function _createLock(address user, uint256 amount) internal {
-        vm.startPrank(user);
-        uint256 unlockTime = block.timestamp + lockDuration;
-        protocol.wrappedTrust.approve(address(protocol.trustBonding), amount);
-        protocol.trustBonding.create_lock(amount, unlockTime);
-        vm.stopPrank();
-    }
-
-    function _calculateExpectedRewards(address user, uint256 epoch) internal view returns (uint256) {
-        uint256 rawRewards = protocol.trustBonding.userEligibleRewardsForEpoch(user, epoch);
-        uint256 utilizationRatio = protocol.trustBonding.getPersonalUtilizationRatio(user, epoch);
-        return rawRewards * utilizationRatio / BASIS_POINTS_DIVISOR;
     }
 }

@@ -268,7 +268,11 @@ contract BridgeUnclaimedEmissionsTest is TrustBondingBase {
         // Advance to epoch 2: the full emissions for epoch 0 are now bridgeable
         _advanceToEpoch(2);
         uint256 unclaimedEpoch0InEpoch2 = protocol.trustBonding.getUnclaimedRewardsForEpoch(0);
-        assertEq(unclaimedEpoch0InEpoch2, 1_000_000 * 1e18, "Epoch 0 should now release the full 1,000,000 emissions");
+        assertEq(
+            unclaimedEpoch0InEpoch2,
+            EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH,
+            "Epoch 0 should now release the full 1,000,000 emissions"
+        );
     }
 
     function test_bridgeUnclaimedEmissions_gasRefund() external {

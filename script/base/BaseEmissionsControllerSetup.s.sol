@@ -34,9 +34,6 @@ contract BaseEmissionsControllerSetup is SetupScript {
             SATELLITE_EMISSIONS_CONTROLLER = vm.envAddress("ANVIL_SATELLITE_EMISSIONS_CONTROLLER");
         } else if (block.chainid == vm.envUint("BASE_SEPOLIA_CHAIN_ID")) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("BASE_SEPOLIA_BASE_EMISSIONS_CONTROLLER");
-            SATELLITE_EMISSIONS_CONTROLLER = vm.envAddress("BASE_SEPOLIA_SATELLITE_EMISSIONS_CONTROLLER");
-        } else if (block.chainid == vm.envUint("INTUITION_SEPOLIA_CHAIN_ID")) {
-            BASE_EMISSIONS_CONTROLLER = vm.envAddress("INTUITION_SEPOLIA_BASE_EMISSIONS_CONTROLLER");
             SATELLITE_EMISSIONS_CONTROLLER = vm.envAddress("INTUITION_SEPOLIA_SATELLITE_EMISSIONS_CONTROLLER");
         } else {
             revert("Unsupported chain for broadcasting");

@@ -79,7 +79,7 @@ abstract contract BaseTest is Modifiers, Test {
 
     // CoreEmissions Controller
     uint256 internal constant EMISSIONS_CONTROLLER_EPOCH_LENGTH = TWO_WEEKS;
-    uint256 internal constant EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH = 1_000_000 * 1e18; // 1K tokens
+    uint256 internal constant EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH = 1000 * 1e18; // 1K tokens
     uint256 internal constant EMISSIONS_CONTROLLER_CLIFF = 26;
     uint256 internal constant EMISSIONS_CONTROLLER_REDUCTION_BP = 1000; // 10%
 
@@ -89,6 +89,7 @@ abstract contract BaseTest is Modifiers, Test {
     uint256 internal constant ONE_WEEK = ONE_DAY * 7;
     uint256 internal constant TWO_WEEKS = ONE_DAY * 14;
     uint256 internal constant THREE_WEEKS = ONE_DAY * 21;
+    uint256 internal constant FOUR_WEEKS = ONE_DAY * 28;
     uint256 internal constant ONE_YEAR = ONE_DAY * 365;
     uint256 internal constant TWO_YEARS = ONE_YEAR * 2;
     uint256 internal constant THREE_YEARS = ONE_YEAR * 3;
@@ -620,8 +621,8 @@ abstract contract BaseTest is Modifiers, Test {
     function _setupUserWrappedTokenAndTrustBonding(address user) internal {
         vm.deal({ account: user, newBalance: 10_000_000_000 ether });
         resetPrank({ msgSender: user });
-        protocol.wrappedTrust.deposit{ value: 10_000 ether }();
-        protocol.wrappedTrust.approve(address(protocol.trustBonding), 10_000 ether);
+        protocol.wrappedTrust.deposit{ value: 100_000 ether }();
+        protocol.wrappedTrust.approve(address(protocol.trustBonding), type(uint256).max);
         _addToTrustBondingWhiteList(user);
     }
 
