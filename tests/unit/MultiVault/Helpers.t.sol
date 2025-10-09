@@ -167,7 +167,7 @@ contract MultiVaultHelpersTest is BaseTest {
 
     function test_previewTripleCreate_calculatesFeesAndShares() public {
         // Compute an id that isn't created yet: hash of three atoms (we don't need real atoms for preview)
-        bytes32 preTripleId = keccak256(abi.encodePacked("s", "p", "o", "triple"));
+        bytes32 preTripleId = keccak256(abi.encodePacked(protocol.multiVault.TRIPLE_SALT(), "s", "p", "o"));
         uint256 curveId = getDefaultCurveId();
 
         uint256 tripleCost = protocol.multiVault.getTripleCost();

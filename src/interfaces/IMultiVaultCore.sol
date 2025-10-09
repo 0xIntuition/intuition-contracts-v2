@@ -19,8 +19,8 @@ struct GeneralConfig {
     uint256 minShare;
     /// @dev The maximum length of atom data that can be passed when creating atom vaults
     uint256 atomDataMaxLength;
-    /// @dev The decimal precision used for calculating share prices
-    uint256 decimalPrecision;
+    /// @dev Threshold in terms of total shares in vault at which entry and exit fees start to be charged
+    uint256 feeThreshold;
 }
 
 /// @notice Atom configuration struct
@@ -78,7 +78,6 @@ struct BondingCurveConfig {
 /// @author 0xIntuition
 /// @notice Interface for the MultiVaultCore contract
 interface IMultiVaultCore {
-
     /* =================================================== */
     /*                    INITIALIZER                      */
     /* =================================================== */
@@ -238,7 +237,8 @@ interface IMultiVaultCore {
     function isTriple(bytes32 id) external view returns (bool);
 
     /// @notice Returns the underlying atom IDs for a given triple ID
-    /// @dev If the triple does not exist, this function returns (bytes32(0), bytes32(0), bytes32(0)) instead of reverting
+    /// @dev If the triple does not exist, this function returns (bytes32(0), bytes32(0), bytes32(0)) instead of
+    /// reverting
     /// @param tripleId The ID of the triple
     function triple(bytes32 tripleId) external view returns (bytes32, bytes32, bytes32);
 
