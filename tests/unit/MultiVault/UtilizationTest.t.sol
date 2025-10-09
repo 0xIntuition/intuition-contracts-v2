@@ -6,7 +6,7 @@ import { Test } from "forge-std/src/Test.sol";
 
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
-import { IMultiVault } from "src/interfaces/IMultiVault.sol";
+import { ApprovalTypes } from "src/interfaces/IMultiVault.sol";
 
 contract UtilizationTest is BaseTest {
     uint256 internal CURVE_ID;
@@ -54,7 +54,7 @@ contract UtilizationTest is BaseTest {
         bytes32 atomId = createSimpleAtom("util-onbehalf", ATOM_COST[0], users.bob);
 
         // Allow Alice to deposit for Bob
-        setupApproval(users.bob, users.alice, IMultiVault.ApprovalTypes.DEPOSIT);
+        setupApproval(users.bob, users.alice, ApprovalTypes.DEPOSIT);
 
         uint256 epoch = protocol.multiVault.currentEpoch();
 
@@ -203,7 +203,7 @@ contract UtilizationTest is BaseTest {
         int256 meN_total = protocol.multiVault.personalUtilization(users.bob, epochN);
 
         // Allow Alice to deposit on behalf of Bob for next epoch
-        setupApproval(users.bob, users.alice, IMultiVault.ApprovalTypes.DEPOSIT);
+        setupApproval(users.bob, users.alice, ApprovalTypes.DEPOSIT);
 
         // Move to epoch N+1 (no actions yet for Bob in N+1 -> personalUtilization[bob][N+1] == 0)
         vm.warp(block.timestamp + 14 days + 1);

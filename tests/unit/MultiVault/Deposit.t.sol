@@ -7,7 +7,7 @@ import { Test, console } from "forge-std/src/Test.sol";
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { MultiVaultCore } from "src/protocol/MultiVaultCore.sol";
-import { IMultiVault } from "src/interfaces/IMultiVault.sol";
+import { IMultiVault, ApprovalTypes } from "src/interfaces/IMultiVault.sol";
 import { GeneralConfig, BondingCurveConfig } from "src/interfaces/IMultiVaultCore.sol";
 
 contract DepositTest is BaseTest {
@@ -50,7 +50,7 @@ contract DepositTest is BaseTest {
     function test_deposit_DifferentReceivers_Success() public {
         bytes32 atomId = createSimpleAtom("Different receivers atom", ATOM_COST[0], users.alice);
 
-        setupApproval(users.bob, users.alice, IMultiVault.ApprovalTypes.BOTH);
+        setupApproval(users.bob, users.alice, ApprovalTypes.BOTH);
 
         uint256 shares = makeDeposit(users.alice, users.bob, atomId, CURVE_ID, 10e18, 1e4);
 
@@ -134,7 +134,7 @@ contract DepositTest is BaseTest {
     function test_approve_RevertWhen_SelfApprove() public {
         resetPrank(users.alice);
         vm.expectRevert(MultiVault.MultiVault_CannotApproveOrRevokeSelf.selector);
-        protocol.multiVault.approve(users.alice, IMultiVault.ApprovalTypes.BOTH);
+        protocol.multiVault.approve(users.alice, ApprovalTypes.BOTH);
     }
 
     function test_approve_DeleteApproval_RemovesAccess() public {
@@ -142,7 +142,7 @@ contract DepositTest is BaseTest {
         bytes32 atomId = createSimpleAtom("approval-delete-atom", ATOM_COST[0], users.bob);
 
         // Bob (receiver) approves Alice (sender)
-        setupApproval(users.bob, users.alice, IMultiVault.ApprovalTypes.BOTH);
+        setupApproval(users.bob, users.alice, ApprovalTypes.BOTH);
 
         // First deposit from Alice -> Bob succeeds
         uint256 amount1 = 1 ether;
@@ -151,7 +151,7 @@ contract DepositTest is BaseTest {
 
         // Bob revokes approval by setting NONE (deletes mapping entry)
         resetPrank(users.bob);
-        protocol.multiVault.approve(users.alice, IMultiVault.ApprovalTypes.NONE);
+        protocol.multiVault.approve(users.alice, ApprovalTypes.NONE);
 
         // Second deposit from Alice -> Bob now reverts with SenderNotApproved
         resetPrank(users.alice);

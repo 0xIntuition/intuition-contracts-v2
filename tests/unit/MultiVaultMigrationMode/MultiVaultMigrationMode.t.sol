@@ -2,7 +2,7 @@
 pragma solidity 0.8.29;
 
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
-
+import { VaultType } from "src/interfaces/IMultiVault.sol";
 import { AtomWallet } from "src/protocol/wallet/AtomWallet.sol";
 import { AtomWalletFactory } from "src/protocol/wallet/AtomWalletFactory.sol";
 import { MultiVaultMigrationMode } from "src/protocol/MultiVaultMigrationMode.sol";
@@ -30,9 +30,9 @@ import { BaseTest } from "tests/BaseTest.t.sol";
  * 5. Set user positions (batchSetUserBalances)
  *
  * This order is critical because:
- * - Vault operations emit events that call getVaultType()
- * - getVaultType() checks if terms exist (as atoms or triples)
- * - If vault data is set before term data, getVaultType() will revert
+ * - Vault operations emit events getVaultType()
+ *  getVaultType() checks if terms exist (as atoms or triples)
+ * - If vault data is set before term getVaultType() will revert
  * - Terms must exist before their vault data can be properly categorized
  */
 contract MultiVaultMigrationModeTest is BaseTest {
@@ -63,7 +63,7 @@ contract MultiVaultMigrationModeTest is BaseTest {
         uint256 sharePrice,
         uint256 totalAssets,
         uint256 totalShares,
-        IMultiVault.VaultType vaultType
+        VaultType vaultType
     );
 
     event Deposited(
@@ -75,7 +75,7 @@ contract MultiVaultMigrationModeTest is BaseTest {
         uint256 assetsAfterFees,
         uint256 shares,
         uint256 totalShares,
-        IMultiVault.VaultType vaultType
+        VaultType vaultType
     );
 
     event TripleCreated(
@@ -292,7 +292,7 @@ contract MultiVaultMigrationModeTest is BaseTest {
             multiVaultMigrationMode.currentSharePrice(atomIds[0], 1),
             vaultTotals[0].totalAssets,
             vaultTotals[0].totalShares,
-            IMultiVault.VaultType.ATOM // We know these are atoms because we created them
+            VaultType.ATOM // We know these are atoms because we created them
         );
 
         vm.expectEmit(true, true, true, true);
@@ -302,7 +302,7 @@ contract MultiVaultMigrationModeTest is BaseTest {
             multiVaultMigrationMode.currentSharePrice(atomIds[1], 1),
             vaultTotals[1].totalAssets,
             vaultTotals[1].totalShares,
-            IMultiVault.VaultType.ATOM
+            VaultType.ATOM
         );
 
         vm.prank(users.admin);
@@ -430,7 +430,7 @@ contract MultiVaultMigrationModeTest is BaseTest {
             multiVaultMigrationMode.convertToAssets(atomIds[0], 1, userBalances[0][0]),
             userBalances[0][0],
             userBalances[0][0],
-            IMultiVault.VaultType.ATOM
+            VaultType.ATOM
         );
 
         vm.expectEmit(true, true, true, true);
@@ -443,7 +443,7 @@ contract MultiVaultMigrationModeTest is BaseTest {
             multiVaultMigrationMode.convertToAssets(atomIds[1], 1, userBalances[0][1]),
             userBalances[0][1],
             userBalances[0][1],
-            IMultiVault.VaultType.ATOM
+            VaultType.ATOM
         );
 
         MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode

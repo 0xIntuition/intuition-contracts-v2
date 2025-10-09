@@ -71,13 +71,13 @@ export const MultiVaultAbi = [
   },
   {
     "type": "function",
-    "name": "ONE_SHARE",
+    "name": "TRIPLE_SALT",
     "inputs": [],
     "outputs": [
       {
         "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "stateMutability": "view"
@@ -145,7 +145,7 @@ export const MultiVaultAbi = [
       {
         "name": "approvalType",
         "type": "uint8",
-        "internalType": "enum IMultiVault.ApprovalTypes"
+        "internalType": "enum ApprovalTypes"
       }
     ],
     "outputs": [],
@@ -817,6 +817,25 @@ export const MultiVaultAbi = [
   },
   {
     "type": "function",
+    "name": "getInverseTripleId",
+    "inputs": [
+      {
+        "name": "tripleId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getRoleAdmin",
     "inputs": [
       {
@@ -1070,7 +1089,7 @@ export const MultiVaultAbi = [
       {
         "name": "",
         "type": "uint8",
-        "internalType": "enum IMultiVault.VaultType"
+        "internalType": "enum VaultType"
       }
     ],
     "stateMutability": "view"
@@ -2153,7 +2172,7 @@ export const MultiVaultAbi = [
         "name": "approvalType",
         "type": "uint8",
         "indexed": false,
-        "internalType": "enum IMultiVault.ApprovalTypes"
+        "internalType": "enum ApprovalTypes"
       }
     ],
     "anonymous": false
@@ -2295,7 +2314,7 @@ export const MultiVaultAbi = [
         "name": "vaultType",
         "type": "uint8",
         "indexed": false,
-        "internalType": "enum IMultiVault.VaultType"
+        "internalType": "enum VaultType"
       }
     ],
     "anonymous": false
@@ -2494,7 +2513,7 @@ export const MultiVaultAbi = [
         "name": "vaultType",
         "type": "uint8",
         "indexed": false,
-        "internalType": "enum IMultiVault.VaultType"
+        "internalType": "enum VaultType"
       }
     ],
     "anonymous": false
@@ -2612,7 +2631,7 @@ export const MultiVaultAbi = [
         "name": "vaultType",
         "type": "uint8",
         "indexed": false,
-        "internalType": "enum IMultiVault.VaultType"
+        "internalType": "enum VaultType"
       }
     ],
     "anonymous": false
