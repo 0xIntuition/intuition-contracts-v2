@@ -504,7 +504,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
 
         // Fetch the personal utilization before and after the epoch
         uint256 lastActiveEpoch = IMultiVault(multiVault).getUserLastActiveEpoch(_account);
-        uint256 prevEpochForUser = lastActiveEpoch < _epoch ? lastActiveEpoch : _epoch - 1;
+        uint256 prevEpochForUser = lastActiveEpoch < _epoch - 1 ? lastActiveEpoch : _epoch - 1;
         int256 userUtilizationBefore = IMultiVault(multiVault).getUserUtilizationForEpoch(_account, prevEpochForUser);
         int256 userUtilizationAfter = IMultiVault(multiVault).getUserUtilizationForEpoch(_account, _epoch);
 

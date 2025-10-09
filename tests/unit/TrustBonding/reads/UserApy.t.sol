@@ -276,6 +276,7 @@ contract TrustBondingUserApyTest is TrustBondingBase {
         _advanceToEpoch(2);
         int256 userUtilizationEpoch2 = 500 ether;
         _setUserUtilizationForEpoch(users.alice, 2, userUtilizationEpoch2);
+        _setLastActiveEpochForUser(users.alice, 2); // Ensure last active epoch is updated
 
         (uint256 currentApy, uint256 maxApy) = protocol.trustBonding.getUserApy(users.alice);
 
@@ -400,6 +401,7 @@ contract TrustBondingUserApyTest is TrustBondingBase {
         _setUserClaimedRewardsForEpoch(users.alice, 1, claimedInEpoch1);
         int256 userUtilizationEpoch1 = 100 ether;
         _setUserUtilizationForEpoch(users.alice, 1, userUtilizationEpoch1);
+        _setLastActiveEpochForUser(users.alice, 1); // Ensure last active epoch is updated
 
         (uint256 currentApy1, uint256 maxApy1) = protocol.trustBonding.getUserApy(users.alice);
 
@@ -409,6 +411,7 @@ contract TrustBondingUserApyTest is TrustBondingBase {
         _setUserClaimedRewardsForEpoch(users.alice, 2, claimedInEpoch2);
         int256 userUtilizationEpoch2 = userUtilizationEpoch1 + 500 ether;
         _setUserUtilizationForEpoch(users.alice, 2, userUtilizationEpoch2);
+        _setLastActiveEpochForUser(users.alice, 2); // Ensure last active epoch is updated
 
         (uint256 currentApy2, uint256 maxApy2) = protocol.trustBonding.getUserApy(users.alice);
 
@@ -418,6 +421,7 @@ contract TrustBondingUserApyTest is TrustBondingBase {
         _setUserClaimedRewardsForEpoch(users.alice, 3, claimedInEpoch3);
         int256 userUtilizationEpoch3 = userUtilizationEpoch2 + 200 ether;
         _setUserUtilizationForEpoch(users.alice, 3, userUtilizationEpoch3);
+        _setLastActiveEpochForUser(users.alice, 3); // Ensure last active epoch is updated
 
         (uint256 currentApy3, uint256 maxApy3) = protocol.trustBonding.getUserApy(users.alice);
 
@@ -425,6 +429,7 @@ contract TrustBondingUserApyTest is TrustBondingBase {
         _advanceToEpoch(4);
         int256 userUtilizationEpoch4 = userUtilizationEpoch3 + 700 ether;
         _setUserUtilizationForEpoch(users.alice, 4, userUtilizationEpoch4);
+        _setLastActiveEpochForUser(users.alice, 4); // Ensure last active epoch is updated
 
         (uint256 currentApy4, uint256 maxApy4) = protocol.trustBonding.getUserApy(users.alice);
 
