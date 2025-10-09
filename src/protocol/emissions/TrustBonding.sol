@@ -259,7 +259,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         uint256 userRewards = _userEligibleRewardsForEpoch(account, currEpoch);
         uint256 personalUtilization = _getPersonalUtilizationRatio(account, currEpoch);
         int256 locked = locked[account].amount;
-        
+
         if (userRewards == 0 || locked <= 0) {
             return (currentApy, maxApy);
         }
@@ -553,7 +553,9 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         }
 
         // Fetch the system utilization before and after the epoch
-        int256 utilizationBefore = IMultiVault(multiVault).getTotalUtilizationForEpoch(_epoch - 1);
+        uint256 lastSystemActiveEpoch = IMultiVault(multiVault).getLastSystemActiveEpoch();
+        uint256 prevEpochForSystem = lastSystemActiveEpoch < _epoch - 1 ? lastSystemActiveEpoch : _epoch - 1;
+        int256 utilizationBefore = IMultiVault(multiVault).getTotalUtilizationForEpoch(prevEpochForSystem);
         int256 utilizationAfter = IMultiVault(multiVault).getTotalUtilizationForEpoch(_epoch);
 
         // Since rawUtilizationDelta is signed, we only do a sign check, as the explicit underflow check is not needed
@@ -569,6 +571,11 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
 
         // Fetch the target utilization for the previous epoch
         uint256 utilizationTarget = totalClaimedRewardsForEpoch[_epoch - 1];
+
+        // If there was no utilization target, we return the minimum system utilization ratio
+        if (utilizationTarget == 0) {
+            return systemUtilizationLowerBound;
+        }
 
         // If the utilizationDelta is greater than the target, we return the max ratio
         if (utilizationDelta >= utilizationTarget) {

@@ -71,7 +71,7 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         assertEq(ratio, SYSTEM_UTILIZATION_LOWER_BOUND, "Zero utilization delta should return lower bound");
     }
 
-    function test_getSystemUtilizationRatio_noTargetUtilization_shouldReturnMaxRatio() external {
+    function test_getSystemUtilizationRatio_noTargetUtilization_shouldReturnLowerBound() external {
         // Advance to epoch 2 where utilization calculations begin
         _advanceToEpoch(2);
 
@@ -83,7 +83,9 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         // No claimed rewards for epoch 1 (target utilization = 0)
 
         uint256 ratio = protocol.trustBonding.getSystemUtilizationRatio(2);
-        assertEq(ratio, BASIS_POINTS_DIVISOR, "No target utilization should return max ratio");
+        assertEq(
+            ratio, protocol.trustBonding.systemUtilizationLowerBound(), "No target utilization should return max ratio"
+        );
     }
 
     function test_getSystemUtilizationRatio_utilizationDeltaGreaterThanTarget_shouldReturnMaxRatio() external {
@@ -113,6 +115,8 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         _setTotalUtilizationForEpoch(2, 1500e18);
         // Set claimed rewards for epoch 1 to 1000e18 (target = 1000e18)
         _setTotalClaimedRewardsForEpoch(1, 1000e18);
+        // Set last active epoch for system to epoch 2
+        _setLastActiveEpochFoSystem(2);
 
         // Expected calculation:
         // delta = 500e18, target = 1000e18
@@ -136,6 +140,8 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         _setTotalUtilizationForEpoch(2, 1250e18);
         // Set claimed rewards for epoch 1 to 1000e18 (target = 1000e18)
         _setTotalClaimedRewardsForEpoch(1, 1000e18);
+        // Set last active epoch for system to epoch 2
+        _setLastActiveEpochFoSystem(2);
 
         // Expected calculation:
         // delta = 250e18, target = 1000e18
@@ -159,6 +165,8 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         _setTotalUtilizationForEpoch(2, 1750e18);
         // Set claimed rewards for epoch 1 to 1000e18 (target = 1000e18)
         _setTotalClaimedRewardsForEpoch(1, 1000e18);
+        // Set last active epoch for system to epoch 2
+        _setLastActiveEpochFoSystem(2);
 
         // Expected calculation:
         // delta = 750e18, target = 1000e18
@@ -344,6 +352,7 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         _setTotalUtilizationForEpoch(1, 1000e18);
         _setTotalUtilizationForEpoch(2, 1500e18); // delta = 500e18
         _setTotalClaimedRewardsForEpoch(1, 1000e18); // target = 1000e18
+        _setLastActiveEpochFoSystem(2);
 
         // Set up personal utilization scenario for Alice
         _setUserUtilizationForEpoch(users.alice, 1, 500e18);
@@ -392,6 +401,7 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         _setTotalUtilizationForEpoch(1, 1000e18);
         _setTotalUtilizationForEpoch(2, 1000e18 + 1); // delta = 1
         _setTotalClaimedRewardsForEpoch(1, 1000e18); // target = 1000e18
+        _setLastActiveEpochFoSystem(2);
 
         uint256 systemRatio = protocol.trustBonding.getSystemUtilizationRatio(2);
         // Expected: 5000 + (1 * 5000) / 1000e18 ≈ 5000 (rounds down)

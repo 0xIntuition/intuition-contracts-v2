@@ -319,6 +319,7 @@ contract TrustBondingSystemApyTest is TrustBondingBase {
         int256 utilizationEpoch2 = 500 ether; // Decreased
         _setTotalUtilizationForEpoch(2, utilizationEpoch2);
         _setUserUtilizationForEpoch(users.alice, 2, utilizationEpoch2);
+        _setLastActiveEpochFoSystem(2);
 
         (uint256 currentApy, uint256 maxApy) = protocol.trustBonding.getSystemApy();
 
@@ -358,6 +359,7 @@ contract TrustBondingSystemApyTest is TrustBondingBase {
         int256 utilizationEpoch2 = utilizationEpoch1 + 900 ether;
         _setTotalUtilizationForEpoch(2, utilizationEpoch2);
         _setUserUtilizationForEpoch(users.alice, 2, utilizationEpoch2);
+        _setLastActiveEpochFoSystem(2);
 
         (uint256 currentApy2, uint256 maxApy2) = protocol.trustBonding.getSystemApy();
 
@@ -419,6 +421,7 @@ contract TrustBondingSystemApyTest is TrustBondingBase {
         _setTotalClaimedRewardsForEpoch(1, claimedInEpoch1);
         int256 utilizationEpoch1 = 100 ether;
         _setTotalUtilizationForEpoch(1, utilizationEpoch1);
+        _setLastActiveEpochFoSystem(1);
 
         (uint256 currentApy1, uint256 maxApy1) = protocol.trustBonding.getSystemApy();
 
@@ -428,6 +431,7 @@ contract TrustBondingSystemApyTest is TrustBondingBase {
         _setTotalClaimedRewardsForEpoch(2, claimedInEpoch2);
         int256 utilizationEpoch2 = utilizationEpoch1 + 500 ether;
         _setTotalUtilizationForEpoch(2, utilizationEpoch2);
+        _setLastActiveEpochFoSystem(2);
 
         (uint256 currentApy2, uint256 maxApy2) = protocol.trustBonding.getSystemApy();
 
@@ -437,6 +441,7 @@ contract TrustBondingSystemApyTest is TrustBondingBase {
         _setTotalClaimedRewardsForEpoch(3, claimedInEpoch3);
         int256 utilizationEpoch3 = utilizationEpoch2 + 200 ether;
         _setTotalUtilizationForEpoch(3, utilizationEpoch3);
+        _setLastActiveEpochFoSystem(3);
 
         (uint256 currentApy3, uint256 maxApy3) = protocol.trustBonding.getSystemApy();
 
@@ -444,6 +449,7 @@ contract TrustBondingSystemApyTest is TrustBondingBase {
         _advanceToEpoch(4);
         int256 utilizationEpoch4 = utilizationEpoch3 + 700 ether;
         _setTotalUtilizationForEpoch(4, utilizationEpoch4);
+        _setLastActiveEpochFoSystem(4);
 
         (uint256 currentApy4, uint256 maxApy4) = protocol.trustBonding.getSystemApy();
 

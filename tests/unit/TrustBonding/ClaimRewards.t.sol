@@ -284,6 +284,7 @@ contract ClaimRewardsTest is TrustBondingBase {
     function test_claimRewards_withSystemUtilizationImpactOnEmissions() external {
         _createLock(users.alice, initialTokens);
         _advanceToEpoch(3);
+        _setLastActiveEpochFoSystem(3);
 
         uint256 prevEpoch = 2;
 

@@ -83,6 +83,9 @@ contract MultiVault is
     // User address -> Last active epoch
     mapping(address user => uint256 epoch) public lastActiveEpoch;
 
+    /// @notice Last epoch in which there was any system activity (deposits, redemptions, atom/triple creations)
+    uint256 public lastSystemActiveEpoch;
+
     /* =================================================== */
     /*                        Errors                       */
     /* =================================================== */
@@ -216,6 +219,11 @@ contract MultiVault is
     /// @inheritdoc IMultiVault
     function getUserUtilizationForEpoch(address user, uint256 epoch) external view returns (int256) {
         return personalUtilization[user][epoch];
+    }
+
+    /// @inheritdoc IMultiVault
+    function getLastSystemActiveEpoch() external view returns (uint256) {
+        return lastSystemActiveEpoch;
     }
 
     /// @inheritdoc IMultiVault
@@ -1400,6 +1408,9 @@ contract MultiVault is
         personalUtilization[user][epoch] += totalValue;
         emit PersonalUtilizationAdded(user, epoch, totalValue, personalUtilization[user][epoch]);
 
+        // Mark lastSystemActiveEpoch
+        lastSystemActiveEpoch = epoch;
+
         // Mark lastActiveEpoch for the user
         lastActiveEpoch[user] = epoch;
     }
@@ -1418,6 +1429,9 @@ contract MultiVault is
 
         personalUtilization[user][epoch] -= amountToRemove;
         emit PersonalUtilizationRemoved(user, epoch, amountToRemove, personalUtilization[user][epoch]);
+
+        // Mark lastSystemActiveEpoch
+        lastSystemActiveEpoch = epoch;
 
         // Mark lastActiveEpoch for the user
         lastActiveEpoch[user] = epoch;
