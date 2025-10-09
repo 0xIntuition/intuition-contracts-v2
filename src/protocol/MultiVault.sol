@@ -440,7 +440,9 @@ contract MultiVault is
             _updateVaultOnCreation(sender, atomId, curveId, assetsAfterFees, sharesForReceiver, VaultType.ATOM);
 
         /* --- Add entry fee to Atom Vault (Protocol Owned) --- */
-        _increaseProRataVaultAssets(atomId, _feeOnRaw(assetsAfterFixedFees, vaultFees.entryFee), VaultType.ATOM);
+        if (_shouldChargeFees(atomId)) {
+            _increaseProRataVaultAssets(atomId, _feeOnRaw(assetsAfterFixedFees, vaultFees.entryFee), VaultType.ATOM);
+        }
 
         /* --- Emit Events --- */
         emit AtomCreated(sender, atomId, data, atomWallet);
@@ -569,7 +571,9 @@ contract MultiVault is
             _updateVaultOnCreation(sender, tripleId, curveId, assetsAfterFees, sharesForReceiver, VaultType.TRIPLE);
 
         /* --- Add vault and triple fees to vault (Protocol Owned) --- */
-        _increaseProRataVaultAssets(tripleId, _feeOnRaw(assetsAfterFixedFees, vaultFees.entryFee), VaultType.TRIPLE);
+        if (_shouldChargeFees(tripleId)) {
+            _increaseProRataVaultAssets(tripleId, _feeOnRaw(assetsAfterFixedFees, vaultFees.entryFee), VaultType.TRIPLE);
+        }
 
         if (_shouldChargeAtomDepositFraction(tripleId)) {
             _increaseProRataVaultsAssets(
@@ -1074,7 +1078,7 @@ contract MultiVault is
         assetsAfterFixedFees = assets - atomCost;
 
         uint256 protocolFee = _feeOnRaw(assetsAfterFixedFees, vaultFees.protocolFee);
-        uint256 entryFee = _feeOnRaw(assetsAfterFixedFees, vaultFees.entryFee);
+        uint256 entryFee = _shouldChargeFees(termId) ? _feeOnRaw(assetsAfterFixedFees, vaultFees.entryFee) : 0;
         uint256 atomWalletDepositFee = _feeOnRaw(assetsAfterFixedFees, atomConfig.atomWalletDepositFee);
 
         assetsAfterFees = assetsAfterFixedFees - entryFee - protocolFee - atomWalletDepositFee;
@@ -1111,7 +1115,7 @@ contract MultiVault is
         }
 
         uint256 protocolFee = _feeOnRaw(base, vaultFees.protocolFee);
-        uint256 entryFee = _feeOnRaw(base, vaultFees.entryFee);
+        uint256 entryFee = _shouldChargeFees(termId) ? _feeOnRaw(base, vaultFees.entryFee) : 0;
         uint256 atomWalletDepositFee = _feeOnRaw(base, atomConfig.atomWalletDepositFee);
 
         uint256 assetsAfterFees = base - protocolFee - entryFee - atomWalletDepositFee;
@@ -1143,7 +1147,7 @@ contract MultiVault is
         uint256 assetsAfterFixedFees = assets - tripleCost;
 
         uint256 protocolFee = _feeOnRaw(assetsAfterFixedFees, vaultFees.protocolFee);
-        uint256 entryFee = _feeOnRaw(assetsAfterFixedFees, vaultFees.entryFee);
+        uint256 entryFee = _shouldChargeFees(termId) ? _feeOnRaw(assetsAfterFixedFees, vaultFees.entryFee) : 0;
         uint256 atomDepositFraction = _shouldChargeAtomDepositFraction(termId)
             ? _feeOnRaw(assetsAfterFixedFees, tripleConfig.atomDepositFractionForTriple)
             : 0;
