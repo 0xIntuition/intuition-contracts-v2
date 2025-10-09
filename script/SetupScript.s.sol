@@ -98,7 +98,7 @@ abstract contract SetupScript is Script {
     // CoreEmissionsController Config
     uint256 internal EMISSIONS_START_TIMESTAMP = BONDING_START_TIMESTAMP;
     uint256 internal EMISSIONS_LENGTH = TWO_WEEKS;
-    uint256 internal EMISSIONS_PER_EPOCH = 1000e18; // 1000 TRUST per epoch
+    uint256 internal EMISSIONS_PER_EPOCH = 1000 ether; // 1000 TRUST per epoch
     uint256 internal EMISSIONS_REDUCTION_CLIFF = 4; // 1 epoch
     uint256 internal EMISSIONS_REDUCTION_BASIS_POINTS = 1000; // 10%
 
@@ -108,10 +108,9 @@ abstract contract SetupScript is Script {
     uint256 internal OFFSET_PROGRESSIVE_CURVE_OFFSET = 5e35;
 
     // MetaLayer Configurations
-    uint256 internal METALAYER_GAS_LIMIT = 200_000; // Gas limit for cross-chain operations
+    uint256 internal METALAYER_GAS_LIMIT = 125_000; // Gas limit for cross-chain operations
     address internal METALAYER_HUB_OR_SPOKE = 0x007700aa28A331B91219Ffa4A444711F0D9E57B5;
 
-    /// @dev Initializes the transaction broadcaster like this:
     constructor() {
         if (block.chainid == vm.envUint("BASE_CHAIN_ID")) {
             uint256 deployerKey = vm.envUint("DEPLOYER_MAINNET");
