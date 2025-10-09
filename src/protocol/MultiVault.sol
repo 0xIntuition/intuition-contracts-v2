@@ -1739,10 +1739,10 @@ contract MultiVault is
     /// @param tripleId The ID of the triple
     /// @return bool Whether the atom deposit fraction should be charged or not
     function _shouldChargeAtomDepositFraction(bytes32 tripleId) internal view returns (bool) {
-        (bytes32 subjectId, bytes32 predicateId, bytes32 objectId) = triple(tripleId);
-        bool shouldChargeForSubject = _shouldChargeFees(subjectId);
-        bool shouldChargeForPredicate = _shouldChargeFees(predicateId);
-        bool shouldChargeForObject = _shouldChargeFees(objectId);
+        bytes32[3] memory atomIds = _triples[tripleId];
+        bool shouldChargeForSubject = _shouldChargeFees(atomIds[0]);
+        bool shouldChargeForPredicate = _shouldChargeFees(atomIds[1]);
+        bool shouldChargeForObject = _shouldChargeFees(atomIds[2]);
         return shouldChargeForSubject && shouldChargeForPredicate && shouldChargeForObject;
     }
 
