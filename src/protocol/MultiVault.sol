@@ -1742,8 +1742,14 @@ contract MultiVault is
     {
         uint256 defaultCurveId = bondingCurveConfig.defaultCurveId;
         uint256 totalShares = _vaults[termId][defaultCurveId].totalShares;
-        uint256 remainingSharesInDefaultVault =
-            (curveId == defaultCurveId) ? (totalShares - sharesToRedeem) : totalShares;
+        uint256 remainingSharesInDefaultVault;
+
+        if (curveId == defaultCurveId) {
+            remainingSharesInDefaultVault = sharesToRedeem >= totalShares ? 0 : totalShares - sharesToRedeem;
+        } else {
+            remainingSharesInDefaultVault = totalShares;
+        }
+
         if (remainingSharesInDefaultVault < generalConfig.feeThreshold) return false;
         return true;
     }
