@@ -63,7 +63,7 @@ export const AtomWalletFactoryAbi = [
       {
         "name": "",
         "type": "address",
-        "internalType": "contract IMultiVault"
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"

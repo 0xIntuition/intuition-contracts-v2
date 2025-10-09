@@ -15,7 +15,7 @@ import {
     VaultFees,
     BondingCurveConfig
 } from "src/interfaces/IMultiVaultCore.sol";
-import { IMultiVault } from "src/interfaces/IMultiVault.sol";
+import { IMultiVault, VaultType } from "src/interfaces/IMultiVault.sol";
 
 import { MultiVaultCore } from "src/protocol/MultiVaultCore.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
@@ -200,19 +200,11 @@ contract MultiVaultCoreTest is BaseTest {
                 TRIPLE_CREATION_PROTOCOL_FEE + TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION + (2 * MIN_SHARES);
             assertEq(protocol.multiVault.getTripleCost(), expectedTripleCost, "getTripleCost formula");
 
-            assertEq(
-                uint256(protocol.multiVault.getVaultType(atomIds[0])),
-                uint256(IMultiVault.VaultType.ATOM),
-                "VaultType ATOM"
-            );
-            assertEq(
-                uint256(protocol.multiVault.getVaultType(tripleId)),
-                uint256(IMultiVault.VaultType.TRIPLE),
-                "VaultType TRIPLE"
-            );
+            assertEq(uint256(protocol.multiVault.getVaultType(atomIds[0])), uint256(VaultType.ATOM), "VaultType ATOM");
+            assertEq(uint256(protocol.multiVault.getVaultType(tripleId)), uint256(VaultType.TRIPLE), "VaultType TRIPLE");
             assertEq(
                 uint256(protocol.multiVault.getVaultType(counterId)),
-                uint256(IMultiVault.VaultType.COUNTER_TRIPLE),
+                uint256(VaultType.COUNTER_TRIPLE),
                 "VaultType COUNTER_TRIPLE"
             );
         }

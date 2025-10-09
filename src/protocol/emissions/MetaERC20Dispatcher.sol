@@ -79,7 +79,7 @@ contract MetaERC20Dispatcher {
     }
 
     /* =================================================== */
-    /*                      INTERNAL                       */
+    /*                 INTERNAL FUNCTIONS                  */
     /* =================================================== */
 
     function _setMessageGasCost(uint256 newGasCost) internal {

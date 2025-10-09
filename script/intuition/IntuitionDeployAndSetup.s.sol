@@ -55,7 +55,7 @@ contract IntuitionDeployAndSetup is SetupScript {
 
     address public MIGRATOR;
 
-    uint32 internal BASE_METALAYER_RECIPIENT_DOMAIN = 8453;
+    uint32 internal BASE_METALAYER_RECIPIENT_DOMAIN = 84532;
 
     address public BASE_EMISSIONS_CONTROLLER;
 
@@ -78,7 +78,7 @@ contract IntuitionDeployAndSetup is SetupScript {
             MIGRATOR = vm.envAddress("ANVIL_MULTI_VAULT_ROLE_MIGRATOR");
             MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION = vm.envAddress("ANVIL_MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION");
         } else if (block.chainid == vm.envUint("INTUITION_SEPOLIA_CHAIN_ID")) {
-            BASE_EMISSIONS_CONTROLLER = vm.envAddress("INTUITION_SEPOLIA_BASE_EMISSIONS_CONTROLLER");
+            BASE_EMISSIONS_CONTROLLER = vm.envAddress("BASE_SEPOLIA_BASE_EMISSIONS_CONTROLLER");
             MIGRATOR = vm.envAddress("INTUITION_SEPOLIA_MULTI_VAULT_ROLE_MIGRATOR");
             MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION =
                 vm.envAddress("INTUITION_SEPOLIA_MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION");
@@ -116,7 +116,6 @@ contract IntuitionDeployAndSetup is SetupScript {
         contractInfo("BondingCurveRegistry", address(bondingCurveRegistry));
         contractInfo("LinearCurve", address(linearCurve));
         contractInfo("OffsetProgressiveCurve", address(offsetProgressiveCurve));
-        contractInfo("ProgressiveCurve", address(progressiveCurve));
         _exportContractAddresses();
     }
 
@@ -161,15 +160,10 @@ contract IntuitionDeployAndSetup is SetupScript {
         offsetProgressiveCurve = new OffsetProgressiveCurve(
             "Offset Progressive Bonding Curve", OFFSET_PROGRESSIVE_CURVE_SLOPE, OFFSET_PROGRESSIVE_CURVE_OFFSET
         );
-        progressiveCurve = new ProgressiveCurve("Progressive Bonding Curve", PROGRESSIVE_CURVE_SLOPE);
-        info("LinearCurve", address(linearCurve));
-        info("OffsetProgressiveCurve", address(offsetProgressiveCurve));
-        info("ProgressiveCurve", address(progressiveCurve));
 
         // Add curves to registry
         bondingCurveRegistry.addBondingCurve(address(linearCurve));
         bondingCurveRegistry.addBondingCurve(address(offsetProgressiveCurve));
-        bondingCurveRegistry.addBondingCurve(address(progressiveCurve)); // review if this curve is still required
 
         // Deploy SatelliteEmissionsController implementation and proxy
         SatelliteEmissionsController satelliteEmissionsControllerImpl = new SatelliteEmissionsController();

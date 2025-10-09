@@ -958,5 +958,10 @@ export const SatelliteEmissionsControllerAbi = [
     "type": "error",
     "name": "SatelliteEmissionsController_PreviouslyBridgedUnclaimedEmissions",
     "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SatelliteEmissionsController_TrustBondingNotSet",
+    "inputs": []
   }
 ] as const;
