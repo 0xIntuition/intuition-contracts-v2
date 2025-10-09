@@ -288,7 +288,7 @@ contract IntuitionDeployAndSetup is SetupScript {
             minDeposit: MIN_DEPOSIT,
             minShare: MIN_SHARES,
             atomDataMaxLength: ATOM_DATA_MAX_LENGTH,
-            decimalPrecision: DECIMAL_PRECISION
+            feeThreshold: FEE_THRESHOLD
         });
 
         atomConfig = AtomConfig({

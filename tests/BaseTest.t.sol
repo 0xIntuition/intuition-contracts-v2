@@ -44,7 +44,7 @@ abstract contract BaseTest is Modifiers, Test {
 
     uint256[] internal ATOM_COST;
     uint256[] internal TRIPLE_COST;
-    uint256 internal DECIMAL_PRECISION = 1e18;
+    uint256 internal FEE_THRESHOLD = 1e17;
     uint256 internal FEE_DENOMINATOR = 10_000;
     uint256 internal MIN_DEPOSIT = 1e17; // 0.1 Trust
     uint256 internal MIN_SHARES = 1e6; // Ghost Shares
@@ -355,7 +355,7 @@ abstract contract BaseTest is Modifiers, Test {
             minDeposit: MIN_DEPOSIT,
             minShare: MIN_SHARES,
             atomDataMaxLength: 1000,
-            decimalPrecision: 1e18
+            feeThreshold: 1e17
         });
     }
 

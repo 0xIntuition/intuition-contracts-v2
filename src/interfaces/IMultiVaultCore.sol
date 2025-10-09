@@ -21,8 +21,8 @@ struct GeneralConfig {
     uint256 minShare;
     /// @dev Maximum length of the atom data that can be passed when creating atom vaults
     uint256 atomDataMaxLength;
-    /// @dev Decimal precision used for calculating share prices
-    uint256 decimalPrecision;
+    /// @dev Threshold in terms of total shares in vault at which entry and exit fees start to be charged
+    uint256 feeThreshold;
 }
 
 /// @dev Atom configuration struct

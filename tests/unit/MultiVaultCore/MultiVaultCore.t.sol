@@ -70,7 +70,7 @@ contract MultiVaultCoreTest is BaseTest {
         assertEq(g.minDeposit, MIN_DEPOSIT, "minDeposit");
         assertEq(g.minShare, MIN_SHARES, "minShare");
         assertEq(g.atomDataMaxLength, ATOM_DATA_MAX_LENGTH, "atomDataMaxLength");
-        assertEq(g.decimalPrecision, DECIMAL_PRECISION, "decimalPrecision");
+        assertEq(g.feeThreshold, FEE_THRESHOLD, "feeThreshold");
 
         // Atom
         AtomConfig memory a = protocol.multiVault.getAtomConfig();
