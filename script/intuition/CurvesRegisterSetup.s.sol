@@ -22,15 +22,21 @@ forge script script/intuition/CurvesRegisterSetup.s.sol:CurvesRegisterSetup \
 --optimizer-runs 10000 \
 --rpc-url intuition_sepolia \
 --broadcast
+
+MAINNET
+forge script script/intuition/CurvesRegisterSetup.s.sol:CurvesRegisterSetup \
+--optimizer-runs 10000 \
+--rpc-url intuition \
+--broadcast
 */
 contract CurvesRegisterSetup is SetupScript {
     address public BONDING_CURVE_REGISTRY;
 
     function setUp() public override {
         super.setUp();
-        if (block.chainid == vm.envUint("ANVIL_CHAIN_ID")) {
+        if (block.chainid == NETWORK_ANVIL) {
             BONDING_CURVE_REGISTRY = vm.envAddress("ANVIL_BONDING_CURVE_REGISTRY");
-        } else if (block.chainid == vm.envUint("INTUITION_SEPOLIA_CHAIN_ID")) {
+        } else if (block.chainid == NETWORK_INTUITION_SEPOLIA) {
             BONDING_CURVE_REGISTRY = vm.envAddress("INTUITION_SEPOLIA_BONDING_CURVE_REGISTRY");
         } else {
             revert("Unsupported chain for broadcasting");

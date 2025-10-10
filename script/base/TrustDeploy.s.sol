@@ -26,11 +26,11 @@ contract TrustDeploy is SetupScript {
     function setUp() public override {
         super.setUp();
 
-        if (block.chainid == vm.envUint("ANVIL_CHAIN_ID")) {
+        if (block.chainid == NETWORK_ANVIL) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("ANVIL_BASE_EMISSIONS_CONTROLLER");
-        } else if (block.chainid == vm.envUint("BASE_SEPOLIA_CHAIN_ID")) {
+        } else if (block.chainid == NETWORK_BASE_SEPOLIA) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("BASE_SEPOLIA_BASE_EMISSIONS_CONTROLLER");
-        } else if (block.chainid == vm.envUint("INTUITION_SEPOLIA_CHAIN_ID")) {
+        } else if (block.chainid == NETWORK_INTUITION_SEPOLIA) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("INTUITION_SEPOLIA_BASE_EMISSIONS_CONTROLLER");
         } else {
             revert("Unsupported chain for broadcasting");
