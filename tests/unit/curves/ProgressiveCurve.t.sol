@@ -116,4 +116,41 @@ contract ProgressiveCurveTest is Test {
         uint256 expectedPrice = totalShares * SLOPE;
         assertEq(price, expectedPrice);
     }
+
+    function test_previewMint_isCeil_of_previewRedeem_floor() public view {
+        uint256 s0 = 10e18;
+        uint256 n = 1e18;
+
+        uint256 assetsUp = curve.previewMint(n, s0, 0);
+        uint256 assetsFloor = curve.previewRedeem(n, s0 + n, 0);
+
+        assertGe(assetsUp, assetsFloor);
+        assertLe(assetsUp - assetsFloor, 1); // at most 1 wei diff
+    }
+
+    function test_previewWithdraw_isMinimal() public view {
+        uint256 s0 = 10e18;
+        uint256 a = 1e18;
+
+        uint256 shUp = curve.previewWithdraw(a, 0, s0);
+        uint256 aWithShUp = curve.previewRedeem(shUp, s0, 0);
+        assertGe(aWithShUp, a);
+
+        if (shUp > 0) {
+            uint256 aWithShUpMinus1 = curve.previewRedeem(shUp - 1, s0, 0);
+            assertLt(aWithShUpMinus1, a); // minimality of rounding up
+        }
+    }
+
+    function test_previewDeposit_equals_convertToShares() public view {
+        uint256 s0 = 10e18;
+        uint256 a = 3e18;
+        assertEq(curve.previewDeposit(a, 0, s0), curve.convertToShares(a, 0, s0));
+    }
+
+    function test_previewRedeem_equals_convertToAssets() public view {
+        uint256 s0 = 10e18;
+        uint256 r = 2e18;
+        assertEq(curve.previewRedeem(r, s0, 0), curve.convertToAssets(r, s0, 0));
+    }
 }
