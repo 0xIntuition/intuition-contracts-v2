@@ -59,7 +59,7 @@ contract LinearCurve is BaseCurve {
         override
         returns (uint256 assets)
     {
-        assets = convertToAssets(shares, totalShares, totalAssets);
+        assets = totalShares == 0 ? shares : shares.mulDivUp(totalAssets, totalShares);
     }
 
     /// @inheritdoc BaseCurve
@@ -73,7 +73,7 @@ contract LinearCurve is BaseCurve {
         override
         returns (uint256 shares)
     {
-        shares = convertToShares(assets, totalAssets, totalShares);
+        shares = totalShares == 0 ? assets : assets.mulDivUp(totalShares, totalAssets);
     }
 
     /// @inheritdoc BaseCurve

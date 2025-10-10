@@ -4,15 +4,12 @@ pragma solidity 0.8.29;
 import { console2 } from "forge-std/src/console2.sol";
 
 import { SetupScript } from "../SetupScript.s.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
 import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 
 import { Trust } from "src/Trust.sol";
-import { TestTrust } from "tests/mocks/TestTrust.sol";
-import { WrappedTrust } from "src/WrappedTrust.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { AtomWarden } from "src/protocol/wallet/AtomWarden.sol";
 import { AtomWallet } from "src/protocol/wallet/AtomWallet.sol";
@@ -21,7 +18,6 @@ import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEm
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
-import { ProgressiveCurve } from "src/protocol/curves/ProgressiveCurve.sol";
 import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCurve.sol";
 import {
     GeneralConfig,
@@ -55,7 +51,7 @@ contract IntuitionDeployAndSetup is SetupScript {
 
     address public MIGRATOR;
 
-    uint32 internal BASE_METALAYER_RECIPIENT_DOMAIN = 84532;
+    uint32 internal BASE_METALAYER_RECIPIENT_DOMAIN = 84_532;
 
     address public BASE_EMISSIONS_CONTROLLER;
 

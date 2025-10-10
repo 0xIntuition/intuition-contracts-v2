@@ -150,7 +150,12 @@ contract ProgressiveCurve is BaseCurve {
         override
         returns (uint256 assets)
     {
-        return convert(_convertToAssets(convert(totalShares), convert(totalShares + shares)));
+        UD60x18 s0 = convert(totalShares);
+        UD60x18 s1 = convert(totalShares + shares);
+        UD60x18 aUD = _convertToAssets(s0, s1); // precise fixed-point
+
+        uint256 raw = UD60x18.unwrap(aUD); // 18-decimal scaled
+        assets = raw / 1e18 + ((raw % 1e18 == 0) ? 0 : 1); // ceil to uint
     }
 
     /// @inheritdoc BaseCurve
@@ -172,9 +177,11 @@ contract ProgressiveCurve is BaseCurve {
         returns (uint256 shares)
     {
         UD60x18 currentSupplyOfShares = convert(totalShares);
-        return convert(
-            currentSupplyOfShares.sub(currentSupplyOfShares.powu(2).sub(convert(assets).div(HALF_SLOPE)).sqrt())
-        );
+        UD60x18 preciseShares =
+            currentSupplyOfShares.sub(currentSupplyOfShares.powu(2).sub(convert(assets).div(HALF_SLOPE)).sqrt());
+
+        uint256 raw = UD60x18.unwrap(preciseShares); // 18-decimal scaled
+        shares = raw / 1e18 + ((raw % 1e18 == 0) ? 0 : 1); // ceil to uint256
     }
 
     /// @inheritdoc BaseCurve
