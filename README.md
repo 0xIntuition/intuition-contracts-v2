@@ -141,12 +141,12 @@ This project is licensed under BUSL-1.1
 
 ## Utility Scripts
 
-### `getReinitializeCalldata.ts`
+### `getTRUSTReinitializeCalldata.ts`
 
 Generates the **encoded calldata** for the `reinitialize()` function for the TRUST token upgrade.
 
 ```bash
-npx ts-node script/upgrades/getReinitializeCalldata.ts <ADMIN_ADDRESS> <BASE_EMISSIONS_CONTROLLER_ADDRESS>
+npx ts-node script/upgrades/getTRUSTReinitializeCalldata.ts <ADMIN_ADDRESS> <BASE_EMISSIONS_CONTROLLER_ADDRESS>
 ```
 
 ---
