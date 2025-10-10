@@ -165,9 +165,12 @@ contract OffsetProgressiveCurve is BaseCurve {
         override
         returns (uint256 assets)
     {
-        UD60x18 currentSupplyOfShares = convert(totalShares).add(OFFSET);
-        UD60x18 supplyOfSharesAfterMint = convert(totalShares + shares).add(OFFSET);
-        return convert(_convertToAssets(currentSupplyOfShares, supplyOfSharesAfterMint));
+        UD60x18 s0 = convert(totalShares).add(OFFSET);
+        UD60x18 s1 = convert(totalShares + shares).add(OFFSET);
+        UD60x18 aUD = _convertToAssets(s0, s1);
+
+        uint256 raw = UD60x18.unwrap(aUD); // 18-decimal scaled
+        assets = raw / 1e18 + ((raw % 1e18 == 0) ? 0 : 1); // ceil to uint256
     }
 
     /// @inheritdoc BaseCurve
@@ -190,9 +193,11 @@ contract OffsetProgressiveCurve is BaseCurve {
         returns (uint256 shares)
     {
         UD60x18 currentSupplyOfShares = convert(totalShares).add(OFFSET);
-        return convert(
-            currentSupplyOfShares.sub(currentSupplyOfShares.powu(2).sub(convert(assets).div(HALF_SLOPE)).sqrt())
-        );
+        UD60x18 preciseShares =
+            currentSupplyOfShares.sub(currentSupplyOfShares.powu(2).sub(convert(assets).div(HALF_SLOPE)).sqrt());
+
+        uint256 raw = UD60x18.unwrap(preciseShares); // 18-decimal scaled
+        shares = raw / 1e18 + ((raw % 1e18 == 0) ? 0 : 1); // ceil to uint256
     }
 
     /// @inheritdoc BaseCurve

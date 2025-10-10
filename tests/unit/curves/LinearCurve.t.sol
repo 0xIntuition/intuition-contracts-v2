@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { Test } from "forge-std/src/Test.sol";
+import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
+
+import { Test, console } from "forge-std/src/Test.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
 import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
 
@@ -103,5 +105,26 @@ contract LinearCurveTest is Test {
 
         uint256 assets = curve.convertToAssets(shares, totalShares, totalAssets);
         assertEq(assets, shares * totalAssets / totalShares);
+    }
+
+    function test_previewMint_roundsUp_onRemainder() public view {
+        uint256 shares = 1e18;
+        uint256 totalShares = 2e18;
+        uint256 totalAssets = 3e18 + 1; // force remainder
+
+        uint256 expectedAssets = FixedPointMathLib.mulDivUp(shares, totalAssets, totalShares);
+        uint256 actualAssets = curve.previewMint(shares, totalShares, totalAssets);
+        assertEq(actualAssets, expectedAssets); // will be 1.5e18 + 1 wei
+    }
+
+    // 2) Withdraw already rounds up in your inputs; assert the correct ceil
+    function test_previewWithdraw_roundsUp_onRemainder() public view {
+        uint256 assets = 1e18;
+        uint256 totalAssets = 3e18;
+        uint256 totalShares = 2e18;
+
+        uint256 expectedShares = FixedPointMathLib.mulDivUp(assets, totalShares, totalAssets);
+        uint256 actualShares = curve.previewWithdraw(assets, totalAssets, totalShares);
+        assertEq(actualShares, expectedShares); // 666666666666666667 wei
     }
 }
