@@ -21,6 +21,13 @@ forge script script/base/BaseEmissionsControllerSetup.s.sol:BaseEmissionsControl
 --rpc-url base_sepolia \
 --broadcast \
 --slow
+
+MAINNET
+forge script script/base/BaseEmissionsControllerSetup.s.sol:BaseEmissionsControllerSetup \
+--optimizer-runs 10000 \
+--rpc-url base \
+--broadcast \
+--slow
 */
 contract BaseEmissionsControllerSetup is SetupScript {
     address public BASE_EMISSIONS_CONTROLLER;

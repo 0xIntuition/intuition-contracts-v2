@@ -6,20 +6,12 @@ import { SetupScript } from "../SetupScript.s.sol";
 import { IntuitionSepoliaBridge } from "tests/testnet/IntuitionSepoliaBridge.sol";
 
 /*
+TESTNET
 forge script script/e2e/IntuitionSepoliaBridgeDeploy.s.sol:IntuitionSepoliaBridgeDeploy \
+--optimizer-runs 10000 \
 --rpc-url intuition_sepolia \
---verifier blockscout \
---verifier-url 'https://intuition-testnet.explorer.caldera.xyz/api/' \
 --broadcast \
---slow \ 
--vvvv
-
-forge verify-contract \
---rpc-url https://intuition-testnet.rpc.caldera.xyz/http \
---verifier blockscout \
---verifier-url 'https://intuition-testnet.explorer.caldera.xyz/api/' \
-[address] \
-tests/testnet/IntuitionSepoliaBridge.sol:IntuitionSepoliaBridge
+--slow
 
 */
 contract IntuitionSepoliaBridgeDeploy is SetupScript {

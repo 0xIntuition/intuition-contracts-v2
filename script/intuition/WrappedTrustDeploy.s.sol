@@ -13,6 +13,13 @@ forge script script/intuition/WrappedTrustDeploy.s.sol:WrappedTrustDeploy \
 --rpc-url intuition_sepolia \
 --broadcast \
 --slow
+
+MAINNET
+forge script script/intuition/WrappedTrustDeploy.s.sol:WrappedTrustDeploy \
+--optimizer-runs 10000 \
+--rpc-url intuition \
+--broadcast \
+--slow
 */
 contract WrappedTrustDeploy is SetupScript {
     function run() public broadcast returns (bool) {
