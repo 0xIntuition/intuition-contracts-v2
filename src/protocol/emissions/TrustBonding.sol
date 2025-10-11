@@ -259,7 +259,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         uint256 userRewards = _userEligibleRewardsForEpoch(account, currEpoch);
         uint256 personalUtilization = _getPersonalUtilizationRatio(account, currEpoch);
         int256 locked = locked[account].amount;
-        
+
         if (userRewards == 0 || locked <= 0) {
             return (currentApy, maxApy);
         }
@@ -503,7 +503,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         }
 
         // Fetch the personal utilization before and after the epoch
-        int256 userUtilizationBefore = IMultiVault(multiVault).getUserUtilizationForEpoch(_account, _epoch - 1);
+        int256 userUtilizationBefore = IMultiVault(multiVault).getUserUtilizationBefore(_account, _epoch);
         int256 userUtilizationAfter = IMultiVault(multiVault).getUserUtilizationForEpoch(_account, _epoch);
 
         // Since rawUtilizationDelta is signed, we only do a sign check, as the explicit underflow check is not needed

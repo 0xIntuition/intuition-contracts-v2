@@ -78,7 +78,6 @@ struct BondingCurveConfig {
 /// @author 0xIntuition
 /// @notice Interface for the MultiVaultCore contract
 interface IMultiVaultCore {
-
     /* =================================================== */
     /*                    INITIALIZER                      */
     /* =================================================== */
@@ -238,7 +237,8 @@ interface IMultiVaultCore {
     function isTriple(bytes32 id) external view returns (bool);
 
     /// @notice Returns the underlying atom IDs for a given triple ID
-    /// @dev If the triple does not exist, this function returns (bytes32(0), bytes32(0), bytes32(0)) instead of reverting
+    /// @dev If the triple does not exist, this function returns (bytes32(0), bytes32(0), bytes32(0)) instead of
+    /// reverting
     /// @param tripleId The ID of the triple
     function triple(bytes32 tripleId) external view returns (bytes32, bytes32, bytes32);
 

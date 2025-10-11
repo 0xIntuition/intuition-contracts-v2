@@ -219,6 +219,19 @@ contract MultiVault is
     }
 
     /// @inheritdoc IMultiVault
+    function getUserLastActiveEpoch(address user) external view returns (uint256) {
+        return lastActiveEpoch[user];
+    }
+
+    /// @inheritdoc IMultiVault
+    function getUserUtilizationBefore(address user, uint256 epoch) external view returns (int256) {
+        uint256 lastActiveEpochForUser = lastActiveEpoch[user];
+        uint256 prevEpoch = epoch > 0 ? epoch - 1 : 0;
+        uint256 prevEpochForUser = lastActiveEpochForUser < prevEpoch ? lastActiveEpochForUser : prevEpoch;
+        return personalUtilization[user][prevEpochForUser];
+    }
+
+    /// @inheritdoc IMultiVault
     function getAtomWarden() external view returns (address) {
         return walletConfig.atomWarden;
     }
