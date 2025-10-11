@@ -16,7 +16,7 @@ async function main() {
 
   const reinitializeCalldata = trustTokenInterface.encodeFunctionData("reinitialize", [admin, baseEmissionsController]);
 
-  console.log(`\nReinitialize calldata for TRUST token upgrade: ${reinitializeCalldata}\n`);
+  console.log(`Calldata:\n ${reinitializeCalldata}\n`);
 }
 
 main()

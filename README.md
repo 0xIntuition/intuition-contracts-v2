@@ -141,42 +141,50 @@ This project is licensed under BUSL-1.1
 
 ## Utility Scripts
 
-### `getTRUSTReinitializeCalldata.ts`
+### Trust V2 Reinitialize Call Data 
 
 Generates the **encoded calldata** for the `reinitialize()` function for the TRUST token upgrade.
 
 ```bash
-npx ts-node script/upgrades/getTRUSTReinitializeCalldata.ts <ADMIN_ADDRESS> <BASE_EMISSIONS_CONTROLLER_ADDRESS>
+npx tsx script/upgrades/generate-trust-v2-upgrade-calldata.ts <ADMIN_ADDRESS> <BASE_EMISSIONS_CONTROLLER_ADDRESS>
+```
+
+
+### Trust Proxy V2 Upgrade 
+
+Generates the **encoded calldata** for the Trust `ProxyAdmin.upgradeAndCall()` execution.
+
+```bash
+npx tsx script/upgrades/generate-trust-proxy-upgrade-and-call-calldata.ts "0x6cd905dF2Ed214b22e0d48FF17CD4200C1C6d8A3" <IMPLEMENTATION_ADDRESS> <REINITIALIZE_CALLDATA_OR_0x>
 ```
 
 ---
 
-### `getUpdateDelayData.ts`
+### Timelock Update Delay
 
 Prepares the **`TimelockController` schedule parameters** for updating the minimum delay within the `TimelockController` contract.
 
 ```bash
-npx ts-node script/upgrades/getUpdateDelayData.ts <RPC_URL> <NEW_DELAY_IN_SECONDS>
+npx tsx script/upgrades/generate-timelock-update-delay-calldata.ts <RPC_URL> <NEW_DELAY_IN_SECONDS>
 ```
 
 Example:
 
 ```bash
-npx ts-node script/upgrades/getUpdateDelayData.ts "https://mainnet.base.org" 259200
+npx tsx script/upgrades/generate-timelock-update-delay-calldata.ts "https://mainnet.base.org" 259200
 ```
 
----
 
-### `getUpgradeAndCallData.ts`
+### Timelock Upgrade and Call
 
-Builds the **`TimelockController` schedule parameters** for a `ProxyAdmin.upgradeAndCall()` execution, optionally including the `reinitialize()` calldata from script #1 (`getReinitializeCalldata.ts`).
+Builds the **`TimelockController` schedule parameters** for a `ProxyAdmin.upgradeAndCall()` execution.
 
 ```bash
-npx ts-node script/upgrades/getUpgradeAndCallData.ts <RPC_URL> "<PROXY_ADDRESS,IMPLEMENTATION_ADDRESS>" <REINITIALIZE_CALLDATA_OR_0x>
+npx tsx script/upgrades/generate-timelock-upgrade-and-call-calldata.ts <RPC_URL> <PROXY_ADDRESS> <IMPLEMENTATION_ADDRESS> <REINITIALIZE_CALLDATA_OR_0x>
 ```
 
 Example:
 
 ```bash
-npx ts-node script/upgrades/getUpgradeAndCallData.ts "https://mainnet.base.org" "0xProxy,0xNewImpl" 0x1234abcd...
+npx tsx script/upgrades/generate-timelock-upgrade-and-call-calldata.ts "https://mainnet.base.org" "0x000000000000000000000000000000000000dEaD" "0x000000000000000000000000000000000000dEaD" "0x"
 ```

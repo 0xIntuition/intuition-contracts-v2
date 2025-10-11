@@ -11,7 +11,7 @@ async function main() {
   if (!ethers.utils.isAddress(timelockControllerAddress)) {
     throw new Error("Invalid TimelockController address.");
   }
-
+  
   const rpcUrl = process.argv[2];
 
   // Initialize the provider
