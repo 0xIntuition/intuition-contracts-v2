@@ -11,6 +11,8 @@
     "@openzeppelin/contracts-upgradeable": "^4.9.6"
   },
   "devDependencies": {
+    "@types/node": "^24.7.0",
+    "ethers": "^5.8.0",
     "prettier": "^3.5",
     "solhint": "^5.1"
   },
