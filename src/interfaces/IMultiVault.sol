@@ -307,6 +307,18 @@ interface IMultiVault {
      */
     function getUserLastActiveEpoch(address user) external view returns (uint256);
 
+    /**
+     * @notice Returns a user's utilization value prior to a specified epoch
+     * @dev If the user had no recorded activity in the epoch immediately preceding
+     *      the given one, this function falls back to their last active epoch
+     *      to determine the utilization before the specified epoch
+     * @param user The address of the user to query
+     * @param epoch The epoch number to check utilization before
+     * @return utilization The user's utilization value before the specified epoch,
+     *         which may be positive or negative
+     */
+    function getUserUtilizationBefore(address user, uint256 epoch) external view returns (int256 utilization);
+
     /// @notice Returns the total assets and total shares in a vault for a given term and bonding curve
     /// @param termId The ID of the term (atom or triple)
     /// @param curveId The ID of the bonding curve
