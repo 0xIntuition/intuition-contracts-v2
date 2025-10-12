@@ -8,8 +8,8 @@ import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCur
 
 contract OffsetProgressiveCurveTest is Test {
     OffsetProgressiveCurve public curve;
-    uint256 constant SLOPE = 2;
-    uint256 constant OFFSET = 5e35;
+    uint256 public constant SLOPE = 2;
+    uint256 public constant OFFSET = 5e35;
 
     function setUp() public {
         curve = new OffsetProgressiveCurve("Offset Progressive Curve Test", SLOPE, OFFSET);
@@ -35,11 +35,6 @@ contract OffsetProgressiveCurveTest is Test {
         assertGt(shares, 0);
     }
 
-    function test_previewDeposit_revertsOnZeroAssets() public {
-        vm.expectRevert("Asset amount must be greater than zero");
-        curve.previewDeposit(0, 0, 0);
-    }
-
     function test_previewRedeem_successful() public view {
         uint256 assets = curve.previewRedeem(1e18, 10e18, 0);
         assertGt(assets, 0);
@@ -51,7 +46,7 @@ contract OffsetProgressiveCurveTest is Test {
     }
 
     function test_previewWithdraw_successful() public view {
-        uint256 shares = curve.previewWithdraw(1e18, 0, 10e18);
+        uint256 shares = curve.previewWithdraw(1e18, 10e18, 10e18);
         assertGt(shares, 0);
     }
 
@@ -68,16 +63,6 @@ contract OffsetProgressiveCurveTest is Test {
     function test_currentPrice_offsetEffect() public view {
         uint256 priceAtZero = curve.currentPrice(0, 0);
         assertEq(priceAtZero, OFFSET * SLOPE / 1e18);
-    }
-
-    function test_convertToShares_revertsOnZeroAssets() public {
-        vm.expectRevert("Asset amount must be greater than zero");
-        curve.convertToShares(0, 0, 0);
-    }
-
-    function test_convertToAssets_revertsOnUnderSupply() public {
-        vm.expectRevert("PC: Under supply of shares");
-        curve.convertToAssets(11e18, 10e18, 0);
     }
 
     function test_maxShares() public view {
@@ -125,5 +110,53 @@ contract OffsetProgressiveCurveTest is Test {
         // Which is: totalShares * SLOPE + OFFSET * SLOPE / 1e18
         uint256 expectedPrice = totalShares * SLOPE + (OFFSET * SLOPE / 1e18);
         assertEq(price, expectedPrice);
+    }
+
+    function test_previewDeposit_allowsZeroAssets_returnsZero() public view {
+        uint256 shares = curve.previewDeposit(0, /*totalAssets=*/ 0, /*totalShares=*/ 123e18);
+        assertEq(shares, 0);
+    }
+
+    function test_convertToShares_allowsZeroAssets_returnsZero() public view {
+        uint256 shares = curve.convertToShares(0, /*totalAssets=*/ 0, /*totalShares=*/ 123e18);
+        assertEq(shares, 0);
+    }
+
+    // Withdraw bound: assets > totalAssets
+    function test_previewWithdraw_reverts_whenAssetsExceedTotalAssets() public {
+        vm.expectRevert(abi.encodeWithSelector(BaseCurve.BaseCurve_AssetsExceedTotalAssets.selector));
+        curve.previewWithdraw( /*assets=*/ 2, /*totalAssets=*/ 1, /*totalShares=*/ 10e18);
+    }
+
+    // Redeem bounds: shares > totalShares
+    function test_previewRedeem_reverts_whenSharesExceedTotalShares() public {
+        vm.expectRevert(abi.encodeWithSelector(BaseCurve.BaseCurve_SharesExceedTotalShares.selector));
+        curve.previewRedeem( /*shares=*/ 11e18, /*totalShares=*/ 10e18, /*totalAssets=*/ 0);
+    }
+
+    function test_convertToAssets_reverts_whenSharesExceedTotalShares() public {
+        vm.expectRevert(abi.encodeWithSelector(BaseCurve.BaseCurve_SharesExceedTotalShares.selector));
+        curve.convertToAssets( /*shares=*/ 11e18, /*totalShares=*/ 10e18, /*totalAssets=*/ 0);
+    }
+
+    // Deposit bounds: assets + totalAssets > maxAssets
+    function test_previewDeposit_reverts_whenAssetsOverflowMaxAssets() public {
+        uint256 maxA = curve.maxAssets();
+        vm.expectRevert(abi.encodeWithSelector(BaseCurve.BaseCurve_AssetsOverflowMax.selector));
+        curve.previewDeposit( /*assets=*/ 1, /*totalAssets=*/ maxA, /*totalShares=*/ 0);
+    }
+
+    // Mint bounds: shares + totalShares > maxShares
+    function test_previewMint_reverts_whenSharesOverflowMaxShares() public {
+        uint256 maxS = curve.maxShares();
+        vm.expectRevert(abi.encodeWithSelector(BaseCurve.BaseCurve_SharesOverflowMax.selector));
+        curve.previewMint( /*shares=*/ 1, /*totalShares=*/ maxS, /*totalAssets=*/ 0);
+    }
+
+    // Mint out: assetsOut + totalAssets > maxAssets
+    function test_previewMint_reverts_whenAssetsOutWouldOverflowMaxAssets() public {
+        uint256 maxA = curve.maxAssets();
+        vm.expectRevert(abi.encodeWithSelector(BaseCurve.BaseCurve_AssetsOverflowMax.selector));
+        curve.previewMint( /*shares=*/ 1, /*totalShares=*/ 1, /*totalAssets=*/ maxA);
     }
 }

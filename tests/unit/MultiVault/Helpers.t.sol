@@ -132,7 +132,8 @@ contract MultiVaultHelpersTest is BaseTest {
 
     function test_currentSharePrice_equalsConvertToAssets1Share() public {
         // create a real atom so the vault exists with non-zero totals
-        bytes32 atomId = createSimpleAtom("price-atom", getAtomCreationCost(), users.admin);
+        uint256 assets = 2 ether;
+        bytes32 atomId = createSimpleAtom("price-atom", getAtomCreationCost() + assets, users.admin);
         uint256 curveId = getDefaultCurveId();
 
         uint256 oneShareAssets = protocol.multiVault.convertToAssets(atomId, curveId, ONE_SHARE);
@@ -286,7 +287,7 @@ contract MultiVaultHelpersTest is BaseTest {
         uint256 curveId = getDefaultCurveId();
 
         // use a small assets amount to avoid large state shifts in implicit reasoning
-        uint256 assets = 1 ether;
+        uint256 assets = protocol.multiVault.getGeneralConfig().minShare;
         uint256 shares = protocol.multiVault.convertToShares(atomId, curveId, assets);
         // Converting back at current state should be close; we assert monotonic: non-zero roundtrip
         uint256 assetsBack = protocol.multiVault.convertToAssets(atomId, curveId, shares);
@@ -301,7 +302,7 @@ contract MultiVaultHelpersTest is BaseTest {
         );
         uint256 curveId = getDefaultCurveId();
 
-        uint256 assets = 1 ether;
+        uint256 assets = protocol.multiVault.getGeneralConfig().minShare;
         uint256 shares = protocol.multiVault.convertToShares(tripleId, curveId, assets);
         uint256 assetsBack = protocol.multiVault.convertToAssets(tripleId, curveId, shares);
 

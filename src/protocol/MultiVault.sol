@@ -1659,12 +1659,6 @@ contract MultiVault is
             revert MultiVault_DepositOrRedeemZeroShares();
         }
 
-        (uint256 expectedAssets,) = _calculateRedeem(_termId, _curveId, _shares);
-
-        if (expectedAssets < _minAssets) {
-            revert MultiVault_SlippageExceeded();
-        }
-
         if (_maxRedeem(_account, _termId, _curveId) < _shares) {
             revert MultiVault_InsufficientSharesInVault();
         }
@@ -1672,6 +1666,12 @@ contract MultiVault is
         uint256 remainingShares = _vaults[_termId][_curveId].totalShares - _shares;
         if (remainingShares < generalConfig.minShare) {
             revert MultiVault_InsufficientRemainingSharesInVault(remainingShares);
+        }
+
+        (uint256 expectedAssets,) = _calculateRedeem(_termId, _curveId, _shares);
+
+        if (expectedAssets < _minAssets) {
+            revert MultiVault_SlippageExceeded();
         }
     }
 

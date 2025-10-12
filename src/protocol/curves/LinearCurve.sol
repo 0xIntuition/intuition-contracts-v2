@@ -45,7 +45,9 @@ contract LinearCurve is BaseCurve {
         override
         returns (uint256 shares)
     {
-        return convertToShares(assets, totalAssets, totalShares);
+        _checkDepositBounds(assets, totalAssets, MAX_ASSETS);
+        shares = convertToShares(assets, totalAssets, totalShares);
+        _checkDepositOut(shares, totalShares, MAX_SHARES);
     }
 
     /// @inheritdoc BaseCurve
@@ -59,7 +61,9 @@ contract LinearCurve is BaseCurve {
         override
         returns (uint256 assets)
     {
+        _checkMintBounds(shares, totalShares, MAX_SHARES);
         assets = convertToAssets(shares, totalShares, totalAssets);
+        _checkMintOut(assets, totalAssets, MAX_ASSETS);
     }
 
     /// @inheritdoc BaseCurve
@@ -73,6 +77,7 @@ contract LinearCurve is BaseCurve {
         override
         returns (uint256 shares)
     {
+        _checkWithdraw(assets, totalAssets);
         shares = convertToShares(assets, totalAssets, totalShares);
     }
 
@@ -87,6 +92,7 @@ contract LinearCurve is BaseCurve {
         override
         returns (uint256 assets)
     {
+        _checkRedeem(shares, totalShares);
         assets = convertToAssets(shares, totalShares, totalAssets);
     }
 
@@ -101,8 +107,10 @@ contract LinearCurve is BaseCurve {
         override
         returns (uint256 shares)
     {
+        _checkDepositBounds(assets, totalAssets, MAX_ASSETS);
         uint256 supply = totalShares;
         shares = supply == 0 ? assets : assets.mulDiv(supply, totalAssets);
+        _checkDepositOut(shares, totalShares, MAX_SHARES);
     }
 
     /// @inheritdoc BaseCurve
@@ -116,13 +124,18 @@ contract LinearCurve is BaseCurve {
         override
         returns (uint256 assets)
     {
+        _checkRedeem(shares, totalShares);
         uint256 supply = totalShares;
         assets = supply == 0 ? shares : shares.mulDiv(totalAssets, supply);
     }
 
     /// @inheritdoc BaseCurve
     function currentPrice(uint256 totalShares, uint256 totalAssets) public pure override returns (uint256 sharePrice) {
-        return convertToAssets(ONE_SHARE, totalShares, totalAssets);
+        // Define a base price when there are no shares yet.
+        if (totalShares == 0) return ONE_SHARE; // 1.0 * 1e18
+
+        // Price of 1 whole share (1e18) under the linear curve
+        return ONE_SHARE.mulDiv(totalAssets, totalShares);
     }
 
     /// @inheritdoc BaseCurve
