@@ -597,8 +597,8 @@ contract MultiVault is
             VaultType.TRIPLE
         );
 
-        // Increment total terms created
-        ++totalTermsCreated;
+        // Increment total terms created by 2 (triple + counter triple)
+        totalTermsCreated += 2;
 
         return tripleId;
     }
