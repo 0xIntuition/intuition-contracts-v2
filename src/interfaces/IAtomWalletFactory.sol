@@ -38,7 +38,7 @@ interface IAtomWalletFactory {
      * @notice Returns the MultiVault contract address
      * @return The MultiVault contract instance
      */
-    function multiVault() external view returns (IMultiVault);
+    function multiVault() external view returns (address);
 
     /**
      * @notice Computes the deterministic address of an AtomWallet for a given atom ID

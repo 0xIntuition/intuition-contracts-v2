@@ -7,6 +7,7 @@ import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/acc
 import { IAtomWarden } from "src/interfaces/IAtomWarden.sol";
 import { IAtomWallet } from "src/interfaces/IAtomWallet.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
+import { IMultiVaultCore } from "src/interfaces/IMultiVaultCore.sol";
 
 /**
  * @title  AtomWarden
@@ -21,7 +22,7 @@ contract AtomWarden is IAtomWarden, Initializable, Ownable2StepUpgradeable {
     /* =================================================== */
 
     /// @notice The reference to the MultiVault contract addressC
-    IMultiVault public multiVault;
+    address public multiVault;
 
     /* =================================================== */
     /*                      CONSTRUCTOR                    */
@@ -53,19 +54,19 @@ contract AtomWarden is IAtomWarden, Initializable, Ownable2StepUpgradeable {
     /// @inheritdoc IAtomWarden
     function claimOwnershipOverAddressAtom(bytes32 atomId) external {
         // validate atomId refers to an existing atom
-        if (!multiVault.isAtom(atomId)) {
+        if (!IMultiVaultCore(multiVault).isAtom(atomId)) {
             revert AtomWarden_AtomIdDoesNotExist();
         }
 
         // stored atom data must equal lowercase string address
-        bytes memory storedAtomData = multiVault.atom(atomId);
+        bytes memory storedAtomData = IMultiVaultCore(multiVault).atom(atomId);
         bytes memory expectedAtomData = abi.encodePacked(_toLowerCaseAddress(msg.sender));
 
         if (keccak256(storedAtomData) != keccak256(expectedAtomData)) {
             revert AtomWarden_ClaimOwnershipFailed();
         }
 
-        address payable atomWalletAddress = payable(multiVault.computeAtomWalletAddr(atomId));
+        address payable atomWalletAddress = payable(IMultiVault(multiVault).computeAtomWalletAddr(atomId));
 
         if (atomWalletAddress.code.length == 0) {
             revert AtomWarden_AtomWalletNotDeployed();
@@ -86,11 +87,11 @@ contract AtomWarden is IAtomWarden, Initializable, Ownable2StepUpgradeable {
         }
 
         // validate the vault exists and is an atom
-        if (!multiVault.isAtom(atomId)) {
+        if (!IMultiVaultCore(multiVault).isAtom(atomId)) {
             revert AtomWarden_AtomIdDoesNotExist();
         }
 
-        address payable atomWalletAddress = payable(multiVault.computeAtomWalletAddr(atomId));
+        address payable atomWalletAddress = payable(IMultiVault(multiVault).computeAtomWalletAddr(atomId));
 
         if (atomWalletAddress.code.length == 0) {
             revert AtomWarden_AtomWalletNotDeployed();
@@ -135,7 +136,7 @@ contract AtomWarden is IAtomWarden, Initializable, Ownable2StepUpgradeable {
             revert AtomWarden_InvalidAddress();
         }
 
-        multiVault = IMultiVault(_multiVault);
+        multiVault = _multiVault;
 
         emit MultiVaultSet(_multiVault);
     }

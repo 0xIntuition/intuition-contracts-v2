@@ -202,7 +202,7 @@ contract BaseEmissionsController is
     }
 
     /* =================================================== */
-    /*                      INTERNAL                       */
+    /*                 INTERNAL FUNCTIONS                  */
     /* =================================================== */
 
     function _mintAndBridge(uint256 epoch, uint256 value) internal onlyRole(CONTROLLER_ROLE) {

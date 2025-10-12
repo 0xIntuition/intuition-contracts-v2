@@ -50,6 +50,7 @@ interface ISatelliteEmissionsController {
     error SatelliteEmissionsController_PreviouslyBridgedUnclaimedEmissions();
     error SatelliteEmissionsController_InsufficientBalance();
     error SatelliteEmissionsController_InsufficientGasPayment();
+    error SatelliteEmissionsController_TrustBondingNotSet();
 
     /* =================================================== */
     /*                      GETTERS                        */

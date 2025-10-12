@@ -35,17 +35,26 @@ import {
 } from "src/interfaces/IMultiVaultCore.sol";
 
 abstract contract SetupScript is Script {
-    /// @dev Included to enable compilation of the script without a $MNEMONIC environment variable.
-    string internal constant TEST_MNEMONIC = "test test test test test test test test test test test junk";
+    Trust public trust;
+    MultiVault public multiVault;
+    AtomWarden public atomWarden;
+    AtomWallet public atomWalletImplementation;
+    AtomWalletFactory public atomWalletFactory;
+    UpgradeableBeacon public atomWalletBeacon;
+    SatelliteEmissionsController public satelliteEmissionsController;
+    TrustBonding public trustBonding;
+    BondingCurveRegistry public bondingCurveRegistry;
+    LinearCurve public linearCurve;
+    OffsetProgressiveCurve public offsetProgressiveCurve;
+
+    uint256 internal constant ONE_DAY = 86_400;
+    uint256 internal constant TWO_WEEKS = ONE_DAY * 14;
 
     /// @dev Needed for the deterministic deployments.
     bytes32 internal constant ZERO_SALT = bytes32(0);
 
     /// @dev The address of the transaction broadcaster.
     address internal broadcaster;
-
-    /// @dev Used to derive the broadcaster's address if $ETH_FROM is not defined.
-    string internal mnemonic;
 
     // General Config
     address internal ADMIN;
@@ -69,8 +78,8 @@ abstract contract SetupScript is Script {
     uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 0.9% (Percentage Cost)
 
     // Wallet Config
-    address internal ENTRY_POINT = 0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108; // deterministic address of the
-        // EntryPoint contract on all chains (v0.8.0)
+    /// @dev deterministic address of the EntryPoint contract on all chains (v0.8.0)
+    address internal ENTRY_POINT = 0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108;
 
     // Vault Config
     uint256 internal ENTRY_FEE = 100; // 1% of assets deposited after fixed costs (Percentage Cost)
@@ -82,14 +91,14 @@ abstract contract SetupScript is Script {
 
     // TrustBonding Config
     uint256 internal BONDING_START_TIMESTAMP = block.timestamp + 100;
-    uint256 internal BONDING_EPOCH_LENGTH = 2 weeks;
+    uint256 internal BONDING_EPOCH_LENGTH = TWO_WEEKS;
     uint256 internal BONDING_SYSTEM_UTILIZATION_LOWER_BOUND = 5000; // 50%
     uint256 internal BONDING_PERSONAL_UTILIZATION_LOWER_BOUND = 2500; // 25%
 
     // CoreEmissionsController Config
     uint256 internal EMISSIONS_START_TIMESTAMP = BONDING_START_TIMESTAMP;
-    uint256 internal EMISSIONS_LENGTH = 6 hours;
-    uint256 internal EMISSIONS_PER_EPOCH = 1000e18; // 1000 TRUST per epoch
+    uint256 internal EMISSIONS_LENGTH = TWO_WEEKS;
+    uint256 internal EMISSIONS_PER_EPOCH = 1000 ether; // 1000 TRUST per epoch
     uint256 internal EMISSIONS_REDUCTION_CLIFF = 4; // 1 epoch
     uint256 internal EMISSIONS_REDUCTION_BASIS_POINTS = 1000; // 10%
 
@@ -99,30 +108,9 @@ abstract contract SetupScript is Script {
     uint256 internal OFFSET_PROGRESSIVE_CURVE_OFFSET = 5e35;
 
     // MetaLayer Configurations
-    address internal METALAYER_HUB_OR_SPOKE = 0x007700aa28A331B91219Ffa4A444711F0D9E57B5;
     uint256 internal METALAYER_GAS_LIMIT = 125_000; // Gas limit for cross-chain operations
+    address internal METALAYER_HUB_OR_SPOKE = 0x007700aa28A331B91219Ffa4A444711F0D9E57B5;
 
-    // Deployed contracts
-    Trust public trust;
-    MultiVault public multiVault;
-    AtomWarden public atomWarden;
-    AtomWallet public atomWalletImplementation;
-    AtomWalletFactory public atomWalletFactory;
-    UpgradeableBeacon public atomWalletBeacon;
-    SatelliteEmissionsController public satelliteEmissionsController;
-    TrustBonding public trustBonding;
-    BondingCurveRegistry public bondingCurveRegistry;
-    LinearCurve public linearCurve;
-    ProgressiveCurve public progressiveCurve;
-    OffsetProgressiveCurve public offsetProgressiveCurve;
-
-    /// @dev Initializes the transaction broadcaster like this:
-    ///
-    /// - If $ETH_FROM is defined, use it.
-    /// - Otherwise, derive the broadcaster address from $MNEMONIC.
-    /// - If $MNEMONIC is not defined, default to a test mnemonic.
-    ///
-    /// The use case for $ETH_FROM is to specify the broadcaster key and its address via the command line.
     constructor() {
         if (block.chainid == vm.envUint("BASE_CHAIN_ID")) {
             uint256 deployerKey = vm.envUint("DEPLOYER_MAINNET");
@@ -176,47 +164,7 @@ abstract contract SetupScript is Script {
             revert("Unsupported chain for broadcasting");
         }
 
-        // Load optional configuration from environment
-        MIN_SHARES = vm.envOr("MIN_SHARES", MIN_SHARES);
-        MIN_DEPOSIT = vm.envOr("MIN_DEPOSIT", MIN_DEPOSIT);
-
-        // Atom Config
-        ATOM_CREATION_PROTOCOL_FEE = vm.envOr("ATOM_CREATION_PROTOCOL_FEE", ATOM_CREATION_PROTOCOL_FEE);
-        ATOM_WALLET_DEPOSIT_FEE = vm.envOr("ATOM_WALLET_DEPOSIT_FEE", ATOM_WALLET_DEPOSIT_FEE);
-
-        // Triple Config
-        TRIPLE_CREATION_PROTOCOL_FEE = vm.envOr("TRIPLE_CREATION_PROTOCOL_FEE", TRIPLE_CREATION_PROTOCOL_FEE);
-        TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION =
-            vm.envOr("TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION", TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION);
-        ATOM_DEPOSIT_FRACTION_FOR_TRIPLE =
-            vm.envOr("ATOM_DEPOSIT_FRACTION_FOR_TRIPLE", ATOM_DEPOSIT_FRACTION_FOR_TRIPLE);
-
-        // Vault Config
-        ENTRY_FEE = vm.envOr("ENTRY_FEE", ENTRY_FEE);
-        EXIT_FEE = vm.envOr("EXIT_FEE", EXIT_FEE);
-        PROTOCOL_FEE = vm.envOr("PROTOCOL_FEE", PROTOCOL_FEE);
-
-        // Timelock Config
-        TIMELOCK_MIN_DELAY = vm.envOr("TIMELOCK_MIN_DELAY", TIMELOCK_MIN_DELAY);
-
-        // TrustBonding Config
-        BONDING_EPOCH_LENGTH = vm.envOr("BONDING_EPOCH_LENGTH", BONDING_EPOCH_LENGTH);
-        BONDING_SYSTEM_UTILIZATION_LOWER_BOUND =
-            vm.envOr("BONDING_SYSTEM_UTILIZATION_LOWER_BOUND", BONDING_SYSTEM_UTILIZATION_LOWER_BOUND);
-        BONDING_PERSONAL_UTILIZATION_LOWER_BOUND =
-            vm.envOr("BONDING_PERSONAL_UTILIZATION_LOWER_BOUND", BONDING_PERSONAL_UTILIZATION_LOWER_BOUND);
-
-        // CoreEmissionsController Config
-        EMISSIONS_LENGTH = vm.envOr("EMISSIONS_LENGTH", EMISSIONS_LENGTH);
-        EMISSIONS_PER_EPOCH = vm.envOr("EMISSIONS_PER_EPOCH", EMISSIONS_PER_EPOCH);
-        EMISSIONS_REDUCTION_CLIFF = vm.envOr("EMISSIONS_REDUCTION_CLIFF", EMISSIONS_REDUCTION_CLIFF);
-        EMISSIONS_REDUCTION_BASIS_POINTS =
-            vm.envOr("EMISSIONS_REDUCTION_BASIS_POINTS", EMISSIONS_REDUCTION_BASIS_POINTS);
-
-        // Curve Configurations
-        OFFSET_PROGRESSIVE_CURVE_SLOPE = vm.envOr("OFFSET_PROGRESSIVE_CURVE_SLOPE", OFFSET_PROGRESSIVE_CURVE_SLOPE);
-        OFFSET_PROGRESSIVE_CURVE_OFFSET = vm.envOr("OFFSET_PROGRESSIVE_CURVE_OFFSET", OFFSET_PROGRESSIVE_CURVE_OFFSET);
-        PROGRESSIVE_CURVE_SLOPE = vm.envOr("PROGRESSIVE_CURVE_SLOPE", PROGRESSIVE_CURVE_SLOPE);
+        _initializeValuesFromEnv();
 
         console2.log("");
         console2.log("CONFIGURATION: =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+");
@@ -330,15 +278,50 @@ abstract contract SetupScript is Script {
                 "' }"
             )
         );
-        console2.log(
-            string.concat(
-                "  ProgressiveCurve: { [",
-                vm.toString(block.chainid),
-                "]: '",
-                vm.toString(address(progressiveCurve)),
-                "' }"
-            )
-        );
         console2.log("}");
+    }
+
+    function _initializeValuesFromEnv() internal {
+        // Load optional configuration from environment
+        MIN_SHARES = vm.envOr("MIN_SHARES", MIN_SHARES);
+        MIN_DEPOSIT = vm.envOr("MIN_DEPOSIT", MIN_DEPOSIT);
+
+        // Atom Config
+        ATOM_CREATION_PROTOCOL_FEE = vm.envOr("ATOM_CREATION_PROTOCOL_FEE", ATOM_CREATION_PROTOCOL_FEE);
+        ATOM_WALLET_DEPOSIT_FEE = vm.envOr("ATOM_WALLET_DEPOSIT_FEE", ATOM_WALLET_DEPOSIT_FEE);
+
+        // Triple Config
+        TRIPLE_CREATION_PROTOCOL_FEE = vm.envOr("TRIPLE_CREATION_PROTOCOL_FEE", TRIPLE_CREATION_PROTOCOL_FEE);
+        TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION =
+            vm.envOr("TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION", TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION);
+        ATOM_DEPOSIT_FRACTION_FOR_TRIPLE =
+            vm.envOr("ATOM_DEPOSIT_FRACTION_FOR_TRIPLE", ATOM_DEPOSIT_FRACTION_FOR_TRIPLE);
+
+        // Vault Config
+        ENTRY_FEE = vm.envOr("ENTRY_FEE", ENTRY_FEE);
+        EXIT_FEE = vm.envOr("EXIT_FEE", EXIT_FEE);
+        PROTOCOL_FEE = vm.envOr("PROTOCOL_FEE", PROTOCOL_FEE);
+
+        // Timelock Config
+        TIMELOCK_MIN_DELAY = vm.envOr("TIMELOCK_MIN_DELAY", TIMELOCK_MIN_DELAY);
+
+        // TrustBonding Config
+        BONDING_EPOCH_LENGTH = vm.envOr("BONDING_EPOCH_LENGTH", BONDING_EPOCH_LENGTH);
+        BONDING_SYSTEM_UTILIZATION_LOWER_BOUND =
+            vm.envOr("BONDING_SYSTEM_UTILIZATION_LOWER_BOUND", BONDING_SYSTEM_UTILIZATION_LOWER_BOUND);
+        BONDING_PERSONAL_UTILIZATION_LOWER_BOUND =
+            vm.envOr("BONDING_PERSONAL_UTILIZATION_LOWER_BOUND", BONDING_PERSONAL_UTILIZATION_LOWER_BOUND);
+
+        // CoreEmissionsController Config
+        EMISSIONS_LENGTH = vm.envOr("EMISSIONS_LENGTH", EMISSIONS_LENGTH);
+        EMISSIONS_PER_EPOCH = vm.envOr("EMISSIONS_PER_EPOCH", EMISSIONS_PER_EPOCH);
+        EMISSIONS_REDUCTION_CLIFF = vm.envOr("EMISSIONS_REDUCTION_CLIFF", EMISSIONS_REDUCTION_CLIFF);
+        EMISSIONS_REDUCTION_BASIS_POINTS =
+            vm.envOr("EMISSIONS_REDUCTION_BASIS_POINTS", EMISSIONS_REDUCTION_BASIS_POINTS);
+
+        // Curve Configurations
+        OFFSET_PROGRESSIVE_CURVE_SLOPE = vm.envOr("OFFSET_PROGRESSIVE_CURVE_SLOPE", OFFSET_PROGRESSIVE_CURVE_SLOPE);
+        OFFSET_PROGRESSIVE_CURVE_OFFSET = vm.envOr("OFFSET_PROGRESSIVE_CURVE_OFFSET", OFFSET_PROGRESSIVE_CURVE_OFFSET);
+        PROGRESSIVE_CURVE_SLOPE = vm.envOr("PROGRESSIVE_CURVE_SLOPE", PROGRESSIVE_CURVE_SLOPE);
     }
 }
