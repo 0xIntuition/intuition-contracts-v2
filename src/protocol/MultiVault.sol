@@ -260,27 +260,25 @@ contract MultiVault is
     /// @inheritdoc IMultiVault
     function previewAtomCreate(
         bytes32 termId,
-        uint256 curveId,
         uint256 assets
     )
         external
         view
         returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees)
     {
-        return _calculateAtomCreate(termId, curveId, assets);
+        return _calculateAtomCreate(termId, assets);
     }
 
     /// @inheritdoc IMultiVault
     function previewTripleCreate(
         bytes32 termId,
-        uint256 curveId,
         uint256 assets
     )
         external
         view
         returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees)
     {
-        return _calculateTripleCreate(termId, curveId, assets);
+        return _calculateTripleCreate(termId, assets);
     }
 
     /// @inheritdoc IMultiVault
@@ -429,7 +427,7 @@ contract MultiVault is
 
         /* --- Calculate final shares and assets after fees --- */
         (uint256 sharesForReceiver, uint256 assetsAfterFixedFees, uint256 assetsAfterFees) =
-            _calculateAtomCreate(atomId, curveId, assets);
+            _calculateAtomCreate(atomId, assets);
 
         /* --- Handle protocol fees --- */
         _accumulateVaultProtocolFees(assetsAfterFixedFees);
@@ -559,7 +557,7 @@ contract MultiVault is
 
         /* --- Calculate final shares and assets after fees --- */
         (uint256 sharesForReceiver, uint256 assetsAfterFixedFees, uint256 assetsAfterFees) =
-            _calculateTripleCreate(tripleId, curveId, assets);
+            _calculateTripleCreate(tripleId, assets);
 
         /* --- Accumulate dynamic fees --- */
         _accumulateVaultProtocolFees(assetsAfterFixedFees);
@@ -1042,20 +1040,19 @@ contract MultiVault is
 
     /// @dev calculates the assets received after fees and shares minted for a given creation deposit
     /// @param termId the atom or triple ID
-    /// @param curveId the bonding curve ID
     /// @param assets the number of assets to deposit
     /// @return shares the number of shares that would be minted for the deposit
     /// @return assetsAfterFixedFees the assets remaining after fixed fees (atom/triple cost)
     /// @return assetsAfterFees the assets remaining after all fees
     function _calculateAtomCreate(
         bytes32 termId,
-        uint256 curveId,
         uint256 assets
     )
         internal
         view
         returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees)
     {
+        uint256 curveId = bondingCurveConfig.defaultCurveId;
         uint256 atomCost = _getAtomCost();
 
         if (assets < atomCost) {
@@ -1112,21 +1109,14 @@ contract MultiVault is
 
     /// @dev calculates the assets received after fees and shares minted for a given creation deposit
     /// @param termId the atom or triple ID
-    /// @param _curveId the bonding curve ID
     /// @param assets the number of assets to deposit
     /// @return shares the number of shares that would be minted for the deposit
     /// @return assetsAfterFixedFees the assets remaining after fixed fees (atom/triple cost)
     /// @return assetsAfterFees the assets remaining after all fees
-    function _calculateTripleCreate(
-        bytes32 termId,
-        uint256 _curveId,
-        uint256 assets
-    )
-        internal
-        view
-        returns (uint256, uint256, uint256)
-    {
+    function _calculateTripleCreate(bytes32 termId, uint256 assets) internal view returns (uint256, uint256, uint256) {
+        uint256 curveId = bondingCurveConfig.defaultCurveId;
         uint256 tripleCost = _getTripleCost();
+
         if (assets < tripleCost) {
             revert MultiVault_InsufficientAssets();
         }
@@ -1138,7 +1128,7 @@ contract MultiVault is
         uint256 atomDepositFraction = _feeOnRaw(assetsAfterFixedFees, tripleConfig.atomDepositFractionForTriple);
 
         uint256 assetsAfterFees = assetsAfterFixedFees - protocolFee - entryFee - atomDepositFraction;
-        uint256 shares = _convertToShares(termId, _curveId, assetsAfterFees);
+        uint256 shares = _convertToShares(termId, curveId, assetsAfterFees);
 
         return (shares, assetsAfterFixedFees, assetsAfterFees);
     }

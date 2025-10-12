@@ -108,7 +108,8 @@ interface IMultiVault {
     /// @param receiver The address of the receiver
     /// @param termId The ID of the term (atom or triple)
     /// @param curveId The ID of the bonding curve
-    /// @param assets The amount of assets deposited (gross assets deposited by the sender, including atomCost or tripleCost where applicable)
+    /// @param assets The amount of assets deposited (gross assets deposited by the sender, including atomCost or
+    /// tripleCost where applicable)
     /// @param assetsAfterFees The amount of assets after all deposit fees are deducted
     /// @param shares The amount of shares minted to the receiver
     /// @param totalShares The user's share balance in the vault after the deposit
@@ -272,7 +273,8 @@ interface IMultiVault {
     function entryFeeAmount(uint256 assets) external view returns (uint256);
 
     /// @notice Returns the amount of assets that would be charged as an exit fee for a given redemption amount
-    /// @dev If redeeming the shares would result in zero total shares remaining in the vault, the exit fee is not applied
+    /// @dev If redeeming the shares would result in zero total shares remaining in the vault, the exit fee is not
+    /// applied
     /// @param assets The amount of assets to calculate the fee on
     /// @return feeAmount The amount of assets that would be charged as the exit fee
     function exitFeeAmount(uint256 assets) external view returns (uint256);
@@ -329,14 +331,13 @@ interface IMultiVault {
     /// @notice Simulates the creation of an atom with an initial deposit
     /// @dev Returns the expected shares to be minted and the net assets credited after fees
     /// @param termId The ID of the atom
-    /// @param curveId The ID of the bonding curve
     /// @param assets The amount of assets the user would send
     /// @return shares The expected shares to be minted for the user
-    /// @return assetsAfterFixedFees The net assets that will be added to the vault (after fixed fees, before dynamic fees)
+    /// @return assetsAfterFixedFees The net assets that will be added to the vault (after fixed fees, before dynamic
+    /// fees)
     /// @return assetsAfterFees The net assets that will be added to the vault (after all fees)
     function previewAtomCreate(
         bytes32 termId,
-        uint256 curveId,
         uint256 assets
     )
         external
@@ -378,14 +379,13 @@ interface IMultiVault {
     /// @notice Simulates the creation of a triple with an initial deposit
     /// @dev Returns the expected shares to be minted and the net assets credited after fees
     /// @param termId The ID of the triple
-    /// @param curveId The ID of the bonding curve
     /// @param assets The amount of assets the user would send
     /// @return shares The expected shares to be minted for the user
-    /// @return assetsAfterFixedFees The net assets that will be added to the vault (after fixed fees like protocol and entry fees)
+    /// @return assetsAfterFixedFees The net assets that will be added to the vault (after fixed fees like protocol and
+    /// entry fees)
     /// @return assetsAfterFees The net assets that will be added to the vault (after all fees)
     function previewTripleCreate(
         bytes32 termId,
-        uint256 curveId,
         uint256 assets
     )
         external

@@ -155,7 +155,7 @@ contract MultiVaultHelpersTest is BaseTest {
         uint256 assets = atomCost + 5 ether;
 
         (uint256 shares, uint256 assetsAfterFixed, uint256 assetsAfterFees) =
-            protocol.multiVault.previewAtomCreate(preAtomId, curveId, assets);
+            protocol.multiVault.previewAtomCreate(preAtomId, assets);
 
         // sanity: assetsAfterFixed = assets - atomCost
         assertEq(assetsAfterFixed, assets - atomCost);
@@ -174,7 +174,7 @@ contract MultiVaultHelpersTest is BaseTest {
         uint256 assets = tripleCost + 7 ether;
 
         (uint256 shares, uint256 assetsAfterFixed, uint256 assetsAfterFees) =
-            protocol.multiVault.previewTripleCreate(preTripleId, curveId, assets);
+            protocol.multiVault.previewTripleCreate(preTripleId, assets);
 
         assertEq(assetsAfterFixed, assets - tripleCost);
 
