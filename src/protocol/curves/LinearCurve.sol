@@ -30,9 +30,16 @@ contract LinearCurve is BaseCurve {
     /// @dev Represents one share in 18 decimal format
     uint256 public constant ONE_SHARE = 1e18;
 
-    /// @notice Constructor for the Linear Curve.
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    /// @notice Initializes the new Linear Curve.
     /// @param _name The name of the curve.
-    constructor(string memory _name) BaseCurve(_name) { }
+    function initialize(string calldata _name) external initializer {
+        __BaseCurve_init(_name);
+    }
 
     /// @inheritdoc BaseCurve
     function previewDeposit(

@@ -3,6 +3,7 @@ pragma solidity 0.8.29;
 
 import { Test } from "forge-std/src/Test.sol";
 import { UD60x18, ud60x18 } from "@prb/math/src/UD60x18.sol";
+import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
 import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCurve.sol";
@@ -24,16 +25,38 @@ contract BondingCurveRegistryTest is Test {
     event BondingCurveAdded(uint256 indexed curveId, address indexed curveAddress, string indexed curveName);
 
     function setUp() public {
-        registry = new BondingCurveRegistry(admin);
-        linearCurve = new LinearCurve("Linear Curve Test");
-        progressiveCurve = new ProgressiveCurve("Progressive Curve Test", SLOPE);
-        offsetProgressiveCurve = new OffsetProgressiveCurve("Offset Progressive Curve Test", SLOPE, OFFSET);
-    }
+        BondingCurveRegistry bondingCurveRegistryImpl = new BondingCurveRegistry();
+        TransparentUpgradeableProxy bondingCurveRegistryProxy = new TransparentUpgradeableProxy(
+            address(bondingCurveRegistryImpl),
+            admin,
+            abi.encodeWithSelector(BondingCurveRegistry.initialize.selector, admin)
+        );
+        registry = BondingCurveRegistry(address(bondingCurveRegistryProxy));
 
-    function test_constructor_successful() public {
-        BondingCurveRegistry newRegistry = new BondingCurveRegistry(admin);
-        assertEq(newRegistry.owner(), admin);
-        assertEq(newRegistry.count(), 0);
+        // Deploy bonding curve implementations
+        LinearCurve linearCurveImpl = new LinearCurve();
+        OffsetProgressiveCurve offsetProgressiveCurveImpl = new OffsetProgressiveCurve();
+        ProgressiveCurve progressiveCurveImpl = new ProgressiveCurve();
+
+        // Deploy proxies for bonding curves
+        TransparentUpgradeableProxy linearCurveProxy = new TransparentUpgradeableProxy(
+            address(linearCurveImpl), admin, abi.encodeWithSelector(LinearCurve.initialize.selector, "Linear Curve")
+        );
+        linearCurve = LinearCurve(address(linearCurveProxy));
+
+        TransparentUpgradeableProxy progressiveCurveProxy = new TransparentUpgradeableProxy(
+            address(new ProgressiveCurve()),
+            admin,
+            abi.encodeWithSelector(ProgressiveCurve.initialize.selector, "Progressive Curve", 2)
+        );
+        progressiveCurve = ProgressiveCurve(address(progressiveCurveProxy));
+
+        TransparentUpgradeableProxy offsetProgressiveCurveProxy = new TransparentUpgradeableProxy(
+            address(offsetProgressiveCurveImpl),
+            admin,
+            abi.encodeWithSelector(OffsetProgressiveCurve.initialize.selector, "Offset Progressive Curve", 2, 5e35)
+        );
+        offsetProgressiveCurve = OffsetProgressiveCurve(address(offsetProgressiveCurveProxy));
     }
 
     function test_addBondingCurve_successful() public {
@@ -43,7 +66,7 @@ contract BondingCurveRegistryTest is Test {
         assertEq(registry.count(), 1);
         assertEq(registry.curveAddresses(1), address(linearCurve));
         assertEq(registry.curveIds(address(linearCurve)), 1);
-        assertTrue(registry.registeredCurveNames("Linear Curve Test"));
+        assertTrue(registry.registeredCurveNames("Linear Curve"));
     }
 
     function test_addBondingCurve_revertsOnZeroAddress() public {
@@ -62,14 +85,19 @@ contract BondingCurveRegistryTest is Test {
     }
 
     function test_addBondingCurve_revertsOnNonUniqueNames() public {
-        LinearCurve duplicateNameCurve = new LinearCurve("Linear Curve Test");
+        LinearCurve duplicateNameCurveImpl = new LinearCurve();
+        TransparentUpgradeableProxy duplicateNameCurveProxy = new TransparentUpgradeableProxy(
+            address(duplicateNameCurveImpl),
+            admin,
+            abi.encodeWithSelector(LinearCurve.initialize.selector, "Linear Curve")
+        );
 
         vm.prank(admin);
         registry.addBondingCurve(address(linearCurve));
 
         vm.prank(admin);
         vm.expectRevert(abi.encodeWithSelector(BondingCurveRegistry.BondingCurveRegistry_CurveNameNotUnique.selector));
-        registry.addBondingCurve(address(duplicateNameCurve));
+        registry.addBondingCurve(address(duplicateNameCurveProxy));
     }
 
     function test_addBondingCurve_revertsOnNonAdmin() public {
@@ -81,7 +109,7 @@ contract BondingCurveRegistryTest is Test {
     function test_addBondingCurve_emitsEvent() public {
         vm.prank(admin);
         vm.expectEmit(true, true, true, true);
-        emit BondingCurveAdded(1, address(linearCurve), "Linear Curve Test");
+        emit BondingCurveAdded(1, address(linearCurve), "Linear Curve");
         registry.addBondingCurve(address(linearCurve));
     }
 
@@ -146,7 +174,7 @@ contract BondingCurveRegistryTest is Test {
         registry.addBondingCurve(address(linearCurve));
 
         string memory name = registry.getCurveName(1);
-        assertEq(name, "Linear Curve Test");
+        assertEq(name, "Linear Curve");
     }
 
     function test_getCurveMaxShares_successful() public {
@@ -169,8 +197,15 @@ contract BondingCurveRegistryTest is Test {
         slope1 = bound(slope1, 1, 1e18);
         slope2 = bound(slope2, 1, 1e18);
 
-        ProgressiveCurve curve1 = new ProgressiveCurve("Curve 1", slope1);
-        ProgressiveCurve curve2 = new ProgressiveCurve("Curve 2", slope2);
+        ProgressiveCurve curve1Impl = new ProgressiveCurve();
+        ProgressiveCurve curve2Impl = new ProgressiveCurve();
+
+        TransparentUpgradeableProxy curve1 = new TransparentUpgradeableProxy(
+            address(curve1Impl), admin, abi.encodeWithSelector(ProgressiveCurve.initialize.selector, "Curve 1", slope1)
+        );
+        TransparentUpgradeableProxy curve2 = new TransparentUpgradeableProxy(
+            address(curve2Impl), admin, abi.encodeWithSelector(ProgressiveCurve.initialize.selector, "Curve 2", slope2)
+        );
 
         vm.startPrank(admin);
         registry.addBondingCurve(address(curve1));

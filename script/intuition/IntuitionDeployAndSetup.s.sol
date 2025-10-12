@@ -55,7 +55,7 @@ contract IntuitionDeployAndSetup is SetupScript {
 
     address public MIGRATOR;
 
-    uint32 internal BASE_METALAYER_RECIPIENT_DOMAIN = 84532;
+    uint32 internal BASE_METALAYER_RECIPIENT_DOMAIN = 84_532;
 
     address public BASE_EMISSIONS_CONTROLLER;
 
@@ -151,15 +151,39 @@ contract IntuitionDeployAndSetup is SetupScript {
         atomWarden = AtomWarden(address(atomWardenProxy));
         info("AtomWarden Proxy", address(atomWardenProxy));
 
-        // Deploy BondingCurveRegistry
-        bondingCurveRegistry = new BondingCurveRegistry(ADMIN);
-        info("BondingCurveRegistry", address(bondingCurveRegistry));
-
-        // Deploy bonding curves
-        linearCurve = new LinearCurve("Linear Bonding Curve");
-        offsetProgressiveCurve = new OffsetProgressiveCurve(
-            "Offset Progressive Bonding Curve", OFFSET_PROGRESSIVE_CURVE_SLOPE, OFFSET_PROGRESSIVE_CURVE_OFFSET
+        // Deploy BondingCurveRegistry implementation and proxy
+        BondingCurveRegistry bondingCurveRegistryImpl = new BondingCurveRegistry();
+        TransparentUpgradeableProxy bondingCurveRegistryProxy = new TransparentUpgradeableProxy(
+            address(bondingCurveRegistryImpl),
+            ADMIN,
+            abi.encodeWithSelector(BondingCurveRegistry.initialize.selector, ADMIN)
         );
+        bondingCurveRegistry = BondingCurveRegistry(address(bondingCurveRegistryProxy));
+        info("BondingCurveRegistry Proxy", address(bondingCurveRegistry));
+
+        // Deploy bonding curve implementations
+        LinearCurve linearCurveImpl = new LinearCurve();
+        OffsetProgressiveCurve offsetProgressiveCurveImpl = new OffsetProgressiveCurve();
+
+        // Deploy proxies for bonding curves
+        TransparentUpgradeableProxy linearCurveProxy = new TransparentUpgradeableProxy(
+            address(linearCurveImpl), ADMIN, abi.encodeWithSelector(LinearCurve.initialize.selector, "Linear Curve")
+        );
+        linearCurve = LinearCurve(address(linearCurveProxy));
+        info("LinearCurve Proxy", address(linearCurve));
+
+        TransparentUpgradeableProxy offsetProgressiveCurveProxy = new TransparentUpgradeableProxy(
+            address(offsetProgressiveCurveImpl),
+            ADMIN,
+            abi.encodeWithSelector(
+                OffsetProgressiveCurve.initialize.selector,
+                "Offset Progressive Curve",
+                PROGRESSIVE_CURVE_SLOPE,
+                OFFSET_PROGRESSIVE_CURVE_OFFSET
+            )
+        );
+        offsetProgressiveCurve = OffsetProgressiveCurve(address(offsetProgressiveCurveProxy));
+        info("OffsetProgressiveCurve Proxy", address(offsetProgressiveCurveProxy));
 
         // Add curves to registry
         bondingCurveRegistry.addBondingCurve(address(linearCurve));

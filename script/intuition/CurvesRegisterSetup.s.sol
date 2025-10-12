@@ -26,6 +26,10 @@ forge script script/intuition/CurvesRegisterSetup.s.sol:CurvesRegisterSetup \
 contract CurvesRegisterSetup is SetupScript {
     address public BONDING_CURVE_REGISTRY;
 
+    TransparentUpgradeableProxy public linearCurveProxy;
+    TransparentUpgradeableProxy public progressiveCurveProxy;
+    TransparentUpgradeableProxy public offsetProgressiveCurveProxy;
+
     function setUp() public override {
         super.setUp();
         if (block.chainid == vm.envUint("ANVIL_CHAIN_ID")) {
@@ -45,18 +49,38 @@ contract CurvesRegisterSetup is SetupScript {
         // Deploy BondingCurveRegistry
         bondingCurveRegistry = BondingCurveRegistry(BONDING_CURVE_REGISTRY);
 
-        // Deploy bonding curves
-        LinearCurve linearCurve = new LinearCurve("Linear Bonding Curve");
-        ProgressiveCurve progressiveCurve = new ProgressiveCurve("Progressive Bonding Curve", PROGRESSIVE_CURVE_SLOPE);
-        OffsetProgressiveCurve offsetProgressiveCurve = new OffsetProgressiveCurve(
-            "Offset Progressive Bonding Curve", PROGRESSIVE_CURVE_SLOPE, OFFSET_PROGRESSIVE_CURVE_OFFSET
+        // Deploy bonding curve implementations
+        LinearCurve linearCurve = new LinearCurve();
+        ProgressiveCurve progressiveCurve = new ProgressiveCurve();
+        OffsetProgressiveCurve offsetProgressiveCurve = new OffsetProgressiveCurve();
+
+        // Deploy proxies for bonding curves
+        linearCurveProxy = new TransparentUpgradeableProxy(
+            address(linearCurve), ADMIN, abi.encodeWithSelector(LinearCurve.initialize.selector, "Linear Curve")
         );
-        info("LinearCurve", address(linearCurve));
-        info("ProgressiveCurve", address(progressiveCurve));
-        info("OffsetProgressiveCurve", address(offsetProgressiveCurve));
+        progressiveCurveProxy = new TransparentUpgradeableProxy(
+            address(progressiveCurve),
+            ADMIN,
+            abi.encodeWithSelector(ProgressiveCurve.initialize.selector, "Progressive Curve", PROGRESSIVE_CURVE_SLOPE)
+        );
+        offsetProgressiveCurveProxy = new TransparentUpgradeableProxy(
+            address(offsetProgressiveCurve),
+            ADMIN,
+            abi.encodeWithSelector(
+                OffsetProgressiveCurve.initialize.selector,
+                "Offset Progressive Curve",
+                PROGRESSIVE_CURVE_SLOPE,
+                OFFSET_PROGRESSIVE_CURVE_OFFSET
+            )
+        );
+
+        info("LinearCurve", address(linearCurveProxy));
+        info("ProgressiveCurve", address(progressiveCurveProxy));
+        info("OffsetProgressiveCurve", address(offsetProgressiveCurveProxy));
 
         // Add curves to registry
-        bondingCurveRegistry.addBondingCurve(address(progressiveCurve));
-        bondingCurveRegistry.addBondingCurve(address(offsetProgressiveCurve));
+        bondingCurveRegistry.addBondingCurve(address(linearCurveProxy));
+        bondingCurveRegistry.addBondingCurve(address(progressiveCurveProxy));
+        bondingCurveRegistry.addBondingCurve(address(offsetProgressiveCurveProxy));
     }
 }

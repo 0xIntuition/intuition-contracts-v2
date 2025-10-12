@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+
 import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
 
 /**
@@ -13,13 +15,7 @@ import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
  *      accomodating for the effect of fees, supply burn, airdrops, etc) are handled by the MultiVault instead
  *      of the curves themselves.
  */
-abstract contract BaseCurve is IBaseCurve {
-    /* =================================================== */
-    /*                      ERRORS                         */
-    /* =================================================== */
-
-    error BaseCurve_EmptyStringNotAllowed();
-
+abstract contract BaseCurve is IBaseCurve, Initializable {
     /* =================================================== */
     /*                  STATE VARIABLES                    */
     /* =================================================== */
@@ -27,15 +23,29 @@ abstract contract BaseCurve is IBaseCurve {
     /// @notice The name of the curve
     string public name;
 
-    /// @notice Construct the curve with a unique name
-    ///
+    /* =================================================== */
+    /*                    CONSTRUCTOR                      */
+    /* =================================================== */
+
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    /* =================================================== */
+    /*                    INITIALIZER                      */
+    /* =================================================== */
+
+    /// @notice Initialize the curve with a unique name
     /// @param _name Unique name for the curve
-    constructor(string memory _name) {
+    function __BaseCurve_init(string memory _name) internal onlyInitializing {
         if (bytes(_name).length == 0) {
             revert BaseCurve_EmptyStringNotAllowed();
         }
 
         name = _name;
+
+        emit CurveNameSet(_name);
     }
 
     /// @notice The maximum number of shares that this curve can handle without overflowing.

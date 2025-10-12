@@ -3,6 +3,7 @@ pragma solidity 0.8.29;
 
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
@@ -269,9 +270,21 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
 
     function testSetBondingCurveConfig_OnlyAdmin_UpdatesFields() public {
         // Deploy a fresh registry and at least one curve so defaultCurveId=1 is valid
-        BondingCurveRegistry newReg = new BondingCurveRegistry(users.admin);
+        BondingCurveRegistry newRegImpl = new BondingCurveRegistry();
+        TransparentUpgradeableProxy newReg = new TransparentUpgradeableProxy(
+            address(newRegImpl),
+            users.admin,
+            abi.encodeWithSelector(BondingCurveRegistry.initialize.selector, users.admin)
+        );
+        BondingCurveRegistry newRegInstance = BondingCurveRegistry(address(newReg));
+
+        LinearCurve lc = new LinearCurve();
+        TransparentUpgradeableProxy lcProxy = new TransparentUpgradeableProxy(
+            address(lc), users.admin, abi.encodeWithSelector(LinearCurve.initialize.selector, "Linear")
+        );
+
         resetPrank(users.admin);
-        newReg.addBondingCurve(address(new LinearCurve("Linear")));
+        newRegInstance.addBondingCurve(address(lcProxy));
         // set to the fresh registry, default curve id 1
         BondingCurveConfig memory bc = BondingCurveConfig({ registry: address(newReg), defaultCurveId: 1 });
 
