@@ -242,7 +242,7 @@ contract SatelliteEmissionsController is
         );
 
         if (msg.value > gasLimit) {
-            Address.sendValue(payable(msg.sender), msg.value - gasLimit);
+            Address.sendValue(payable(_msgSender()), msg.value - gasLimit);
         }
 
         emit UnclaimedEmissionsBridged(epoch, amount);
