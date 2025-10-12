@@ -46,7 +46,7 @@ contract BaseEmissionsControllerDeploy is SetupScript {
     }
 
     function run() public broadcast {
-        _deployContracts();
+        _deploy();
         console2.log("");
         console2.log("DEPLOYMENTS: =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+");
         console2.log("Upgrades TimelockController for BaseEmissionsController:", address(upgradesTimelockController));
@@ -54,7 +54,7 @@ contract BaseEmissionsControllerDeploy is SetupScript {
         console2.log("BaseEmissionsController Proxy:", address(baseEmissionsControllerProxy));
     }
 
-    function _deployContracts() internal {
+    function _deploy() internal {
         // 1. Deploy TimelockController contract for upgrades (it should become the ProxyAdmin owner for the
         // BaseEmissionsController proxy contract)
         upgradesTimelockController = _deployTimelockController("Upgrades TimelockController");

@@ -48,10 +48,10 @@ contract BaseEmissionsControllerSetup is SetupScript {
     }
 
     function run() public broadcast {
-        _setupContracts();
+        _setup();
     }
 
-    function _setupContracts() internal {
+    function _setup() internal {
         BaseEmissionsController(BASE_EMISSIONS_CONTROLLER).setSatelliteEmissionsController(
             SATELLITE_EMISSIONS_CONTROLLER
         );

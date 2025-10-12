@@ -105,7 +105,7 @@ contract IntuitionDeployAndSetup is SetupScript {
         if (TRUST_TOKEN == address(0)) {
             revert("Trust token address not provided");
         } else {
-            trust = WrappedTrust(TRUST_TOKEN);
+            trust = Trust(TRUST_TOKEN);
         }
 
         // Deploy the complete MultiVault system
