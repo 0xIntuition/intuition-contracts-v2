@@ -99,7 +99,6 @@ interface ITrustBonding {
      * @param _timelock The address of the timelock contract
      * @param _trustToken The address of the WTRUST token
      * @param _epochLength The length of an epoch in seconds
-     * @param _multiVault The address of the MultiVault contract
      * @param _satelliteEmissionsController The address of the SatelliteEmissionsController contract
      * @param _systemUtilizationLowerBound The lower bound for the system utilization ratio
      * @param _personalUtilizationLowerBound The lower bound for the personal utilization ratio
@@ -109,7 +108,6 @@ interface ITrustBonding {
         address _timelock,
         address _trustToken,
         uint256 _epochLength,
-        address _multiVault,
         address _satelliteEmissionsController,
         uint256 _systemUtilizationLowerBound,
         uint256 _personalUtilizationLowerBound
@@ -231,27 +229,29 @@ interface ITrustBonding {
     /// @notice Returns the eligible rewards for a specific user
     /// @param account The address of the user
     /// @param epoch The epoch number to query
-    /// @return eligible The total rewards the user is eligible for in the specified epoch
-    /// @return available The rewards available for the user to claim in the specified epoch
+    /// @return eligibleRewards The total rewards the user is eligible for in the specified epoch
+    /// @return maxRewards The rewards available for the user to claim in the specified epoch
     function getUserRewardsForEpoch(
         address account,
         uint256 epoch
     )
         external
         view
-        returns (uint256 eligible, uint256 available);
+        returns (uint256 eligibleRewards, uint256 maxRewards);
 
     /**
      * @notice Returns the Annual Percentage Yield (APY) for a specific epoch
-     * @return The APY for the specified epoch (scaled by 1e18)
+     * @return currentApy The current APY for the user in the current epoch (scaled by BASIS_POINTS)
+     * @return maxApy The maximum possible APY for the user based on max utilization (scaled by BASIS_POINTS)
      */
-    function getUserApy(address account) external view returns (uint256, uint256);
+    function getUserApy(address account) external view returns (uint256 currentApy, uint256 maxApy);
 
     /**
      * @notice Returns the Annual Percentage Yield (APY) for a specific epoch
-     * @return The APY for the specified epoch (scaled by 1e18)
+     * @return currentApy The current APY for the current epoch (scaled by BASIS_POINTS)
+     * @return maxApy The maximum possible APY based on max utilization (scaled by BASIS_POINTS)
      */
-    function getSystemApy() external view returns (uint256);
+    function getSystemApy() external view returns (uint256 currentApy, uint256 maxApy);
 
     /**
      * @notice Calculates the amount of unclaimed rewards for a specific epoch.
@@ -259,9 +259,9 @@ interface ITrustBonding {
      * SatelliteEmissionsController to determine how much TRUST should be bridged back to the BaseEmissionsController
      * and burned.
      * @param epoch The epoch to calculate the unclaimed rewards for
-     * @return Amount of unclaimed rewards available for reclaiming
+     * @return claimableRewards Unclaimed rewards available for reclaiming
      */
-    function getUnclaimedRewardsForEpoch(uint256 epoch) external view returns (uint256);
+    function getUnclaimedRewardsForEpoch(uint256 epoch) external view returns (uint256 claimableRewards);
 
     /**
      * @notice Claims eligible Trust token rewards. Claims are always for the previous epoch (`currentEpoch() - 1`)

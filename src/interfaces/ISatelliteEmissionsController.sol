@@ -59,6 +59,7 @@ interface ISatelliteEmissionsController {
     error SatelliteEmissionsController_InsufficientBalance();
     error SatelliteEmissionsController_InsufficientGasPayment();
     error SatelliteEmissionsController_InvalidWithdrawAmount();
+    error SatelliteEmissionsController_TrustBondingNotSet();
 
     /* =================================================== */
     /*                      GETTERS                        */

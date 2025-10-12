@@ -460,7 +460,12 @@ export const TrustBondingAbi = [
     "inputs": [],
     "outputs": [
       {
-        "name": "",
+        "name": "currentApy",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maxApy",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -616,12 +621,12 @@ export const TrustBondingAbi = [
     ],
     "outputs": [
       {
-        "name": "eligibleRewards",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "maxRewards",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -780,11 +785,6 @@ export const TrustBondingAbi = [
         "name": "_epochLength",
         "type": "uint256",
         "internalType": "uint256"
-      },
-      {
-        "name": "_multiVault",
-        "type": "address",
-        "internalType": "address"
       },
       {
         "name": "_satelliteEmissionsController",

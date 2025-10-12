@@ -7,7 +7,7 @@ import { Test } from "forge-std/src/Test.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
-import { IMultiVault } from "src/interfaces/IMultiVault.sol";
+import { IMultiVault, ApprovalTypes } from "src/interfaces/IMultiVault.sol";
 import { MetaERC20DispatchInit, FinalityState } from "src/interfaces/IMetaLayer.sol";
 import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";
 import {
@@ -41,10 +41,11 @@ abstract contract BaseTest is Modifiers, Test {
                                      VARIABLES
     //////////////////////////////////////////////////////////////////////////*/
     uint256 internal BASIS_POINTS_DIVISOR = 10_000;
+    uint256 internal ONE_SHARE = 1e18;
 
     uint256[] internal ATOM_COST;
     uint256[] internal TRIPLE_COST;
-    uint8 internal DECIMAL_PRECISION = 18;
+    uint256 internal DECIMAL_PRECISION = 1e18;
     uint256 internal FEE_DENOMINATOR = 10_000;
     uint256 internal MIN_DEPOSIT = 1e17; // 0.1 Trust
     uint256 internal MIN_SHARES = 1e6; // Ghost Shares
@@ -57,9 +58,10 @@ abstract contract BaseTest is Modifiers, Test {
     // Triple Config
     uint256 internal TRIPLE_CREATION_PROTOCOL_FEE = 1e15; // 0.001 Trust (Fixed Cost)
     uint256 internal TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 1e15; // 0.001 Trust (Fixed Cost)
-    uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 3% (Percentage Cost)
+    uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 0.9% (Percentage Cost)
 
     // Wallet Config
+    address internal ENTRY_POINT = 0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108;
     address internal ATOM_WARDEN = address(1);
 
     // Vault Config
@@ -78,7 +80,7 @@ abstract contract BaseTest is Modifiers, Test {
 
     // CoreEmissions Controller
     uint256 internal constant EMISSIONS_CONTROLLER_EPOCH_LENGTH = TWO_WEEKS;
-    uint256 internal constant EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH = 1_000_000 * 1e18; // 1K tokens
+    uint256 internal constant EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH = 1000 * 1e18; // 1K tokens
     uint256 internal constant EMISSIONS_CONTROLLER_CLIFF = 26;
     uint256 internal constant EMISSIONS_CONTROLLER_REDUCTION_BP = 1000; // 10%
 
@@ -88,6 +90,7 @@ abstract contract BaseTest is Modifiers, Test {
     uint256 internal constant ONE_WEEK = ONE_DAY * 7;
     uint256 internal constant TWO_WEEKS = ONE_DAY * 14;
     uint256 internal constant THREE_WEEKS = ONE_DAY * 21;
+    uint256 internal constant FOUR_WEEKS = ONE_DAY * 28;
     uint256 internal constant ONE_YEAR = ONE_DAY * 365;
     uint256 internal constant TWO_YEARS = ONE_YEAR * 2;
     uint256 internal constant THREE_YEARS = ONE_YEAR * 3;
@@ -291,7 +294,6 @@ abstract contract BaseTest is Modifiers, Test {
             users.timelock, // timelock
             address(protocol.wrappedTrust), // trustToken
             TRUST_BONDING_EPOCH_LENGTH, // epochLength (minimum 2 weeks required)
-            address(protocol.multiVault), // multiVault
             address(protocol.satelliteEmissionsController), // satelliteEmissionsController
             TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound (50%)
             TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound (30%)
@@ -321,6 +323,9 @@ abstract contract BaseTest is Modifiers, Test {
             _getDefaultVaultFees(),
             bondingCurveConfig
         );
+
+        resetPrank(users.timelock);
+        protocol.trustBonding.setMultiVault(address(protocol.multiVault));
 
         // Approve tokens for all users after deployment
         _approveTokensForUsers();
@@ -352,7 +357,7 @@ abstract contract BaseTest is Modifiers, Test {
             minDeposit: MIN_DEPOSIT,
             minShare: MIN_SHARES,
             atomDataMaxLength: 1000,
-            decimalPrecision: 18
+            decimalPrecision: 1e18
         });
     }
 
@@ -373,7 +378,7 @@ abstract contract BaseTest is Modifiers, Test {
 
     function _getDefaultWalletConfig(address _atomWalletFactory) internal returns (WalletConfig memory) {
         return WalletConfig({
-            entryPoint: address(0),
+            entryPoint: ENTRY_POINT,
             atomWarden: ATOM_WARDEN,
             atomWalletBeacon: address(0),
             atomWalletFactory: address(_atomWalletFactory)
@@ -418,7 +423,7 @@ abstract contract BaseTest is Modifiers, Test {
     }
 
     function calculateAtomId(bytes memory atomData) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(atomData));
+        return keccak256(abi.encodePacked(keccak256("ATOM_SALT"), keccak256(atomData)));
     }
 
     function getAtomCreationCost() internal view returns (uint256) {
@@ -533,7 +538,7 @@ abstract contract BaseTest is Modifiers, Test {
     }
 
     // Helper to set up approval for another user
-    function setupApproval(address owner, address spender, IMultiVault.ApprovalTypes approvalType) internal {
+    function setupApproval(address owner, address spender, ApprovalTypes approvalType) internal {
         resetPrank({ msgSender: owner });
         protocol.multiVault.approve(spender, approvalType);
     }
@@ -617,8 +622,8 @@ abstract contract BaseTest is Modifiers, Test {
     function _setupUserWrappedTokenAndTrustBonding(address user) internal {
         vm.deal({ account: user, newBalance: 10_000_000_000 ether });
         resetPrank({ msgSender: user });
-        protocol.wrappedTrust.deposit{ value: 10_000 ether }();
-        protocol.wrappedTrust.approve(address(protocol.trustBonding), 10_000 ether);
+        protocol.wrappedTrust.deposit{ value: 100_000 ether }();
+        protocol.wrappedTrust.approve(address(protocol.trustBonding), type(uint256).max);
         _addToTrustBondingWhiteList(user);
     }
 

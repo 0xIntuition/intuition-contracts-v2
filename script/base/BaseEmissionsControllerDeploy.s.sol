@@ -14,14 +14,14 @@ import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsContro
 LOCAL
 forge script script/base/BaseEmissionsControllerDeploy.s.sol:BaseEmissionsControllerDeploy \
 --optimizer-runs 10000 \
---rpc-url base_sepolia \
+--rpc-url anvil \
 --broadcast \
 --slow
 
 TESTNET
 forge script script/base/BaseEmissionsControllerDeploy.s.sol:BaseEmissionsControllerDeploy \
 --optimizer-runs 10000 \
---rpc-url intuition_sepolia \
+--rpc-url base_sepolia \
 --broadcast \
 --slow
 */
@@ -44,6 +44,7 @@ contract BaseEmissionsControllerDeploy is SetupScript {
         _deployContracts();
         console2.log("");
         console2.log("DEPLOYMENTS: =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+");
+        console2.log("Upgrades TimelockController for BaseEmissionsController:", address(upgradesTimelockController));
         console2.log("BaseEmissionsController Implementation:", address(baseEmissionsControllerImpl));
         console2.log("BaseEmissionsController Proxy:", address(baseEmissionsControllerProxy));
     }

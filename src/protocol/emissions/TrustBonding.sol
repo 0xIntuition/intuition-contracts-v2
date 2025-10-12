@@ -118,7 +118,6 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         address _timelock,
         address _trustToken,
         uint256 _epochLength,
-        address _multiVault,
         address _satelliteEmissionsController,
         uint256 _systemUtilizationLowerBound,
         uint256 _personalUtilizationLowerBound
@@ -137,7 +136,6 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         _grantRole(PAUSER_ROLE, _owner);
 
         _setTimelock(_timelock);
-        _setMultiVault(_multiVault);
         _updateSatelliteEmissionsController(_satelliteEmissionsController);
         _updateSystemUtilizationLowerBound(_systemUtilizationLowerBound);
         _updatePersonalUtilizationLowerBound(_personalUtilizationLowerBound);
@@ -236,13 +234,12 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
 
     function getUserInfo(address account) external view returns (UserInfo memory) {
         uint256 _currEpoch = _currentEpoch();
-
         uint256 userRewards;
         uint256 personalUtilization;
+
         if (_currEpoch > 0) {
-            uint256 prevEpoch = _previousEpoch(_currEpoch);
-            userRewards = _userEligibleRewardsForEpoch(account, prevEpoch);
-            personalUtilization = _getPersonalUtilizationRatio(account, prevEpoch);
+            userRewards = _userEligibleRewardsForEpoch(account, _currEpoch);
+            personalUtilization = _getPersonalUtilizationRatio(account, _currEpoch);
         }
 
         LockedBalance memory userLocked = locked[account];
@@ -261,11 +258,12 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         uint256 currEpoch = _currentEpoch();
         uint256 userRewards = _userEligibleRewardsForEpoch(account, currEpoch);
         uint256 personalUtilization = _getPersonalUtilizationRatio(account, currEpoch);
-
         int256 locked = locked[account].amount;
+        
         if (userRewards == 0 || locked <= 0) {
             return (currentApy, maxApy);
         }
+
         uint256 userRewardsPerYear = userRewards * _epochsPerYear();
         currentApy = (userRewardsPerYear * personalUtilization) / uint256(locked);
         maxApy = (userRewardsPerYear * BASIS_POINTS_DIVISOR) / uint256(locked);
@@ -275,48 +273,47 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     /// @inheritdoc ITrustBonding
     function getUserCurrentClaimableRewards(address account) external view returns (uint256) {
         uint256 _currEpoch = _currentEpoch();
+
         if (_currEpoch == 0) {
             return 0;
         }
-        uint256 prevEpoch = _previousEpoch(_currEpoch);
+
+        uint256 prevEpoch = _currEpoch - 1;
         uint256 userClaimedReward = userClaimedRewardsForEpoch[account][prevEpoch];
         uint256 userEligibleReward = _userEligibleRewardsForEpoch(account, prevEpoch)
             * _getPersonalUtilizationRatio(account, prevEpoch) / BASIS_POINTS_DIVISOR;
+
         if (userEligibleReward <= userClaimedReward) {
             return 0;
         }
+
         return userEligibleReward - userClaimedReward;
     }
 
     /// @inheritdoc ITrustBonding
-    function getUserRewardsForEpoch(
-        address account,
-        uint256 epoch
-    )
-        external
-        view
-        returns (uint256 eligibleRewards, uint256 maxRewards)
-    {
+    function getUserRewardsForEpoch(address account, uint256 epoch) external view returns (uint256, uint256) {
         uint256 _currEpoch = _currentEpoch();
-        if (_currEpoch == 0 || epoch >= _currEpoch) {
+        if (_currEpoch == 0 || epoch > _currEpoch) {
             return (0, 0);
         }
         uint256 userRewards = _userEligibleRewardsForEpoch(account, epoch);
         uint256 personalUtilization = _getPersonalUtilizationRatio(account, epoch);
-
-        return (userRewards, (userRewards * personalUtilization) / BASIS_POINTS_DIVISOR);
+        return ((userRewards * personalUtilization) / BASIS_POINTS_DIVISOR, userRewards);
     }
 
     /// @inheritdoc ITrustBonding
-    function getSystemApy() external view returns (uint256) {
-        uint256 _supply = supply;
+    function getSystemApy() external view returns (uint256 currentApy, uint256 maxApy) {
+        uint256 _supply = _totalSupply(block.timestamp);
         if (_supply == 0) {
-            return 0;
+            return (0, 0);
         }
-
-        uint256 emissionsPerYear = _emissionsForEpoch(_currentEpoch()) * _epochsPerYear();
-
-        return ((emissionsPerYear * BASIS_POINTS_DIVISOR) / _supply);
+        uint256 _currEpoch = _currentEpoch();
+        uint256 emissionsPerYear = _emissionsForEpoch(_currEpoch) * _epochsPerYear();
+        uint256 maxEmissions = ICoreEmissionsController(satelliteEmissionsController).getEmissionsAtEpoch(_currEpoch);
+        uint256 maxEmissionsPerYear = maxEmissions * _epochsPerYear();
+        currentApy = (emissionsPerYear * BASIS_POINTS_DIVISOR) / _supply;
+        maxApy = (maxEmissionsPerYear * BASIS_POINTS_DIVISOR) / _supply;
+        return (currentApy, maxApy);
     }
 
     /// @inheritdoc ITrustBonding
@@ -406,13 +403,13 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /// @inheritdoc ITrustBonding
-    function setTimelock(address _timelock) external onlyTimelock {
-        _setTimelock(_timelock);
+    function setMultiVault(address _multiVault) external onlyTimelock {
+        _setMultiVault(_multiVault);
     }
 
     /// @inheritdoc ITrustBonding
-    function setMultiVault(address _multiVault) external onlyTimelock {
-        _setMultiVault(_multiVault);
+    function setTimelock(address _timelock) external onlyTimelock {
+        _setTimelock(_timelock);
     }
 
     /// @inheritdoc ITrustBonding
@@ -652,9 +649,5 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     function _previousEpoch() internal view returns (uint256) {
         uint256 curr = _currentEpoch();
         return curr == 0 ? 0 : curr - 1;
-    }
-
-    function _previousEpoch(uint256 _currEpoch) internal pure returns (uint256) {
-        return _currEpoch == 0 ? 0 : _currEpoch - 1;
     }
 }

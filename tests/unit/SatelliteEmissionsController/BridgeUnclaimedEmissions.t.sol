@@ -114,10 +114,6 @@ contract BridgeUnclaimedEmissionsTest is TrustBondingBase {
     }
 
     /*//////////////////////////////////////////////////////////////
-                     BRIDGING PREVIOUSLY CLAIMED REWARDS
-    //////////////////////////////////////////////////////////////*/
-
-    /*//////////////////////////////////////////////////////////////
                         FAILED BRIDGING TESTS
     //////////////////////////////////////////////////////////////*/
 
@@ -138,6 +134,33 @@ contract BridgeUnclaimedEmissionsTest is TrustBondingBase {
             )
         );
         protocol.satelliteEmissionsController.bridgeUnclaimedEmissions{ value: GAS_QUOTE }(2);
+    }
+    
+    function test_bridgeUnclaimedEmissions_revertWhen_trustBondingIsNotSetYet() external {
+        // Deploy a new SatelliteEmissionsController without setting TrustBonding
+        SatelliteEmissionsController newSatelliteEmissionsController = _deploySatelliteEmissionsController();
+
+        address baseEmissionsController = address(0xABC);
+
+        // Initialize the new SatelliteEmissionsController
+        newSatelliteEmissionsController.initialize(
+            users.admin,
+            baseEmissionsController, // placeholder address for BaseEmissionsController
+            metaERC20DispatchInit,
+            coreEmissionsInit
+        );
+
+        // Advance to epoch 4 to ensure there are bridgeable rewards
+        _createLock(users.alice, initialTokens);
+        _advanceToEpoch(4);
+
+        resetPrank(users.admin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ISatelliteEmissionsController.SatelliteEmissionsController_TrustBondingNotSet.selector
+            )
+        );
+        newSatelliteEmissionsController.bridgeUnclaimedEmissions{ value: GAS_QUOTE }(2);
     }
 
     function test_bridgeUnclaimedEmissions_revertWhen_previouslyClaimed() external {
@@ -265,7 +288,11 @@ contract BridgeUnclaimedEmissionsTest is TrustBondingBase {
         // Advance to epoch 2: the full emissions for epoch 0 are now bridgeable
         _advanceToEpoch(2);
         uint256 unclaimedEpoch0InEpoch2 = protocol.trustBonding.getUnclaimedRewardsForEpoch(0);
-        assertEq(unclaimedEpoch0InEpoch2, 1_000_000 * 1e18, "Epoch 0 should now release the full 1,000,000 emissions");
+        assertEq(
+            unclaimedEpoch0InEpoch2,
+            EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH,
+            "Epoch 0 should now release the full 1,000,000 emissions"
+        );
     }
 
     function test_bridgeUnclaimedEmissions_gasRefund() external {
