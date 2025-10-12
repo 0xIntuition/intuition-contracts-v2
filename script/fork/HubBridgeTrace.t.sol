@@ -31,13 +31,11 @@ contract HubBridgeTraceTest is Test {
     uint256 public constant GAS_LIMIT = GAS_CONSTANT + 125_000;
 
     // Contract addresses
+    uint256 public bridgeAmount = 1e18;
     address public hubBridge = address(0); // Set this to deployed HubBridge address
     address public testToken = 0xA54b4E6e356b963Ee00d1C947f478d9194a1a210;
-    address public testRecipient = 0x395867a085228940cA50a26166FDAD3f382aeB09;
-    uint256 public bridgeAmount = 1e18;
-
-    // Test sender - set to an address with tokens and ETH
-    address public testSender = 0x395867a085228940cA50a26166FDAD3f382aeB09;
+    address public testSender = 0x4905e138b507F5Da41e894aF80672b1ecB167C3E;
+    address public testRecipient = 0x4905e138b507F5Da41e894aF80672b1ecB167C3E;
 
     function setUp() public {
         // Validate fork

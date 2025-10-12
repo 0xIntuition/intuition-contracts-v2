@@ -22,20 +22,18 @@ contract SpokeBridgeTraceTest is Test {
     uint256 public constant GAS_LIMIT = GAS_CONSTANT + 125_000;
 
     // Contract addresses
-    address public spokeBridge = 0x7745bDEe668501E5eeF7e9605C746f9cDfb60667; // Set this to deployed SpokeBridge address
-    address public testRecipient = 0x395867a085228940cA50a26166FDAD3f382aeB09;
     uint256 public bridgeAmount = 1e18;
-
-    // Test sender - set to an address with ADMIN role on SpokeBridge
-    address public testAdmin = 0x4905e138b507F5Da41e894aF80672b1ecB167C3E; // Must be set to actual admin
+    address public spokeBridge = 0x7745bDEe668501E5eeF7e9605C746f9cDfb60667; // Set this to deployed SpokeBridge address
+    address public testSender = 0x4905e138b507F5Da41e894aF80672b1ecB167C3E;
+    address public testRecipient = 0x4905e138b507F5Da41e894aF80672b1ecB167C3E;
 
     function setUp() public {
         // Validate fork
         require(block.chainid == INTUITION_CHAIN_ID, "Must run on Intuition fork");
 
         // Give test admin some ETH if needed
-        if (testAdmin != address(0)) {
-            vm.deal(testAdmin, 10 ether);
+        if (testSender != address(0)) {
+            vm.deal(testSender, 10 ether);
         }
     }
 
@@ -44,17 +42,17 @@ contract SpokeBridgeTraceTest is Test {
      */
     function test_bridge_withPrank() public {
         require(spokeBridge != address(0), "SpokeBridge address not set");
-        require(testAdmin != address(0), "Test admin address not set");
+        require(testSender != address(0), "Test admin address not set");
 
         console2.log("=== SpokeBridge Fork Test with vm.prank ===");
-        console2.log("Test Admin:", testAdmin);
+        console2.log("Test Admin:", testSender);
         console2.log("SpokeBridge:", spokeBridge);
         console2.log("Recipient:", testRecipient);
 
         SpokeBridge bridge = SpokeBridge(payable(spokeBridge));
 
         // Check admin balance
-        uint256 adminBalance = testAdmin.balance;
+        uint256 adminBalance = testSender.balance;
         console2.log("Admin Balance:", adminBalance);
 
         // Get gas quote from underlying MetaERC20Spoke
@@ -67,7 +65,7 @@ contract SpokeBridgeTraceTest is Test {
         require(adminBalance >= totalValue, "Insufficient ETH for bridge + gas");
 
         // Prank as test admin and bridge
-        vm.startPrank(testAdmin);
+        vm.startPrank(testSender);
 
         console2.log("Executing bridge...");
         bridge.bridge{ value: totalValue }(testRecipient);
@@ -75,7 +73,7 @@ contract SpokeBridgeTraceTest is Test {
         vm.stopPrank();
 
         console2.log("Bridge successful!");
-        console2.log("Final admin balance:", testAdmin.balance);
+        console2.log("Final admin balance:", testSender.balance);
     }
 
     /**
@@ -141,16 +139,16 @@ contract SpokeBridgeTraceTest is Test {
      */
     function test_bridge_revertsForInsufficientValue() public {
         require(spokeBridge != address(0), "SpokeBridge address not set");
-        require(testAdmin != address(0), "Test admin address not set");
+        require(testSender != address(0), "Test admin address not set");
 
         SpokeBridge bridge = SpokeBridge(payable(spokeBridge));
 
         uint256 gasQuote = _getGasQuote(bridge);
         uint256 insufficientValue = gasQuote; // Only gas, no bridge amount
 
-        vm.deal(testAdmin, insufficientValue + 1 ether);
+        vm.deal(testSender, insufficientValue + 1 ether);
 
-        vm.startPrank(testAdmin);
+        vm.startPrank(testSender);
         vm.expectRevert(SpokeBridge.NotEnoughValueSent.selector);
         bridge.bridge{ value: insufficientValue }(testRecipient);
         vm.stopPrank();
