@@ -198,7 +198,7 @@ abstract contract SetupScript is Script {
             EMISSIONS_LENGTH = ONE_DAY;
             EMISSIONS_REDUCTION_BASIS_POINTS = 1000; // 10%
             EMISSIONS_REDUCTION_CLIFF = 4; // 1 epoch
-            EMISSIONS_PER_EPOCH = 1_000 ether;
+            EMISSIONS_PER_EPOCH = 1000 ether;
         } else if (block.chainid == NETWORK_INTUITION) {
             TRUST_TOKEN = 0x81cFb09cb44f7184Ad934C09F82000701A4bF672;
             ADMIN = 0xbeA18ab4c83a12be25f8AA8A10D8747A07Cdc6eb;

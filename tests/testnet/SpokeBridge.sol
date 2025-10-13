@@ -24,7 +24,7 @@ contract SpokeBridge is MetaERC20Dispatcher, AccessControl {
             metaERC20DispatchInit.finalityState
         );
     }
-    
+
     function bridge(address to) external payable {
         uint256 gasLimit = _quoteGasPayment(_recipientDomain, GAS_CONSTANT + _messageGasCost);
         if (msg.value <= gasLimit) {

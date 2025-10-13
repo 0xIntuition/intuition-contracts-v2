@@ -19,6 +19,7 @@ forge script script/intuition/TrustDeploy.s.sol:TrustDeploy \
 
 contract TrustDeploy is SetupScript {
     Trust public trustImpl;
+
     function setUp() public override {
         super.setUp();
     }

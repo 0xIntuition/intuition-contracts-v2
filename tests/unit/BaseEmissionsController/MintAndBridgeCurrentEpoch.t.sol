@@ -494,9 +494,7 @@ contract MintAndBridgeCurrentEpochTest is BaseTest {
 
         // Total should be sum of both
         assertEq(
-            baseEmissionsController.getTotalMinted(),
-            epoch2Minted + epoch3Minted,
-            "Total should be sum of both mints"
+            baseEmissionsController.getTotalMinted(), epoch2Minted + epoch3Minted, "Total should be sum of both mints"
         );
     }
 

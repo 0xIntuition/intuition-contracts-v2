@@ -6,13 +6,13 @@ import { SpokeBridge } from "tests/testnet/SpokeBridge.sol";
 import { FinalityState, IMetaERC20HubOrSpoke, IMetalayerRouter, IIGP } from "src/interfaces/IMetaLayer.sol";
 
 /**
-@notice Fork test for SpokeBridge with vm.prank support
-
-Run with:
-forge test --match-contract SpokeBridgeTraceTest --fork-url https://rpc.intuition.systems -vvvv
-
-Or test specific function:
-forge test --match-test test_bridge_withPrank --fork-url https://rpc.intuition.systems -vvvv
+ * @notice Fork test for SpokeBridge with vm.prank support
+ *
+ * Run with:
+ * forge test --match-contract SpokeBridgeTraceTest --fork-url https://rpc.intuition.systems -vvvv
+ *
+ * Or test specific function:
+ * forge test --match-test test_bridge_withPrank --fork-url https://rpc.intuition.systems -vvvv
  */
 contract SpokeBridgeTraceTest is Test {
     // Network constants

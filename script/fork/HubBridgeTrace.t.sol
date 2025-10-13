@@ -15,14 +15,14 @@ interface IERC20 {
 }
 
 /**
-@notice Fork test for HubBridge with vm.prank support
-
-Run with:
-forge test --match-contract HubBridgeTraceTest --fork-url https://mainnet.base.org -vvvv
-
-Or test specific function:
-forge test --match-test test_bridge_withPrank --fork-url https://mainnet.base.org -vvvv
-*/
+ * @notice Fork test for HubBridge with vm.prank support
+ *
+ * Run with:
+ * forge test --match-contract HubBridgeTraceTest --fork-url https://mainnet.base.org -vvvv
+ *
+ * Or test specific function:
+ * forge test --match-test test_bridge_withPrank --fork-url https://mainnet.base.org -vvvv
+ */
 contract HubBridgeTraceTest is Test {
     // Network constants
     uint32 public constant BASE_CHAIN_ID = 8453;

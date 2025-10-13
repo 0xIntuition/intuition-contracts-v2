@@ -25,9 +25,7 @@ contract DeployEntryPoint is SetupScript {
         super.setUp();
     }
 
-
     function run() external broadcast {
-
         if (DETERMINISTIC_DEPLOYER_ADDRESS.code.length == 0) revert("Deterministic Deployer not deployed");
 
         bytes memory data =
