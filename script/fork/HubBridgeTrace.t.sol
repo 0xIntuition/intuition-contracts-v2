@@ -15,14 +15,14 @@ interface IERC20 {
 }
 
 /**
- * @notice Fork test for HubBridge with vm.prank support
- *
- * Run with:
- * forge test --match-contract HubBridgeTraceTest --fork-url https://sepolia.base.org -vvvv
- *
- * Or test specific function:
- * forge test --match-test test_bridge_withPrank --fork-url https://sepolia.base.org -vvvv
- */
+@notice Fork test for HubBridge with vm.prank support
+
+Run with:
+forge test --match-contract HubBridgeTraceTest --fork-url https://mainnet.base.org -vvvv
+
+Or test specific function:
+forge test --match-test test_bridge_withPrank --fork-url https://mainnet.base.org -vvvv
+*/
 contract HubBridgeTraceTest is Test {
     // Network constants
     uint32 public constant BASE_CHAIN_ID = 8453;
@@ -32,14 +32,14 @@ contract HubBridgeTraceTest is Test {
 
     // Contract addresses
     uint256 public bridgeAmount = 1e18;
-    address public hubBridge = address(0); // Set this to deployed HubBridge address
-    address public testToken = 0xA54b4E6e356b963Ee00d1C947f478d9194a1a210;
+    address public hubBridge = 0xfdAe6ae4Ca946746CB7470570BbC95c71e1952A1; // Set this to deployed HubBridge address
+    address public testToken = 0x6cd905dF2Ed214b22e0d48FF17CD4200C1C6d8A3;
     address public testSender = 0x4905e138b507F5Da41e894aF80672b1ecB167C3E;
     address public testRecipient = 0x4905e138b507F5Da41e894aF80672b1ecB167C3E;
 
     function setUp() public {
         // Validate fork
-        require(block.chainid == BASE_CHAIN_ID, "Must run on Base Sepolia fork");
+        require(block.chainid == BASE_CHAIN_ID, "Must run on Base fork");
 
         // Give test sender some ETH for gas if needed
         vm.deal(testSender, 10 ether);

@@ -49,15 +49,16 @@ contract BaseEmissionsControllerSetup is SetupScript {
 
     function run() public broadcast {
         _setup();
+        console2.log("");
+        console2.log("DEPLOYMENTS: =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+");
+        console2.log("Base Emissions Controller:", address(BASE_EMISSIONS_CONTROLLER));
+        console2.log("Satellite Emissions Controller:", address(SATELLITE_EMISSIONS_CONTROLLER));
+        console2.log("");
+        console2.log("SETUP COMPLETE");
     }
 
-<<<<<<< HEAD
-    function _setup() internal {
-        BaseEmissionsController(BASE_EMISSIONS_CONTROLLER).setSatelliteEmissionsController(
-=======
     function _setupContracts() internal {
         BaseEmissionsController(payable(BASE_EMISSIONS_CONTROLLER)).setSatelliteEmissionsController(
->>>>>>> main
             SATELLITE_EMISSIONS_CONTROLLER
         );
     }
