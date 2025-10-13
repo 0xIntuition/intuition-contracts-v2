@@ -21,6 +21,13 @@ forge script script/base/BaseEmissionsControllerSetup.s.sol:BaseEmissionsControl
 --rpc-url base_sepolia \
 --broadcast \
 --slow
+
+MAINNET
+forge script script/base/BaseEmissionsControllerSetup.s.sol:BaseEmissionsControllerSetup \
+--optimizer-runs 10000 \
+--rpc-url base \
+--broadcast \
+--slow
 */
 contract BaseEmissionsControllerSetup is SetupScript {
     address public BASE_EMISSIONS_CONTROLLER;
@@ -41,10 +48,16 @@ contract BaseEmissionsControllerSetup is SetupScript {
     }
 
     function run() public broadcast {
-        _setupContracts();
+        _setup();
+        console2.log("");
+        console2.log("DEPLOYMENTS: =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+");
+        console2.log("Base Emissions Controller:", address(BASE_EMISSIONS_CONTROLLER));
+        console2.log("Satellite Emissions Controller:", address(SATELLITE_EMISSIONS_CONTROLLER));
+        console2.log("");
+        console2.log("SETUP COMPLETE");
     }
 
-    function _setupContracts() internal {
+    function _setup() internal {
         BaseEmissionsController(payable(BASE_EMISSIONS_CONTROLLER)).setSatelliteEmissionsController(
             SATELLITE_EMISSIONS_CONTROLLER
         );

@@ -104,7 +104,7 @@ contract BaseEmissionsController is
     /// @notice Receive native gas token to fund cross-chain messages
     receive() external payable {
         emit Transfer(_msgSender(), address(this), msg.value);
-     }
+    }
 
     /* =================================================== */
     /*                      GETTERS                        */

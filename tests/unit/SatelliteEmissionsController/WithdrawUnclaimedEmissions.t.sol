@@ -339,7 +339,11 @@ contract WithdrawUnclaimedEmissionsTest is TrustBondingBase {
         // Advance to epoch 2: the full emissions for epoch 0 are now withdrawable
         _advanceToEpoch(2);
         uint256 unclaimedEpoch0InEpoch2 = protocol.trustBonding.getUnclaimedRewardsForEpoch(0);
-        assertEq(unclaimedEpoch0InEpoch2, EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH, "Epoch 0 should now release the full 1,000,000 emissions");
+        assertEq(
+            unclaimedEpoch0InEpoch2,
+            EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH,
+            "Epoch 0 should now release the full 1,000,000 emissions"
+        );
 
         resetPrank(users.admin);
         vm.expectEmit(true, true, false, true);
