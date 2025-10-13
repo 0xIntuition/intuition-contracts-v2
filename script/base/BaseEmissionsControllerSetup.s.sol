@@ -57,7 +57,7 @@ contract BaseEmissionsControllerSetup is SetupScript {
         console2.log("SETUP COMPLETE");
     }
 
-    function _setupContracts() internal {
+    function _setup() internal {
         BaseEmissionsController(payable(BASE_EMISSIONS_CONTROLLER)).setSatelliteEmissionsController(
             SATELLITE_EMISSIONS_CONTROLLER
         );
