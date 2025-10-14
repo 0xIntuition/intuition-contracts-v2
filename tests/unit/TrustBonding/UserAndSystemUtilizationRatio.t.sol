@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { console, Vm } from "forge-std/src/Test.sol";
 import { TrustBondingBase } from "tests/unit/TrustBonding/TrustBondingBase.t.sol";
 import { ITrustBonding } from "src/interfaces/ITrustBonding.sol";
-import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
+import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 
 /// forge test --match-path 'tests/unit/TrustBonding/UserAndSystemUtilizationRatio.t.sol'
 contract UserAndSystemUtilizationRatio is TrustBondingBase {
@@ -420,5 +419,116 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         assertEq(
             systemRatio, SYSTEM_UTILIZATION_LOWER_BOUND, "Minimal delta should result in lower bound due to rounding"
         );
+    }
+
+    /*//////////////////////////////////////////////////////////////
+    PREVIOUS-ACTIVE-EPOCH RESOLUTION TESTS (DIRECT MV CHECKS)
+    //////////////////////////////////////////////////////////////*/
+
+    function test_getUserUtilizationBefore_lastBeforePrevEpoch_usesLastActive() external {
+        // target epoch = 5  -> prevEpoch = 4
+        _advanceToEpoch(5);
+
+        _setUserUtilizationForEpoch(users.alice, 2, 111);
+        _setLastActiveEpochForUser(users.alice, 2); // last (2) < prevEpoch (4)
+        _setPreviousActiveEpochForUser(users.alice, 1);
+
+        int256 before = IMultiVault(address(protocol.multiVault)).getUserUtilizationBefore(users.alice, 5);
+        assertEq(before, int256(111), "Should use lastActiveEpoch when last < prevEpoch");
+    }
+
+    function test_getUserUtilizationBefore_lastEqualsPrevEpoch_usesPreviousActive() external {
+        // target epoch = 5  -> prevEpoch = 4
+        _advanceToEpoch(5);
+
+        _setUserUtilizationForEpoch(users.alice, 3, 333);
+        _setUserUtilizationForEpoch(users.alice, 4, 444);
+        _setLastActiveEpochForUser(users.alice, 4); // last == prevEpoch (4)
+        _setPreviousActiveEpochForUser(users.alice, 3);
+
+        int256 before = IMultiVault(address(protocol.multiVault)).getUserUtilizationBefore(users.alice, 5);
+        assertEq(before, int256(444), "When last == prevEpoch, must use previousActiveEpoch");
+    }
+
+    function test_getUserUtilizationBefore_lastEqualsTargetEpoch_usesPreviousActive() external {
+        // target epoch = 5  -> prevEpoch = 4
+        _advanceToEpoch(5);
+
+        _setUserUtilizationForEpoch(users.alice, 4, 444);
+        _setUserUtilizationForEpoch(users.alice, 5, 555);
+        _setLastActiveEpochForUser(users.alice, 5); // last == target epoch
+        _setPreviousActiveEpochForUser(users.alice, 4);
+
+        int256 before = IMultiVault(address(protocol.multiVault)).getUserUtilizationBefore(users.alice, 5);
+        assertEq(before, int256(444), "When last >= target, must use previousActiveEpoch");
+    }
+
+    function test_getUserUtilizationBefore_sparseActivityFarBehind_usesThatSparseLast() external {
+        // target epoch = 8  -> prevEpoch = 7
+        _advanceToEpoch(8);
+
+        _setUserUtilizationForEpoch(users.alice, 1, 777);
+        _setLastActiveEpochForUser(users.alice, 1); // last (1) < prevEpoch (7)
+        _setPreviousActiveEpochForUser(users.alice, 0);
+
+        int256 before = IMultiVault(address(protocol.multiVault)).getUserUtilizationBefore(users.alice, 8);
+        assertEq(before, int256(777), "Should use sparse lastActiveEpoch when far behind");
+    }
+
+    function test_getUserUtilizationBefore_neverActive_returnsZero() external {
+        // target epoch = 3  -> prevEpoch = 2
+        _advanceToEpoch(3);
+
+        _setLastActiveEpochForUser(users.alice, 0);
+        _setPreviousActiveEpochForUser(users.alice, 0);
+        // personal[alice][0] defaults to 0
+
+        int256 before = IMultiVault(address(protocol.multiVault)).getUserUtilizationBefore(users.alice, 3);
+        assertEq(before, int256(0), "Never active -> before is 0");
+    }
+
+    function test_getUserUtilizationBefore_lastAfterTargetEpoch_usesPreviousActive() external {
+        // target epoch = 4  -> prevEpoch = 3
+        _advanceToEpoch(4);
+
+        _setUserUtilizationForEpoch(users.alice, 2, 222);
+        _setLastActiveEpochForUser(users.alice, 7); // last >> target
+        _setPreviousActiveEpochForUser(users.alice, 2);
+
+        int256 before = IMultiVault(address(protocol.multiVault)).getUserUtilizationBefore(users.alice, 4);
+        assertEq(before, int256(222), "Future lastActiveEpoch -> use previousActiveEpoch");
+    }
+
+    /*//////////////////////////////////////////////////////////////
+    PERSONAL RATIO: TARGET==0 BRANCHES (INTEGRATED TB CHECKS)
+    //////////////////////////////////////////////////////////////*/
+
+    function test_personalUtilRatio_targetZero_noEligibility_prevEpoch_returnsMax() external {
+        // Epoch 2 is the first epoch where utilization math is applied in TB
+        _advanceToEpoch(2);
+
+        // No locks -> no eligibility in epoch 1; set a positive delta so sign is > 0
+        _setUserUtilizationForEpoch(users.alice, 2, 1000);
+        _setLastActiveEpochForUser(users.alice, 2);
+        _setPreviousActiveEpochForUser(users.alice, 0);
+
+        uint256 ratio = protocol.trustBonding.getPersonalUtilizationRatio(users.alice, 2);
+        assertEq(ratio, BASIS_POINTS_DIVISOR, "No eligibility last epoch -> 100% personal utilization");
+    }
+
+    function test_personalUtilRatio_targetZero_hadEligibilityButDidNotClaim_returnsFloor() external {
+        _addToTrustBondingWhiteList(users.alice);
+        _createLock(users.alice, initialTokens); // ensures eligibility exists for epoch 1
+        _advanceToEpoch(2);
+
+        // Positive delta between 1 and 2
+        _setUserUtilizationForEpoch(users.alice, 1, 100);
+        _setUserUtilizationForEpoch(users.alice, 2, 200);
+        _setLastActiveEpochForUser(users.alice, 2);
+        _setPreviousActiveEpochForUser(users.alice, 1);
+
+        // userClaimedRewardsForEpoch[alice][1] is 0 by default -> target==0 AND had eligibility
+        uint256 ratio = protocol.trustBonding.getPersonalUtilizationRatio(users.alice, 2);
+        assertEq(ratio, PERSONAL_UTILIZATION_LOWER_BOUND, "Had eligibility but didn't claim -> floor ratio");
     }
 }
