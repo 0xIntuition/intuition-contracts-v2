@@ -39,11 +39,11 @@ contract AtomWalletTest is BaseTest {
 
     /// @notice Test data
     bytes public constant TEST_ATOM_DATA = bytes("Test atom for wallet");
-    bytes32 public constant TEST_ATOM_ID = keccak256(abi.encodePacked(TEST_ATOM_DATA));
+    bytes32 public TEST_ATOM_ID;
     uint256 public constant TEST_AMOUNT = 1 ether;
     uint256 public constant TEST_DEPOSIT_AMOUNT = 0.5 ether;
     bytes public constant TEST_CALLDATA = hex"deadbeef";
-    uint256 constant BASE_TIMESTAMP = 1_000_000;
+    uint256 public constant BASE_TIMESTAMP = 1_000_000;
 
     /// @notice Contract addresses
     AtomWallet public atomWallet;
@@ -51,6 +51,8 @@ contract AtomWalletTest is BaseTest {
     MockEntryPoint public mockEntryPoint;
 
     function setUp() public override {
+        TEST_ATOM_ID = calculateAtomId(TEST_ATOM_DATA);
+
         // Deploy mock EntryPoint and fund it with TRUST first
         mockEntryPoint = new MockEntryPoint();
         vm.deal(address(mockEntryPoint), 1000 ether);
@@ -646,7 +648,7 @@ contract AtomWalletTest is BaseTest {
         // Create new atom
         vm.startPrank(users.alice);
         bytes memory atomData = bytes("New test atom");
-        bytes32 atomId = keccak256(abi.encodePacked(atomData));
+        bytes32 atomId = calculateAtomId(atomData);
         uint256 atomCost = protocol.multiVault.getAtomCost();
 
         bytes[] memory atomDataArray = new bytes[](1);
@@ -719,7 +721,7 @@ contract AtomWalletTest is BaseTest {
     }
 
     function test_factory_deployAtomWallet_emitsEvent() public {
-        bytes32 newAtomId = keccak256(abi.encodePacked("New test atom"));
+        bytes32 newAtomId = calculateAtomId(bytes("New test atom"));
 
         // Create new atom
         vm.startPrank(users.alice);
@@ -822,7 +824,7 @@ contract AtomWalletTest is BaseTest {
         // Create new atom
         vm.startPrank(users.alice);
         bytes memory atomData = bytes("New test atom");
-        bytes32 newAtomId = keccak256(abi.encodePacked("New test atom"));
+        bytes32 newAtomId = calculateAtomId(atomData);
         uint256 atomCost = protocol.multiVault.getAtomCost();
 
         bytes[] memory atomDataArray = new bytes[](1);
@@ -851,15 +853,7 @@ contract AtomWalletTest is BaseTest {
     //////////////////////////////////////////////////////////////*/
 
     function testFuzz_execute_validParameters(address target, uint256 value, bytes calldata data) external {
-        // Exclude precompiled contracts (addresses 0x1 to 0xA)
-        vm.assume(target > address(0xA));
-        vm.assume(target.code.length == 0);
-
-        // Exclude Foundry cheatcode addresses that masquerade as EOAs
-        address FOUNDRY_CONSOLE = address(0x000000000000000000636F6e736F6c652e6c6f67); // "console.log"
-        address FOUNDRY_CONSOLE2 = address(0x0000000000000000000000000000636f6e736f6c6532); // "console2"
-        address HEVM = address(uint160(uint256(keccak256("hevm cheat code"))));
-        vm.assume(target != FOUNDRY_CONSOLE && target != FOUNDRY_CONSOLE2 && target != HEVM);
+        _excludeReservedAddresses(target);
 
         // Bound value and proceed
         value = bound(value, 0, address(atomWallet).balance);

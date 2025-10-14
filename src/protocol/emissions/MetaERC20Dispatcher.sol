@@ -78,8 +78,12 @@ contract MetaERC20Dispatcher {
         return _messageGasCost;
     }
 
+    function quoteGasPayment(uint32 domain, uint256 gasLimit) external view returns (uint256) {
+        return _quoteGasPayment(domain, gasLimit);
+    }
+
     /* =================================================== */
-    /*                      INTERNAL                       */
+    /*                 INTERNAL FUNCTIONS                  */
     /* =================================================== */
 
     function _setMessageGasCost(uint256 newGasCost) internal {

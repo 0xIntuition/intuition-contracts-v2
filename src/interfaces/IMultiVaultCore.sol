@@ -1,78 +1,76 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-/* =================================================== */
-/*                   CONFIG STRUCTS                    */
-/* =================================================== */
+import { VaultType } from "src/interfaces/IMultiVault.sol";
 
-/// @dev General configuration struct
+/// @notice General configuration struct
 struct GeneralConfig {
-    /// @dev Admin address
+    /// @dev The admin address
     address admin;
-    /// @dev Protocol multisig address
+    /// @dev The protocol multisig address
     address protocolMultisig;
-    /// @dev Fees are calculated by amount * (fee / feeDenominator);
+    /// @dev The fee denominator used for fee calculations: fees are calculated as amount * (fee / feeDenominator)
     uint256 feeDenominator;
-    /// @dev Address of the TrustBonding contract
+    /// @dev The address of the TrustBonding contract
     address trustBonding;
-    /// @dev Minimum amount of assets that must be deposited into an atom/triple vault
+    /// @dev The minimum amount of assets that must be deposited into an atom or triple vault
     uint256 minDeposit;
-    /// @dev Number of shares minted to zero address upon vault creation to initialize the vault
+    /// @dev The number of shares minted to the zero address upon vault creation to initialize the vault
     uint256 minShare;
-    /// @dev Maximum length of the atom data that can be passed when creating atom vaults
+    /// @dev The maximum length of atom data that can be passed when creating atom vaults
     uint256 atomDataMaxLength;
-    /// @dev Decimal precision used for calculating share prices
+    /// @dev The decimal precision used for calculating share prices
     uint256 decimalPrecision;
 }
 
-/// @dev Atom configuration struct
+/// @notice Atom configuration struct
 struct AtomConfig {
-    /// @dev Fee paid to the protocol when depositing vault shares for the atom vault upon creation
+    /// @dev The fee paid to the protocol when depositing vault shares for atom vault creation
     uint256 atomCreationProtocolFee;
-    /// @dev A portion of the deposit amount that is used to collect assets for the associated atom wallet
+    /// @dev The portion of the deposit amount used to collect assets for the associated atom wallet
     uint256 atomWalletDepositFee;
 }
 
-/// @dev Triple configuration struct
+/// @notice Triple configuration struct
 struct TripleConfig {
-    /// @dev Fee paid to the protocol when depositing vault shares for the triple vault upon creation
+    /// @dev The fee paid to the protocol when depositing vault shares for triple vault creation
     uint256 tripleCreationProtocolFee;
-    /// @dev Static fee going towards increasing the amount of assets in the underlying atom vaults
+    /// @dev The static fee allocated to increasing the amount of assets in the underlying atom vaults
     uint256 totalAtomDepositsOnTripleCreation;
-    /// @dev % of the Triple deposit amount that is used to purchase equity in the underlying atoms
+    /// @dev The percentage of the triple deposit amount used to purchase equity in the underlying atoms
     uint256 atomDepositFractionForTriple;
 }
 
-/// @dev Atom wallet configuration struct
+/// @notice Atom wallet configuration struct
 struct WalletConfig {
-    /// @dev Entry Point contract address used for the erc4337 atom accounts
+    /// @dev The EntryPoint contract address used for ERC-4337 atom accounts
     address entryPoint;
-    /// @dev AtomWallet Warden address, address that is the initial owner of all atom accounts
+    /// @dev The AtomWarden address, which is the initial owner of all atom accounts
     address atomWarden;
-    /// @dev UpgradeableBeacon contract address, which points to the AtomWallet implementation
+    /// @dev The UpgradeableBeacon contract address that points to the AtomWallet implementation
     address atomWalletBeacon;
-    /// @dev AtomWalletFactory contract address, which is used to create new atom wallets
+    /// @dev The AtomWalletFactory contract address used to create new atom wallets
     address atomWalletFactory;
 }
 
 /// @notice Vault fees struct
 struct VaultFees {
-    /// @dev entry fees are charged when depositing assets into the vault and they stay in the vault as assets
-    ///      rather than going towards minting shares for the recipient
+    /// @dev Entry fees charged when depositing assets into the vault; they remain in the vault as assets
+    ///      rather than being used to mint shares for the recipient
     uint256 entryFee;
-    /// @dev exit fees are charged when redeeming shares from the vault and they stay in the vault as assets
+    /// @dev Exit fees charged when redeeming shares from the vault; they remain in the vault as assets
     ///      rather than being sent to the receiver
     uint256 exitFee;
-    /// @dev protocol fees are charged both when depositing assets and redeeming shares from the vault and
-    ///      they are sent to the protocol multisig address, as defined in `generalConfig.protocolMultisig`
+    /// @dev Protocol fees charged when depositing assets and redeeming shares from the vault;
+    ///      they are sent to the protocol multisig address as defined in `generalConfig.protocolMultisig`
     uint256 protocolFee;
 }
 
-/// @dev Bonding curve configuration struct
+/// @notice Bonding curve configuration struct
 struct BondingCurveConfig {
-    /// @dev BondingCurveRegistry contract address - must not be changed after initialization
+    /// @dev The BondingCurveRegistry contract address (must not be changed after initialization)
     address registry;
-    /// @dev Default bonding curve ID to use for new terms - '1' is suggested for the linear curve
+    /// @dev The default bonding curve ID to use for new terms (ID '1' is suggested for the linear curve)
     uint256 defaultCurveId;
 }
 
@@ -80,10 +78,6 @@ struct BondingCurveConfig {
 /// @author 0xIntuition
 /// @notice Interface for the MultiVaultCore contract
 interface IMultiVaultCore {
-    /* =================================================== */
-    /*                       EVENTS                        */
-    /* =================================================== */
-
     /* =================================================== */
     /*                    INITIALIZER                      */
     /* =================================================== */
@@ -108,18 +102,51 @@ interface IMultiVaultCore {
         external;
 
     /* =================================================== */
-    /*                    ADMIN FUNCTIONS                  */
-    /* =================================================== */
-
-    /* =================================================== */
-    /*                   VIEW FUNCTIONS                    */
+    /*                      GETTERS                        */
     /* =================================================== */
 
     /**
-     * @notice Returns the general configuration settings
-     * @return GeneralConfig struct containing admin addresses, protocol parameters, and system limits
+     * @notice Retrieves the atom data for a given atom ID
+     * @param atomId The ID of the atom to retrieve data for
+     * @return The atom data for the specified atom ID
      */
-    function getGeneralConfig() external view returns (GeneralConfig memory);
+    function atom(bytes32 atomId) external view returns (bytes memory);
+
+    /// @notice Calculates the atom ID from the atom data
+    /// @param data The data of the atom
+    function calculateAtomId(bytes memory data) external pure returns (bytes32 id);
+
+    /// @notice Calculates the counter triple ID from the subject, predicate, and object atom IDs
+    /// @param subjectId The ID of the subject atom
+    /// @param predicateId The ID of the predicate atom
+    /// @param objectId The ID of the object atom
+    /// @return id The calculated counter triple ID
+    function calculateCounterTripleId(
+        bytes32 subjectId,
+        bytes32 predicateId,
+        bytes32 objectId
+    )
+        external
+        pure
+        returns (bytes32);
+
+    /// @notice Calculates the triple ID from the subject, predicate, and object atom IDs
+    /// @param subjectId The ID of the subject atom
+    /// @param predicateId The ID of the predicate atom
+    /// @param objectId The ID of the object atom
+    /// @return id The calculated triple ID
+    function calculateTripleId(
+        bytes32 subjectId,
+        bytes32 predicateId,
+        bytes32 objectId
+    )
+        external
+        pure
+        returns (bytes32);
+
+    /// @notice Returns the atom data for a given atom ID
+    /// @dev If the atom does not exist, this function reverts
+    function getAtom(bytes32 atomId) external view returns (bytes memory data);
 
     /**
      * @notice Returns the atom configuration settings
@@ -127,11 +154,62 @@ interface IMultiVaultCore {
      */
     function getAtomConfig() external view returns (AtomConfig memory);
 
+    /// @notice Returns the static costs required to create an atom
+    /// @return atomCost The static costs of creating an atom
+    function getAtomCost() external view returns (uint256);
+
+    /**
+     * @notice Returns the bonding curve configuration
+     * @return BondingCurveConfig struct containing registry address and default curve ID
+     */
+    function getBondingCurveConfig() external view returns (BondingCurveConfig memory);
+
+    /// @notice Returns the counter ID from the given triple ID
+    /// @param tripleId The ID of the triple
+    /// @return counterId The counter vault ID for the given triple ID
+    function getCounterIdFromTripleId(bytes32 tripleId) external pure returns (bytes32);
+
+    /**
+     * @notice Returns the general configuration settings
+     * @return GeneralConfig struct containing admin addresses, protocol parameters, and system limits
+     */
+    function getGeneralConfig() external view returns (GeneralConfig memory);
+
+    /// @notice Returns the inverse triple ID (counter or positive) for a given triple ID
+    /// @param tripleId The ID of the triple or counter triple
+    /// @return The inverse triple ID
+    function getInverseTripleId(bytes32 tripleId) external view returns (bytes32);
+
+    /// @notice Returns the underlying atom IDs for a given triple ID
+    /// @dev If the triple does not exist, this function reverts
+    /// @param tripleId The ID of the triple
+    function getTriple(bytes32 tripleId) external view returns (bytes32, bytes32, bytes32);
+
     /**
      * @notice Returns the triple configuration settings
      * @return TripleConfig struct containing triple creation fees and atom deposit configuration
      */
     function getTripleConfig() external view returns (TripleConfig memory);
+
+    /// @notice Returns the static costs required to create a triple
+    /// @return tripleCost The static costs of creating a triple
+    function getTripleCost() external view returns (uint256);
+
+    /// @notice Returns the triple ID from the given counter ID
+    /// @param counterId The ID of the counter triple
+    /// @return tripleId The triple vault ID for the given counter ID
+    function getTripleIdFromCounterId(bytes32 counterId) external view returns (bytes32);
+
+    /**
+     * @notice Returns the vault fees configuration
+     * @return VaultFees struct containing entry, exit, and protocol fee settings
+     */
+    function getVaultFees() external view returns (VaultFees memory);
+
+    /// @notice Returns the vault type for a given term ID
+    /// @param termId The term ID to check
+    /// @return vaultType The type of vault (ATOM, TRIPLE, or COUNTER_TRIPLE)
+    function getVaultType(bytes32 termId) external view returns (VaultType);
 
     /**
      * @notice Returns the wallet configuration settings for ERC-4337 compatibility
@@ -140,14 +218,39 @@ interface IMultiVaultCore {
     function getWalletConfig() external view returns (WalletConfig memory);
 
     /**
-     * @notice Returns the vault fees configuration
-     * @return VaultFees struct containing entry, exit, and protocol fee settings
+     * @notice Checks if a term ID corresponds to an atom vault
+     * @param atomId The term ID to check
+     * @return True if the term ID is an atom, false otherwise
      */
-    function getVaultFees() external view returns (VaultFees memory);
+    function isAtom(bytes32 atomId) external view returns (bool);
+
+    /// @notice Returns whether the supplied vault ID is a counter triple
+    /// @param termId The ID of the term (atom or triple) to check
+    /// @return Whether the supplied term ID is a counter triple
+    function isCounterTriple(bytes32 termId) external view returns (bool);
 
     /**
-     * @notice Returns the bonding curve configuration
-     * @return BondingCurveConfig struct containing registry address and default curve ID
+     * @notice Checks if a term ID corresponds to a triple vault
+     * @param id The term ID to check
+     * @return True if the term ID is a triple, false otherwise
      */
-    function getBondingCurveConfig() external view returns (BondingCurveConfig memory);
+    function isTriple(bytes32 id) external view returns (bool);
+
+    /// @notice Returns the underlying atom IDs for a given triple ID
+    /// @dev If the triple does not exist, this function returns (bytes32(0), bytes32(0), bytes32(0)) instead of
+    /// reverting
+    /// @param tripleId The ID of the triple
+    function triple(bytes32 tripleId) external view returns (bytes32, bytes32, bytes32);
+
+    /**
+     * @notice Returns the wallet configuration for ERC-4337 compatibility
+     * @return entryPoint The EntryPoint contract address for ERC-4337
+     * @return atomWarden The AtomWarden contract address
+     * @return atomWalletBeacon The UpgradeableBeacon contract address for AtomWallets
+     * @return atomWalletFactory The AtomWalletFactory contract address
+     */
+    function walletConfig()
+        external
+        view
+        returns (address entryPoint, address atomWarden, address atomWalletBeacon, address atomWalletFactory);
 }

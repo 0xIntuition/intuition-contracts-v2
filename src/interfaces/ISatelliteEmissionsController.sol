@@ -34,11 +34,19 @@ interface ISatelliteEmissionsController {
     event NativeTokenTransferred(address indexed recipient, uint256 amount);
 
     /**
-     * @notice Event emitted when unclaimed rewards are bridged back to the BaseEmissionsController
-     * @param epoch The epoch for which unclaimed rewards were bridged
-     * @param amount The amount of unclaimed rewards bridged
+     * @notice Event emitted when unclaimed emissions are bridged back to the BaseEmissionsController
+     * @param epoch The epoch for which unclaimed emissions were bridged
+     * @param amount The amount of unclaimed emissions bridged
      */
-    event UnclaimedRewardsBridged(uint256 indexed epoch, uint256 amount);
+    event UnclaimedEmissionsBridged(uint256 indexed epoch, uint256 amount);
+
+    /**
+     * @notice Event emitted when unclaimed emissions are withdrawn by the admin
+     * @param epoch The epoch for which unclaimed emissions were withdrawn
+     * @param recipient The address that received the unclaimed emissions
+     * @param amount The amount of unclaimed emissions withdrawn
+     */
+    event UnclaimedEmissionsWithdrawn(uint256 indexed epoch, address indexed recipient, uint256 amount);
 
     /* =================================================== */
     /*                       ERRORS                        */
@@ -50,6 +58,8 @@ interface ISatelliteEmissionsController {
     error SatelliteEmissionsController_PreviouslyBridgedUnclaimedEmissions();
     error SatelliteEmissionsController_InsufficientBalance();
     error SatelliteEmissionsController_InsufficientGasPayment();
+    error SatelliteEmissionsController_InvalidWithdrawAmount();
+    error SatelliteEmissionsController_TrustBondingNotSet();
 
     /* =================================================== */
     /*                      GETTERS                        */
@@ -68,11 +78,11 @@ interface ISatelliteEmissionsController {
     function getBaseEmissionsController() external view returns (address);
 
     /**
-     * @notice Get the amount of emissions bridged back to Base for a specific epoch
+     * @notice Get the amount of emissions reclaimed for a specific epoch
      * @param epoch The epoch to query
-     * @return The amount of emissions bridged back to Base for the given epoch
+     * @return The amount of emissions reclaimed for the given epoch
      */
-    function getBridgedEmissions(uint256 epoch) external view returns (uint256);
+    function getReclaimedEmissions(uint256 epoch) external view returns (uint256);
 
     /* =================================================== */
     /*                    CONTROLLER                       */
@@ -133,9 +143,17 @@ interface ISatelliteEmissionsController {
     function setRecipientDomain(uint32 newRecipientDomain) external;
 
     /**
+     * @notice Withdraw unclaimed emissions for a specific epoch to a specified recipient
+     * @dev Only callable by addresses with DEFAULT_ADMIN_ROLE
+     * @param epoch The epoch for which to withdraw unclaimed emissions
+     * @param recipient The address to receive the unclaimed emissions
+     */
+    function withdrawUnclaimedEmissions(uint256 epoch, address recipient) external;
+
+    /**
      * @notice Bridges unclaimed emissions for a specific epoch back to the BaseEmissionsController
      * @dev The SatelliteEmissionsController can only bridge unclaimed emission once the claiming period for that epoch
-     * has ended, which is enforced in the TrustBonding contract. Only callable by addresses with DEFAULT_ADMIN_ROLE.
+     * has ended, which is enforced in the TrustBonding contract. Only callable by addresses with OPERATOR_ROLE.
      * @param epoch The epoch for which to bridge unclaimed emissions
      */
     function bridgeUnclaimedEmissions(uint256 epoch) external payable;

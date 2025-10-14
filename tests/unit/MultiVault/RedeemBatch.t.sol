@@ -7,7 +7,7 @@ import { Test } from "forge-std/src/Test.sol";
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { MultiVaultCore } from "src/protocol/MultiVaultCore.sol";
-import { IMultiVault } from "src/interfaces/IMultiVault.sol";
+import { ApprovalTypes } from "src/interfaces/IMultiVault.sol";
 
 contract RedeemBatchTest is BaseTest {
     uint256 internal CURVE_ID;
@@ -118,7 +118,7 @@ contract RedeemBatchTest is BaseTest {
     function test_redeemBatch_Success() public {
         (bytes32[] memory atomIds, uint256[] memory depositShares) = _setupAtomsWithDeposits(1, 20e18);
 
-        setupApproval(users.alice, users.bob, IMultiVault.ApprovalTypes.REDEMPTION);
+        setupApproval(users.alice, users.bob, ApprovalTypes.REDEMPTION);
 
         uint256[] memory curveIds = createDefaultCurveIdArray(1);
         uint256[] memory sharesToRedeem = new uint256[](1);

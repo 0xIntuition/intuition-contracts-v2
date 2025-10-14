@@ -38,12 +38,15 @@ contract MultiVaultMigrationUpgrade is SetupScript {
     function setUp() public override {
         super.setUp();
 
-        if (block.chainid == vm.envUint("ANVIL_CHAIN_ID")) {
+        if (block.chainid == NETWORK_ANVIL) {
             MULTIVAULT_PROXY = vm.envAddress("ANVIL_MULTI_VAULT_MIGRATION_MODE");
             PROXY_ADMIN = vm.envAddress("ANVIL_PROXY_ADMIN");
-        } else if (block.chainid == vm.envUint("INTUITION_SEPOLIA_CHAIN_ID")) {
-            MULTIVAULT_PROXY = vm.envAddress("INTUITION_SEPOLIA_MULTI_VAULT_MIGRATION_MODE");
+        } else if (block.chainid == NETWORK_INTUITION_SEPOLIA) {
+            MULTIVAULT_PROXY = vm.envAddress("INTUITION_SEPOLIA_MULTI_VAULT_MIGRATION_MODE_PROXY");
             PROXY_ADMIN = vm.envAddress("INTUITION_SEPOLIA_PROXY_ADMIN");
+        } else if (block.chainid == NETWORK_INTUITION) {
+            MULTIVAULT_PROXY = vm.envAddress("INTUITION_MULTI_VAULT_MIGRATION_MODE_PROXY");
+            PROXY_ADMIN = vm.envAddress("INTUITION_PROXY_ADMIN");
         } else {
             revert("Unsupported chain for broadcasting");
         }

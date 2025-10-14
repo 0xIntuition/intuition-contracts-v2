@@ -48,14 +48,19 @@ forge script script/intuition/IntuitionDeployAndSetup.s.sol:IntuitionDeployAndSe
 --rpc-url intuition_sepolia \
 --broadcast \
 --slow
+
+MAINNET
+forge script script/intuition/IntuitionDeployAndSetup.s.sol:IntuitionDeployAndSetup \
+--optimizer-runs 10000 \
+--rpc-url intuition \
+--broadcast \
+--slow
 */
 
 contract IntuitionDeployAndSetup is SetupScript {
     bytes32 public constant MIGRATOR_ROLE = keccak256("MIGRATOR_ROLE");
 
     address public MIGRATOR;
-
-    uint32 internal BASE_METALAYER_RECIPIENT_DOMAIN = 8453;
 
     address public BASE_EMISSIONS_CONTROLLER;
 
@@ -73,22 +78,22 @@ contract IntuitionDeployAndSetup is SetupScript {
     function setUp() public override {
         super.setUp();
 
-        if (block.chainid == vm.envUint("ANVIL_CHAIN_ID")) {
+        if (block.chainid == NETWORK_ANVIL) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("ANVIL_BASE_EMISSIONS_CONTROLLER");
             MIGRATOR = vm.envAddress("ANVIL_MULTI_VAULT_ROLE_MIGRATOR");
             MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION = vm.envAddress("ANVIL_MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION");
-        } else if (block.chainid == vm.envUint("INTUITION_SEPOLIA_CHAIN_ID")) {
-            BASE_EMISSIONS_CONTROLLER = vm.envAddress("INTUITION_SEPOLIA_BASE_EMISSIONS_CONTROLLER");
+        } else if (block.chainid == NETWORK_INTUITION_SEPOLIA) {
+            BASE_EMISSIONS_CONTROLLER = vm.envAddress("BASE_SEPOLIA_BASE_EMISSIONS_CONTROLLER");
             MIGRATOR = vm.envAddress("INTUITION_SEPOLIA_MULTI_VAULT_ROLE_MIGRATOR");
             MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION =
                 vm.envAddress("INTUITION_SEPOLIA_MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION");
-        } else if (block.chainid == vm.envUint("INTUITION_MAINNET_CHAIN_ID")) {
+        } else if (block.chainid == NETWORK_INTUITION) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("BASE_MAINNET_BASE_EMISSIONS_CONTROLLER");
             MIGRATOR = vm.envAddress("INTUITION_MAINNET_MULTI_VAULT_ROLE_MIGRATOR");
             MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION =
                 vm.envAddress("INTUITION_MAINNET_MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION");
         } else {
-            revert("Unsupported chain for broadcasting");
+            revert("Unsupported chain for Intuition Deploy and Setup");
         }
     }
 
@@ -116,7 +121,6 @@ contract IntuitionDeployAndSetup is SetupScript {
         contractInfo("BondingCurveRegistry", address(bondingCurveRegistry));
         contractInfo("LinearCurve", address(linearCurve));
         contractInfo("OffsetProgressiveCurve", address(offsetProgressiveCurve));
-        contractInfo("ProgressiveCurve", address(progressiveCurve));
         _exportContractAddresses();
     }
 
@@ -161,15 +165,10 @@ contract IntuitionDeployAndSetup is SetupScript {
         offsetProgressiveCurve = new OffsetProgressiveCurve(
             "Offset Progressive Bonding Curve", OFFSET_PROGRESSIVE_CURVE_SLOPE, OFFSET_PROGRESSIVE_CURVE_OFFSET
         );
-        progressiveCurve = new ProgressiveCurve("Progressive Bonding Curve", PROGRESSIVE_CURVE_SLOPE);
-        info("LinearCurve", address(linearCurve));
-        info("OffsetProgressiveCurve", address(offsetProgressiveCurve));
-        info("ProgressiveCurve", address(progressiveCurve));
 
         // Add curves to registry
         bondingCurveRegistry.addBondingCurve(address(linearCurve));
         bondingCurveRegistry.addBondingCurve(address(offsetProgressiveCurve));
-        bondingCurveRegistry.addBondingCurve(address(progressiveCurve)); // review if this curve is still required
 
         // Deploy SatelliteEmissionsController implementation and proxy
         SatelliteEmissionsController satelliteEmissionsControllerImpl = new SatelliteEmissionsController();
@@ -229,7 +228,7 @@ contract IntuitionDeployAndSetup is SetupScript {
 
         // Set the TrustBonding address in SatelliteEmissionsController and grant it the CONTROLLER_ROLE only
         // if we are not on the Intuition mainnet (on mainnet, this will be done through an admin Safe)
-        if (block.chainid != vm.envUint("INTUITION_MAINNET_CHAIN_ID")) {
+        if (block.chainid != NETWORK_INTUITION) {
             satelliteEmissionsController.setTrustBonding(address(trustBonding));
 
             // Grant CONTROLLER_ROLE to TrustBonding in SatelliteEmissionsController
@@ -266,14 +265,14 @@ contract IntuitionDeployAndSetup is SetupScript {
 
         // Set the MultiVault and parameters Timelock addresses in TrustBonding only if we are not on the Intuition
         // mainnet (on mainnet, this will be done through an admin Safe)
-        if (block.chainid != vm.envUint("INTUITION_MAINNET_CHAIN_ID")) {
+        if (block.chainid != NETWORK_INTUITION) {
             trustBonding.setMultiVault(address(multiVault));
             trustBonding.setTimelock(address(parametersTimelockController));
         }
 
         // Grant the MIGRATOR_ROLE to the migrator address only if we are not on the Intuition mainnet (on mainnet,
         // this will be done through an admin Safe)
-        if (block.chainid != vm.envUint("INTUITION_MAINNET_CHAIN_ID")) {
+        if (block.chainid != NETWORK_INTUITION) {
             IAccessControl(address(multiVault)).grantRole(MIGRATOR_ROLE, MIGRATOR);
             console2.log("MIGRATOR_ROLE granted to:", MIGRATOR);
         }

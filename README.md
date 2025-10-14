@@ -14,11 +14,12 @@ The Intuition V2 smart contracts for the Intuition protocol, built using [Foundr
 ## Deploy Smart Contracts on Intuition Testnet
 
 1. Execute script/base/BaseEmissionsControllerDeploy.s.sol
-   - Update the `INTUITION_SEPOLIA_BASE_EMISSIONS_CONTROLLER` in .env
+   - Update the `BASE_SEPOLIA_BASE_EMISSIONS_CONTROLLER` in .env
 2. Execute script/intuition/MultiVaultMigrationModeDeploy.s.sol
    - Update the `INTUITION_SEPOLIA_MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION` in .env
 3. Execute script/intuition/IntuitionDeployAndSetup.s.sol
-   - Update the `BASE_SEPOLIA_SATELLITE_EMISSIONS_CONTROLLER` in .env
+   - Update the `INTUITION_SEPOLIA_MULTI_VAULT_MIGRATION_MODE_PROXY` in .env
+   - Update the `INTUITION_SEPOLIA_SATELLITE_EMISSIONS_CONTROLLER` in .env
 4. Execute script/base/BaseEmissionsControllerSetup.s.sol
 
 ## Upgrade MultiVaultMigrationMode to MultiVault contract post-migration
@@ -138,3 +139,53 @@ $ bun run test:coverage:report
 ## License
 
 This project is licensed under BUSL-1.1
+
+## Utility Scripts
+
+### Trust V2 Reinitialize Call Data 
+
+Generates the **encoded calldata** for the `reinitialize()` function for the TRUST token upgrade.
+
+```bash
+npx tsx script/upgrades/generate-trust-v2-upgrade-calldata.ts <ADMIN_ADDRESS> <BASE_EMISSIONS_CONTROLLER_ADDRESS>
+```
+
+
+### Trust Proxy V2 Upgrade 
+
+Generates the **encoded calldata** for the Trust `ProxyAdmin.upgradeAndCall()` execution.
+
+```bash
+npx tsx script/upgrades/generate-trust-proxy-upgrade-and-call-calldata.ts "0x6cd905dF2Ed214b22e0d48FF17CD4200C1C6d8A3" <IMPLEMENTATION_ADDRESS> <REINITIALIZE_CALLDATA_OR_0x>
+```
+
+---
+
+### Timelock Update Delay
+
+Prepares the **`TimelockController` schedule parameters** for updating the minimum delay within the `TimelockController` contract.
+
+```bash
+npx tsx script/upgrades/generate-timelock-update-delay-calldata.ts <RPC_URL> <NEW_DELAY_IN_SECONDS>
+```
+
+Example:
+
+```bash
+npx tsx script/upgrades/generate-timelock-update-delay-calldata.ts "https://mainnet.base.org" 259200
+```
+
+
+### Timelock Upgrade and Call
+
+Builds the **`TimelockController` schedule parameters** for a `ProxyAdmin.upgradeAndCall()` execution.
+
+```bash
+npx tsx script/upgrades/generate-timelock-upgrade-and-call-calldata.ts <RPC_URL> <PROXY_ADDRESS> <IMPLEMENTATION_ADDRESS> <REINITIALIZE_CALLDATA_OR_0x>
+```
+
+Example:
+
+```bash
+npx tsx script/upgrades/generate-timelock-upgrade-and-call-calldata.ts "https://mainnet.base.org" "0x000000000000000000000000000000000000dEaD" "0x000000000000000000000000000000000000dEaD" "0x"
+```
