@@ -294,7 +294,7 @@ contract MultiVault is
         returns (uint256 shares, uint256 assetsAfterFees)
     {
         bool isAtomVault = _isAtom(termId);
-        return _calculateDeposit(termId, curveId, assets, isAtomVault);
+        (shares,, assetsAfterFees) = _calculateDeposit(termId, curveId, assets, isAtomVault);
     }
 
     /// @inheritdoc IMultiVault
@@ -764,7 +764,7 @@ contract MultiVault is
                 _updateVaultOnCreation(receiver, termId, curveId, assetsAfterFees, sharesForReceiver, _vaultType);
 
             if (_vaultType != VaultType.ATOM) {
-                bytes32 _counterTripleId = getCounterIdFromTripleId(termId);
+                bytes32 _counterTripleId = _calculateCounterTripleId(termId);
 
                 /* --- Initialize the counter vault with min shares --- */
                 _initializeCounterTripleVault(_counterTripleId, curveId);
@@ -1030,6 +1030,7 @@ contract MultiVault is
     /// @param assets the number of assets to deposit
     /// @param isAtomVault whether the vault is an atom or triple vault
     /// @return shares the number of shares that would be minted for the deposit
+    /// @return assetsAfterMinSharesCost the assets remaining after min shares cost (if applicable)
     /// @return assetsAfterFees the assets remaining after all fees
     function _calculateDeposit(
         bytes32 termId,

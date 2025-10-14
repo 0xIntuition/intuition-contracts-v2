@@ -340,23 +340,6 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
         }
     }
 
-    /// @dev Internal function to get the vault type for a given term ID
-    /// @param termId The term ID to check
-    /// @return vaultType The type of vault (ATOM, TRIPLE, or COUNTER_TRIPLE)
-    function getVaultType(bytes32 termId) external view returns (VaultType) {
-        return _getVaultType(termId);
-    }
-
-    /* =================================================== */
-    /*                    INTERNAL FUNCTIONS               */
-    /* =================================================== */
-
-    /// @dev Internal function to set and validate the general configuration struct
-    function _setGeneralConfig(GeneralConfig memory _generalConfig) internal {
-        if (_generalConfig.admin == address(0)) revert MultiVaultCore_InvalidAdmin();
-        generalConfig = _generalConfig;
-    }
-
     /// @dev Internal function to determine the vault type for a given term ID
     function _getVaultType(bytes32 termId) internal view returns (VaultType) {
         bool _isVaultAtom = _isAtom(termId);
