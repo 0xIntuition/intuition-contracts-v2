@@ -30,6 +30,8 @@ contract SatelliteEmissionsController is
 
     bytes32 public constant CONTROLLER_ROLE = keccak256("CONTROLLER_ROLE");
 
+    bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
+
     /* =================================================== */
     /*                  INTERNAL STATE                     */
     /* =================================================== */
@@ -40,8 +42,8 @@ contract SatelliteEmissionsController is
     /// @notice Address of the BaseEmissionsController contract
     address internal _BASE_EMISSIONS_CONTROLLER;
 
-    /// @notice Mapping of bridged emissions for each epoch
-    mapping(uint256 epoch => uint256 amount) internal _bridgedEmissions;
+    /// @notice Mapping of reclaimed emissions for each epoch
+    mapping(uint256 epoch => uint256 amount) internal _reclaimedEmissions;
 
     /// @dev Gap for upgrade safety
     uint256[50] private __gap;
@@ -109,8 +111,8 @@ contract SatelliteEmissionsController is
     }
 
     /// @inheritdoc ISatelliteEmissionsController
-    function getBridgedEmissions(uint256 epoch) external view returns (uint256) {
-        return _bridgedEmissions[epoch];
+    function getReclaimedEmissions(uint256 epoch) external view returns (uint256) {
+        return _reclaimedEmissions[epoch];
     }
 
     /* =================================================== */
@@ -174,7 +176,40 @@ contract SatelliteEmissionsController is
     }
 
     /// @inheritdoc ISatelliteEmissionsController
-    function bridgeUnclaimedEmissions(uint256 epoch) external payable onlyRole(DEFAULT_ADMIN_ROLE) {
+    function withdrawUnclaimedEmissions(
+        uint256 epoch,
+        address recipient
+    )
+        external
+        nonReentrant
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        // Prevent withdrawing zero amount if no unclaimed emissions are available.
+        uint256 amount = ITrustBonding(_TRUST_BONDING).getUnclaimedRewardsForEpoch(epoch);
+        if (amount == 0) {
+            revert SatelliteEmissionsController_InvalidWithdrawAmount();
+        }
+
+        if (recipient == address(0)) {
+            revert SatelliteEmissionsController_InvalidAddress();
+        }
+
+        // Check if emissions for this epoch have already been reclaimed.
+        if (_reclaimedEmissions[epoch] > 0) {
+            revert SatelliteEmissionsController_PreviouslyBridgedUnclaimedEmissions();
+        }
+
+        // Mark the unclaimed emissions as reclaimed and prevent from being claimed again.
+        _reclaimedEmissions[epoch] = amount;
+
+        // Transfer the unclaimed emissions to the recipient.
+        Address.sendValue(payable(recipient), amount);
+
+        emit UnclaimedEmissionsWithdrawn(epoch, recipient, amount);
+    }
+
+    /// @inheritdoc ISatelliteEmissionsController
+    function bridgeUnclaimedEmissions(uint256 epoch) external payable onlyRole(OPERATOR_ROLE) {
         if (_TRUST_BONDING == address(0)) {
             revert SatelliteEmissionsController_TrustBondingNotSet();
         }
@@ -185,13 +220,13 @@ contract SatelliteEmissionsController is
             revert SatelliteEmissionsController_InvalidBridgeAmount();
         }
 
-        // Check if rewards for this epoch have already been reclaimed and bridged.
-        if (_bridgedEmissions[epoch] > 0) {
+        // Check if emissions for this epoch have already been reclaimed and bridged.
+        if (_reclaimedEmissions[epoch] > 0) {
             revert SatelliteEmissionsController_PreviouslyBridgedUnclaimedEmissions();
         }
 
-        // Mark the unclaimed rewards as bridged and prevent from being claimed again.
-        _bridgedEmissions[epoch] = amount;
+        // Mark the unclaimed emissions as bridged and prevent from being claimed and bridged again.
+        _reclaimedEmissions[epoch] = amount;
 
         // Calculate gas limit for the bridge transfer using the MetaLayer router.
         uint256 gasLimit = _quoteGasPayment(_recipientDomain, GAS_CONSTANT + _messageGasCost);
@@ -199,7 +234,7 @@ contract SatelliteEmissionsController is
             revert SatelliteEmissionsController_InsufficientGasPayment();
         }
 
-        // Bridge the unclaimed rewards back to the base emissions controller.
+        // Bridge the unclaimed emissions back to the base emissions controller.
         // Reference the MetaERC20Dispatcher smart contract for more details.
         _bridgeTokensViaNativeToken(
             _metaERC20SpokeOrHub,
@@ -211,10 +246,10 @@ contract SatelliteEmissionsController is
         );
 
         if (msg.value > gasLimit) {
-            Address.sendValue(payable(msg.sender), msg.value - gasLimit);
+            Address.sendValue(payable(_msgSender()), msg.value - gasLimit);
         }
 
-        emit UnclaimedRewardsBridged(epoch, amount);
+        emit UnclaimedEmissionsBridged(epoch, amount);
     }
 
     /* =================================================== */
