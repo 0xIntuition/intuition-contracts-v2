@@ -1224,9 +1224,9 @@ contract MultiVault is
 
         uint256 amountPerTerm = amount / 3; // negligible dust amount stays in the contract (i.e. only one or a few wei)
 
-        _increaseProRataVaultAssets(subjectId, amountPerTerm, getVaultType(subjectId));
-        _increaseProRataVaultAssets(predicateId, amountPerTerm, getVaultType(predicateId));
-        _increaseProRataVaultAssets(objectId, amountPerTerm, getVaultType(objectId));
+        _increaseProRataVaultAssets(subjectId, amountPerTerm, _getVaultType(subjectId));
+        _increaseProRataVaultAssets(predicateId, amountPerTerm, _getVaultType(predicateId));
+        _increaseProRataVaultAssets(objectId, amountPerTerm, _getVaultType(objectId));
     }
 
     /// @dev Increases the total assets of the pro-rata vault for a given termId and curveId
