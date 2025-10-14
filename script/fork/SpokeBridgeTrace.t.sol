@@ -28,8 +28,6 @@ contract SpokeBridgeTraceTest is Test {
     address public testRecipient = 0x4905e138b507F5Da41e894aF80672b1ecB167C3E;
 
     function setUp() public {
-        vm.createSelectFork("intuition");
-
         // Validate fork
         require(block.chainid == INTUITION_CHAIN_ID, "Must run on Intuition fork");
 
