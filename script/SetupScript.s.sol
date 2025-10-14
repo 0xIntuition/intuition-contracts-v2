@@ -260,7 +260,7 @@ abstract contract SetupScript is Script {
             TRUST_TOKEN = vm.envOr("ANVIL_TRUST_TOKEN", address(0));
             PROTOCOL_MULTISIG = vm.envOr("ANVIL_PROTOCOL_MULTISIG", ADMIN);
 
-            BASE_METALAYER_RECIPIENT_DOMAIN = NETWORK_ANVIL;
+            BASE_METALAYER_RECIPIENT_DOMAIN = 11111;
 
             // Timelock Config
             TIMELOCK_MIN_DELAY = 60 minutes;
