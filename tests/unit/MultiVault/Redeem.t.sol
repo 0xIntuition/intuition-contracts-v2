@@ -7,7 +7,7 @@ import { Test } from "forge-std/src/Test.sol";
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { MultiVaultCore } from "src/protocol/MultiVaultCore.sol";
-import { IMultiVault } from "src/interfaces/IMultiVault.sol";
+import { ApprovalTypes } from "src/interfaces/IMultiVault.sol";
 
 /// @dev Minimal registry mock so _validateRedeem() can run inside a harness.
 contract BondingCurveRegistryMock {
@@ -133,7 +133,7 @@ contract RedeemTest is BaseTest {
         uint256 shares = makeDeposit(users.alice, users.alice, atomId, CURVE_ID, 1500e18, 0);
         uint256 redeemSharesAmount = shares / 2;
 
-        setupApproval(users.alice, users.bob, IMultiVault.ApprovalTypes.REDEMPTION);
+        setupApproval(users.alice, users.bob, ApprovalTypes.REDEMPTION);
 
         uint256 assets = redeemShares(users.bob, users.alice, atomId, CURVE_ID, redeemSharesAmount, 0);
 

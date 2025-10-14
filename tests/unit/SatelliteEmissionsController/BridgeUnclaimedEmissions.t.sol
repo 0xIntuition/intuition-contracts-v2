@@ -3,6 +3,8 @@ pragma solidity 0.8.29;
 
 import { console2 } from "forge-std/src/console2.sol";
 import { console, Vm } from "forge-std/src/Test.sol";
+import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
+
 import { TrustBondingBase } from "tests/unit/TrustBonding/TrustBondingBase.t.sol";
 import { ITrustBonding } from "src/interfaces/ITrustBonding.sol";
 import { ISatelliteEmissionsController } from "src/interfaces/ISatelliteEmissionsController.sol";
@@ -23,6 +25,9 @@ contract BridgeUnclaimedEmissionsTest is TrustBondingBase {
         _setupUserWrappedTokenAndTrustBonding(users.charlie);
         vm.deal(address(protocol.satelliteEmissionsController), 10_000_000 ether);
         _addToTrustBondingWhiteList(users.alice);
+        protocol.satelliteEmissionsController.grantRole(
+            protocol.satelliteEmissionsController.OPERATOR_ROLE(), users.admin
+        );
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -109,12 +114,57 @@ contract BridgeUnclaimedEmissionsTest is TrustBondingBase {
     }
 
     /*//////////////////////////////////////////////////////////////
-                     BRIDGING PREVIOUSLY CLAIMED REWARDS
-    //////////////////////////////////////////////////////////////*/
-
-    /*//////////////////////////////////////////////////////////////
                         FAILED BRIDGING TESTS
     //////////////////////////////////////////////////////////////*/
+
+    function test_bridgeUnclaimedEmissions_revertWhen_notCalledByTheOperatorRole() external {
+        _createLock(users.alice, initialTokens);
+        _advanceToEpoch(4);
+
+        // Ensure there are unclaimed rewards to bridge
+        uint256 unclaimedRewards = protocol.trustBonding.getUnclaimedRewardsForEpoch(2);
+        assertGt(unclaimedRewards, 0, "Should have unclaimed rewards");
+
+        resetPrank(users.alice); // Alice does not have OPERATOR_ROLE
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector,
+                users.alice,
+                protocol.satelliteEmissionsController.OPERATOR_ROLE()
+            )
+        );
+        protocol.satelliteEmissionsController.bridgeUnclaimedEmissions{ value: GAS_QUOTE }(2);
+    }
+
+    function test_bridgeUnclaimedEmissions_revertWhen_trustBondingIsNotSetYet() external {
+        // Deploy a new SatelliteEmissionsController without setting TrustBonding
+        SatelliteEmissionsController newSatelliteEmissionsController = _deploySatelliteEmissionsController();
+
+        address baseEmissionsController = address(0xABC);
+
+        // Initialize the new SatelliteEmissionsController
+        newSatelliteEmissionsController.initialize(
+            users.admin,
+            baseEmissionsController, // placeholder address for BaseEmissionsController
+            metaERC20DispatchInit,
+            coreEmissionsInit
+        );
+
+        newSatelliteEmissionsController.grantRole(newSatelliteEmissionsController.OPERATOR_ROLE(), users.admin);
+
+        // Advance to epoch 4 to ensure there are bridgeable rewards
+        _createLock(users.alice, initialTokens);
+        _advanceToEpoch(4);
+
+        resetPrank(users.admin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ISatelliteEmissionsController.SatelliteEmissionsController_TrustBondingNotSet.selector
+            )
+        );
+        newSatelliteEmissionsController.bridgeUnclaimedEmissions{ value: GAS_QUOTE }(2);
+    }
+
     function test_bridgeUnclaimedEmissions_revertWhen_previouslyClaimed() external {
         _createLock(users.alice, initialTokens);
         _advanceToEpoch(4);
@@ -240,7 +290,11 @@ contract BridgeUnclaimedEmissionsTest is TrustBondingBase {
         // Advance to epoch 2: the full emissions for epoch 0 are now bridgeable
         _advanceToEpoch(2);
         uint256 unclaimedEpoch0InEpoch2 = protocol.trustBonding.getUnclaimedRewardsForEpoch(0);
-        assertEq(unclaimedEpoch0InEpoch2, 1_000_000 * 1e18, "Epoch 0 should now release the full 1,000,000 emissions");
+        assertEq(
+            unclaimedEpoch0InEpoch2,
+            EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH,
+            "Epoch 0 should now release the full 1,000,000 emissions"
+        );
     }
 
     function test_bridgeUnclaimedEmissions_gasRefund() external {

@@ -8,6 +8,7 @@ import { AtomWarden } from "src/protocol/wallet/AtomWarden.sol";
 import { IAtomWarden } from "src/interfaces/IAtomWarden.sol";
 import { IAtomWallet } from "src/interfaces/IAtomWallet.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
+import { IMultiVaultCore } from "src/interfaces/IMultiVaultCore.sol";
 import { BaseTest } from "tests/BaseTest.t.sol";
 
 contract MockAtomWallet {
@@ -111,7 +112,7 @@ contract AtomWardenTest is BaseTest {
     function test_claimOwnershipOverAddressAtom_revertsOnNonExistentAtom() external {
         vm.mockCall(
             address(protocol.multiVault),
-            abi.encodeWithSelector(IMultiVault.isAtom.selector, INVALID_ATOM_ID),
+            abi.encodeWithSelector(IMultiVaultCore.isAtom.selector, INVALID_ATOM_ID),
             abi.encode(false)
         );
 
@@ -181,7 +182,7 @@ contract AtomWardenTest is BaseTest {
     function test_claimOwnership_revertsOnNonExistentAtom() external {
         vm.mockCall(
             address(protocol.multiVault),
-            abi.encodeWithSelector(IMultiVault.isAtom.selector, INVALID_ATOM_ID),
+            abi.encodeWithSelector(IMultiVaultCore.isAtom.selector, INVALID_ATOM_ID),
             abi.encode(false)
         );
 
@@ -255,7 +256,7 @@ contract AtomWardenTest is BaseTest {
 
         vm.mockCall(
             address(protocol.multiVault),
-            abi.encodeWithSelector(IMultiVault.atom.selector, atomId),
+            abi.encodeWithSelector(IMultiVaultCore.atom.selector, atomId),
             abi.encode(bytes(abi.encodePacked(_toLowerCaseAddress(randomAddress))))
         );
 
@@ -329,7 +330,9 @@ contract AtomWardenTest is BaseTest {
         address atomWalletAddress = _deployMockAtomWallet(atomId);
 
         vm.mockCall(
-            address(protocol.multiVault), abi.encodeWithSelector(IMultiVault.isAtom.selector, atomId), abi.encode(true)
+            address(protocol.multiVault),
+            abi.encodeWithSelector(IMultiVaultCore.isAtom.selector, atomId),
+            abi.encode(true)
         );
 
         vm.mockCall(
@@ -400,11 +403,11 @@ contract AtomWardenTest is BaseTest {
         bytes32 atomId = _createAddressAtom(users.alice);
         address atomWalletAddress = _deployMockAtomWallet(atomId);
 
-        vm.mockCall(MOCK_MULTIVAULT, abi.encodeWithSelector(IMultiVault.isAtom.selector, atomId), abi.encode(true));
+        vm.mockCall(MOCK_MULTIVAULT, abi.encodeWithSelector(IMultiVaultCore.isAtom.selector, atomId), abi.encode(true));
 
         vm.mockCall(
             MOCK_MULTIVAULT,
-            abi.encodeWithSelector(IMultiVault.atom.selector, atomId),
+            abi.encodeWithSelector(IMultiVaultCore.atom.selector, atomId),
             abi.encode(_toLowerCaseAddress(users.alice))
         );
 
@@ -486,12 +489,14 @@ contract AtomWardenTest is BaseTest {
         bytes32 atomId = keccak256(abi.encodePacked(atomData));
 
         vm.mockCall(
-            address(protocol.multiVault), abi.encodeWithSelector(IMultiVault.isAtom.selector, atomId), abi.encode(true)
+            address(protocol.multiVault),
+            abi.encodeWithSelector(IMultiVaultCore.isAtom.selector, atomId),
+            abi.encode(true)
         );
 
         vm.mockCall(
             address(protocol.multiVault),
-            abi.encodeWithSelector(IMultiVault.atom.selector, atomId),
+            abi.encodeWithSelector(IMultiVaultCore.atom.selector, atomId),
             abi.encode(atomData)
         );
 
@@ -502,7 +507,9 @@ contract AtomWardenTest is BaseTest {
         bytes32 atomId = TEST_ATOM_ID;
 
         vm.mockCall(
-            address(protocol.multiVault), abi.encodeWithSelector(IMultiVault.isAtom.selector, atomId), abi.encode(true)
+            address(protocol.multiVault),
+            abi.encodeWithSelector(IMultiVaultCore.isAtom.selector, atomId),
+            abi.encode(true)
         );
 
         return atomId;

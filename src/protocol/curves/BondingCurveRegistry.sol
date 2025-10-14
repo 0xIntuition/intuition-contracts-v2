@@ -39,13 +39,13 @@ contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2Step {
     uint256 public count;
 
     /// @notice Mapping of curve IDs to curve addresses, used for lookup
-    mapping(uint256 => address) public curveAddresses;
+    mapping(uint256 curveId => address curveAddress) public curveAddresses;
 
     /// @notice Mapping of curve addresses to curve IDs, for reverse lookup
-    mapping(address => uint256) public curveIds;
+    mapping(address curveAddress => uint256 curveId) public curveIds;
 
     /// @notice Mapping of the registered curve names, used to enforce uniqueness
-    mapping(string => bool) public registeredCurveNames;
+    mapping(string curveName => bool registered) public registeredCurveNames;
 
     /* =================================================== */
     /*                    CONSTRUCTOR                      */

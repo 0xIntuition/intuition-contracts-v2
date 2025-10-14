@@ -64,7 +64,7 @@ contract MintAndBridgeTest is BaseTest {
         TransparentUpgradeableProxy baseEmissionsControllerProxy =
             new TransparentUpgradeableProxy(address(baseEmissionsControllerImpl), users.admin, "");
 
-        baseEmissionsController = BaseEmissionsController(address(baseEmissionsControllerProxy));
+        baseEmissionsController = BaseEmissionsController(payable(baseEmissionsControllerProxy));
 
         IIGPMock IIGP = new IIGPMock();
         MetalayerRouterMock metaERC20Router = new MetalayerRouterMock(address(IIGP));

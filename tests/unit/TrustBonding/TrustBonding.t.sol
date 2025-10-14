@@ -9,20 +9,13 @@ import {
     ITransparentUpgradeableProxy
 } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
-import { BaseTest } from "tests/BaseTest.t.sol";
+import { TrustBondingBase } from "tests/unit/TrustBonding/TrustBondingBase.t.sol";
 import { ITrustBonding } from "src/interfaces/ITrustBonding.sol";
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 
-contract TrustBondingTest is BaseTest {
+contract TrustBondingTest is TrustBondingBase {
     /// @notice Constants
-    uint256 public dealAmount = 100 * 1e18;
-    uint256 public initialTokens = 10_000 * 1e18;
-    uint256 public defaultUnlockDuration = 2 * 365 days; // 2 years
-    uint256 public constant MAX_POSSIBLE_ANNUAL_EMISSION = 0.75e8 * 1e18; // 7.5% of the initial supply
     address public timelock = address(4);
-    uint256 public constant systemUtilizationLowerBound = 5000; // 50%
-    uint256 public constant personalUtilizationLowerBound = 3000; // 30%
-    uint256 public additionalTokens = 10_000 * 1e18;
 
     /* =================================================== */
     /*                       SETUP                         */
@@ -30,25 +23,13 @@ contract TrustBondingTest is BaseTest {
 
     function setUp() public override {
         super.setUp();
-
-        vm.deal(users.alice, additionalTokens * 10);
-        vm.deal(users.bob, additionalTokens * 10);
-        vm.deal(users.charlie, additionalTokens * 10);
-
+        vm.deal(users.alice, DEAL_AMOUNT * 10);
+        vm.deal(users.bob, DEAL_AMOUNT * 10);
+        vm.deal(users.charlie, DEAL_AMOUNT * 10);
         _setupUserForTrustBonding(users.alice);
         _setupUserForTrustBonding(users.bob);
         _setupUserForTrustBonding(users.charlie);
-
         vm.deal(address(protocol.satelliteEmissionsController), 10_000_000 ether);
-    }
-
-    function _deployNewTrustBondingContract() internal returns (TrustBonding) {
-        TrustBonding newTrustBondingImpl = new TrustBonding();
-
-        TransparentUpgradeableProxy proxy =
-            new TransparentUpgradeableProxy(address(newTrustBondingImpl), users.admin, "");
-
-        return TrustBonding(address(proxy));
     }
 
     function test_initialize_verifyInitParams() external {
@@ -68,8 +49,8 @@ contract TrustBondingTest is BaseTest {
             address(protocol.wrappedTrust), // protocol.wrappedTrust
             TRUST_BONDING_EPOCH_LENGTH, // epochLength (minimum 2 weeks required)
             address(protocol.satelliteEmissionsController), // satelliteEmissionsController
-            TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound (50%)
-            TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound (30%)
+            TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // 50%
+            TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // 30%
         );
 
         vm.stopPrank();
@@ -87,8 +68,8 @@ contract TrustBondingTest is BaseTest {
             address(protocol.wrappedTrust), // protocol.wrappedTrust
             TRUST_BONDING_EPOCH_LENGTH, // epochLength (minimum 2 weeks required)
             address(protocol.satelliteEmissionsController), // satelliteEmissionsController
-            TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound (50%)
-            TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound (30%)
+            TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND (50%)
+            TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND (30%)
         );
 
         vm.stopPrank();
@@ -106,8 +87,8 @@ contract TrustBondingTest is BaseTest {
             address(0), // protocol.wrappedTrust
             TRUST_BONDING_EPOCH_LENGTH, // epochLength (minimum 2 weeks required)
             address(protocol.satelliteEmissionsController), // satelliteEmissionsController
-            TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound (50%)
-            TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound (30%)
+            TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND (50%)
+            TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND (30%)
         );
 
         vm.stopPrank();
@@ -127,8 +108,8 @@ contract TrustBondingTest is BaseTest {
             address(protocol.wrappedTrust), // protocol.wrappedTrust
             invalidEpochLength, // epochLength (minimum 2 weeks required)
             address(protocol.satelliteEmissionsController), // satelliteEmissionsController
-            TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound (50%)
-            TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound (30%)
+            TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND (50%)
+            TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND (30%)
         );
 
         vm.stopPrank();
@@ -192,7 +173,7 @@ contract TrustBondingTest is BaseTest {
 
         assertEq(totalLocked, 0);
 
-        _bondSomeTokens(users.alice);
+        _createLock(users.alice);
 
         totalLocked = protocol.trustBonding.totalLocked();
 
@@ -200,8 +181,8 @@ contract TrustBondingTest is BaseTest {
     }
 
     function test_totalBondedBalance() external {
-        _bondSomeTokens(users.alice);
-        _bondSomeTokens(users.bob);
+        _createLock(users.alice);
+        _createLock(users.bob);
 
         uint256 totalBondedBalance = protocol.trustBonding.totalBondedBalance();
 
@@ -224,8 +205,8 @@ contract TrustBondingTest is BaseTest {
     }
 
     function test_totalBondedBalanceAtEpochEnd() external {
-        _bondSomeTokens(users.alice);
-        _bondSomeTokens(users.bob);
+        _createLock(users.alice);
+        _createLock(users.bob);
 
         uint256 currentEpoch = protocol.trustBonding.currentEpoch();
         uint256 totalBondedBalanceAtEpochEnd = protocol.trustBonding.totalBondedBalanceAtEpochEnd(currentEpoch);
@@ -260,7 +241,7 @@ contract TrustBondingTest is BaseTest {
     }
 
     function test_userBondedBalanceAtEpochEnd() external {
-        _bondSomeTokens(users.alice);
+        _createLock(users.alice);
 
         uint256 currentEpoch = protocol.trustBonding.currentEpoch();
         uint256 aliceInitialVeTrust = protocol.trustBonding.balanceOf(users.alice);
@@ -300,9 +281,9 @@ contract TrustBondingTest is BaseTest {
     }
 
     function test_userEligibleRewardsForEpoch() external {
-        _bondSomeTokens(users.alice);
-        _bondSomeTokens(users.bob);
-        _bondSomeTokens(users.charlie);
+        _createLock(users.alice);
+        _createLock(users.bob);
+        _createLock(users.charlie);
 
         uint256 currentEpoch = protocol.trustBonding.currentEpoch();
         uint256 emissionsForEpoch = protocol.trustBonding.emissionsForEpoch(currentEpoch);
@@ -314,7 +295,7 @@ contract TrustBondingTest is BaseTest {
     }
 
     function test_hasClaimedRewardsForEpoch() external {
-        _bondSomeTokens(users.alice);
+        _createLock(users.alice);
         vm.warp(TRUST_BONDING_START_TIMESTAMP + protocol.trustBonding.epochLength());
 
         uint256 currentEpoch = protocol.trustBonding.currentEpoch();
@@ -333,29 +314,8 @@ contract TrustBondingTest is BaseTest {
         assertEq(protocol.trustBonding.hasClaimedRewardsForEpoch(users.alice, previousEpoch), true);
     }
 
-    function test_getAprAtEpoch_whenTotalLockedIsZero() external view {
-        uint256 currentEpoch = protocol.trustBonding.currentEpoch();
-        uint256 currentApy = protocol.trustBonding.getSystemApy();
-
-        assertEq(currentApy, 0);
-    }
-
-    function test_getAprAtEpoch_whenTotalLockedIsAboveZero() external {
-        _bondSomeTokens(users.alice);
-
-        uint256 currentEpoch = protocol.trustBonding.currentEpoch();
-        uint256 currentApy = protocol.trustBonding.getSystemApy();
-
-        uint256 trustPerYear =
-            protocol.trustBonding.emissionsForEpoch(currentEpoch) * protocol.trustBonding.epochsPerYear();
-        uint256 expectedAPR =
-            (trustPerYear * protocol.trustBonding.BASIS_POINTS_DIVISOR()) / protocol.trustBonding.totalLocked();
-
-        assertEq(currentApy, expectedAPR);
-    }
-
     function test_claimRewards_shouldRevertIfContractIsPaused() external {
-        _bondSomeTokens(users.alice);
+        _createLock(users.alice);
         _advanceEpochs(1);
 
         vm.prank(users.admin);
@@ -370,7 +330,7 @@ contract TrustBondingTest is BaseTest {
     }
 
     function test_claimRewards_shouldRevertIfRecipientIsAddressZero() external {
-        _bondSomeTokens(users.alice);
+        _createLock(users.alice);
         _advanceEpochs(1);
 
         resetPrank(users.alice);
@@ -382,7 +342,7 @@ contract TrustBondingTest is BaseTest {
     }
 
     function test_claimRewards_shouldRevertIfClaimingRewardsDuringFirstEpoch() external {
-        _bondSomeTokens(users.alice);
+        _createLock(users.alice);
 
         resetPrank(users.alice);
 
@@ -404,7 +364,7 @@ contract TrustBondingTest is BaseTest {
     }
 
     function test_claimRewards_shouldRevertIfAlreadyClaimedRewardsForEpoch() external {
-        _bondSomeTokens(users.alice);
+        _createLock(users.alice);
         _advanceEpochs(1);
 
         vm.prank(users.alice);
@@ -419,7 +379,7 @@ contract TrustBondingTest is BaseTest {
     }
 
     function test_claimRewards_differentScenarios() external {
-        _bondSomeTokens(users.alice);
+        _createLock(users.alice);
         _advanceEpochs(1);
 
         // Case 1: Regular rewards claim
@@ -444,7 +404,7 @@ contract TrustBondingTest is BaseTest {
         vm.stopPrank();
 
         // Case 2: Claimed amount for alice goes down if more people bonded in the meantime
-        _bondSomeTokens(users.bob);
+        _createLock(users.bob);
         _advanceEpochs(1);
 
         vm.startPrank(users.alice, users.alice);
@@ -461,6 +421,7 @@ contract TrustBondingTest is BaseTest {
         assertLt(expectedRewards2, expectedRewards);
 
         // Case 3: Claimed amount calculation with utilization ratio
+        _setupUserForTrustBonding(users.alice);
         protocol.trustBonding.increase_amount(additionalTokens);
         _advanceEpochs(1);
 
@@ -515,7 +476,7 @@ contract TrustBondingTest is BaseTest {
         uint256 rawRewards =
             protocol.trustBonding.userEligibleRewardsForEpoch(users.alice, protocol.trustBonding.currentEpoch() - 1);
         uint256 expectedRewards4 =
-            rawRewards * personalUtilizationLowerBound / protocol.trustBonding.BASIS_POINTS_DIVISOR();
+            rawRewards * TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND / protocol.trustBonding.BASIS_POINTS_DIVISOR();
 
         protocol.trustBonding.claimRewards(users.alice);
         uint256 aliceFinalBalance = users.alice.balance;
@@ -535,8 +496,8 @@ contract TrustBondingTest is BaseTest {
         uint256 bobInitialBalance = users.bob.balance;
         uint256 bobRawRewards =
             protocol.trustBonding.userEligibleRewardsForEpoch(users.bob, protocol.trustBonding.currentEpoch() - 1);
-        uint256 bobExpectedRewards =
-            bobRawRewards * personalUtilizationLowerBound / protocol.trustBonding.BASIS_POINTS_DIVISOR();
+        uint256 bobExpectedRewards = bobRawRewards * TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND
+            / protocol.trustBonding.BASIS_POINTS_DIVISOR();
 
         protocol.trustBonding.claimRewards(users.bob);
 
@@ -560,12 +521,12 @@ contract TrustBondingTest is BaseTest {
         // 1. Lock some tokens
         vm.startPrank(users.alice, users.alice);
         uint256 aliceBalanceBefore = protocol.wrappedTrust.balanceOf(users.alice);
-        protocol.trustBonding.create_lock(initialTokens, block.timestamp + defaultUnlockDuration);
+        protocol.trustBonding.create_lock(initialTokens, block.timestamp + lockDuration);
 
         (int128 rawLockedAmount, uint256 lockEndTimestamp) = protocol.trustBonding.locked(users.alice);
         uint256 lockedAmount = uint256(uint128(rawLockedAmount));
         // unlock time is rounded down to the number of whole weeks
-        uint256 expectedLockEndTimestamp = ((block.timestamp + defaultUnlockDuration) / 1 weeks) * 1 weeks;
+        uint256 expectedLockEndTimestamp = ((block.timestamp + lockDuration) / 1 weeks) * 1 weeks;
 
         assertEq(lockedAmount, initialTokens);
         assertEq(lockEndTimestamp, expectedLockEndTimestamp);
@@ -669,54 +630,5 @@ contract TrustBondingTest is BaseTest {
         assertEq(protocol.trustBonding.paused(), false);
 
         vm.stopPrank();
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                            HELPER FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @dev Internal function to bond some tokens for a given user
-    function _bondSomeTokens(address user) internal {
-        vm.startPrank(user, user);
-        uint256 unlockTime = block.timestamp + defaultUnlockDuration;
-        protocol.trustBonding.create_lock(initialTokens, unlockTime);
-        vm.stopPrank();
-    }
-
-    /// @dev Internal function to advance the epoch by a given number of epochs
-    function _advanceEpochs(uint256 epochs) internal {
-        uint256 currentEpoch = protocol.trustBonding.currentEpoch();
-        uint256 currentEpochEndTimestamp = protocol.trustBonding.epochTimestampEnd(currentEpoch);
-        uint256 targetTimestamp = currentEpochEndTimestamp + epochs * protocol.trustBonding.epochLength();
-        vm.warp(targetTimestamp - 1);
-    }
-
-    function _setTotalClaimedRewardsForEpoch(uint256 epoch, uint256 claimedRewards) internal {
-        // Compute the slot
-        bytes32 slot = keccak256(abi.encode(epoch, uint256(13))); // 13 = storage slot of totalClaimedRewardsForEpoch
-            // mapping
-
-        vm.store(address(protocol.trustBonding), slot, bytes32(uint256(claimedRewards)));
-    }
-
-    function _setUserClaimedRewardsForEpoch(address user, uint256 epoch, uint256 claimedRewards) internal {
-        // Compute the outer slot
-        bytes32 outerSlot = keccak256(abi.encode(user, uint256(14))); // 14 = storage slot ofuserClaimedRewardsForEpoch
-            // mapping
-
-        // Compute the final slot
-        bytes32 finalSlot = keccak256(abi.encode(epoch, outerSlot));
-
-        vm.store(address(protocol.trustBonding), finalSlot, bytes32(uint256(claimedRewards)));
-    }
-
-    function _setupUserForTrustBonding(address user) internal {
-        resetPrank({ msgSender: user });
-
-        // Give plenty of balance so initial + additional locks always succeed
-        protocol.wrappedTrust.deposit{ value: additionalTokens * 10 }();
-
-        // Approve once for all TrustBonding tests
-        protocol.wrappedTrust.approve(address(protocol.trustBonding), type(uint256).max);
     }
 }

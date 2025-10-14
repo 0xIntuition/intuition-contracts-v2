@@ -21,6 +21,13 @@ forge script script/base/BaseEmissionsControllerSetup.s.sol:BaseEmissionsControl
 --rpc-url base_sepolia \
 --broadcast \
 --slow
+
+MAINNET
+forge script script/base/BaseEmissionsControllerSetup.s.sol:BaseEmissionsControllerSetup \
+--optimizer-runs 10000 \
+--rpc-url base \
+--broadcast \
+--slow
 */
 contract BaseEmissionsControllerSetup is SetupScript {
     address public BASE_EMISSIONS_CONTROLLER;
@@ -34,9 +41,6 @@ contract BaseEmissionsControllerSetup is SetupScript {
             SATELLITE_EMISSIONS_CONTROLLER = vm.envAddress("ANVIL_SATELLITE_EMISSIONS_CONTROLLER");
         } else if (block.chainid == vm.envUint("BASE_SEPOLIA_CHAIN_ID")) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("BASE_SEPOLIA_BASE_EMISSIONS_CONTROLLER");
-            SATELLITE_EMISSIONS_CONTROLLER = vm.envAddress("BASE_SEPOLIA_SATELLITE_EMISSIONS_CONTROLLER");
-        } else if (block.chainid == vm.envUint("INTUITION_SEPOLIA_CHAIN_ID")) {
-            BASE_EMISSIONS_CONTROLLER = vm.envAddress("INTUITION_SEPOLIA_BASE_EMISSIONS_CONTROLLER");
             SATELLITE_EMISSIONS_CONTROLLER = vm.envAddress("INTUITION_SEPOLIA_SATELLITE_EMISSIONS_CONTROLLER");
         } else {
             revert("Unsupported chain for broadcasting");
@@ -44,11 +48,17 @@ contract BaseEmissionsControllerSetup is SetupScript {
     }
 
     function run() public broadcast {
-        _setupContracts();
+        _setup();
+        console2.log("");
+        console2.log("DEPLOYMENTS: =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+");
+        console2.log("Base Emissions Controller:", address(BASE_EMISSIONS_CONTROLLER));
+        console2.log("Satellite Emissions Controller:", address(SATELLITE_EMISSIONS_CONTROLLER));
+        console2.log("");
+        console2.log("SETUP COMPLETE");
     }
 
-    function _setupContracts() internal {
-        BaseEmissionsController(BASE_EMISSIONS_CONTROLLER).setSatelliteEmissionsController(
+    function _setup() internal {
+        BaseEmissionsController(payable(BASE_EMISSIONS_CONTROLLER)).setSatelliteEmissionsController(
             SATELLITE_EMISSIONS_CONTROLLER
         );
     }
