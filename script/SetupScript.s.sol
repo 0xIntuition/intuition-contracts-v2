@@ -48,11 +48,6 @@ abstract contract SetupScript is Script {
     /// @dev The address of the transaction broadcaster.
     address internal broadcaster;
 
-    // General Config
-    address internal ADMIN;
-    address internal PROTOCOL_MULTISIG;
-    address internal TRUST_TOKEN;
-
     Trust public trust;
     MultiVault public multiVault;
     AtomWarden public atomWarden;
@@ -84,10 +79,8 @@ abstract contract SetupScript is Script {
     // address internal METALAYER_HUB_OR_SPOKE;
 
     uint256 internal FEE_THRESHOLD = 1e17;
-    uint256 internal FEE_DENOMINATOR = 10_000;
     uint256 internal MIN_DEPOSIT = 1e15; // 0.001 Trust
-    uint256 internal MIN_SHARES = 1e6; // Ghost Shares
-    uint256 internal ATOM_DATA_MAX_LENGTH = 1000;
+
     // Atom Config
     uint256 internal ATOM_CREATION_PROTOCOL_FEE = 1e18; // 1 Trust (Fixed Cost)
     uint256 internal ATOM_WALLET_DEPOSIT_FEE = 100; // 1% of assets after fixed costs (Percentage Cost)
@@ -268,7 +261,7 @@ abstract contract SetupScript is Script {
             TRUST_TOKEN = vm.envOr("ANVIL_TRUST_TOKEN", address(0));
             PROTOCOL_MULTISIG = vm.envOr("ANVIL_PROTOCOL_MULTISIG", ADMIN);
 
-            BASE_METALAYER_RECIPIENT_DOMAIN = 11111;
+            BASE_METALAYER_RECIPIENT_DOMAIN = 11_111;
 
             // Timelock Config
             TIMELOCK_MIN_DELAY = 60 minutes;
