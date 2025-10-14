@@ -58,8 +58,6 @@ contract IntuitionDeployAndSetup is SetupScript {
 
     address public MIGRATOR;
 
-    uint32 internal BASE_METALAYER_RECIPIENT_DOMAIN = 84_532;
-
     address public BASE_EMISSIONS_CONTROLLER;
 
     address public MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION;
