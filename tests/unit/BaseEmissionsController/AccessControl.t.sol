@@ -88,7 +88,7 @@ contract AccessControlTest is BaseTest {
         TransparentUpgradeableProxy baseEmissionsControllerProxy =
             new TransparentUpgradeableProxy(address(baseEmissionsControllerImpl), users.admin, "");
 
-        baseEmissionsController = BaseEmissionsController(address(baseEmissionsControllerProxy));
+        baseEmissionsController = BaseEmissionsController(payable(baseEmissionsControllerProxy));
 
         vm.label(address(baseEmissionsController), "BaseEmissionsController");
 
