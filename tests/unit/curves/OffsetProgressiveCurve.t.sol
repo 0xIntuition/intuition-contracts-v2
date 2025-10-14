@@ -2,7 +2,7 @@
 pragma solidity 0.8.29;
 
 import { Test } from "forge-std/src/Test.sol";
-import { UD60x18, ud60x18 } from "@prb/math/src/UD60x18.sol";
+import { UD60x18, ud60x18, convert } from "@prb/math/src/UD60x18.sol";
 import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
 import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCurve.sol";
 
@@ -125,5 +125,52 @@ contract OffsetProgressiveCurveTest is Test {
         // Which is: totalShares * SLOPE + OFFSET * SLOPE / 1e18
         uint256 expectedPrice = totalShares * SLOPE + (OFFSET * SLOPE / 1e18);
         assertEq(price, expectedPrice);
+    }
+
+    function test_previewMint_mintMaxSharesFromZero_succeeds() public view {
+        uint256 sMax = curve.maxShares();
+        uint256 assets = curve.previewMint(sMax, 0, 0);
+        assertGt(assets, 0);
+
+        uint256 expected = _expectedMintCostFromZero(sMax);
+        assertEq(assets, expected);
+    }
+
+    function test_previewMint_mintPastMaxSharesFromZero_reverts() public {
+        uint256 sMax = curve.maxShares();
+        vm.expectRevert();
+        curve.previewMint(sMax + 1, 0, 0);
+    }
+
+    function test_previewMint_boundaryFromNonZeroSupply_succeeds() public view {
+        uint256 sMax = curve.maxShares();
+        uint256 s0 = sMax - 1;
+        uint256 n = 1; // reaches max
+        uint256 assets = curve.previewMint(n, s0, 0);
+        assertGt(assets, 0);
+    }
+
+    function test_previewMint_crossesMaxFromNonZeroSupply_reverts() public {
+        uint256 sMax = curve.maxShares();
+        uint256 s0 = sMax - 1;
+        uint256 n = 2; // crosses max
+        vm.expectRevert();
+        curve.previewMint(n, s0, 0);
+    }
+
+    function test_previewRedeem_allAtMaxShares_succeeds() public view {
+        uint256 sMax = curve.maxShares();
+        uint256 expected = _expectedMintCostFromZero(sMax);
+        uint256 assets = curve.previewRedeem(sMax, sMax, 0);
+        assertEq(assets, expected);
+    }
+
+    /// @dev Helper to compute expected mint cost from zero supply
+    function _expectedMintCostFromZero(uint256 shares) internal view returns (uint256) {
+        // Cost = ((s+o)^2 - o^2) * (m/2)
+        UD60x18 o = curve.OFFSET();
+        UD60x18 sPlusO = convert(shares).add(o);
+        UD60x18 diff = sPlusO.powu(2).sub(o.powu(2));
+        return convert(diff.mul(curve.HALF_SLOPE()));
     }
 }

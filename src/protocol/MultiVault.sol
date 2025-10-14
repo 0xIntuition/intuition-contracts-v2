@@ -133,6 +133,8 @@ contract MultiVault is
 
     error MultiVault_ActionExceedsMaxAssets();
 
+    error MultiVault_ActionExceedsMaxShares();
+
     error MultiVault_DefaultCurveMustBeInitializedViaCreatePaths();
 
     error MultiVault_DepositTooSmallToCoverMinShares();
@@ -1574,11 +1576,17 @@ contract MultiVault is
     )
         internal
     {
+        IBondingCurveRegistry registry = IBondingCurveRegistry(bondingCurveConfig.registry);
+
+        uint256 maxAssets = registry.getCurveMaxAssets(curveId);
+        uint256 maxShares = registry.getCurveMaxShares(curveId);
+        if (totalAssets > maxAssets) revert MultiVault_ActionExceedsMaxAssets();
+        if (totalShares > maxShares) revert MultiVault_ActionExceedsMaxShares();
+
         VaultState storage vaultState = _vaults[termId][curveId];
         vaultState.totalAssets = totalAssets;
         vaultState.totalShares = totalShares;
 
-        IBondingCurveRegistry registry = IBondingCurveRegistry(bondingCurveConfig.registry);
         uint256 price = registry.currentPrice(curveId, totalShares, totalAssets);
 
         emit SharePriceChanged(termId, curveId, price, totalAssets, totalShares, vaultType);
@@ -1621,7 +1629,7 @@ contract MultiVault is
     /// @param _assets the amount of assets to deposit
     /// @param _minShares the minimum amount of shares to receive
     function _validateMinShares(bytes32 _termId, uint256 _curveId, uint256 _assets, uint256 _minShares) internal view {
-        uint256 maxAssets = IBondingCurveRegistry(bondingCurveConfig.registry).getCurveMaxAssets(_curveId);
+        IBondingCurveRegistry registry = IBondingCurveRegistry(bondingCurveConfig.registry);
 
         (uint256 expectedShares, uint256 netAssetsToVault) =
             _calculateDeposit(_termId, _curveId, _assets, _isAtom(_termId));
@@ -1632,11 +1640,13 @@ contract MultiVault is
         uint256 minShareCost = (isNew && !isDefault) ? generalConfig.minShare : 0;
 
         uint256 projectedAssets = _vaults[_termId][_curveId].totalAssets + netAssetsToVault + minShareCost;
-        if (projectedAssets > maxAssets) revert MultiVault_ActionExceedsMaxAssets();
+        if (projectedAssets > registry.getCurveMaxAssets(_curveId)) revert MultiVault_ActionExceedsMaxAssets();
 
-        if (expectedShares < _minShares) {
-            revert MultiVault_SlippageExceeded();
-        }
+        uint256 projectedShares =
+            _vaults[_termId][_curveId].totalShares + expectedShares + (isNew ? generalConfig.minShare : 0);
+        if (projectedShares > registry.getCurveMaxShares(_curveId)) revert MultiVault_ActionExceedsMaxShares();
+
+        if (expectedShares < _minShares) revert MultiVault_SlippageExceeded();
     }
 
     /// @dev Validate a redeem operation
