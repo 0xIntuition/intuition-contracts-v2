@@ -83,6 +83,10 @@ contract MultiVault is
     // User address -> Last active epoch
     mapping(address user => uint256 epoch) public lastActiveEpoch;
 
+    /// @notice Mapping of the epoch in which a user was last active before their most recent activity
+    // User address -> Previous active epoch (before lastActiveEpoch)
+    mapping(address user => uint256 epoch) public previousActiveEpoch;
+
     /* =================================================== */
     /*                        Errors                       */
     /* =================================================== */
@@ -226,9 +230,12 @@ contract MultiVault is
     /// @inheritdoc IMultiVault
     function getUserUtilizationBefore(address user, uint256 epoch) external view returns (int256) {
         uint256 lastActiveEpochForUser = lastActiveEpoch[user];
-        uint256 prevEpoch = epoch > 0 ? epoch - 1 : 0;
-        uint256 prevEpochForUser = lastActiveEpochForUser < prevEpoch ? lastActiveEpochForUser : prevEpoch;
-        return personalUtilization[user][prevEpochForUser];
+
+        // If the user's last activity is already before the target epoch, use it.
+        // Otherwise (they acted in the target epoch or later), use the stored previousActiveEpoch.
+        uint256 refEpoch = lastActiveEpochForUser < epoch ? lastActiveEpochForUser : previousActiveEpoch[user];
+
+        return personalUtilization[user][refEpoch];
     }
 
     /// @inheritdoc IMultiVault
@@ -1406,6 +1413,11 @@ contract MultiVault is
         _rollover(user);
 
         uint256 epoch = _currentEpoch();
+        uint256 prevLastActiveEpoch = lastActiveEpoch[user];
+
+        if (prevLastActiveEpoch != 0 && prevLastActiveEpoch != epoch) {
+            previousActiveEpoch[user] = prevLastActiveEpoch; // strictly prior active epoch
+        }
 
         totalUtilization[epoch] += totalValue;
         emit TotalUtilizationAdded(epoch, totalValue, totalUtilization[epoch]);
@@ -1425,6 +1437,11 @@ contract MultiVault is
         _rollover(user);
 
         uint256 epoch = _currentEpoch();
+        uint256 prevLastActiveEpoch = lastActiveEpoch[user];
+
+        if (prevLastActiveEpoch != 0 && prevLastActiveEpoch != epoch) {
+            previousActiveEpoch[user] = prevLastActiveEpoch; // strictly prior active epoch
+        }
 
         totalUtilization[epoch] -= amountToRemove;
         emit TotalUtilizationRemoved(epoch, amountToRemove, totalUtilization[epoch]);

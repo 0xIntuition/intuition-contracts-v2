@@ -211,6 +211,8 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         _setUserUtilizationForEpoch(users.alice, 2, 500e18);
         // Ensure last active epoch is set to 2
         _setLastActiveEpochForUser(users.alice, 2);
+        // Ensure previous active epoch is set to 1
+        _setPreviousActiveEpochForUser(users.alice, 1);
 
         uint256 ratio = protocol.trustBonding.getPersonalUtilizationRatio(users.alice, 2);
         assertEq(ratio, PERSONAL_UTILIZATION_LOWER_BOUND, "Negative utilization delta should return lower bound");
@@ -227,6 +229,8 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         _setUserUtilizationForEpoch(users.alice, 2, 1000e18);
         // Ensure last active epoch is set to 2
         _setLastActiveEpochForUser(users.alice, 2);
+        // Ensure previous active epoch is set to 1
+        _setPreviousActiveEpochForUser(users.alice, 1);
 
         uint256 ratio = protocol.trustBonding.getPersonalUtilizationRatio(users.alice, 2);
         assertEq(ratio, PERSONAL_UTILIZATION_LOWER_BOUND, "Zero utilization delta should return lower bound");
@@ -276,6 +280,8 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         _setUserClaimedRewardsForEpoch(users.alice, 1, 1000e18);
         // Ensure last active epoch is set to 2
         _setLastActiveEpochForUser(users.alice, 2);
+        // Ensure previous active epoch is set to 1
+        _setPreviousActiveEpochForUser(users.alice, 1);
 
         // Expected calculation:
         // delta = 500e18, target = 1000e18
@@ -301,6 +307,8 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         _setUserClaimedRewardsForEpoch(users.alice, 1, 1000e18);
         // Ensure last active epoch is set to 2
         _setLastActiveEpochForUser(users.alice, 2);
+        // Ensure previous active epoch is set to 1
+        _setPreviousActiveEpochForUser(users.alice, 1);
 
         // Expected calculation:
         // delta = 250e18, target = 1000e18
@@ -326,6 +334,8 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         _setUserClaimedRewardsForEpoch(users.alice, 1, 1000e18);
         // Ensure last active epoch is set to 2
         _setLastActiveEpochForUser(users.alice, 2);
+        // Ensure previous active epoch is set to 1
+        _setPreviousActiveEpochForUser(users.alice, 1);
 
         // Expected calculation:
         // delta = 750e18, target = 1000e18
@@ -360,6 +370,7 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         _setUserUtilizationForEpoch(users.alice, 2, 750e18); // delta = 250e18
         _setUserClaimedRewardsForEpoch(users.alice, 1, 500e18); // target = 500e18
         _setLastActiveEpochForUser(users.alice, 2);
+        _setPreviousActiveEpochForUser(users.alice, 1);
 
         // Expected system ratio: 5000 + (500 * 5000) / 1000 = 7500
         uint256 expectedSystemRatio = 7500;
