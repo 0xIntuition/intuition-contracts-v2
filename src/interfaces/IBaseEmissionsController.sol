@@ -41,6 +41,8 @@ interface IBaseEmissionsController {
      */
     event TrustBurned(address indexed from, uint256 amount);
 
+    event Transfer(address indexed from, address indexed to, uint256 amount);
+
     /* =================================================== */
     /*                       ERRORS                        */
     /* =================================================== */
@@ -86,7 +88,20 @@ interface IBaseEmissionsController {
     /* =================================================== */
 
     /**
-     * @notice Mint new TRUST tokens for a specific epoch and bridge them to the satellite chain
+     * @notice Withdraw native gas tokens from the contract
+     * @dev Only callable by addresses with CONTROLLER_ROLE
+     * @param epoch The epoch to mint tokens for
+     */
+    function withdraw(uint256 epoch) external;
+
+    /**
+     * @notice Mint new TRUST tokens for the current epoch and bridge them to the satellite emissions controller
+     * @dev Only callable by addresses with CONTROLLER_ROLE
+     */
+    function mintAndBridgeCurrentEpoch() external;
+
+    /**
+     * @notice Mint new TRUST tokens for a specific epoch and bridge them to the satellite emissions controller
      * @dev Only callable by addresses with CONTROLLER_ROLE
      * @param epoch The epoch to mint tokens for
      */

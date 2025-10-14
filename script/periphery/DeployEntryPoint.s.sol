@@ -1,15 +1,31 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.29;
 
-import { Script, console2 } from "forge-std/src/Script.sol";
+import { console2 } from "forge-std/src/Script.sol";
+import { SetupScript } from "../SetupScript.s.sol";
 
-contract DeployEntryPoint is Script {
+/*
+TESTNET
+forge script script/periphery/DeployEntryPoint.s.sol:DeployEntryPoint \
+--optimizer-runs 200 \
+--rpc-url intuition_sepolia \
+--broadcast
+
+MAINNET
+forge script script/periphery/DeployEntryPoint.s.sol:DeployEntryPoint \
+--optimizer-runs 200 \
+--rpc-url intuition \
+--broadcast
+*/
+contract DeployEntryPoint is SetupScript {
     address public constant EXPECTED_ENTRYPOINT_ADDRESS = 0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108;
     address public constant DETERMINISTIC_DEPLOYER_ADDRESS = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
 
-    function run() external {
-        vm.startBroadcast();
+    function setUp() public override {
+        super.setUp();
+    }
 
+    function run() external broadcast {
         if (DETERMINISTIC_DEPLOYER_ADDRESS.code.length == 0) revert("Deterministic Deployer not deployed");
 
         bytes memory data =
@@ -23,7 +39,5 @@ contract DeployEntryPoint is Script {
         if (deployedEntryPointAddress.code.length == 0) revert("No code deployed at the expected EntryPoint address");
 
         console2.log("EntryPoint deployed at", deployedEntryPointAddress);
-
-        vm.stopBroadcast();
     }
 }
