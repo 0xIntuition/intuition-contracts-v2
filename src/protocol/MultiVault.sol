@@ -1460,7 +1460,7 @@ contract MultiVault is
         uint256 currentEpochLocal = _currentEpoch();
         uint256 userLastEpoch = lastActiveEpoch[user];
 
-        // First, handle system-wide rollover if this is the first action in the new epoch
+        // First, handle the system-wide rollover if this is the first action in the new epoch
         if (currentEpochLocal > 0 && totalUtilization[currentEpochLocal] == 0) {
             // Roll over from the immediately previous epoch
             uint256 previousEpoch = currentEpochLocal - 1;
@@ -1469,16 +1469,16 @@ contract MultiVault is
             }
         }
 
-        // Then handle user-specific rollover
-        if (userLastEpoch == 0 || userLastEpoch == currentEpochLocal) {
-            // First ever action by this user, or already active in current epoch; no rollover needed
-            return;
+        // Then handle the user-specific rollover
+        if (userLastEpoch == currentEpochLocal) {
+            return; // already up to date; no rollover needed
         }
 
         // User's first action in a new epoch - roll over their personal utilization from their respective last active
         // epoch
-        if (personalUtilization[user][currentEpochLocal] == 0) {
-            personalUtilization[user][currentEpochLocal] = personalUtilization[user][userLastEpoch];
+        int256 lastEpochUtilization = personalUtilization[user][userLastEpoch];
+        if (lastEpochUtilization != 0 && personalUtilization[user][currentEpochLocal] == 0) {
+            personalUtilization[user][currentEpochLocal] = lastEpochUtilization;
         }
     }
 

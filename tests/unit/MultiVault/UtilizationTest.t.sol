@@ -107,7 +107,7 @@ contract UtilizationTest is BaseTest {
         // First action in N+1 rolls over N totals, then adds new amount
         assertEq(protocol.multiVault.totalUtilization(epochN1), sysN_total + int256(amountN1), "system carry + add");
         assertEq(
-            protocol.multiVault.personalUtilization(users.alice, epochN1) + sysN_total,
+            protocol.multiVault.personalUtilization(users.alice, epochN1),
             meN_total + int256(amountN1),
             "me carry + add"
         );
@@ -145,7 +145,7 @@ contract UtilizationTest is BaseTest {
         // Expect carry – rawAssets
         assertEq(protocol.multiVault.totalUtilization(epochN1), sysN_total - int256(rawAssets), "system carry - raw");
         assertEq(
-            protocol.multiVault.personalUtilization(users.alice, epochN1) + sysN_total,
+            protocol.multiVault.personalUtilization(users.alice, epochN1),
             meN_total - int256(rawAssets),
             "me carry - raw"
         );
@@ -223,7 +223,7 @@ contract UtilizationTest is BaseTest {
 
         // After rollover: Bob's N utilization is copied into N+1, then amountN1 is added
         assertEq(
-            protocol.multiVault.personalUtilization(users.bob, epochN1) + meN_total,
+            protocol.multiVault.personalUtilization(users.bob, epochN1),
             meN_total + int256(amountN1),
             "on-behalf deposit should copy prior epoch personal utilization, then add"
         );
