@@ -64,6 +64,9 @@ contract OffsetProgressiveCurve is BaseCurve {
     /// beyond that point.
     uint256 public immutable MAX_ASSETS;
 
+    /// @notice Custom errors
+    error OffsetProgressiveCurve_InvalidSlope();
+
     /// @notice Constructs a new ProgressiveCurve with the given name and slope
     /// @param _name The name of the curve (i.e. "Progressive Curve #465")
     /// @param slope18 The slope of the curve, in basis points (i.e. 0.0025e18)
@@ -71,7 +74,7 @@ contract OffsetProgressiveCurve is BaseCurve {
     /// @dev Computes maximum values given constructor arguments
     /// @dev Computes Slope / 2 as commonly used constant
     constructor(string memory _name, uint256 slope18, uint256 offset18) BaseCurve(_name) {
-        require(slope18 > 0, "PC: Slope must be > 0");
+        if (slope18 == 0 || slope18 % 2 != 0) revert OffsetProgressiveCurve_InvalidSlope();
 
         SLOPE = UD60x18.wrap(slope18);
         HALF_SLOPE = UD60x18.wrap(slope18 / 2);
@@ -169,8 +172,7 @@ contract OffsetProgressiveCurve is BaseCurve {
         UD60x18 s1 = convert(totalShares + shares).add(OFFSET);
         UD60x18 aUD = _convertToAssets(s0, s1);
 
-        uint256 raw = UD60x18.unwrap(aUD); // 18-decimal scaled
-        assets = raw / 1e18 + ((raw % 1e18 == 0) ? 0 : 1); // ceil to uint256
+        assets = _ceilUdToUint(aUD);
     }
 
     /// @inheritdoc BaseCurve
@@ -196,8 +198,7 @@ contract OffsetProgressiveCurve is BaseCurve {
         UD60x18 preciseShares =
             currentSupplyOfShares.sub(currentSupplyOfShares.powu(2).sub(convert(assets).div(HALF_SLOPE)).sqrt());
 
-        uint256 raw = UD60x18.unwrap(preciseShares); // 18-decimal scaled
-        shares = raw / 1e18 + ((raw % 1e18 == 0) ? 0 : 1); // ceil to uint256
+        shares = _ceilUdToUint(preciseShares);
     }
 
     /// @inheritdoc BaseCurve
@@ -302,6 +303,12 @@ contract OffsetProgressiveCurve is BaseCurve {
     function _convertToAssets(UD60x18 juniorSupply, UD60x18 seniorSupply) internal view returns (UD60x18 assets) {
         UD60x18 sqrDiff = seniorSupply.powu(2).sub(juniorSupply.powu(2));
         return sqrDiff.mul(HALF_SLOPE);
+    }
+
+    /// @dev Converts a UD60x18 to a uint256 by ceiling the value (i.e. rounding up)
+    function _ceilUdToUint(UD60x18 x) internal pure returns (uint256) {
+        uint256 raw = UD60x18.unwrap(x); // 18-decimal scaled
+        return raw / 1e18 + ((raw % 1e18 == 0) ? 0 : 1); // ceil to uint256
     }
 
     /// @inheritdoc BaseCurve

@@ -19,14 +19,19 @@ contract ProgressiveCurveTest is Test {
         assertEq(newCurve.name(), "Test Curve");
     }
 
-    function test_constructor_revertsOnZeroSlope() public {
-        vm.expectRevert("PC: Slope must be > 0");
-        new ProgressiveCurve("Test Curve", 0);
-    }
-
     function test_constructor_revertsOnEmptyName() public {
         vm.expectRevert(abi.encodeWithSelector(BaseCurve.BaseCurve_EmptyStringNotAllowed.selector));
         new ProgressiveCurve("", SLOPE);
+    }
+
+    function test_constructor_revertsOnZeroSlope() public {
+        vm.expectRevert(abi.encodeWithSelector(ProgressiveCurve.ProgressiveCurve_InvalidSlope.selector));
+        new ProgressiveCurve("Test Curve", 0);
+    }
+
+    function test_constructor_revertsOnOddSlope() public {
+        vm.expectRevert(abi.encodeWithSelector(ProgressiveCurve.ProgressiveCurve_InvalidSlope.selector));
+        new ProgressiveCurve("Test Curve", 3); // odd
     }
 
     function test_previewDeposit_zeroShares() public view {

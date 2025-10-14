@@ -21,8 +21,13 @@ contract OffsetProgressiveCurveTest is Test {
     }
 
     function test_constructor_revertsOnZeroSlope() public {
-        vm.expectRevert("PC: Slope must be > 0");
+        vm.expectRevert(abi.encodeWithSelector(OffsetProgressiveCurve.OffsetProgressiveCurve_InvalidSlope.selector));
         new OffsetProgressiveCurve("Test Curve", 0, OFFSET);
+    }
+
+    function test_constructor_revertsOnOddSlope() public {
+        vm.expectRevert(abi.encodeWithSelector(OffsetProgressiveCurve.OffsetProgressiveCurve_InvalidSlope.selector));
+        new OffsetProgressiveCurve("Test Curve", 3, OFFSET); // odd
     }
 
     function test_constructor_revertsOnEmptyName() public {
