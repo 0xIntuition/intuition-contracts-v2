@@ -19,6 +19,12 @@ forge script script/intuition/MultiVaultMigrationModeDeploy.s.sol:MultiVaultMigr
 --optimizer-runs 200 \
 --rpc-url intuition_sepolia \
 --broadcast
+
+MAINNET
+forge script script/intuition/MultiVaultMigrationModeDeploy.s.sol:MultiVaultMigrationModeDeploy \
+--optimizer-runs 200 \
+--rpc-url intuition \
+--broadcast
 */
 
 contract MultiVaultMigrationModeDeploy is SetupScript {
