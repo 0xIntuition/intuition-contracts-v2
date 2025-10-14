@@ -24,6 +24,13 @@ forge script script/base/BaseEmissionsControllerDeploy.s.sol:BaseEmissionsContro
 --rpc-url base_sepolia \
 --broadcast \
 --slow
+
+MAINNET 
+forge script script/base/BaseEmissionsControllerDeploy.s.sol:BaseEmissionsControllerDeploy \
+--optimizer-runs 10000 \
+--rpc-url base \
+--broadcast \
+--slow
 */
 
 contract BaseEmissionsControllerDeploy is SetupScript {
@@ -32,8 +39,6 @@ contract BaseEmissionsControllerDeploy is SetupScript {
     TimelockController public upgradesTimelockController;
 
     /// @notice Chain ID for the Intuition Testnet
-    uint32 internal SATELLITE_METALAYER_RECIPIENT_DOMAIN = 13_579;
-
     address public BASE_EMISSIONS_CONTROLLER;
 
     function setUp() public override {
@@ -41,7 +46,7 @@ contract BaseEmissionsControllerDeploy is SetupScript {
     }
 
     function run() public broadcast {
-        _deployContracts();
+        _deploy();
         console2.log("");
         console2.log("DEPLOYMENTS: =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+");
         console2.log("Upgrades TimelockController for BaseEmissionsController:", address(upgradesTimelockController));
@@ -49,7 +54,7 @@ contract BaseEmissionsControllerDeploy is SetupScript {
         console2.log("BaseEmissionsController Proxy:", address(baseEmissionsControllerProxy));
     }
 
-    function _deployContracts() internal {
+    function _deploy() internal {
         // 1. Deploy TimelockController contract for upgrades (it should become the ProxyAdmin owner for the
         // BaseEmissionsController proxy contract)
         upgradesTimelockController = _deployTimelockController("Upgrades TimelockController");
