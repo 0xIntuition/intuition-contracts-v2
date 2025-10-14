@@ -11,6 +11,8 @@
     "@openzeppelin/contracts-upgradeable": "^4.9.6"
   },
   "devDependencies": {
+    "@types/node": "^24.7.0",
+    "ethers": "^5.8.0",
     "prettier": "^3.5",
     "solhint": "^5.1"
   },
@@ -31,6 +33,6 @@
     "test": "forge test",
     "coverage": "forge coverage --no-match-coverage '(script|tests|src/external/curve)'",
     "test:coverage": "forge coverage",
-    "test:coverage:report": "forge coverage --report lcov && genhtml lcov.info --branch-coverage --output-dir coverage"
+    "test:coverage:report": "forge coverage --no-match-coverage '(script|tests|src/external/curve)' --report lcov && genhtml lcov.info --branch-coverage --output-dir coverage --ignore-errors inconsistent"
   }
 }
