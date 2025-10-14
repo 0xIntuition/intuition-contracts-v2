@@ -38,6 +38,8 @@ contract HubBridgeTraceTest is Test {
     address public testRecipient = 0x4905e138b507F5Da41e894aF80672b1ecB167C3E;
 
     function setUp() public {
+        vm.createSelectFork("base");
+
         // Validate fork
         require(block.chainid == BASE_CHAIN_ID, "Must run on Base fork");
 
