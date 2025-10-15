@@ -31,6 +31,7 @@ contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2StepUpgradeable 
     error BondingCurveRegistry_CurveAlreadyExists();
     error BondingCurveRegistry_EmptyCurveName();
     error BondingCurveRegistry_CurveNameNotUnique();
+    error BondingCurveRegistry_InvalidCurveId();
 
     /* =================================================== */
     /*                  STATE VARIABLES                    */
@@ -47,6 +48,15 @@ contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2StepUpgradeable 
 
     /// @notice Mapping of the registered curve names, used to enforce uniqueness
     mapping(string curveName => bool registered) public registeredCurveNames;
+
+    /* =================================================== */
+    /*                    MODIFIERS                        */
+    /* =================================================== */
+
+    modifier onlyValidCurveId(uint256 id) {
+        if (!_isCurveIdValid(id)) revert BondingCurveRegistry_InvalidCurveId();
+        _;
+    }
 
     /* =================================================== */
     /*                    CONSTRUCTOR                      */
@@ -126,6 +136,7 @@ contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2StepUpgradeable 
     )
         external
         view
+        onlyValidCurveId(id)
         returns (uint256 shares)
     {
         return IBaseCurve(curveAddresses[id]).previewDeposit(assets, totalAssets, totalShares);
@@ -145,6 +156,7 @@ contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2StepUpgradeable 
     )
         external
         view
+        onlyValidCurveId(id)
         returns (uint256 assets)
     {
         return IBaseCurve(curveAddresses[id]).previewRedeem(shares, totalShares, totalAssets);
@@ -164,6 +176,7 @@ contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2StepUpgradeable 
     )
         external
         view
+        onlyValidCurveId(id)
         returns (uint256 shares)
     {
         return IBaseCurve(curveAddresses[id]).previewWithdraw(assets, totalAssets, totalShares);
@@ -183,6 +196,7 @@ contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2StepUpgradeable 
     )
         external
         view
+        onlyValidCurveId(id)
         returns (uint256 assets)
     {
         return IBaseCurve(curveAddresses[id]).previewMint(shares, totalShares, totalAssets);
@@ -202,6 +216,7 @@ contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2StepUpgradeable 
     )
         external
         view
+        onlyValidCurveId(id)
         returns (uint256 shares)
     {
         return IBaseCurve(curveAddresses[id]).convertToShares(assets, totalAssets, totalShares);
@@ -221,6 +236,7 @@ contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2StepUpgradeable 
     )
         external
         view
+        onlyValidCurveId(id)
         returns (uint256 assets)
     {
         return IBaseCurve(curveAddresses[id]).convertToAssets(shares, totalShares, totalAssets);
@@ -238,6 +254,7 @@ contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2StepUpgradeable 
     )
         external
         view
+        onlyValidCurveId(id)
         returns (uint256 sharePrice)
     {
         return IBaseCurve(curveAddresses[id]).currentPrice(totalShares, totalAssets);
@@ -246,7 +263,7 @@ contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2StepUpgradeable 
     /// @notice Get the name of a curve
     /// @param id Curve ID to query
     /// @return name The name of the curve
-    function getCurveName(uint256 id) external view returns (string memory name) {
+    function getCurveName(uint256 id) external view onlyValidCurveId(id) returns (string memory name) {
         return IBaseCurve(curveAddresses[id]).name();
     }
 
@@ -254,7 +271,7 @@ contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2StepUpgradeable 
     /// constructor arguments, to avoid overflow.
     /// @param id Curve ID to query
     /// @return maxShares The maximum number of shares
-    function getCurveMaxShares(uint256 id) external view returns (uint256 maxShares) {
+    function getCurveMaxShares(uint256 id) external view onlyValidCurveId(id) returns (uint256 maxShares) {
         return IBaseCurve(curveAddresses[id]).maxShares();
     }
 
@@ -262,7 +279,23 @@ contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2StepUpgradeable 
     /// constructor arguments, to avoid overflow.
     /// @param id Curve ID to query
     /// @return maxAssets The maximum number of assets
-    function getCurveMaxAssets(uint256 id) external view returns (uint256 maxAssets) {
+    function getCurveMaxAssets(uint256 id) external view onlyValidCurveId(id) returns (uint256 maxAssets) {
         return IBaseCurve(curveAddresses[id]).maxAssets();
+    }
+
+    /// @notice Check if a curve ID is valid
+    /// @param id Curve ID to check
+    /// @return valid True if the curve ID is valid, false otherwise
+    function isCurveIdValid(uint256 id) external view returns (bool valid) {
+        return _isCurveIdValid(id);
+    }
+
+    /* =================================================== */
+    /*                INTERNAL FUNCTIONS                   */
+    /* =================================================== */
+
+    /// @dev Internal function to check if a curve ID is valid
+    function _isCurveIdValid(uint256 id) internal view returns (bool valid) {
+        return id > 0 && id <= count;
     }
 }

@@ -102,7 +102,7 @@ contract OffsetProgressiveCurve is BaseCurve {
     /// $$\text{shares} = \sqrt{(s + o)^2 + \frac{2a}{m}} - (s + o)$$
     function previewDeposit(
         uint256 assets,
-        uint256, /*totalAssets*/
+        uint256 totalAssets,
         uint256 totalShares
     )
         external
@@ -110,13 +110,12 @@ contract OffsetProgressiveCurve is BaseCurve {
         override
         returns (uint256 shares)
     {
-        require(assets > 0, "Asset amount must be greater than zero");
-
+        _checkDepositBounds(assets, totalAssets, MAX_ASSETS);
         UD60x18 currentSupplyOfShares = convert(totalShares).add(OFFSET);
-
-        return convert(
+        shares = convert(
             currentSupplyOfShares.powu(2).add(convert(assets).div(HALF_SLOPE)).sqrt().sub(currentSupplyOfShares)
         );
+        _checkDepositOut(shares, totalShares, MAX_SHARES);
     }
 
     /// @inheritdoc BaseCurve
@@ -142,10 +141,9 @@ contract OffsetProgressiveCurve is BaseCurve {
         override
         returns (uint256 assets)
     {
+        _checkRedeem(shares, totalShares);
         UD60x18 currentSupplyOfShares = convert(totalShares).add(OFFSET);
-
         UD60x18 supplyOfSharesAfterRedeem = currentSupplyOfShares.sub(convert(shares));
-
         return convert(_convertToAssets(supplyOfSharesAfterRedeem, currentSupplyOfShares));
     }
 
@@ -165,16 +163,18 @@ contract OffsetProgressiveCurve is BaseCurve {
     function previewMint(
         uint256 shares,
         uint256 totalShares,
-        uint256 /*totalAssets*/
+        uint256 totalAssets
     )
         external
         view
         override
         returns (uint256 assets)
     {
+        _checkMintBounds(shares, totalShares, MAX_SHARES);
         UD60x18 currentSupplyOfShares = convert(totalShares).add(OFFSET);
         UD60x18 supplyOfSharesAfterMint = convert(totalShares + shares).add(OFFSET);
-        return convert(_convertToAssets(currentSupplyOfShares, supplyOfSharesAfterMint));
+        assets = convert(_convertToAssets(currentSupplyOfShares, supplyOfSharesAfterMint));
+        _checkMintOut(assets, totalAssets, MAX_ASSETS);
     }
 
     /// @inheritdoc BaseCurve
@@ -188,7 +188,7 @@ contract OffsetProgressiveCurve is BaseCurve {
     /// $$\text{shares} = (s + o) - \sqrt{(s + o)^2 - \frac{2a}{m}}$$
     function previewWithdraw(
         uint256 assets,
-        uint256, /*totalAssets*/
+        uint256 totalAssets,
         uint256 totalShares
     )
         external
@@ -196,6 +196,7 @@ contract OffsetProgressiveCurve is BaseCurve {
         override
         returns (uint256 shares)
     {
+        _checkWithdraw(assets, totalAssets);
         UD60x18 currentSupplyOfShares = convert(totalShares).add(OFFSET);
         return convert(
             currentSupplyOfShares.sub(currentSupplyOfShares.powu(2).sub(convert(assets).div(HALF_SLOPE)).sqrt())
@@ -235,7 +236,7 @@ contract OffsetProgressiveCurve is BaseCurve {
     /// $$\text{shares} = \frac{2a}{(s + o) \cdot m}$$
     function convertToShares(
         uint256 assets,
-        uint256, /*totalAssets*/
+        uint256 totalAssets,
         uint256 totalShares
     )
         external
@@ -243,11 +244,12 @@ contract OffsetProgressiveCurve is BaseCurve {
         override
         returns (uint256 shares)
     {
-        require(assets > 0, "Asset amount must be greater than zero");
+        _checkDepositBounds(assets, totalAssets, MAX_ASSETS);
         UD60x18 currentSupplyOfShares = convert(totalShares).add(OFFSET);
-        return convert(
+        shares = convert(
             currentSupplyOfShares.powu(2).add(convert(assets).div(HALF_SLOPE)).sqrt().sub(currentSupplyOfShares)
         );
+        _checkDepositOut(shares, totalShares, MAX_SHARES);
     }
 
     /// @inheritdoc BaseCurve
@@ -272,7 +274,7 @@ contract OffsetProgressiveCurve is BaseCurve {
         override
         returns (uint256 assets)
     {
-        require(totalShares >= shares, "PC: Under supply of shares");
+        _checkRedeem(shares, totalShares);
         UD60x18 currentSupplyOfShares = convert(totalShares).add(OFFSET);
         UD60x18 supplyOfSharesAfterRedeem = currentSupplyOfShares.sub(convert(shares));
         return convert(_convertToAssets(supplyOfSharesAfterRedeem, currentSupplyOfShares));

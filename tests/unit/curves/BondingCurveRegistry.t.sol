@@ -121,12 +121,28 @@ contract BondingCurveRegistryTest is Test {
         assertEq(shares, 1e18);
     }
 
+    function test_previewDeposit_revertsOnInvalidCurveId() public {
+        vm.prank(admin);
+        registry.addBondingCurve(address(linearCurve));
+
+        vm.expectRevert(abi.encodeWithSelector(BondingCurveRegistry.BondingCurveRegistry_InvalidCurveId.selector));
+        registry.previewDeposit(1e18, 10e18, 10e18, 2);
+    }
+
     function test_previewRedeem_successful() public {
         vm.prank(admin);
         registry.addBondingCurve(address(linearCurve));
 
         uint256 assets = registry.previewRedeem(1e18, 10e18, 10e18, 1);
         assertEq(assets, 1e18);
+    }
+
+    function test_previewRedeem_revertsOnInvalidCurveId() public {
+        vm.prank(admin);
+        registry.addBondingCurve(address(linearCurve));
+
+        vm.expectRevert(abi.encodeWithSelector(BondingCurveRegistry.BondingCurveRegistry_InvalidCurveId.selector));
+        registry.previewRedeem(1e18, 10e18, 10e18, 2);
     }
 
     function test_previewWithdraw_successful() public {
@@ -137,12 +153,28 @@ contract BondingCurveRegistryTest is Test {
         assertEq(shares, 1e18);
     }
 
+    function test_previewWithdraw_revertsOnInvalidCurveId() public {
+        vm.prank(admin);
+        registry.addBondingCurve(address(linearCurve));
+
+        vm.expectRevert(abi.encodeWithSelector(BondingCurveRegistry.BondingCurveRegistry_InvalidCurveId.selector));
+        registry.previewWithdraw(1e18, 10e18, 10e18, 2);
+    }
+
     function test_previewMint_successful() public {
         vm.prank(admin);
         registry.addBondingCurve(address(linearCurve));
 
         uint256 assets = registry.previewMint(1e18, 10e18, 10e18, 1);
         assertEq(assets, 1e18);
+    }
+
+    function test_previewMint_revertsOnInvalidCurveId() public {
+        vm.prank(admin);
+        registry.addBondingCurve(address(linearCurve));
+
+        vm.expectRevert(abi.encodeWithSelector(BondingCurveRegistry.BondingCurveRegistry_InvalidCurveId.selector));
+        registry.previewMint(1e18, 10e18, 10e18, 2);
     }
 
     function test_convertToShares_successful() public {
@@ -153,12 +185,28 @@ contract BondingCurveRegistryTest is Test {
         assertEq(shares, 1e18);
     }
 
+    function test_convertToShares_revertsOnInvalidCurveId() public {
+        vm.prank(admin);
+        registry.addBondingCurve(address(linearCurve));
+
+        vm.expectRevert(abi.encodeWithSelector(BondingCurveRegistry.BondingCurveRegistry_InvalidCurveId.selector));
+        registry.convertToShares(1e18, 10e18, 10e18, 2);
+    }
+
     function test_convertToAssets_successful() public {
         vm.prank(admin);
         registry.addBondingCurve(address(linearCurve));
 
         uint256 assets = registry.convertToAssets(1e18, 10e18, 10e18, 1);
         assertEq(assets, 1e18);
+    }
+
+    function test_convertToAssets_revertsOnInvalidCurveId() public {
+        vm.prank(admin);
+        registry.addBondingCurve(address(linearCurve));
+
+        vm.expectRevert(abi.encodeWithSelector(BondingCurveRegistry.BondingCurveRegistry_InvalidCurveId.selector));
+        registry.convertToAssets(1e18, 10e18, 10e18, 2);
     }
 
     function test_currentPrice_successful() public {
@@ -169,12 +217,28 @@ contract BondingCurveRegistryTest is Test {
         assertEq(price, 1e18);
     }
 
+    function test_currentPrice_revertsOnInvalidCurveId() public {
+        vm.prank(admin);
+        registry.addBondingCurve(address(linearCurve));
+
+        vm.expectRevert(abi.encodeWithSelector(BondingCurveRegistry.BondingCurveRegistry_InvalidCurveId.selector));
+        registry.currentPrice(2, 10e18, 10e18);
+    }
+
     function test_getCurveName_successful() public {
         vm.prank(admin);
         registry.addBondingCurve(address(linearCurve));
 
         string memory name = registry.getCurveName(1);
         assertEq(name, "Linear Curve");
+    }
+
+    function test_getCurveName_revertsOnInvalidCurveId() public {
+        vm.prank(admin);
+        registry.addBondingCurve(address(linearCurve));
+
+        vm.expectRevert(abi.encodeWithSelector(BondingCurveRegistry.BondingCurveRegistry_InvalidCurveId.selector));
+        registry.getCurveName(2);
     }
 
     function test_getCurveMaxShares_successful() public {
@@ -185,12 +249,36 @@ contract BondingCurveRegistryTest is Test {
         assertEq(maxShares, type(uint256).max);
     }
 
+    function test_getCurveMaxShares_revertsOnInvalidCurveId() public {
+        vm.prank(admin);
+        registry.addBondingCurve(address(linearCurve));
+
+        vm.expectRevert(abi.encodeWithSelector(BondingCurveRegistry.BondingCurveRegistry_InvalidCurveId.selector));
+        registry.getCurveMaxShares(2);
+    }
+
     function test_getCurveMaxAssets_successful() public {
         vm.prank(admin);
         registry.addBondingCurve(address(linearCurve));
 
         uint256 maxAssets = registry.getCurveMaxAssets(1);
         assertEq(maxAssets, type(uint256).max);
+    }
+
+    function test_getCurveMaxAssets_revertsOnInvalidCurveId() public {
+        vm.prank(admin);
+        registry.addBondingCurve(address(linearCurve));
+
+        vm.expectRevert(abi.encodeWithSelector(BondingCurveRegistry.BondingCurveRegistry_InvalidCurveId.selector));
+        registry.getCurveMaxAssets(2);
+    }
+
+    function test_isCurveIdValid_successful() public {
+        vm.prank(admin);
+        registry.addBondingCurve(address(linearCurve));
+
+        assertTrue(registry.isCurveIdValid(1));
+        assertFalse(registry.isCurveIdValid(2));
     }
 
     function testFuzz_addMultipleCurves(uint256 slope1, uint256 slope2) public {
