@@ -670,4 +670,17 @@ abstract contract BaseTest is Modifiers, Test {
         resetPrank({ msgSender: users.admin });
         protocol.trustBonding.add_to_whitelist(_user);
     }
+
+    /// @dev Helper function to create a random EOA excluding reserved addresses
+    function _excludeReservedAddresses(address target) internal {
+        // Exclude precompiled contracts (addresses 0x1 to 0xA)
+        vm.assume(target > address(0xA));
+        vm.assume(target.code.length == 0);
+
+        // Exclude Foundry cheatcode addresses that masquerade as EOAs
+        address FOUNDRY_CONSOLE = address(0x000000000000000000636F6e736F6c652e6c6f67); // "console.log"
+        address FOUNDRY_CONSOLE2 = address(0x0000000000000000000000000000636f6e736f6c6532); // "console2"
+        address HEVM = address(uint160(uint256(keccak256("hevm cheat code"))));
+        vm.assume(target != FOUNDRY_CONSOLE && target != FOUNDRY_CONSOLE2 && target != HEVM);
+    }
 }
