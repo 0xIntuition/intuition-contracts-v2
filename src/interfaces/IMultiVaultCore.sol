@@ -89,7 +89,7 @@ interface IMultiVaultCore {
      * @param minDeposit The new minimum deposit amount
      * @param minShare The new minimum share amount
      * @param atomDataMaxLength The new maximum atom data length
-     * @param decimalPrecision The new decimal precision for share price calculations
+     * @param feeThreshold The new fee threshold
      */
     event GeneralConfigUpdated(
         address indexed admin,
@@ -99,7 +99,7 @@ interface IMultiVaultCore {
         uint256 minDeposit,
         uint256 minShare,
         uint256 atomDataMaxLength,
-        uint256 decimalPrecision
+        uint256 feeThreshold
     );
 
     /**
@@ -112,12 +112,10 @@ interface IMultiVaultCore {
     /**
      * @notice Emitted when the triple configuration is updated
      * @param tripleCreationProtocolFee The new triple creation protocol fee
-     * @param totalAtomDepositsOnTripleCreation The new total atom deposits on triple creation
      * @param atomDepositFractionForTriple The new atom deposit fraction for triple
      */
     event TripleConfigUpdated(
         uint256 tripleCreationProtocolFee,
-        uint256 totalAtomDepositsOnTripleCreation,
         uint256 atomDepositFractionForTriple
     );
 

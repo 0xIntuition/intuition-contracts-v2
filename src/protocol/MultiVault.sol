@@ -955,7 +955,7 @@ contract MultiVault is
             _generalConfig.minDeposit,
             _generalConfig.minShare,
             _generalConfig.atomDataMaxLength,
-            _generalConfig.decimalPrecision
+            _generalConfig.feeThreshold
         );
     }
 
@@ -970,7 +970,6 @@ contract MultiVault is
         tripleConfig = _tripleConfig;
         emit TripleConfigUpdated(
             _tripleConfig.tripleCreationProtocolFee,
-            _tripleConfig.totalAtomDepositsOnTripleCreation,
             _tripleConfig.atomDepositFractionForTriple
         );
     }
@@ -1682,12 +1681,6 @@ contract MultiVault is
 
         if (_maxRedeem(_account, _termId, _curveId) < _shares) {
             revert MultiVault_InsufficientSharesInVault();
-        }
-
-        (uint256 expectedAssets,) = _calculateRedeem(_termId, _curveId, _shares);
-
-        if (expectedAssets < _minAssets) {
-            revert MultiVault_SlippageExceeded();
         }
 
         uint256 remainingShares = _vaults[_termId][_curveId].totalShares - _shares;
