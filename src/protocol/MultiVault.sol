@@ -948,26 +948,49 @@ contract MultiVault is
     /// @inheritdoc IMultiVault
     function setGeneralConfig(GeneralConfig memory _generalConfig) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setGeneralConfig(_generalConfig);
+        emit GeneralConfigUpdated(
+            _generalConfig.admin,
+            _generalConfig.protocolMultisig,
+            _generalConfig.feeDenominator,
+            _generalConfig.trustBonding,
+            _generalConfig.minDeposit,
+            _generalConfig.minShare,
+            _generalConfig.atomDataMaxLength,
+            _generalConfig.decimalPrecision
+        );
     }
 
     /// @inheritdoc IMultiVault
     function setAtomConfig(AtomConfig memory _atomConfig) external onlyRole(DEFAULT_ADMIN_ROLE) {
         atomConfig = _atomConfig;
+        emit AtomConfigUpdated(_atomConfig.atomCreationProtocolFee, _atomConfig.atomWalletDepositFee);
     }
 
     /// @inheritdoc IMultiVault
     function setTripleConfig(TripleConfig memory _tripleConfig) external onlyRole(DEFAULT_ADMIN_ROLE) {
         tripleConfig = _tripleConfig;
-    }
-
-    /// @inheritdoc IMultiVault
-    function setVaultFees(VaultFees memory _vaultFees) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        vaultFees = _vaultFees;
+        emit TripleConfigUpdated(
+            _tripleConfig.tripleCreationProtocolFee,
+            _tripleConfig.totalAtomDepositsOnTripleCreation,
+            _tripleConfig.atomDepositFractionForTriple
+        );
     }
 
     /// @inheritdoc IMultiVault
     function setWalletConfig(WalletConfig memory _walletConfig) external onlyRole(DEFAULT_ADMIN_ROLE) {
         walletConfig = _walletConfig;
+        emit WalletConfigUpdated(
+            _walletConfig.entryPoint,
+            _walletConfig.atomWarden,
+            _walletConfig.atomWalletBeacon,
+            _walletConfig.atomWalletFactory
+        );
+    }
+
+    /// @inheritdoc IMultiVault
+    function setVaultFees(VaultFees memory _vaultFees) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        vaultFees = _vaultFees;
+        emit VaultFeesUpdated(_vaultFees.entryFee, _vaultFees.exitFee, _vaultFees.protocolFee);
     }
 
     /// @inheritdoc IMultiVault
@@ -976,6 +999,7 @@ contract MultiVault is
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
         bondingCurveConfig = _bondingCurveConfig;
+        emit BondingCurveConfigUpdated(_bondingCurveConfig.registry, _bondingCurveConfig.defaultCurveId);
     }
 
     /// @inheritdoc IMultiVault
