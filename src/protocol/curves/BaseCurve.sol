@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+
 import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
 
 /**
@@ -10,14 +12,20 @@ import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
  * @dev This contract is designed to be inherited by other bonding curve contracts, providing a common interface for
  *      converting between assets and shares.
  * @dev These curves handle the pure mathematical relationship for share price. Pool ratio adjustments (such as
- *      accomodating for the effect of fees, supply burn, airdrops, etc) are handled by the MultiVault instead
+ *      accommodating for the effect of fees, supply burn, airdrops, etc) are handled by the MultiVault instead
  *      of the curves themselves.
  */
-abstract contract BaseCurve is IBaseCurve {
+abstract contract BaseCurve is IBaseCurve, Initializable {
     /* =================================================== */
-    /*                      ERRORS                         */
+    /*                  STATE VARIABLES                    */
     /* =================================================== */
 
+    /// @notice The name of the curve
+    string public name;
+    
+    /* =================================================== */
+    /*                       ERRORS                        */
+    /* =================================================== */
     error BaseCurve_EmptyStringNotAllowed();
     error BaseCurve_AssetsExceedTotalAssets();
     error BaseCurve_SharesExceedTotalShares();
@@ -25,21 +33,28 @@ abstract contract BaseCurve is IBaseCurve {
     error BaseCurve_SharesOverflowMax();
 
     /* =================================================== */
-    /*                  STATE VARIABLES                    */
+    /*                    CONSTRUCTOR                      */
     /* =================================================== */
 
-    /// @notice The name of the curve
-    string public name;
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
 
-    /// @notice Construct the curve with a unique name
-    ///
+    /* =================================================== */
+    /*                    INITIALIZER                      */
+    /* =================================================== */
+
+    /// @notice Initialize the curve with a unique name
     /// @param _name Unique name for the curve
-    constructor(string memory _name) {
+    function __BaseCurve_init(string memory _name) internal onlyInitializing {
         if (bytes(_name).length == 0) {
             revert BaseCurve_EmptyStringNotAllowed();
         }
 
         name = _name;
+
+        emit CurveNameSet(_name);
     }
 
     /// @notice The maximum number of shares that this curve can handle without overflowing.

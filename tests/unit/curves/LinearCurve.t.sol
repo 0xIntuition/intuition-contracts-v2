@@ -2,24 +2,41 @@
 pragma solidity 0.8.29;
 
 import { Test } from "forge-std/src/Test.sol";
+import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
-import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
+import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
 
 contract LinearCurveTest is Test {
     LinearCurve public curve;
 
     function setUp() public {
-        curve = new LinearCurve("Linear Curve Test");
+        LinearCurve linearCurveImpl = new LinearCurve();
+        TransparentUpgradeableProxy linearCurveProxy = new TransparentUpgradeableProxy(
+            address(linearCurveImpl),
+            address(this),
+            abi.encodeWithSelector(LinearCurve.initialize.selector, "Linear Curve Test")
+        );
+        curve = LinearCurve(address(linearCurveProxy));
     }
 
-    function test_constructor_successful() public {
-        LinearCurve newCurve = new LinearCurve("Test Curve");
-        assertEq(newCurve.name(), "Test Curve");
+    function test_initialize_successful() public {
+        LinearCurve linearCurveImpl = new LinearCurve();
+        TransparentUpgradeableProxy linearCurveProxy =
+            new TransparentUpgradeableProxy(address(linearCurveImpl), address(this), "");
+        curve = LinearCurve(address(linearCurveProxy));
+
+        curve.initialize("Linear Curve Test");
+        assertEq(LinearCurve(address(linearCurveProxy)).name(), "Linear Curve Test");
     }
 
-    function test_constructor_revertsOnEmptyName() public {
-        vm.expectRevert(abi.encodeWithSelector(BaseCurve.BaseCurve_EmptyStringNotAllowed.selector));
-        new LinearCurve("");
+    function test_initialize_revertsOnEmptyName() public {
+        LinearCurve linearCurveImpl = new LinearCurve();
+        TransparentUpgradeableProxy linearCurveProxy =
+            new TransparentUpgradeableProxy(address(linearCurveImpl), address(this), "");
+        curve = LinearCurve(address(linearCurveProxy));
+
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_EmptyStringNotAllowed.selector));
+        curve.initialize("");
     }
 
     function test_previewDeposit_zeroSupply() public view {

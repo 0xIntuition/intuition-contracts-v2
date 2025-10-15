@@ -47,30 +47,37 @@ contract OffsetProgressiveCurve is BaseCurve {
     /// @dev 0.0025e18 -> 25 basis points, 0.0001e18 = 1 basis point, etc etc
     /// @dev If minDeposit is 0.003 ether, this value would need to be 0.00007054e18 to avoid returning 0 shares for
     /// minDeposit assets
-    UD60x18 public immutable SLOPE;
+    UD60x18 public SLOPE;
 
     /// @notice The offset of the curve.  This value is used to snip off a portion of the beginning of the curve,
     /// realigning it to the
     /// origin.  For more details, see the preview functions.
-    UD60x18 public immutable OFFSET;
+    UD60x18 public OFFSET;
 
     /// @notice The half of the slope, used for calculations.
-    UD60x18 public immutable HALF_SLOPE;
+    UD60x18 public HALF_SLOPE;
 
     /// @dev Since powu(2) will overflow first (see slope equation), maximum totalShares is sqrt(MAX_UD60x18)
-    uint256 public immutable MAX_SHARES;
+    uint256 public MAX_SHARES;
 
     /// @dev The maximum assets is totalShares * slope / 2, because multiplication (see slope equation) would overflow
     /// beyond that point.
-    uint256 public immutable MAX_ASSETS;
+    uint256 public MAX_ASSETS;
 
-    /// @notice Constructs a new ProgressiveCurve with the given name and slope
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    /// @notice Initializes a new ProgressiveCurve with the given name and slope
     /// @param _name The name of the curve (i.e. "Progressive Curve #465")
     /// @param slope18 The slope of the curve, in basis points (i.e. 0.0025e18)
     /// @param offset18 The offset of the curve, in basis points (i.e. 0.0001e18)
     /// @dev Computes maximum values given constructor arguments
     /// @dev Computes Slope / 2 as commonly used constant
-    constructor(string memory _name, uint256 slope18, uint256 offset18) BaseCurve(_name) {
+    function initialize(string calldata _name, uint256 slope18, uint256 offset18) external initializer {
+        __BaseCurve_init(_name);
+
         require(slope18 > 0, "PC: Slope must be > 0");
 
         SLOPE = UD60x18.wrap(slope18);

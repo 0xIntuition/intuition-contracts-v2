@@ -42,8 +42,6 @@ contract MultiVaultMigrationModeTest is BaseTest {
 
     MultiVaultMigrationMode public multiVaultMigrationMode;
     BondingCurveRegistry public testBondingCurveRegistry;
-    LinearCurve public linearCurve;
-    OffsetProgressiveCurve public offsetProgressiveCurve;
     AtomWalletFactory public atomWalletFactory;
 
     /* =================================================== */
@@ -100,10 +98,33 @@ contract MultiVaultMigrationModeTest is BaseTest {
         // Cast the proxy to AtomWalletFactory
         atomWalletFactory = AtomWalletFactory(address(atomWalletFactoryProxy));
 
-        // Deploy test bonding curve registry and curves
-        testBondingCurveRegistry = new BondingCurveRegistry(users.admin);
-        linearCurve = new LinearCurve("Test Linear Curve");
-        offsetProgressiveCurve = new OffsetProgressiveCurve("Test Offset Progressive Curve", 1e15, 1e15);
+        // Deploy BondingCurveRegistry implementation and proxy
+        BondingCurveRegistry bondingCurveRegistryImpl = new BondingCurveRegistry();
+        TransparentUpgradeableProxy bondingCurveRegistryProxy = new TransparentUpgradeableProxy(
+            address(bondingCurveRegistryImpl),
+            users.admin,
+            abi.encodeWithSelector(BondingCurveRegistry.initialize.selector, users.admin)
+        );
+        testBondingCurveRegistry = BondingCurveRegistry(address(bondingCurveRegistryProxy));
+
+        // Deploy bonding curve implementations
+        LinearCurve linearCurveImpl = new LinearCurve();
+        OffsetProgressiveCurve offsetProgressiveCurveImpl = new OffsetProgressiveCurve();
+
+        // Deploy proxies for bonding curves
+        TransparentUpgradeableProxy linearCurveProxy = new TransparentUpgradeableProxy(
+            address(linearCurveImpl),
+            users.admin,
+            abi.encodeWithSelector(LinearCurve.initialize.selector, "Linear Curve")
+        );
+        linearCurve = LinearCurve(address(linearCurveProxy));
+
+        TransparentUpgradeableProxy offsetProgressiveCurveProxy = new TransparentUpgradeableProxy(
+            address(offsetProgressiveCurveImpl),
+            users.admin,
+            abi.encodeWithSelector(OffsetProgressiveCurve.initialize.selector, "Offset Progressive Curve", 2, 5e35)
+        );
+        offsetProgressiveCurve = OffsetProgressiveCurve(address(offsetProgressiveCurveProxy));
 
         // Add curves to registry
         vm.startPrank(users.admin);

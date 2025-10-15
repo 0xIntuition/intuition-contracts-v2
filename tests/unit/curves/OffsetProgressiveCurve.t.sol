@@ -3,8 +3,9 @@ pragma solidity 0.8.29;
 
 import { Test } from "forge-std/src/Test.sol";
 import { UD60x18, ud60x18 } from "@prb/math/src/UD60x18.sol";
-import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
+import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCurve.sol";
+import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
 
 contract OffsetProgressiveCurveTest is Test {
     OffsetProgressiveCurve public curve;
@@ -12,22 +13,43 @@ contract OffsetProgressiveCurveTest is Test {
     uint256 public constant OFFSET = 5e35;
 
     function setUp() public {
-        curve = new OffsetProgressiveCurve("Offset Progressive Curve Test", SLOPE, OFFSET);
+        OffsetProgressiveCurve offsetProgressiveCurveImpl = new OffsetProgressiveCurve();
+        TransparentUpgradeableProxy offsetProgressiveCurveProxy = new TransparentUpgradeableProxy(
+            address(offsetProgressiveCurveImpl),
+            address(this),
+            abi.encodeWithSelector(
+                OffsetProgressiveCurve.initialize.selector, "Offset Progressive Curve Test", SLOPE, OFFSET
+            )
+        );
+        curve = OffsetProgressiveCurve(address(offsetProgressiveCurveProxy));
     }
 
-    function test_constructor_successful() public {
-        OffsetProgressiveCurve newCurve = new OffsetProgressiveCurve("Test Curve", SLOPE, OFFSET);
-        assertEq(newCurve.name(), "Test Curve");
+    function test_initialize_successful() public {
+        OffsetProgressiveCurve newCurveImpl = new OffsetProgressiveCurve();
+        TransparentUpgradeableProxy newCurveProxy =
+            new TransparentUpgradeableProxy(address(newCurveImpl), address(this), "");
+        OffsetProgressiveCurve(address(newCurveProxy)).initialize("Test Curve", SLOPE, OFFSET);
+        assertEq(OffsetProgressiveCurve(address(newCurveProxy)).name(), "Test Curve");
     }
 
-    function test_constructor_revertsOnZeroSlope() public {
+    function test_initialize_revertsOnZeroSlope() public {
+        OffsetProgressiveCurve offsetProgressiveCurveImpl = new OffsetProgressiveCurve();
+        TransparentUpgradeableProxy offsetProgressiveCurveProxy =
+            new TransparentUpgradeableProxy(address(offsetProgressiveCurveImpl), address(this), "");
+        curve = OffsetProgressiveCurve(address(offsetProgressiveCurveProxy));
+
         vm.expectRevert("PC: Slope must be > 0");
-        new OffsetProgressiveCurve("Test Curve", 0, OFFSET);
+        curve.initialize("Test Curve", 0, OFFSET);
     }
 
-    function test_constructor_revertsOnEmptyName() public {
-        vm.expectRevert(abi.encodeWithSelector(BaseCurve.BaseCurve_EmptyStringNotAllowed.selector));
-        new OffsetProgressiveCurve("", SLOPE, OFFSET);
+    function test_initialize_revertsOnEmptyName() public {
+        OffsetProgressiveCurve offsetProgressiveCurveImpl = new OffsetProgressiveCurve();
+        TransparentUpgradeableProxy offsetProgressiveCurveProxy =
+            new TransparentUpgradeableProxy(address(offsetProgressiveCurveImpl), address(this), "");
+        curve = OffsetProgressiveCurve(address(offsetProgressiveCurveProxy));
+
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_EmptyStringNotAllowed.selector));
+        curve.initialize("", SLOPE, OFFSET);
     }
 
     function test_previewDeposit_zeroShares() public view {

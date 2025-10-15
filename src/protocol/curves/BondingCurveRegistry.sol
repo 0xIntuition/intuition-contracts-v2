@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { Ownable, Ownable2Step } from "@openzeppelin/contracts/access/Ownable2Step.sol";
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 
 import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
 import { IBondingCurveRegistry } from "src/interfaces/IBondingCurveRegistry.sol";
@@ -21,7 +22,7 @@ import { IBondingCurveRegistry } from "src/interfaces/IBondingCurveRegistry.sol"
  *         You can think of the registry as a concierge the MultiVault uses to access various
  *         economic incentive patterns.
  */
-contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2Step {
+contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2StepUpgradeable {
     /* =================================================== */
     /*                      ERRORS                         */
     /* =================================================== */
@@ -61,9 +62,20 @@ contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2Step {
     /*                    CONSTRUCTOR                      */
     /* =================================================== */
 
-    /// @notice Constructor for the BondingCurveRegistry contract
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    /* =================================================== */
+    /*                    INITIALIZER                      */
+    /* =================================================== */
+
+    /// @notice Initialize the BondingCurveRegistry contract
     /// @param _admin Address who may add curves to the registry
-    constructor(address _admin) Ownable(_admin) { }
+    function initialize(address _admin) external initializer {
+        __Ownable_init(_admin);
+    }
 
     /* =================================================== */
     /*              ACCESS-RESTRICTED FUNCTIONS            */
