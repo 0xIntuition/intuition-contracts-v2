@@ -103,7 +103,7 @@ contract BaseEmissionsController is
 
     /// @notice Receive native gas token to fund cross-chain messages
     receive() external payable {
-        emit Transfer(_msgSender(), address(this), msg.value);
+        emit Transfer(msg.sender, address(this), msg.value);
     }
 
     /* =================================================== */
@@ -197,8 +197,8 @@ contract BaseEmissionsController is
 
     /// @inheritdoc IBaseEmissionsController
     function withdraw(uint256 amount) external nonReentrant onlyRole(DEFAULT_ADMIN_ROLE) {
-        emit Transfer(address(this), _msgSender(), amount);
-        Address.sendValue(payable(_msgSender()), amount);
+        emit Transfer(address(this), msg.sender, amount);
+        Address.sendValue(payable(msg.sender), amount);
     }
 
     /* =================================================== */
@@ -244,7 +244,7 @@ contract BaseEmissionsController is
         );
 
         if (value > gasLimit) {
-            Address.sendValue(payable(_msgSender()), value - gasLimit);
+            Address.sendValue(payable(msg.sender), value - gasLimit);
         }
 
         emit TrustMintedAndBridged(_SATELLITE_EMISSIONS_CONTROLLER, amount, epoch);
