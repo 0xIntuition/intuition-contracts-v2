@@ -331,7 +331,6 @@ interface IMultiVault {
     /// @notice Simulates the creation of an atom with an initial deposit
     /// @dev Returns the expected shares to be minted and the net assets credited after fees
     /// @param termId The ID of the atom
-    /// @param curveId The ID of the bonding curve
     /// @param assets The amount of assets the user would send
     /// @return shares The expected shares to be minted for the user
     /// @return assetsAfterFixedFees The net assets that will be added to the vault (after fixed fees, before dynamic
@@ -339,7 +338,6 @@ interface IMultiVault {
     /// @return assetsAfterFees The net assets that will be added to the vault (after all fees)
     function previewAtomCreate(
         bytes32 termId,
-        uint256 curveId,
         uint256 assets
     )
         external
@@ -381,7 +379,6 @@ interface IMultiVault {
     /// @notice Simulates the creation of a triple with an initial deposit
     /// @dev Returns the expected shares to be minted and the net assets credited after fees
     /// @param termId The ID of the triple
-    /// @param curveId The ID of the bonding curve
     /// @param assets The amount of assets the user would send
     /// @return shares The expected shares to be minted for the user
     /// @return assetsAfterFixedFees The net assets that will be added to the vault (after fixed fees like protocol and
@@ -389,7 +386,6 @@ interface IMultiVault {
     /// @return assetsAfterFees The net assets that will be added to the vault (after all fees)
     function previewTripleCreate(
         bytes32 termId,
-        uint256 curveId,
         uint256 assets
     )
         external
