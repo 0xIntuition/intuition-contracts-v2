@@ -55,7 +55,7 @@ abstract contract BaseTest is Modifiers, Test {
 
     uint256[] internal ATOM_COST;
     uint256[] internal TRIPLE_COST;
-    uint256 internal DECIMAL_PRECISION = 1e18;
+    uint256 internal FEE_THRESHOLD = 1e17;
     uint256 internal FEE_DENOMINATOR = 10_000;
     uint256 internal MIN_DEPOSIT = 1e17; // 0.1 Trust
     uint256 internal MIN_SHARES = 1e6; // Ghost Shares
@@ -67,7 +67,6 @@ abstract contract BaseTest is Modifiers, Test {
 
     // Triple Config
     uint256 internal TRIPLE_CREATION_PROTOCOL_FEE = 1e15; // 0.001 Trust (Fixed Cost)
-    uint256 internal TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 1e15; // 0.001 Trust (Fixed Cost)
     uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 0.9% (Percentage Cost)
 
     // Wallet Config
@@ -396,7 +395,7 @@ abstract contract BaseTest is Modifiers, Test {
             minDeposit: MIN_DEPOSIT,
             minShare: MIN_SHARES,
             atomDataMaxLength: 1000,
-            decimalPrecision: 1e18
+            feeThreshold: 1e17
         });
     }
 
@@ -410,7 +409,6 @@ abstract contract BaseTest is Modifiers, Test {
     function _getDefaultTripleConfig() internal returns (TripleConfig memory) {
         return TripleConfig({
             tripleCreationProtocolFee: TRIPLE_CREATION_PROTOCOL_FEE,
-            totalAtomDepositsOnTripleCreation: TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION,
             atomDepositFractionForTriple: 500
         });
     }

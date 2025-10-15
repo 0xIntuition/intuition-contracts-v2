@@ -112,7 +112,7 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
             uint256 minDeposit,
             uint256 minShare,
             uint256 atomDataMaxLength,
-            uint256 decimalPrecision
+            uint256 feeThreshold
         ) = protocol.multiVault.generalConfig();
 
         // Prepare a new config with changed values (keep admin same to not disturb roles)
@@ -124,7 +124,7 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
             minDeposit: minDeposit + 1,
             minShare: minShare + 1,
             atomDataMaxLength: atomDataMaxLength + 7,
-            decimalPrecision: decimalPrecision
+            feeThreshold: feeThreshold
         });
 
         resetPrank({ msgSender: users.admin });
@@ -139,7 +139,7 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
             uint256 newMinDeposit,
             uint256 newMinShare,
             uint256 newAtomDataMaxLength,
-            uint256 newDecimalPrecision
+            uint256 newFeeThreshold
         ) = protocol.multiVault.generalConfig();
 
         assertEq(newMultisig, users.controller);
@@ -148,7 +148,7 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
         assertEq(newMinDeposit, minDeposit + 1);
         assertEq(newMinShare, minShare + 1);
         assertEq(newAtomDataMaxLength, atomDataMaxLength + 7);
-        assertEq(newDecimalPrecision, decimalPrecision);
+        assertEq(newFeeThreshold, feeThreshold);
     }
 
     function testSetGeneralConfig_RevertWhen_NonAdmin() public {
@@ -193,20 +193,18 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
     ////////////////////////////////////////////////////////////////////*/
 
     function testSetTripleConfig_OnlyAdmin_UpdatesFields() public {
-        (uint256 creationFee, uint256 staticAtomDeposits, uint256 atomDepositFrac) = protocol.multiVault.tripleConfig();
+        (uint256 creationFee, uint256 atomDepositFrac) = protocol.multiVault.tripleConfig();
 
         TripleConfig memory tc = TripleConfig({
             tripleCreationProtocolFee: creationFee + 1,
-            totalAtomDepositsOnTripleCreation: staticAtomDeposits + 2,
             atomDepositFractionForTriple: atomDepositFrac + 3
         });
 
         resetPrank({ msgSender: users.admin });
         protocol.multiVault.setTripleConfig(tc);
 
-        (uint256 nCreationFee, uint256 nStaticDeposits, uint256 nFrac) = protocol.multiVault.tripleConfig();
+        (uint256 nCreationFee, uint256 nFrac) = protocol.multiVault.tripleConfig();
         assertEq(nCreationFee, creationFee + 1);
-        assertEq(nStaticDeposits, staticAtomDeposits + 2);
         assertEq(nFrac, atomDepositFrac + 3);
     }
 

@@ -365,7 +365,6 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
     /// @dev Internal function to get the static costs that go into creating a triple
     /// @return tripleCost the static costs of creating a triple
     function _getTripleCost() internal view returns (uint256) {
-        return tripleConfig.tripleCreationProtocolFee + tripleConfig.totalAtomDepositsOnTripleCreation
-            + generalConfig.minShare * 2;
+        return tripleConfig.tripleCreationProtocolFee + generalConfig.minShare * 2;
     }
 }

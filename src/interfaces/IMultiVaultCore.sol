@@ -9,7 +9,7 @@ struct GeneralConfig {
     address admin;
     /// @dev The protocol multisig address
     address protocolMultisig;
-    /// @dev The fee denominator used for fee calculations: fees are calculated as amount * (fee / feeDenominator)
+    /// @dev The fee denominator used for fee calculations: fees are calculated as `amount * (fee / feeDenominator)`
     uint256 feeDenominator;
     /// @dev The address of the TrustBonding contract
     address trustBonding;
@@ -19,8 +19,8 @@ struct GeneralConfig {
     uint256 minShare;
     /// @dev The maximum length of atom data that can be passed when creating atom vaults
     uint256 atomDataMaxLength;
-    /// @dev The decimal precision used for calculating share prices
-    uint256 decimalPrecision;
+    /// @dev Threshold in terms of total shares in a default curve vault at which entry and exit fees start to be charged
+    uint256 feeThreshold;
 }
 
 /// @notice Atom configuration struct
@@ -35,8 +35,6 @@ struct AtomConfig {
 struct TripleConfig {
     /// @dev The fee paid to the protocol when depositing vault shares for triple vault creation
     uint256 tripleCreationProtocolFee;
-    /// @dev The static fee allocated to increasing the amount of assets in the underlying atom vaults
-    uint256 totalAtomDepositsOnTripleCreation;
     /// @dev The percentage of the triple deposit amount used to purchase equity in the underlying atoms
     uint256 atomDepositFractionForTriple;
 }
@@ -91,7 +89,7 @@ interface IMultiVaultCore {
      * @param minDeposit The new minimum deposit amount
      * @param minShare The new minimum share amount
      * @param atomDataMaxLength The new maximum atom data length
-     * @param decimalPrecision The new decimal precision for share price calculations
+     * @param feeThreshold The new fee threshold
      */
     event GeneralConfigUpdated(
         address indexed admin,
@@ -101,7 +99,7 @@ interface IMultiVaultCore {
         uint256 minDeposit,
         uint256 minShare,
         uint256 atomDataMaxLength,
-        uint256 decimalPrecision
+        uint256 feeThreshold
     );
 
     /**
@@ -114,12 +112,10 @@ interface IMultiVaultCore {
     /**
      * @notice Emitted when the triple configuration is updated
      * @param tripleCreationProtocolFee The new triple creation protocol fee
-     * @param totalAtomDepositsOnTripleCreation The new total atom deposits on triple creation
      * @param atomDepositFractionForTriple The new atom deposit fraction for triple
      */
     event TripleConfigUpdated(
         uint256 tripleCreationProtocolFee,
-        uint256 totalAtomDepositsOnTripleCreation,
         uint256 atomDepositFractionForTriple
     );
 

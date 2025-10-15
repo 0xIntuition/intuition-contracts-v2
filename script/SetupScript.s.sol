@@ -48,11 +48,6 @@ abstract contract SetupScript is Script {
     /// @dev The address of the transaction broadcaster.
     address internal broadcaster;
 
-    // General Config
-    address internal ADMIN;
-    address internal PROTOCOL_MULTISIG;
-    address internal TRUST_TOKEN;
-
     Trust public trust;
     MultiVault public multiVault;
     AtomWarden public atomWarden;
@@ -78,7 +73,13 @@ abstract contract SetupScript is Script {
     uint32 internal SATELLITE_METALAYER_RECIPIENT_DOMAIN;
 
     // General Config
-    uint256 internal MIN_DEPOSIT;
+    address internal ADMIN;
+    address internal PROTOCOL_MULTISIG;
+    address internal TRUST_TOKEN;
+    // address internal METALAYER_HUB_OR_SPOKE;
+
+    uint256 internal FEE_THRESHOLD = 1e17;
+    uint256 internal MIN_DEPOSIT = 1e15; // 0.001 Trust
 
     // Atom Config
     uint256 internal ATOM_CREATION_PROTOCOL_FEE = 1e18; // 1 Trust (Fixed Cost)
@@ -86,7 +87,6 @@ abstract contract SetupScript is Script {
 
     // Triple Config
     uint256 internal TRIPLE_CREATION_PROTOCOL_FEE = 1e18; // 1 Trust (Fixed Cost)
-    uint256 internal TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 3 * 1e17; // 0.3 Trust (Fixed Cost)
     uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 0.9% (Percentage Cost)
 
     // TrustBonding Config
@@ -184,7 +184,6 @@ abstract contract SetupScript is Script {
 
             // Triple Config
             TRIPLE_CREATION_PROTOCOL_FEE = 1e15; // 0.001 Trust (Fixed Cost)
-            TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 3 * 1e15; // 0.003 Trust (Fixed Cost)
             ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 0.9% (Percentage Cost)
 
             // TrustBonding Config
@@ -222,7 +221,6 @@ abstract contract SetupScript is Script {
 
             // Triple Config
             TRIPLE_CREATION_PROTOCOL_FEE = 1e18; // 1 Trust (Fixed Cost)
-            TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 3 * 1e17; // 0.3 Trust (Fixed Cost)
             ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 0.9% (Percentage Cost)
 
             // TrustBonding Config
@@ -259,6 +257,38 @@ abstract contract SetupScript is Script {
             ADMIN = vm.envAddress("ANVIL_ADMIN_ADDRESS");
             TRUST_TOKEN = vm.envOr("ANVIL_TRUST_TOKEN", address(0));
             PROTOCOL_MULTISIG = vm.envOr("ANVIL_PROTOCOL_MULTISIG", ADMIN);
+
+            BASE_METALAYER_RECIPIENT_DOMAIN = 11_111;
+
+            // Timelock Config
+            TIMELOCK_MIN_DELAY = 60 minutes;
+
+            // MetaLayer Config
+            METALAYER_HUB_OR_SPOKE = 0x007700aa28A331B91219Ffa4A444711F0D9E57B5;
+
+            // General Config
+            MIN_DEPOSIT = 1e15; // 0.001 Trust
+
+            // Atom Config
+            ATOM_CREATION_PROTOCOL_FEE = 1e15; // 0.001 Trust (Fixed Cost)
+            ATOM_WALLET_DEPOSIT_FEE = 100; // 1% of assets after fixed costs (Percentage Cost)
+
+            // Triple Config
+            TRIPLE_CREATION_PROTOCOL_FEE = 1e15; // 0.001 Trust (Fixed Cost)
+            ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 0.9% (Percentage Cost)
+
+            // TrustBonding Config
+            BONDING_START_TIMESTAMP = block.timestamp + 100;
+            BONDING_EPOCH_LENGTH = TWO_WEEKS;
+            BONDING_SYSTEM_UTILIZATION_LOWER_BOUND = 4000; // 50%
+            BONDING_PERSONAL_UTILIZATION_LOWER_BOUND = 2500; // 25%
+
+            // CoreEmissionsController Config
+            EMISSIONS_START_TIMESTAMP = BONDING_START_TIMESTAMP;
+            EMISSIONS_LENGTH = ONE_DAY;
+            EMISSIONS_REDUCTION_BASIS_POINTS = 1000; // 10%
+            EMISSIONS_REDUCTION_CLIFF = 4; // 1 epoch
+            EMISSIONS_PER_EPOCH = 1000 ether;
         } else {
             revert("Unsupported chain for broadcasting");
         }

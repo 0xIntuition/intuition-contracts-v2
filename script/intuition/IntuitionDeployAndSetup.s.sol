@@ -311,7 +311,7 @@ contract IntuitionDeployAndSetup is SetupScript {
             minDeposit: MIN_DEPOSIT,
             minShare: MIN_SHARES,
             atomDataMaxLength: ATOM_DATA_MAX_LENGTH,
-            decimalPrecision: DECIMAL_PRECISION
+            feeThreshold: FEE_THRESHOLD
         });
 
         atomConfig = AtomConfig({
@@ -321,7 +321,6 @@ contract IntuitionDeployAndSetup is SetupScript {
 
         tripleConfig = TripleConfig({
             tripleCreationProtocolFee: TRIPLE_CREATION_PROTOCOL_FEE,
-            totalAtomDepositsOnTripleCreation: TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION,
             atomDepositFractionForTriple: ATOM_DEPOSIT_FRACTION_FOR_TRIPLE
         });
 

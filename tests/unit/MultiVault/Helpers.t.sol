@@ -59,7 +59,7 @@ contract MultiVaultHelpersTest is BaseTest {
     }
 
     function test_atomDepositFractionAmount_ZeroAndNonZero() public view {
-        (,, uint256 atomFracBps) = protocol.multiVault.tripleConfig();
+        (, uint256 atomFracBps) = protocol.multiVault.tripleConfig();
         uint256 denom = FEE_DENOMINATOR;
 
         assertEq(protocol.multiVault.atomDepositFractionAmount(0), 0);
@@ -74,7 +74,7 @@ contract MultiVaultHelpersTest is BaseTest {
         assets = bound(assets, 0, type(uint128).max);
 
         (uint256 entryBps, uint256 exitBps, uint256 protBps) = protocol.multiVault.vaultFees();
-        (,, uint256 atomFracBps) = protocol.multiVault.tripleConfig();
+        (, uint256 atomFracBps) = protocol.multiVault.tripleConfig();
 
         uint256 denom = FEE_DENOMINATOR;
 
