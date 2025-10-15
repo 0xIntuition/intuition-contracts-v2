@@ -1128,9 +1128,9 @@ contract MultiVault is
             assetsAfterMinSharesCost -= minShareCost;
         }
 
-        uint256 protocolFee = _feeOnRaw(base, vaultFees.protocolFee);
-        uint256 entryFee = _shouldChargeFees(termId) ? _feeOnRaw(base, vaultFees.entryFee) : 0;
-        uint256 atomWalletDepositFee = _feeOnRaw(base, atomConfig.atomWalletDepositFee);
+        uint256 protocolFee = _feeOnRaw(assetsAfterMinSharesCost, vaultFees.protocolFee);
+        uint256 entryFee = _shouldChargeFees(termId) ? _feeOnRaw(assetsAfterMinSharesCost, vaultFees.entryFee) : 0;
+        uint256 atomWalletDepositFee = _feeOnRaw(assetsAfterMinSharesCost, atomConfig.atomWalletDepositFee);
 
         assetsAfterFees = assetsAfterMinSharesCost - protocolFee - entryFee - atomWalletDepositFee;
 
@@ -1200,10 +1200,10 @@ contract MultiVault is
             assetsAfterMinSharesCost -= minShareCost;
         }
 
-        uint256 protocolFee = _feeOnRaw(base, vaultFees.protocolFee);
-        uint256 entryFee = _shouldChargeFees(termId) ? _feeOnRaw(base, vaultFees.entryFee) : 0;
+        uint256 protocolFee = _feeOnRaw(assetsAfterMinSharesCost, vaultFees.protocolFee);
+        uint256 entryFee = _shouldChargeFees(termId) ? _feeOnRaw(assetsAfterMinSharesCost, vaultFees.entryFee) : 0;
         uint256 atomDepositFraction =
-            _shouldChargeAtomDepositFraction(termId) ? _feeOnRaw(base, tripleConfig.atomDepositFractionForTriple) : 0;
+            _shouldChargeAtomDepositFraction(termId) ? _feeOnRaw(assetsAfterMinSharesCost, tripleConfig.atomDepositFractionForTriple) : 0;
 
         assetsAfterFees = assetsAfterMinSharesCost - protocolFee - entryFee - atomDepositFraction;
 
