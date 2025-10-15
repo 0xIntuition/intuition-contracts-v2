@@ -45,24 +45,31 @@ contract ProgressiveCurve is BaseCurve {
     /// @dev 0.0025e18 -> 25 basis points, 0.0001e18 = 1 basis point, etc etc
     /// @dev If minDeposit is 0.003 ether, this value would need to be 0.00007054e18 to avoid returning 0 shares for
     /// minDeposit assets
-    UD60x18 public immutable SLOPE;
+    UD60x18 public SLOPE;
 
     /// @notice The half of the slope, used for calculations.
-    UD60x18 public immutable HALF_SLOPE;
+    UD60x18 public HALF_SLOPE;
 
     /// @dev Since powu(2) will overflow first (see slope equation), maximum totalShares is sqrt(MAX_UD60x18)
-    uint256 public immutable MAX_SHARES;
+    uint256 public MAX_SHARES;
 
     /// @dev The maximum assets is totalShares * slope / 2, because multiplication (see slope equation) would overflow
     /// beyond that point.
-    uint256 public immutable MAX_ASSETS;
+    uint256 public MAX_ASSETS;
 
-    /// @notice Constructs a new ProgressiveCurve with the given name and slope
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    /// @notice Initializes a new ProgressiveCurve with the given name and slope
     /// @param _name The name of the curve (i.e. "Progressive Curve #465")
     /// @param slope18 The slope of the curve, in basis points (i.e. 0.0025e18)
     /// @dev Computes maximum values given constructor arguments
     /// @dev Computes Slope / 2 as commonly used constant
-    constructor(string memory _name, uint256 slope18) BaseCurve(_name) {
+    function initialize(string calldata _name, uint256 slope18) external initializer {
+        __BaseCurve_init(_name);
+
         require(slope18 > 0, "PC: Slope must be > 0");
 
         SLOPE = UD60x18.wrap(slope18);
@@ -86,7 +93,7 @@ contract ProgressiveCurve is BaseCurve {
     /// $$\text{shares} = \sqrt{s^2 + \frac{2a}{m}} - s$$
     function previewDeposit(
         uint256 assets,
-        uint256, /*totalAssets*/
+        uint256 totalAssets,
         uint256 totalShares
     )
         external
@@ -94,13 +101,12 @@ contract ProgressiveCurve is BaseCurve {
         override
         returns (uint256 shares)
     {
-        require(assets > 0, "Asset amount must be greater than zero");
-
+        _checkDepositBounds(assets, totalAssets, MAX_ASSETS);
         UD60x18 currentSupplyOfShares = convert(totalShares);
-
-        return convert(
+        shares = convert(
             currentSupplyOfShares.powu(2).add(convert(assets).div(HALF_SLOPE)).sqrt().sub(currentSupplyOfShares)
         );
+        _checkDepositOut(shares, totalShares, MAX_SHARES);
     }
 
     /// @inheritdoc BaseCurve
@@ -123,10 +129,9 @@ contract ProgressiveCurve is BaseCurve {
         override
         returns (uint256 assets)
     {
+        _checkRedeem(shares, totalShares);
         UD60x18 currentSupplyOfShares = convert(totalShares);
-
         UD60x18 supplyOfSharesAfterRedeem = currentSupplyOfShares.sub(convert(shares));
-
         return convert(_convertToAssets(supplyOfSharesAfterRedeem, currentSupplyOfShares));
     }
 
@@ -143,14 +148,16 @@ contract ProgressiveCurve is BaseCurve {
     function previewMint(
         uint256 shares,
         uint256 totalShares,
-        uint256 /*totalAssets*/
+        uint256 totalAssets
     )
         external
         view
         override
         returns (uint256 assets)
     {
-        return convert(_convertToAssets(convert(totalShares), convert(totalShares + shares)));
+        _checkMintBounds(shares, totalShares, MAX_SHARES);
+        assets = convert(_convertToAssets(convert(totalShares), convert(totalShares + shares)));
+        _checkMintOut(assets, totalAssets, MAX_ASSETS);
     }
 
     /// @inheritdoc BaseCurve
@@ -163,7 +170,7 @@ contract ProgressiveCurve is BaseCurve {
     /// $$\text{shares} = s - \sqrt{s^2 - \frac{2a}{m}}$$
     function previewWithdraw(
         uint256 assets,
-        uint256, /*totalAssets*/
+        uint256 totalAssets,
         uint256 totalShares
     )
         external
@@ -171,6 +178,7 @@ contract ProgressiveCurve is BaseCurve {
         override
         returns (uint256 shares)
     {
+        _checkWithdraw(assets, totalAssets);
         UD60x18 currentSupplyOfShares = convert(totalShares);
         return convert(
             currentSupplyOfShares.sub(currentSupplyOfShares.powu(2).sub(convert(assets).div(HALF_SLOPE)).sqrt())
@@ -207,7 +215,7 @@ contract ProgressiveCurve is BaseCurve {
     /// $$\text{shares} = \frac{2a}{s \cdot m}$$
     function convertToShares(
         uint256 assets,
-        uint256, /*totalAssets*/
+        uint256 totalAssets,
         uint256 totalShares
     )
         external
@@ -215,11 +223,12 @@ contract ProgressiveCurve is BaseCurve {
         override
         returns (uint256 shares)
     {
-        require(assets > 0, "Asset amount must be greater than zero");
+        _checkDepositBounds(assets, totalAssets, MAX_ASSETS);
         UD60x18 currentSupplyOfShares = convert(totalShares);
-        return convert(
+        shares = convert(
             currentSupplyOfShares.powu(2).add(convert(assets).div(HALF_SLOPE)).sqrt().sub(currentSupplyOfShares)
         );
+        _checkDepositOut(shares, totalShares, MAX_SHARES);
     }
 
     /// @inheritdoc BaseCurve
@@ -242,7 +251,7 @@ contract ProgressiveCurve is BaseCurve {
         override
         returns (uint256 assets)
     {
-        require(totalShares >= shares, "PC: Under supply of shares");
+        _checkRedeem(shares, totalShares);
         UD60x18 currentSupplyOfShares = convert(totalShares);
         UD60x18 supplyOfSharesAfterRedeem = currentSupplyOfShares.sub(convert(shares));
         return convert(_convertToAssets(supplyOfSharesAfterRedeem, currentSupplyOfShares));

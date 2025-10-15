@@ -48,11 +48,6 @@ abstract contract SetupScript is Script {
     /// @dev The address of the transaction broadcaster.
     address internal broadcaster;
 
-    // General Config
-    address internal ADMIN;
-    address internal PROTOCOL_MULTISIG;
-    address internal TRUST_TOKEN;
-
     Trust public trust;
     MultiVault public multiVault;
     AtomWarden public atomWarden;
@@ -78,7 +73,13 @@ abstract contract SetupScript is Script {
     uint32 internal SATELLITE_METALAYER_RECIPIENT_DOMAIN;
 
     // General Config
-    uint256 internal MIN_DEPOSIT;
+    address internal ADMIN;
+    address internal PROTOCOL_MULTISIG;
+    address internal TRUST_TOKEN;
+    // address internal METALAYER_HUB_OR_SPOKE;
+
+    uint256 internal FEE_THRESHOLD = 1e17;
+    uint256 internal MIN_DEPOSIT = 1e15; // 0.001 Trust
 
     // Atom Config
     uint256 internal ATOM_CREATION_PROTOCOL_FEE = 1e18; // 1 Trust (Fixed Cost)
@@ -86,7 +87,6 @@ abstract contract SetupScript is Script {
 
     // Triple Config
     uint256 internal TRIPLE_CREATION_PROTOCOL_FEE = 1e18; // 1 Trust (Fixed Cost)
-    uint256 internal TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 3 * 1e17; // 0.3 Trust (Fixed Cost)
     uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 0.9% (Percentage Cost)
 
     // TrustBonding Config
@@ -184,7 +184,6 @@ abstract contract SetupScript is Script {
 
             // Triple Config
             TRIPLE_CREATION_PROTOCOL_FEE = 1e15; // 0.001 Trust (Fixed Cost)
-            TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 3 * 1e15; // 0.003 Trust (Fixed Cost)
             ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 0.9% (Percentage Cost)
 
             // TrustBonding Config
@@ -222,7 +221,6 @@ abstract contract SetupScript is Script {
 
             // Triple Config
             TRIPLE_CREATION_PROTOCOL_FEE = 1e18; // 1 Trust (Fixed Cost)
-            TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 3 * 1e17; // 0.3 Trust (Fixed Cost)
             ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 0.9% (Percentage Cost)
 
             // TrustBonding Config
@@ -277,7 +275,6 @@ abstract contract SetupScript is Script {
 
             // Triple Config
             TRIPLE_CREATION_PROTOCOL_FEE = 1e15; // 0.001 Trust (Fixed Cost)
-            TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 3 * 1e15; // 0.003 Trust (Fixed Cost)
             ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 0.9% (Percentage Cost)
 
             // TrustBonding Config
