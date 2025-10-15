@@ -22,15 +22,6 @@ abstract contract BaseCurve is IBaseCurve, Initializable {
 
     /// @notice The name of the curve
     string public name;
-    
-    /* =================================================== */
-    /*                       ERRORS                        */
-    /* =================================================== */
-    error BaseCurve_EmptyStringNotAllowed();
-    error BaseCurve_AssetsExceedTotalAssets();
-    error BaseCurve_SharesExceedTotalShares();
-    error BaseCurve_AssetsOverflowMax();
-    error BaseCurve_SharesOverflowMax();
 
     /* =================================================== */
     /*                    CONSTRUCTOR                      */

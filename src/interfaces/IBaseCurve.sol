@@ -9,18 +9,22 @@ pragma solidity 0.8.29;
  */
 interface IBaseCurve {
     /* =================================================== */
-    /*                      ERRORS                         */
-    /* =================================================== */
-
-    error BaseCurve_EmptyStringNotAllowed();
-
-    /* =================================================== */
     /*                      EVENTS                         */
     /* =================================================== */
 
     /// @notice Emitted when the curve name is set
     /// @param name The unique name of the curve
     event CurveNameSet(string name);
+
+    /* =================================================== */
+    /*                      ERRORS                         */
+    /* =================================================== */
+
+    error BaseCurve_EmptyStringNotAllowed();
+    error BaseCurve_AssetsExceedTotalAssets();
+    error BaseCurve_SharesExceedTotalShares();
+    error BaseCurve_AssetsOverflowMax();
+    error BaseCurve_SharesOverflowMax();
 
     /* =================================================== */
     /*                    FUNCTIONS                       */
