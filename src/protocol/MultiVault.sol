@@ -1157,7 +1157,7 @@ contract MultiVault is
             : 0;
 
         uint256 assetsAfterFees = assetsAfterFixedFees - protocolFee - atomDepositFraction;
-        uint256 shares = _convertToShares(termId, _curveId, assetsAfterFees);
+        uint256 shares = _convertToShares(termId, curveId, assetsAfterFees);
 
         return (shares, assetsAfterFixedFees, assetsAfterFees);
     }
