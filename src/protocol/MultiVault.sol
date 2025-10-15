@@ -640,13 +640,13 @@ contract MultiVault is
         nonReentrant
         returns (uint256)
     {
-        if (!_isApprovedToDeposit(_msgSender(), receiver)) {
+        if (!_isApprovedToDeposit(msg.sender, receiver)) {
             revert MultiVault_SenderNotApproved();
         }
 
         _addUtilization(receiver, int256(msg.value));
 
-        return _processDeposit(_msgSender(), receiver, termId, curveId, msg.value, minShares);
+        return _processDeposit(msg.sender, receiver, termId, curveId, msg.value, minShares);
     }
 
     /// @inheritdoc IMultiVault
@@ -676,12 +676,12 @@ contract MultiVault is
             revert MultiVault_ArraysNotSameLength();
         }
 
-        if (!_isApprovedToDeposit(_msgSender(), receiver)) {
+        if (!_isApprovedToDeposit(msg.sender, receiver)) {
             revert MultiVault_SenderNotApproved();
         }
 
         for (uint256 i = 0; i < length;) {
-            shares[i] = _processDeposit(_msgSender(), receiver, termIds[i], curveIds[i], assets[i], minShares[i]);
+            shares[i] = _processDeposit(msg.sender, receiver, termIds[i], curveIds[i], assets[i], minShares[i]);
             unchecked {
                 ++i;
             }
@@ -792,12 +792,12 @@ contract MultiVault is
         nonReentrant
         returns (uint256)
     {
-        if (!_isApprovedToRedeem(_msgSender(), receiver)) {
+        if (!_isApprovedToRedeem(msg.sender, receiver)) {
             revert MultiVault_RedeemerNotApproved();
         }
 
         (uint256 rawAssetsBeforeFees, uint256 assetsAfterFees) =
-            _processRedeem(_msgSender(), receiver, termId, curveId, shares, minAssets);
+            _processRedeem(msg.sender, receiver, termId, curveId, shares, minAssets);
         _removeUtilization(receiver, int256(rawAssetsBeforeFees));
 
         return assetsAfterFees;
@@ -827,14 +827,14 @@ contract MultiVault is
             revert MultiVault_ArraysNotSameLength();
         }
 
-        if (!_isApprovedToRedeem(_msgSender(), receiver)) {
+        if (!_isApprovedToRedeem(msg.sender, receiver)) {
             revert MultiVault_SenderNotApproved();
         }
 
         uint256 _totalAssetsBeforeFees;
         for (uint256 i = 0; i < termIds.length;) {
             (uint256 assetsBeforeFees, uint256 assetsAfterFees) =
-                _processRedeem(_msgSender(), receiver, termIds[i], curveIds[i], shares[i], minAssets[i]);
+                _processRedeem(msg.sender, receiver, termIds[i], curveIds[i], shares[i], minAssets[i]);
             _totalAssetsBeforeFees += assetsBeforeFees;
             received[i] = assetsAfterFees;
             unchecked {
