@@ -65,7 +65,6 @@ contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2StepUpgradeable 
     /// @param _admin Address who may add curves to the registry
     function initialize(address _admin) external initializer {
         __Ownable_init(_admin);
-        __Ownable2Step_init();
     }
 
     /* =================================================== */

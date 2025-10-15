@@ -12,7 +12,7 @@ import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
  * @dev This contract is designed to be inherited by other bonding curve contracts, providing a common interface for
  *      converting between assets and shares.
  * @dev These curves handle the pure mathematical relationship for share price. Pool ratio adjustments (such as
- *      accomodating for the effect of fees, supply burn, airdrops, etc) are handled by the MultiVault instead
+ *      accommodating for the effect of fees, supply burn, airdrops, etc) are handled by the MultiVault instead
  *      of the curves themselves.
  */
 abstract contract BaseCurve is IBaseCurve, Initializable {
