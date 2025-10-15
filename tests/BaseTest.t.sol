@@ -57,7 +57,6 @@ abstract contract BaseTest is Modifiers, Test {
 
     // Triple Config
     uint256 internal TRIPLE_CREATION_PROTOCOL_FEE = 1e15; // 0.001 Trust (Fixed Cost)
-    uint256 internal TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 1e15; // 0.001 Trust (Fixed Cost)
     uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 0.9% (Percentage Cost)
 
     // Wallet Config
@@ -371,7 +370,6 @@ abstract contract BaseTest is Modifiers, Test {
     function _getDefaultTripleConfig() internal returns (TripleConfig memory) {
         return TripleConfig({
             tripleCreationProtocolFee: TRIPLE_CREATION_PROTOCOL_FEE,
-            totalAtomDepositsOnTripleCreation: TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION,
             atomDepositFractionForTriple: 500
         });
     }

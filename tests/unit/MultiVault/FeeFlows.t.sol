@@ -115,11 +115,11 @@ contract FeeFlowsTest is BaseTest {
         return _mulDivUp(amount, vf.entryFee, _gc().feeDenominator);
     }
 
-    /// @dev compute per-atom credit: static/3 + ceil(extra * fractionBps / den)/3
+    /// @dev compute per-atom credit: ceil(extra * fractionBps / den)/3
     function _perAtomStaticPlusFraction(uint256 assetsAfterFixedFees) internal view returns (uint256) {
-        (, uint256 staticCredit, uint256 fractionBps) = protocol.multiVault.tripleConfig();
+        (, uint256 fractionBps) = protocol.multiVault.tripleConfig();
         uint256 fractionGross = _mulDivUp(assetsAfterFixedFees, fractionBps, _gc().feeDenominator);
-        return (staticCredit / 3) + (fractionGross / 3);
+        return (fractionGross / 3);
     }
 
     /// @dev create one triple with `extra` over the fixed triple cost; arrays scoped inside to avoid stack pressure
@@ -268,18 +268,6 @@ contract FeeFlowsTest is BaseTest {
         vm.startPrank(users.alice);
         protocol.multiVault.createTriples{ value: tripleCost }(S, P, O, V);
         vm.stopPrank();
-
-        // Expect only static TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION to be distributed (div 3)
-        (, uint256 staticCredit,) = protocol.multiVault.tripleConfig();
-        uint256 perAtom = staticCredit / 3;
-
-        (uint256 sA1,) = _vault(sid, defaultId);
-        (uint256 pA1,) = _vault(pid, defaultId);
-        (uint256 oA1,) = _vault(oid, defaultId);
-
-        assertEq(sA1 - sA0, perAtom, "subject static credit mismatch");
-        assertEq(pA1 - pA0, perAtom, "predicate static credit mismatch");
-        assertEq(oA1 - oA0, perAtom, "object static credit mismatch");
     }
 
     /*//////////////////////////////////////////////////////////////////////////

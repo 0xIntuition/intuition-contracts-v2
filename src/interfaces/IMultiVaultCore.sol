@@ -35,8 +35,6 @@ struct AtomConfig {
 struct TripleConfig {
     /// @dev The fee paid to the protocol when depositing vault shares for triple vault creation
     uint256 tripleCreationProtocolFee;
-    /// @dev The static fee allocated to increasing the amount of assets in the underlying atom vaults
-    uint256 totalAtomDepositsOnTripleCreation;
     /// @dev The percentage of the triple deposit amount used to purchase equity in the underlying atoms
     uint256 atomDepositFractionForTriple;
 }

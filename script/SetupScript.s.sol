@@ -87,7 +87,6 @@ abstract contract SetupScript is Script {
 
     // Triple Config
     uint256 internal TRIPLE_CREATION_PROTOCOL_FEE = 1e18; // 1 Trust (Fixed Cost)
-    uint256 internal TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 3 * 1e17; // 0.3 Trust (Fixed Cost)
     uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 0.9% (Percentage Cost)
 
     // TrustBonding Config
@@ -185,7 +184,6 @@ abstract contract SetupScript is Script {
 
             // Triple Config
             TRIPLE_CREATION_PROTOCOL_FEE = 1e15; // 0.001 Trust (Fixed Cost)
-            TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 3 * 1e15; // 0.003 Trust (Fixed Cost)
             ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 0.9% (Percentage Cost)
 
             // TrustBonding Config
@@ -223,7 +221,6 @@ abstract contract SetupScript is Script {
 
             // Triple Config
             TRIPLE_CREATION_PROTOCOL_FEE = 1e18; // 1 Trust (Fixed Cost)
-            TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 3 * 1e17; // 0.3 Trust (Fixed Cost)
             ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 0.9% (Percentage Cost)
 
             // TrustBonding Config
@@ -278,7 +275,6 @@ abstract contract SetupScript is Script {
 
             // Triple Config
             TRIPLE_CREATION_PROTOCOL_FEE = 1e15; // 0.001 Trust (Fixed Cost)
-            TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 3 * 1e15; // 0.003 Trust (Fixed Cost)
             ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 0.9% (Percentage Cost)
 
             // TrustBonding Config

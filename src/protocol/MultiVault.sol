@@ -570,11 +570,6 @@ contract MultiVault is
             _increaseProRataVaultsAssets(
                 tripleId, _feeOnRaw(assetsAfterFixedFees, tripleConfig.atomDepositFractionForTriple)
             );
-
-            // Credit the static totalAtomDepositsOnTripleCreation fee to the pro-rata vaults
-            if (tripleConfig.totalAtomDepositsOnTripleCreation != 0) {
-                _increaseProRataVaultsAssets(tripleId, tripleConfig.totalAtomDepositsOnTripleCreation);
-            }
         }
 
         /* --- Initialize the counter vault with min shares --- */

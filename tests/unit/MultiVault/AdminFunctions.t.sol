@@ -192,20 +192,18 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
     ////////////////////////////////////////////////////////////////////*/
 
     function testSetTripleConfig_OnlyAdmin_UpdatesFields() public {
-        (uint256 creationFee, uint256 staticAtomDeposits, uint256 atomDepositFrac) = protocol.multiVault.tripleConfig();
+        (uint256 creationFee, uint256 atomDepositFrac) = protocol.multiVault.tripleConfig();
 
         TripleConfig memory tc = TripleConfig({
             tripleCreationProtocolFee: creationFee + 1,
-            totalAtomDepositsOnTripleCreation: staticAtomDeposits + 2,
             atomDepositFractionForTriple: atomDepositFrac + 3
         });
 
         resetPrank({ msgSender: users.admin });
         protocol.multiVault.setTripleConfig(tc);
 
-        (uint256 nCreationFee, uint256 nStaticDeposits, uint256 nFrac) = protocol.multiVault.tripleConfig();
+        (uint256 nCreationFee, uint256 nFrac) = protocol.multiVault.tripleConfig();
         assertEq(nCreationFee, creationFee + 1);
-        assertEq(nStaticDeposits, staticAtomDeposits + 2);
         assertEq(nFrac, atomDepositFrac + 3);
     }
 
