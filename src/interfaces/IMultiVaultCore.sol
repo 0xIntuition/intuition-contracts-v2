@@ -77,6 +77,80 @@ struct BondingCurveConfig {
 /// @notice Interface for the MultiVaultCore contract
 interface IMultiVaultCore {
     /* =================================================== */
+    /*                    EVENTS                           */
+    /* =================================================== */
+
+    /**
+     * @notice Emitted when the general configuration is updated
+     * @param admin The new admin address
+     * @param protocolMultisig The new protocol multisig address
+     * @param feeDenominator The new fee denominator
+     * @param trustBonding The new TrustBonding contract address
+     * @param minDeposit The new minimum deposit amount
+     * @param minShare The new minimum share amount
+     * @param atomDataMaxLength The new maximum atom data length
+     * @param decimalPrecision The new decimal precision for share price calculations
+     */
+    event GeneralConfigUpdated(
+        address indexed admin,
+        address indexed protocolMultisig,
+        uint256 feeDenominator,
+        address indexed trustBonding,
+        uint256 minDeposit,
+        uint256 minShare,
+        uint256 atomDataMaxLength,
+        uint256 decimalPrecision
+    );
+
+    /**
+     * @notice Emitted when the atom configuration is updated
+     * @param atomCreationProtocolFee The new atom creation protocol fee
+     * @param atomWalletDepositFee The new atom wallet deposit fee
+     */
+    event AtomConfigUpdated(uint256 atomCreationProtocolFee, uint256 atomWalletDepositFee);
+
+    /**
+     * @notice Emitted when the triple configuration is updated
+     * @param tripleCreationProtocolFee The new triple creation protocol fee
+     * @param totalAtomDepositsOnTripleCreation The new total atom deposits on triple creation
+     * @param atomDepositFractionForTriple The new atom deposit fraction for triple
+     */
+    event TripleConfigUpdated(
+        uint256 tripleCreationProtocolFee,
+        uint256 totalAtomDepositsOnTripleCreation,
+        uint256 atomDepositFractionForTriple
+    );
+
+    /**
+     * @notice Emitted when the wallet configuration is updated
+     * @param entryPoint The new EntryPoint contract address
+     * @param atomWarden The new AtomWarden contract address
+     * @param atomWalletBeacon The new AtomWallet beacon address
+     * @param atomWalletFactory The new AtomWallet factory address
+     */
+    event WalletConfigUpdated(
+        address indexed entryPoint,
+        address indexed atomWarden,
+        address indexed atomWalletBeacon,
+        address atomWalletFactory
+    );
+
+    /**
+     * @notice Emitted when the vault fees configuration is updated
+     * @param entryFee The new entry fee
+     * @param exitFee The new exit fee
+     * @param protocolFee The new protocol fee
+     */
+    event VaultFeesUpdated(uint256 entryFee, uint256 exitFee, uint256 protocolFee);
+
+    /**
+     * @notice Emitted when the bonding curve configuration is updated
+     * @param registry The new BondingCurveRegistry contract address
+     * @param defaultCurveId The new default bonding curve ID
+     */
+    event BondingCurveConfigUpdated(address indexed registry, uint256 defaultCurveId);
+
+    /* =================================================== */
     /*                    INITIALIZER                      */
     /* =================================================== */
 
