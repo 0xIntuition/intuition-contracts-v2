@@ -1761,10 +1761,7 @@ contract MultiVault is
     /// @return bool Whether the atom deposit fraction should be charged or not
     function _shouldChargeAtomDepositFraction(bytes32 tripleId) internal view returns (bool) {
         bytes32[3] memory atomIds = _triples[tripleId];
-        bool shouldChargeForSubject = _shouldChargeFees(atomIds[0]);
-        bool shouldChargeForPredicate = _shouldChargeFees(atomIds[1]);
-        bool shouldChargeForObject = _shouldChargeFees(atomIds[2]);
-        return shouldChargeForSubject && shouldChargeForPredicate && shouldChargeForObject;
+        return _shouldChargeFees(atomIds[0]) && _shouldChargeFees(atomIds[1]) &&  _shouldChargeFees(atomIds[2]);
     }
 
     /// @notice Get the maximum shares that can be redeemed by a user for a given vault

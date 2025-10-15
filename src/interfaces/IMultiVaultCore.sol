@@ -9,7 +9,7 @@ struct GeneralConfig {
     address admin;
     /// @dev The protocol multisig address
     address protocolMultisig;
-    /// @dev The fee denominator used for fee calculations: fees are calculated as amount * (fee / feeDenominator)
+    /// @dev The fee denominator used for fee calculations: fees are calculated as `amount * (fee / feeDenominator)`
     uint256 feeDenominator;
     /// @dev The address of the TrustBonding contract
     address trustBonding;
@@ -19,7 +19,7 @@ struct GeneralConfig {
     uint256 minShare;
     /// @dev The maximum length of atom data that can be passed when creating atom vaults
     uint256 atomDataMaxLength;
-    /// @dev Threshold in terms of total shares in vault at which entry and exit fees start to be charged
+    /// @dev Threshold in terms of total shares in a default curve vault at which entry and exit fees start to be charged
     uint256 feeThreshold;
 }
 
