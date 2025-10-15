@@ -183,7 +183,7 @@ contract IntuitionDeployAndSetup is SetupScript {
             abi.encodeWithSelector(
                 OffsetProgressiveCurve.initialize.selector,
                 "Offset Progressive Curve",
-                PROGRESSIVE_CURVE_SLOPE,
+                OFFSET_PROGRESSIVE_CURVE_SLOPE,
                 OFFSET_PROGRESSIVE_CURVE_OFFSET
             )
         );
