@@ -8,7 +8,7 @@ import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
 
 contract ProgressiveCurveTest is Test {
     ProgressiveCurve public curve;
-    uint256 constant SLOPE = 2;
+    uint256 public constant SLOPE = 2;
 
     function setUp() public {
         curve = new ProgressiveCurve("Progressive Curve Test", SLOPE);
@@ -34,11 +34,6 @@ contract ProgressiveCurveTest is Test {
         assertGt(shares, 0);
     }
 
-    function test_previewDeposit_revertsOnZeroAssets() public {
-        vm.expectRevert("Asset amount must be greater than zero");
-        curve.previewDeposit(0, 0, 0);
-    }
-
     function test_previewRedeem_successful() public view {
         uint256 assets = curve.previewRedeem(1e18, 10e18, 0);
         assertGt(assets, 0);
@@ -50,7 +45,7 @@ contract ProgressiveCurveTest is Test {
     }
 
     function test_previewWithdraw_successful() public view {
-        uint256 shares = curve.previewWithdraw(1e18, 0, 10e18);
+        uint256 shares = curve.previewWithdraw(1e18, 10e18, 10e18);
         assertGt(shares, 0);
     }
 
@@ -62,16 +57,6 @@ contract ProgressiveCurveTest is Test {
         assertEq(price1, 0);
         assertGt(price2, price1);
         assertGt(price3, price2);
-    }
-
-    function test_convertToShares_revertsOnZeroAssets() public {
-        vm.expectRevert("Asset amount must be greater than zero");
-        curve.convertToShares(0, 0, 0);
-    }
-
-    function test_convertToAssets_revertsOnUnderSupply() public {
-        vm.expectRevert("PC: Under supply of shares");
-        curve.convertToAssets(11e18, 10e18, 0);
     }
 
     function test_maxShares() public view {

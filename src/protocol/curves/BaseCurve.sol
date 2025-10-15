@@ -19,6 +19,10 @@ abstract contract BaseCurve is IBaseCurve {
     /* =================================================== */
 
     error BaseCurve_EmptyStringNotAllowed();
+    error BaseCurve_AssetsExceedTotalAssets();
+    error BaseCurve_SharesExceedTotalShares();
+    error BaseCurve_AssetsOverflowMax();
+    error BaseCurve_SharesOverflowMax();
 
     /* =================================================== */
     /*                  STATE VARIABLES                    */
@@ -148,4 +152,39 @@ abstract contract BaseCurve is IBaseCurve {
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @return sharePrice The current price of a share, scaled by 1e18
     function currentPrice(uint256 totalShares, uint256 totalAssets) public view virtual returns (uint256 sharePrice);
+
+    /* =================================================== */
+    /*                  INTERNAL FUNCTIONS                 */
+    /* =================================================== */
+
+    // previewWithdraw(): assets <= totalAssets
+    function _checkWithdraw(uint256 assets, uint256 totalAssets) internal pure {
+        if (assets > totalAssets) revert BaseCurve_AssetsExceedTotalAssets();
+    }
+
+    // previewRedeem()/convertToAssets(): shares <= totalShares
+    function _checkRedeem(uint256 shares, uint256 totalShares) internal pure {
+        if (shares > totalShares) revert BaseCurve_SharesExceedTotalShares();
+    }
+
+    // previewDeposit()/convertToShares(): assets + totalAssets <= maxAssets
+    function _checkDepositBounds(uint256 assets, uint256 totalAssets, uint256 maxAssets) internal pure {
+        // Use subtraction to avoid potential overflow on (assets + totalAssets)
+        if (assets > maxAssets - totalAssets) revert BaseCurve_AssetsOverflowMax();
+    }
+
+    // previewDeposit()/convertToShares(): (sharesOut) + totalShares <= maxShares
+    function _checkDepositOut(uint256 sharesOut, uint256 totalShares, uint256 maxShares) internal pure {
+        if (sharesOut > maxShares - totalShares) revert BaseCurve_SharesOverflowMax();
+    }
+
+    // previewMint(): shares + totalShares <= maxShares
+    function _checkMintBounds(uint256 shares, uint256 totalShares, uint256 maxShares) internal pure {
+        if (shares > maxShares - totalShares) revert BaseCurve_SharesOverflowMax();
+    }
+
+    // previewMint(): (assetsOut) + totalAssets <= maxAssets
+    function _checkMintOut(uint256 assetsOut, uint256 totalAssets, uint256 maxAssets) internal pure {
+        if (assetsOut > maxAssets - totalAssets) revert BaseCurve_AssetsOverflowMax();
+    }
 }

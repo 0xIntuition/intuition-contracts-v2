@@ -661,16 +661,17 @@ contract MultiVaultMigrationModeTest is BaseTest {
     }
 
     function testFuzz_batchSetUserBalances_singleUser(uint256 balance1, uint256 balance2) external {
-        balance1 = bound(balance1, 1e6, type(uint128).max);
-        balance2 = bound(balance2, 1e6, type(uint128).max);
+        balance1 = bound(balance1, 1e6, type(uint96).max);
+        balance2 = bound(balance2, 1e6, type(uint96).max);
+        uint256 total = balance1 + balance2;
 
         // Create atoms
         bytes32[] memory atomIds = _createTestAtoms();
 
         // Set vault totals
         MultiVaultMigrationMode.VaultTotals[] memory vaultTotals = new MultiVaultMigrationMode.VaultTotals[](2);
-        vaultTotals[0] = MultiVaultMigrationMode.VaultTotals(10e18, 10e18);
-        vaultTotals[1] = MultiVaultMigrationMode.VaultTotals(10e18, 10e18);
+        vaultTotals[0] = MultiVaultMigrationMode.VaultTotals(total, total);
+        vaultTotals[1] = MultiVaultMigrationMode.VaultTotals(total, total);
 
         vm.prank(users.admin);
         multiVaultMigrationMode.batchSetVaultTotals(atomIds, 1, vaultTotals);
@@ -705,16 +706,17 @@ contract MultiVaultMigrationModeTest is BaseTest {
     }
 
     function testFuzz_batchSetUserBalances_multipleUsers(uint256 aliceBalance, uint256 bobBalance) external {
-        aliceBalance = bound(aliceBalance, 1e6, type(uint128).max);
-        bobBalance = bound(bobBalance, 1e6, type(uint128).max);
+        aliceBalance = bound(aliceBalance, 1e6, type(uint96).max);
+        bobBalance = bound(bobBalance, 1e6, type(uint96).max);
+        uint256 total = aliceBalance + bobBalance;
 
         // Create atoms
         bytes32[] memory atomIds = _createTestAtoms();
 
         // Set vault totals
         MultiVaultMigrationMode.VaultTotals[] memory vaultTotals = new MultiVaultMigrationMode.VaultTotals[](2);
-        vaultTotals[0] = MultiVaultMigrationMode.VaultTotals(10e18, 10e18);
-        vaultTotals[1] = MultiVaultMigrationMode.VaultTotals(10e18, 10e18);
+        vaultTotals[0] = MultiVaultMigrationMode.VaultTotals(total, total);
+        vaultTotals[1] = MultiVaultMigrationMode.VaultTotals(total, total);
 
         vm.prank(users.admin);
         multiVaultMigrationMode.batchSetVaultTotals(atomIds, 1, vaultTotals);
