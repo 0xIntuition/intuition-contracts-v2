@@ -121,11 +121,7 @@ interface IMultiVaultCore {
     /// @param predicateId The ID of the predicate atom
     /// @param objectId The ID of the object atom
     /// @return id The calculated counter triple ID
-    function calculateCounterTripleId(
-        bytes32 subjectId,
-        bytes32 predicateId,
-        bytes32 objectId
-    )
+    function calculateCounterTripleId(bytes32 subjectId, bytes32 predicateId, bytes32 objectId)
         external
         pure
         returns (bytes32);
@@ -135,14 +131,7 @@ interface IMultiVaultCore {
     /// @param predicateId The ID of the predicate atom
     /// @param objectId The ID of the object atom
     /// @return id The calculated triple ID
-    function calculateTripleId(
-        bytes32 subjectId,
-        bytes32 predicateId,
-        bytes32 objectId
-    )
-        external
-        pure
-        returns (bytes32);
+    function calculateTripleId(bytes32 subjectId, bytes32 predicateId, bytes32 objectId) external pure returns (bytes32);
 
     /// @notice Returns the atom data for a given atom ID
     /// @dev If the atom does not exist, this function reverts

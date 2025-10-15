@@ -107,9 +107,10 @@ contract OffsetProgressiveCurve is BaseCurve {
 
         UD60x18 currentSupplyOfShares = convert(totalShares).add(OFFSET);
 
-        return convert(
-            currentSupplyOfShares.powu(2).add(convert(assets).div(HALF_SLOPE)).sqrt().sub(currentSupplyOfShares)
-        );
+        return
+            convert(
+                currentSupplyOfShares.powu(2).add(convert(assets).div(HALF_SLOPE)).sqrt().sub(currentSupplyOfShares)
+            );
     }
 
     /// @inheritdoc BaseCurve
@@ -190,9 +191,10 @@ contract OffsetProgressiveCurve is BaseCurve {
         returns (uint256 shares)
     {
         UD60x18 currentSupplyOfShares = convert(totalShares).add(OFFSET);
-        return convert(
-            currentSupplyOfShares.sub(currentSupplyOfShares.powu(2).sub(convert(assets).div(HALF_SLOPE)).sqrt())
-        );
+        return
+            convert(
+                currentSupplyOfShares.sub(currentSupplyOfShares.powu(2).sub(convert(assets).div(HALF_SLOPE)).sqrt())
+            );
     }
 
     /// @inheritdoc BaseCurve
@@ -238,9 +240,10 @@ contract OffsetProgressiveCurve is BaseCurve {
     {
         require(assets > 0, "Asset amount must be greater than zero");
         UD60x18 currentSupplyOfShares = convert(totalShares).add(OFFSET);
-        return convert(
-            currentSupplyOfShares.powu(2).add(convert(assets).div(HALF_SLOPE)).sqrt().sub(currentSupplyOfShares)
-        );
+        return
+            convert(
+                currentSupplyOfShares.powu(2).add(convert(assets).div(HALF_SLOPE)).sqrt().sub(currentSupplyOfShares)
+            );
     }
 
     /// @inheritdoc BaseCurve

@@ -25,11 +25,7 @@ interface IBaseCurve {
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @return shares The number of shares that would be minted
-    function previewDeposit(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function previewDeposit(uint256 assets, uint256 totalAssets, uint256 totalShares)
         external
         view
         returns (uint256 shares);
@@ -39,11 +35,7 @@ interface IBaseCurve {
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @return assets The number of assets that would be returned
-    function previewRedeem(
-        uint256 shares,
-        uint256 totalShares,
-        uint256 totalAssets
-    )
+    function previewRedeem(uint256 shares, uint256 totalShares, uint256 totalAssets)
         external
         view
         returns (uint256 assets);
@@ -53,11 +45,7 @@ interface IBaseCurve {
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @return shares The number of shares that would need to be redeemed
-    function previewWithdraw(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function previewWithdraw(uint256 assets, uint256 totalAssets, uint256 totalShares)
         external
         view
         returns (uint256 shares);
@@ -67,11 +55,7 @@ interface IBaseCurve {
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @return assets The number of assets that would be required to mint the shares
-    function previewMint(
-        uint256 shares,
-        uint256 totalShares,
-        uint256 totalAssets
-    )
+    function previewMint(uint256 shares, uint256 totalShares, uint256 totalAssets)
         external
         view
         returns (uint256 assets);
@@ -81,11 +65,7 @@ interface IBaseCurve {
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @return shares The number of shares equivalent to the given assets
-    function convertToShares(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function convertToShares(uint256 assets, uint256 totalAssets, uint256 totalShares)
         external
         view
         returns (uint256 shares);
@@ -95,11 +75,7 @@ interface IBaseCurve {
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @return assets The number of assets equivalent to the given shares
-    function convertToAssets(
-        uint256 shares,
-        uint256 totalShares,
-        uint256 totalAssets
-    )
+    function convertToAssets(uint256 shares, uint256 totalShares, uint256 totalAssets)
         external
         view
         returns (uint256 assets);

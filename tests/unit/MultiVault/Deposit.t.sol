@@ -205,9 +205,8 @@ contract DepositTest is BaseTest {
         uint256 newDefault = oldDefault == 1 ? 2 : 1;
 
         resetPrank(users.admin);
-        protocol.multiVault.setBondingCurveConfig(
-            BondingCurveConfig({ registry: registry, defaultCurveId: newDefault })
-        );
+        protocol.multiVault
+            .setBondingCurveConfig(BondingCurveConfig({ registry: registry, defaultCurveId: newDefault }));
 
         // Now try to deposit into the *new* default curve for this atom
         // That new default curve vault is brand-new (no shares), so this should revert
@@ -217,9 +216,8 @@ contract DepositTest is BaseTest {
 
         // Restore default to keep other tests deterministic (optional)
         resetPrank(users.admin);
-        protocol.multiVault.setBondingCurveConfig(
-            BondingCurveConfig({ registry: registry, defaultCurveId: oldDefault })
-        );
+        protocol.multiVault
+            .setBondingCurveConfig(BondingCurveConfig({ registry: registry, defaultCurveId: oldDefault }));
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -326,7 +324,7 @@ contract DefaultCurveEntryFeeImpactTest is BaseTest {
         (, uint256 defaultCurveId) = protocol.multiVault.bondingCurveConfig();
         DEFAULT_CURVE_ID = defaultCurveId; // expected 1 (linear)
         NON_DEFAULT_CURVE_ID = (defaultCurveId == 1) ? 2 : 1; // pick 2 as non-default if possible
-        // sanity in case registry changed later:
+            // sanity in case registry changed later:
         if (NON_DEFAULT_CURVE_ID == DEFAULT_CURVE_ID) {
             NON_DEFAULT_CURVE_ID = DEFAULT_CURVE_ID == 1 ? 2 : 1;
         }

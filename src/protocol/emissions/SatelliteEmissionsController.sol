@@ -176,10 +176,7 @@ contract SatelliteEmissionsController is
     }
 
     /// @inheritdoc ISatelliteEmissionsController
-    function withdrawUnclaimedEmissions(
-        uint256 epoch,
-        address recipient
-    )
+    function withdrawUnclaimedEmissions(uint256 epoch, address recipient)
         external
         nonReentrant
         onlyRole(DEFAULT_ADMIN_ROLE)
