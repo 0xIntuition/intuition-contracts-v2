@@ -139,6 +139,8 @@ contract MultiVault is
 
     error MultiVault_CannotDirectlyInitializeCounterTriple();
 
+    error MultiVault_TermDoesNotExist(bytes32 termId);
+
     /* =================================================== */
     /*                    CONSTRUCTOR                      */
     /* =================================================== */
@@ -291,6 +293,7 @@ contract MultiVault is
         view
         returns (uint256 shares, uint256 assetsAfterFees)
     {
+        if (!_isTermCreated(termId)) revert MultiVault_TermDoesNotExist(termId);
         bool isAtomVault = _isAtom(termId);
         return _calculateDeposit(termId, curveId, assets, isAtomVault);
     }
@@ -305,16 +308,19 @@ contract MultiVault is
         view
         returns (uint256 assetsAfterFees, uint256 sharesUsed)
     {
+        if (!_isTermCreated(termId)) revert MultiVault_TermDoesNotExist(termId);
         return _calculateRedeem(termId, curveId, shares);
     }
 
     /// @inheritdoc IMultiVault
     function convertToShares(bytes32 termId, uint256 curveId, uint256 assets) external view returns (uint256) {
+        if (!_isTermCreated(termId)) revert MultiVault_TermDoesNotExist(termId);
         return _convertToShares(termId, curveId, assets);
     }
 
     /// @inheritdoc IMultiVault
     function convertToAssets(bytes32 termId, uint256 curveId, uint256 shares) external view returns (uint256) {
+        if (!_isTermCreated(termId)) revert MultiVault_TermDoesNotExist(termId);
         return _convertToAssets(termId, curveId, shares);
     }
 
