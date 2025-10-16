@@ -70,7 +70,7 @@ contract MultiVaultCoreTest is BaseTest {
         assertEq(g.minDeposit, MIN_DEPOSIT, "minDeposit");
         assertEq(g.minShare, MIN_SHARES, "minShare");
         assertEq(g.atomDataMaxLength, ATOM_DATA_MAX_LENGTH, "atomDataMaxLength");
-        assertEq(g.decimalPrecision, DECIMAL_PRECISION, "decimalPrecision");
+        assertEq(g.feeThreshold, FEE_THRESHOLD, "feeThreshold");
 
         // Atom
         AtomConfig memory a = protocol.multiVault.getAtomConfig();
@@ -80,13 +80,7 @@ contract MultiVaultCoreTest is BaseTest {
         // Triple
         TripleConfig memory t = protocol.multiVault.getTripleConfig();
         assertEq(t.tripleCreationProtocolFee, TRIPLE_CREATION_PROTOCOL_FEE, "tripleCreationProtocolFee");
-        assertEq(
-            t.totalAtomDepositsOnTripleCreation,
-            TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION,
-            "totalAtomDepositsOnTripleCreation"
-        );
-        // In BaseTest default we overwrite this to 500 in _getDefaultTripleConfig
-        assertEq(t.atomDepositFractionForTriple, 500, "atomDepositFractionForTriple");
+        assertEq(t.atomDepositFractionForTriple, ATOM_DEPOSIT_FRACTION_FOR_TRIPLE, "atomDepositFractionForTriple");
 
         // Wallet
         WalletConfig memory w = protocol.multiVault.getWalletConfig();
@@ -196,8 +190,7 @@ contract MultiVaultCoreTest is BaseTest {
             bytes32 calc = protocol.multiVault.calculateTripleId(atomIds[0], atomIds[1], atomIds[2]);
             assertEq(calc, tripleId, "calculateTripleId matches");
 
-            uint256 expectedTripleCost =
-                TRIPLE_CREATION_PROTOCOL_FEE + TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION + (2 * MIN_SHARES);
+            uint256 expectedTripleCost = TRIPLE_CREATION_PROTOCOL_FEE + (2 * MIN_SHARES);
             assertEq(protocol.multiVault.getTripleCost(), expectedTripleCost, "getTripleCost formula");
 
             assertEq(uint256(protocol.multiVault.getVaultType(atomIds[0])), uint256(VaultType.ATOM), "VaultType ATOM");
