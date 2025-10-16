@@ -213,6 +213,13 @@ contract TrustBondingBase is BaseTest {
         vm.store(address(protocol.multiVault), slot, bytes32(epoch));
     }
 
+    /// @dev Set previous-previous active epoch for a user using vm.store
+    function _setPreviousPreviousActiveEpochForUser(address user, uint256 epoch) internal {
+        // mapping(address user => uint256 epoch) public previousPreviousActiveEpoch;
+        bytes32 slot = keccak256(abi.encode(user, uint256(34))); // MultiVault previousPreviousActiveEpoch storage slot
+        vm.store(address(protocol.multiVault), slot, bytes32(epoch));
+    }
+
     /// @dev Set total claimed rewards for a specific epoch using vm.store
     function _setTotalClaimedRewardsForEpoch(uint256 epoch, uint256 claimedRewards) internal {
         // mapping(uint256 epoch => uint256 totalClaimedRewards) public totalClaimedRewardsForEpoch;

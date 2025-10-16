@@ -422,8 +422,16 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
     }
 
     /*//////////////////////////////////////////////////////////////
-    PREVIOUS-ACTIVE-EPOCH RESOLUTION TESTS (DIRECT MV CHECKS)
+        PREVIOUS-ACTIVE-EPOCH RESOLUTION TESTS (DIRECT MV CHECKS)
     //////////////////////////////////////////////////////////////*/
+
+    // Cases covered:
+    // - last < prevEpoch (A)
+    // - last == prevEpoch (B)
+    // - last == target (B)
+    // - sparse far-behind (A)
+    // - never active (returns 0 via util[0]==0)
+    // - last >> target (B)
 
     function test_getUserUtilizationBefore_lastBeforePrevEpoch_usesLastActive() external {
         // target epoch = 5  -> prevEpoch = 4
@@ -500,7 +508,7 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
     }
 
     /*//////////////////////////////////////////////////////////////
-    PERSONAL RATIO: TARGET==0 BRANCHES (INTEGRATED TB CHECKS)
+       PERSONAL RATIO: TARGET==0 BRANCHES (INTEGRATED TB CHECKS)
     //////////////////////////////////////////////////////////////*/
 
     function test_personalUtilRatio_targetZero_noEligibility_prevEpoch_returnsMax() external {
@@ -530,5 +538,95 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         // userClaimedRewardsForEpoch[alice][1] is 0 by default -> target==0 AND had eligibility
         uint256 ratio = protocol.trustBonding.getPersonalUtilizationRatio(users.alice, 2);
         assertEq(ratio, PERSONAL_UTILIZATION_LOWER_BOUND, "Had eligibility but didn't claim -> floor ratio");
+    }
+
+    /*//////////////////////////////////////////////////////////////
+        getUserUtilizationBefore() — explicit path coverage
+    //////////////////////////////////////////////////////////////*/
+
+    function test_getUserUtilizationBefore_epochZero_returnsZero() external view {
+        // Querying strictly before epoch 0 is nonsensical by definition
+        int256 before = IMultiVault(address(protocol.multiVault)).getUserUtilizationBefore(users.alice, 0);
+        assertEq(before, int256(0), "epoch ==0  must return 0");
+    }
+
+    // Case A: lastActive < epoch -> return personal[lastActive]
+    function test_getUserUtilizationBefore_caseA_lastBeforeTarget() external {
+        _advanceToEpoch(10);
+
+        // last=4, prev=2, pprev=0; util[4] = 444
+        _setUserUtilizationForEpoch(users.alice, 4, 444);
+        _setLastActiveEpochForUser(users.alice, 4);
+        _setPreviousActiveEpochForUser(users.alice, 2);
+        _setPreviousPreviousActiveEpochForUser(users.alice, 0);
+
+        int256 before = IMultiVault(address(protocol.multiVault)).getUserUtilizationBefore(users.alice, 7);
+        assertEq(before, int256(444), "Case A should return utilization at lastActive (4)");
+    }
+
+    // Case B: lastActive >= epoch, previousActive < epoch -> return personal[previousActive]
+    function test_getUserUtilizationBefore_caseB_previousBeforeTarget() external {
+        _advanceToEpoch(12);
+
+        // last=10, prev=6; util[6] = 606
+        _setUserUtilizationForEpoch(users.alice, 6, 606);
+        _setLastActiveEpochForUser(users.alice, 10);
+        _setPreviousActiveEpochForUser(users.alice, 6);
+        _setPreviousPreviousActiveEpochForUser(users.alice, 3);
+
+        int256 before1 = IMultiVault(address(protocol.multiVault)).getUserUtilizationBefore(users.alice, 9);
+        assertEq(before1, int256(606), "Case B: last(10)>=9, previous(6)<9 -> util[6]");
+
+        // Also when previous == prevEpoch (epoch-1)
+        int256 before2 = IMultiVault(address(protocol.multiVault)).getUserUtilizationBefore(users.alice, 7);
+        assertEq(before2, int256(606), "Case B still applies for epoch=7");
+    }
+
+    // Case C: lastActive >= epoch, previousActive == epoch (or ≥),
+    //         previousPrevious < epoch -> return personal[previousPrevious]
+    function test_getUserUtilizationBefore_caseC_prevEqualsTarget_usesPrevPrev() external {
+        // target epoch = 5
+        _advanceToEpoch(6);
+
+        // last=10, previous=5 (== target), previousPrevious=3; util[3]=303
+        _setUserUtilizationForEpoch(users.alice, 3, 303);
+        _setUserUtilizationForEpoch(users.alice, 5, 555);
+        _setLastActiveEpochForUser(users.alice, 10);
+        _setPreviousActiveEpochForUser(users.alice, 5);
+        _setPreviousPreviousActiveEpochForUser(users.alice, 3);
+
+        int256 before = IMultiVault(address(protocol.multiVault)).getUserUtilizationBefore(users.alice, 5);
+        assertEq(before, int256(303), "Case C: previous == epoch, so use previousPrevious");
+    }
+
+    // Final fallback: no tracked epoch strictly earlier than target -> return 0
+    function test_getUserUtilizationBefore_fallbackNoneTrackedEarlier_returnsZero() external {
+        _advanceToEpoch(100);
+
+        // Make all pointers >= query epoch
+        // earliest tracked = 30, query epoch = 20 => none < 20
+        _setLastActiveEpochForUser(users.alice, 70);
+        _setPreviousActiveEpochForUser(users.alice, 50);
+        _setPreviousPreviousActiveEpochForUser(users.alice, 30);
+
+        // even if epoch 0 had some value, we don't want to reuse it here
+        _setUserUtilizationForEpoch(users.alice, 0, 999);
+
+        int256 before = IMultiVault(address(protocol.multiVault)).getUserUtilizationBefore(users.alice, 20);
+        assertEq(before, int256(0), "No tracked epoch < 20 -> must return 0");
+    }
+
+    // Sanity: if lastActive == 0 (<epoch) and epoch 0 had activity, Case A returns util[0]
+    function test_getUserUtilizationBefore_epoch0Activity_returnsEpoch0ViaCaseA() external {
+        _advanceToEpoch(3);
+
+        // last=0 (<3), previous=0, pprev=0; util[0]=123
+        _setUserUtilizationForEpoch(users.alice, 0, 123);
+        _setLastActiveEpochForUser(users.alice, 0);
+        _setPreviousActiveEpochForUser(users.alice, 0);
+        _setPreviousPreviousActiveEpochForUser(users.alice, 0);
+
+        int256 before = IMultiVault(address(protocol.multiVault)).getUserUtilizationBefore(users.alice, 3);
+        assertEq(before, int256(123), "Case A should return util[0] when last == 0 < epoch");
     }
 }
