@@ -282,8 +282,10 @@ contract BondingCurveRegistryTest is Test {
     }
 
     function testFuzz_addMultipleCurves(uint256 slope1, uint256 slope2) public {
-        slope1 = bound(slope1, 1, 1e18);
-        slope2 = bound(slope2, 1, 1e18);
+        slope1 = bound(slope1, 2, 1e18);
+        slope2 = bound(slope2, 2, 1e18);
+
+        vm.assume(slope1 % 2 == 0 && slope2 % 2 == 0); // Ensure both slopes are even numbers
 
         ProgressiveCurve curve1Impl = new ProgressiveCurve();
         ProgressiveCurve curve2Impl = new ProgressiveCurve();

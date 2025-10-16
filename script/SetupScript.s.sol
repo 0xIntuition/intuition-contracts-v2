@@ -4,14 +4,8 @@ pragma solidity 0.8.29;
 import { console2 } from "forge-std/src/console2.sol";
 import { Script } from "forge-std/src/Script.sol";
 
-import {
-    TransparentUpgradeableProxy,
-    ITransparentUpgradeableProxy
-} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
-import { EntryPoint } from "@account-abstraction/core/EntryPoint.sol";
-import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 
 import { AtomWarden } from "src/protocol/wallet/AtomWarden.sol";
 import { AtomWallet } from "src/protocol/wallet/AtomWallet.sol";
@@ -19,20 +13,10 @@ import { AtomWalletFactory } from "src/protocol/wallet/AtomWalletFactory.sol";
 import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { Trust } from "src/Trust.sol";
-import { TrustToken } from "src/legacy/TrustToken.sol";
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
-import { ProgressiveCurve } from "src/protocol/curves/ProgressiveCurve.sol";
 import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCurve.sol";
-import {
-    GeneralConfig,
-    AtomConfig,
-    TripleConfig,
-    WalletConfig,
-    VaultFees,
-    BondingCurveConfig
-} from "src/interfaces/IMultiVaultCore.sol";
 
 abstract contract SetupScript is Script {
     uint256 public constant NETWORK_BASE = 8453;

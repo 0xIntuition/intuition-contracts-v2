@@ -207,9 +207,12 @@ contract FeeFlowsTest is BaseTest {
         (uint256 atomLinearCurveWithEntryFees,) = _vault(atom, 1);
         assertApproxEqAbs(atomLinearCurveWithEntryFees - atomLinearCurveWithMinAssets, expectedEntryFee, 1e4, "default vault must receive entry fee");
 
-        // Non-default total assets increased by assetsAfterFees + minShare (creation path mints ghost)
+        // Correctly account for the minShare cost in the non-default vault's assets based on the curveId
+        uint256 minShareCost = protocol.curveRegistry.previewMint(gc.minShare, 0, 0, 2);
+
+        // Non-default total assets increased by assetsAfterFees + minShareCost (creation path mints ghost)
         (uint256 aNon1,) = _vault(atom, 2);
-        assertEq(aNon1 - atomProgressiveCurveWithNoAssets, assetsAfterFees + gc.minShare, "non-default vault assets delta mismatch");
+        assertEq(aNon1 - atomProgressiveCurveWithNoAssets, assetsAfterFees + minShareCost, "non-default vault assets delta mismatch");
     }
 
     function test_atom_nonDefault_deposit_does_not_flow_entry_fee_when_below_threshold() public {
