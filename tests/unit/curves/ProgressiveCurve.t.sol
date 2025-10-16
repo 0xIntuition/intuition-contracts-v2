@@ -31,31 +31,6 @@ contract ProgressiveCurveTest is Test {
         assertEq(curve.name(), "Test Curve");
     }
 
-    function test_constructor_revertsOnEmptyName() public {
-        vm.expectRevert(abi.encodeWithSelector(BaseCurve.BaseCurve_EmptyStringNotAllowed.selector));
-        new ProgressiveCurve("", SLOPE);
-    }
-
-    function test_constructor_revertsOnZeroSlope() public {
-        vm.expectRevert(abi.encodeWithSelector(ProgressiveCurve.ProgressiveCurve_InvalidSlope.selector));
-        new ProgressiveCurve("Test Curve", 0);
-    }
-
-    function test_constructor_revertsOnOddSlope() public {
-        vm.expectRevert(abi.encodeWithSelector(ProgressiveCurve.ProgressiveCurve_InvalidSlope.selector));
-        new ProgressiveCurve("Test Curve", 3); // odd
-    }
-
-    function test_initialize_revertsOnZeroSlope() public {
-        ProgressiveCurve progressiveCurveImpl = new ProgressiveCurve();
-        TransparentUpgradeableProxy progressiveCurveProxy =
-            new TransparentUpgradeableProxy(address(progressiveCurveImpl), address(this), "");
-        curve = ProgressiveCurve(address(progressiveCurveProxy));
-
-        vm.expectRevert("PC: Slope must be > 0");
-        curve.initialize("Test Curve", 0);
-    }
-
     function test_initialize_revertsOnEmptyName() public {
         ProgressiveCurve progressiveCurveImpl = new ProgressiveCurve();
         TransparentUpgradeableProxy progressiveCurveProxy =
@@ -64,6 +39,26 @@ contract ProgressiveCurveTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_EmptyStringNotAllowed.selector));
         curve.initialize("", SLOPE);
+    }
+
+    function test_initialize_revertsOnZeroSlope() public {
+        ProgressiveCurve progressiveCurveImpl = new ProgressiveCurve();
+        TransparentUpgradeableProxy progressiveCurveProxy =
+            new TransparentUpgradeableProxy(address(progressiveCurveImpl), address(this), "");
+        curve = ProgressiveCurve(address(progressiveCurveProxy));
+
+        vm.expectRevert(abi.encodeWithSelector(ProgressiveCurve.ProgressiveCurve_InvalidSlope.selector));
+        curve.initialize("Test Curve", 0);
+    }
+
+    function test_initialize_revertsOnOddSlope() public {
+        ProgressiveCurve progressiveCurveImpl = new ProgressiveCurve();
+        TransparentUpgradeableProxy progressiveCurveProxy =
+            new TransparentUpgradeableProxy(address(progressiveCurveImpl), address(this), "");
+        curve = ProgressiveCurve(address(progressiveCurveProxy));
+
+        vm.expectRevert(abi.encodeWithSelector(ProgressiveCurve.ProgressiveCurve_InvalidSlope.selector));
+        curve.initialize("Test Curve", 3); // odd
     }
 
     function test_previewDeposit_zeroShares() public view {
@@ -154,7 +149,7 @@ contract ProgressiveCurveTest is Test {
         uint256 s0 = 10e18;
         uint256 a = 1e18;
 
-        uint256 shUp = curve.previewWithdraw(a, 0, s0);
+        uint256 shUp = curve.previewWithdraw(a, a, s0);
         uint256 aWithShUp = curve.previewRedeem(shUp, s0, 0);
         assertGe(aWithShUp, a);
 

@@ -32,23 +32,6 @@ contract OffsetProgressiveCurveTest is Test {
         assertEq(OffsetProgressiveCurve(address(newCurveProxy)).name(), "Test Curve");
     }
 
-    function test_initialize_revertsOnZeroSlope() public {
-        OffsetProgressiveCurve offsetProgressiveCurveImpl = new OffsetProgressiveCurve();
-        TransparentUpgradeableProxy offsetProgressiveCurveProxy =
-            new TransparentUpgradeableProxy(address(offsetProgressiveCurveImpl), address(this), "");
-        curve = OffsetProgressiveCurve(address(offsetProgressiveCurveProxy));
-    }
-
-    function test_constructor_revertsOnZeroSlope() public {
-        vm.expectRevert(abi.encodeWithSelector(OffsetProgressiveCurve.OffsetProgressiveCurve_InvalidSlope.selector));
-        new OffsetProgressiveCurve("Test Curve", 0, OFFSET);
-    }
-
-    function test_constructor_revertsOnOddSlope() public {
-        vm.expectRevert(abi.encodeWithSelector(OffsetProgressiveCurve.OffsetProgressiveCurve_InvalidSlope.selector));
-        new OffsetProgressiveCurve("Test Curve", 3, OFFSET); // odd
-    }
-
     function test_initialize_revertsOnEmptyName() public {
         OffsetProgressiveCurve offsetProgressiveCurveImpl = new OffsetProgressiveCurve();
         TransparentUpgradeableProxy offsetProgressiveCurveProxy =
@@ -57,6 +40,23 @@ contract OffsetProgressiveCurveTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_EmptyStringNotAllowed.selector));
         curve.initialize("", SLOPE, OFFSET);
+    }
+
+    function test_initialize_revertsOnZeroSlope() public {
+        OffsetProgressiveCurve offsetProgressiveCurveImpl = new OffsetProgressiveCurve();
+        TransparentUpgradeableProxy offsetProgressiveCurveProxy =
+            new TransparentUpgradeableProxy(address(offsetProgressiveCurveImpl), address(this), "");
+        curve = OffsetProgressiveCurve(address(offsetProgressiveCurveProxy));
+    }
+
+    function test_initialize_revertsOnOddSlope() public {
+        OffsetProgressiveCurve offsetProgressiveCurveImpl = new OffsetProgressiveCurve();
+        TransparentUpgradeableProxy offsetProgressiveCurveProxy =
+            new TransparentUpgradeableProxy(address(offsetProgressiveCurveImpl), address(this), "");
+        curve = OffsetProgressiveCurve(address(offsetProgressiveCurveProxy));
+
+        vm.expectRevert(abi.encodeWithSelector(OffsetProgressiveCurve.OffsetProgressiveCurve_InvalidSlope.selector));
+        curve.initialize("Test Curve", 3, OFFSET); // odd
     }
 
     function test_previewDeposit_zeroShares() public view {
@@ -156,7 +156,7 @@ contract OffsetProgressiveCurveTest is Test {
         uint256 s0 = 10e18;
         uint256 a = 1e18;
 
-        uint256 shUp = curve.previewWithdraw(a, 0, s0);
+        uint256 shUp = curve.previewWithdraw(a, a, s0);
         uint256 aWithShUp = curve.previewRedeem(shUp, s0, 0);
         assertGe(aWithShUp, a);
 

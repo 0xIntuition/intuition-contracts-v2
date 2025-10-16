@@ -2,6 +2,7 @@
 pragma solidity 0.8.29;
 
 import { Test } from "forge-std/src/Test.sol";
+import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
 import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
