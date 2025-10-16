@@ -994,61 +994,7 @@ contract MultiVaultMigrationModeTest is BaseTest {
     }
 
     /* =================================================== */
-    /*           DUPLICATE OVERWRITE CHECKS                */
-    /* =================================================== */
-
-    function test_batchSetAtomData_revertsOnDuplicateAtom() external {
-        // First migrate one atom
-        address[] memory creators = new address[](1);
-        bytes[] memory atomDataArray = new bytes[](1);
-        creators[0] = users.alice;
-        atomDataArray[0] = abi.encodePacked("duplicate-atom-data");
-
-        bytes32 atomId = multiVaultMigrationMode.calculateAtomId(atomDataArray[0]);
-
-        vm.prank(users.admin);
-        multiVaultMigrationMode.batchSetAtomData(creators, atomDataArray);
-
-        // Try migrating the same atom again → must revert with MultiVault_AtomAlreadyExists(atomId)
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                MultiVaultMigrationMode.MultiVault_AtomAlreadyExists.selector,
-                atomId
-            )
-        );
-        vm.prank(users.admin);
-        multiVaultMigrationMode.batchSetAtomData(creators, atomDataArray);
-    }
-
-    function test_batchSetTripleData_revertsOnDuplicateTriple() external {
-        // Create a triple once
-        address[] memory creators = new address[](1);
-        bytes32[3][] memory tripleAtomIds = new bytes32[3][](1);
-        creators[0] = users.alice;
-
-        bytes32 subjectId = bytes32("S");
-        bytes32 predicateId = bytes32("P");
-        bytes32 objectId = bytes32("O");
-        tripleAtomIds[0] = [subjectId, predicateId, objectId];
-
-        bytes32 tripleId = multiVaultMigrationMode.calculateTripleId(subjectId, predicateId, objectId);
-
-        vm.prank(users.admin);
-        multiVaultMigrationMode.batchSetTripleData(creators, tripleAtomIds);
-
-        // Try migrating the exact same triple again → must revert with MultiVault_TripleAlreadyExists(tripleId)
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                MultiVaultMigrationMode.MultiVault_TripleAlreadyExists.selector,
-                tripleId
-            )
-        );
-        vm.prank(users.admin);
-        multiVaultMigrationMode.batchSetTripleData(creators, tripleAtomIds);
-    }
-
-    /* =================================================== */
-    /*           NATIVE TRUST RECEIVE TEST (POINT 3)        */
+    /*           NATIVE TRUST RECEIVE TEST                 */
     /* =================================================== */
 
     function test_receive_acceptsNativeTRUST() external {

@@ -57,10 +57,6 @@ contract MultiVaultMigrationMode is MultiVault {
 
     error MultiVault_ZeroAddress();
 
-    error MultiVault_AtomAlreadyExists(bytes32 atomId);
-
-    error MultiVault_TripleAlreadyExists(bytes32 tripleId);
-
     /*//////////////////////////////////////////////////////////////
                              MIGRATION FUNCTIONS
     //////////////////////////////////////////////////////////////*/
@@ -99,8 +95,6 @@ contract MultiVaultMigrationMode is MultiVault {
 
         for (uint256 i = 0; i < length;) {
             bytes32 atomId = _calculateAtomId(atomDataArray[i]);
-            if (_isAtom(atomId)) revert MultiVault_AtomAlreadyExists(atomId);
-            
             _atoms[atomId] = atomDataArray[i];
 
             emit AtomCreated(creators[i], atomId, atomDataArray[i], _computeAtomWalletAddr(atomId));
@@ -130,10 +124,7 @@ contract MultiVaultMigrationMode is MultiVault {
 
         for (uint256 i = 0; i < length;) {
             bytes32 tripleId = _calculateTripleId(tripleAtomIds[i][0], tripleAtomIds[i][1], tripleAtomIds[i][2]);
-            if (_isTriple[tripleId]) revert MultiVault_TripleAlreadyExists(tripleId);
-            
             bytes32 counterTripleId = _calculateCounterTripleId(tripleId);
-            if (_isTriple[counterTripleId]) revert MultiVault_TripleAlreadyExists(counterTripleId);
             
             _initializeTripleState(tripleId, counterTripleId, tripleAtomIds[i]);
             
