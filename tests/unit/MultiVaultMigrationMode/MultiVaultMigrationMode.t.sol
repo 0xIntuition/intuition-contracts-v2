@@ -969,4 +969,76 @@ contract MultiVaultMigrationModeTest is BaseTest {
 
         assertEq(multiVaultMigrationMode.getShares(users.alice, tripleId, 1), 50e18);
     }
+
+    /* =================================================== */
+    /*           DUPLICATE OVERWRITE CHECKS                */
+    /* =================================================== */
+
+    function test_batchSetAtomData_revertsOnDuplicateAtom() external {
+        // First migrate one atom
+        address[] memory creators = new address[](1);
+        bytes[] memory atomDataArray = new bytes[](1);
+        creators[0] = users.alice;
+        atomDataArray[0] = abi.encodePacked("duplicate-atom-data");
+
+        bytes32 atomId = multiVaultMigrationMode.calculateAtomId(atomDataArray[0]);
+
+        vm.prank(users.admin);
+        multiVaultMigrationMode.batchSetAtomData(creators, atomDataArray);
+
+        // Try migrating the same atom again → must revert with MultiVault_AtomAlreadyExists(atomId)
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                MultiVaultMigrationMode.MultiVault_AtomAlreadyExists.selector,
+                atomId
+            )
+        );
+        vm.prank(users.admin);
+        multiVaultMigrationMode.batchSetAtomData(creators, atomDataArray);
+    }
+
+    function test_batchSetTripleData_revertsOnDuplicateTriple() external {
+        // Create a triple once
+        address[] memory creators = new address[](1);
+        bytes32[3][] memory tripleAtomIds = new bytes32[3][](1);
+        creators[0] = users.alice;
+
+        bytes32 subjectId = bytes32("S");
+        bytes32 predicateId = bytes32("P");
+        bytes32 objectId = bytes32("O");
+        tripleAtomIds[0] = [subjectId, predicateId, objectId];
+
+        bytes32 tripleId = multiVaultMigrationMode.calculateTripleId(subjectId, predicateId, objectId);
+
+        vm.prank(users.admin);
+        multiVaultMigrationMode.batchSetTripleData(creators, tripleAtomIds);
+
+        // Try migrating the exact same triple again → must revert with MultiVault_TripleAlreadyExists(tripleId)
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                MultiVaultMigrationMode.MultiVault_TripleAlreadyExists.selector,
+                tripleId
+            )
+        );
+        vm.prank(users.admin);
+        multiVaultMigrationMode.batchSetTripleData(creators, tripleAtomIds);
+    }
+
+    /* =================================================== */
+    /*           NATIVE TRUST RECEIVE TEST (POINT 3)        */
+    /* =================================================== */
+
+    function test_receive_acceptsNativeTRUST() external {
+        // Fund a sender with native TRUST
+        uint256 amount = 1 ether;
+        vm.deal(users.alice, amount);
+
+        // Send native TRUST to the proxy (must succeed if receive() is present in implementation)
+        vm.prank(users.alice);
+        (bool success,) = address(multiVaultMigrationMode).call{value: amount}("");
+        assertTrue(success, "native TRUST transfer should succeed");
+
+        // The proxy holds the native balance
+        assertEq(address(multiVaultMigrationMode).balance, amount, "contract native balance must increase");
+    }
 }
