@@ -78,10 +78,9 @@ contract MultiVault is
     // TRUST
     // deposited and redeemed by the user
     mapping(address user => mapping(uint256 epoch => int256 utilizationAmount)) public personalUtilization;
-
-    /// @notice Mapping of the last active epoch for each user
-    // User address -> Last active epoch
-    mapping(address user => uint256 epoch) public lastActiveEpoch;
+    
+    /// @notice Mapping of the last 3 active epochs for each user
+    mapping(address user => uint256[3] epoch) public userEpochHistory;
 
     /* =================================================== */
     /*                        Errors                       */
@@ -140,6 +139,10 @@ contract MultiVault is
     error MultiVault_CannotDirectlyInitializeCounterTriple();
 
     error MultiVault_TermDoesNotExist(bytes32 termId);
+
+    error MultiVault_EpochNotTracked();
+
+    error MultiVault_InvalidEpoch();
 
     /* =================================================== */
     /*                    CONSTRUCTOR                      */
@@ -218,6 +221,44 @@ contract MultiVault is
     /// @inheritdoc IMultiVault
     function getUserUtilizationForEpoch(address user, uint256 epoch) external view returns (int256) {
         return personalUtilization[user][epoch];
+    }
+
+    /// @inheritdoc IMultiVault
+    function getUserLastActiveEpoch(address user) external view returns (uint256) {
+        return userEpochHistory[user][0];
+    }
+
+    /// @inheritdoc IMultiVault
+    function getUserUtilization(address user, uint256 epoch) external view returns (int256) {
+        uint256 _currentEpoch = _currentEpoch();
+
+        // Revert if calling with future epoch or during epoch 0
+        if (_currentEpoch == 0 || epoch > _currentEpoch) revert MultiVault_InvalidEpoch();
+
+        // If calling with previous global epoch, return utilization for that epoch
+        if (epoch == _currentEpoch - 1) {
+            return personalUtilization[user][_currentEpoch - 1];
+        }
+
+        uint256[3] memory _userEpochHistory = userEpochHistory[user];
+        
+        // Case A: check most recent activity
+        if (_userEpochHistory[0] <= epoch) {
+            return personalUtilization[user][_userEpochHistory[0]];
+        }
+
+        // Case B: check previous activity
+        if (_userEpochHistory[1] <= epoch) {
+            return personalUtilization[user][_userEpochHistory[1]];
+        }
+
+        // Case C: check previous-previous activity
+        if (_userEpochHistory[2] <= epoch) {
+            return personalUtilization[user][_userEpochHistory[2]];
+        }
+
+        // No tracked epoch strictly earlier than `epoch`
+        revert MultiVault_EpochNotTracked();
     }
 
     /// @inheritdoc IMultiVault
@@ -871,7 +912,6 @@ contract MultiVault is
         returns (uint256, uint256)
     {
         VaultType _vaultType = _getVaultType(termId);
-        bool _isAtom = _vaultType == VaultType.ATOM;
 
         _validateRedeem(termId, curveId, receiver, shares, minAssets);
 
@@ -1429,14 +1469,22 @@ contract MultiVault is
 
         uint256 epoch = _currentEpoch();
 
+        uint256[3] storage _userEpochHistory = userEpochHistory[user];
+        if (_userEpochHistory[0] != epoch) {
+            if (_userEpochHistory[0] != 0) {
+                // Shift the history: ppa <- pa <- prev
+                _userEpochHistory[2] = _userEpochHistory[1];
+                _userEpochHistory[1] = _userEpochHistory[0];
+            }
+
+            _userEpochHistory[0] = epoch;
+        }
+
         totalUtilization[epoch] += totalValue;
         emit TotalUtilizationAdded(epoch, totalValue, totalUtilization[epoch]);
 
         personalUtilization[user][epoch] += totalValue;
         emit PersonalUtilizationAdded(user, epoch, totalValue, personalUtilization[user][epoch]);
-
-        // Mark lastActiveEpoch for the user
-        lastActiveEpoch[user] = epoch;
     }
 
     /// @dev Removes the utilization of the system and the user
@@ -1447,15 +1495,22 @@ contract MultiVault is
         _rollover(user);
 
         uint256 epoch = _currentEpoch();
+        uint256[3] storage _userEpochHistory = userEpochHistory[user];
+        if (_userEpochHistory[0] != epoch) {
+            if (_userEpochHistory[0] != 0) {
+                // Shift the history: ppa <- pa <- prev
+                _userEpochHistory[2] = _userEpochHistory[1];
+                _userEpochHistory[1] = _userEpochHistory[0];
+            }
+
+            _userEpochHistory[0] = epoch;
+        }
 
         totalUtilization[epoch] -= amountToRemove;
         emit TotalUtilizationRemoved(epoch, amountToRemove, totalUtilization[epoch]);
 
         personalUtilization[user][epoch] -= amountToRemove;
         emit PersonalUtilizationRemoved(user, epoch, amountToRemove, personalUtilization[user][epoch]);
-
-        // Mark lastActiveEpoch for the user
-        lastActiveEpoch[user] = epoch;
     }
 
     /// @dev Rollover utilization if needed: move leftover from old epoch to current epoch
@@ -1463,9 +1518,9 @@ contract MultiVault is
     /// @param user the address of the user
     function _rollover(address user) internal {
         uint256 currentEpochLocal = _currentEpoch();
-        uint256 userLastEpoch = lastActiveEpoch[user];
+        uint256 userLastEpoch = userEpochHistory[user][0];
 
-        // First, handle system-wide rollover if this is the first action in the new epoch
+        // First, handle the system-wide rollover if this is the first action in the new epoch
         if (currentEpochLocal > 0 && totalUtilization[currentEpochLocal] == 0) {
             // Roll over from the immediately previous epoch
             uint256 previousEpoch = currentEpochLocal - 1;
@@ -1474,16 +1529,16 @@ contract MultiVault is
             }
         }
 
-        // Then handle user-specific rollover
-        if (userLastEpoch == 0 || userLastEpoch == currentEpochLocal) {
-            // First ever action by this user, or already active in current epoch; no rollover needed
-            return;
+        // Then handle the user-specific rollover
+        if (userLastEpoch == currentEpochLocal) {
+            return; // already up to date; no rollover needed
         }
 
         // User's first action in a new epoch - roll over their personal utilization from their respective last active
         // epoch
-        if (personalUtilization[user][currentEpochLocal] == 0) {
-            personalUtilization[user][currentEpochLocal] = personalUtilization[user][userLastEpoch];
+        int256 lastEpochUtilization = personalUtilization[user][userLastEpoch];
+        if (lastEpochUtilization != 0 && personalUtilization[user][currentEpochLocal] == 0) {
+            personalUtilization[user][currentEpochLocal] = lastEpochUtilization;
         }
     }
 

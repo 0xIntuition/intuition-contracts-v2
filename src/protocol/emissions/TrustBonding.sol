@@ -503,8 +503,8 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         }
 
         // Fetch the personal utilization before and after the epoch
-        int256 userUtilizationBefore = IMultiVault(multiVault).getUserUtilizationForEpoch(_account, _epoch - 1);
-        int256 userUtilizationAfter = IMultiVault(multiVault).getUserUtilizationForEpoch(_account, _epoch);
+        int256 userUtilizationBefore = IMultiVault(multiVault).getUserUtilization(_account, _epoch - 1);
+        int256 userUtilizationAfter = IMultiVault(multiVault).getUserUtilization(_account, _epoch);
 
         // Since rawUtilizationDelta is signed, we only do a sign check, as the explicit underflow check is not needed
         int256 rawUtilizationDelta = userUtilizationAfter - userUtilizationBefore;
