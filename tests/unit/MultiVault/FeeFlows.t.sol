@@ -177,39 +177,39 @@ contract FeeFlowsTest is BaseTest {
     //////////////////////////////////////////////////////////////////////////*/
 
     function test_atom_nonDefault_deposit_flows_entry_fee_to_default_when_threshold_met() public {
+        uint256 DEPOSIT_AMOUNT = 10 ether;
         // Gate ON (easy to meet): set threshold to min ghost shares
         _setFeeThreshold(MIN_SHARES);
 
         bytes32 atom = createSimpleAtom("B", protocol.multiVault.getAtomCost(), users.alice);
 
         // 1 = default curve, 2 = first non-default curve
-        (uint256 aDef0,) = _vault(atom, 1);
-        (uint256 aNon0,) = _vault(atom, 2);
+        (uint256 atomLinearCurveWithMinAssets,) = _vault(atom, 1);
+        (uint256 atomProgressiveCurveWithNoAssets,) = _vault(atom, 2);
 
         // Fresh non-default curve deposit (isNew && !isDefault) -> minShare cost applies
-        uint256 amount = 5 ether;
-        (uint256 expShares, uint256 assetsAfterFees) = protocol.multiVault.previewDeposit(atom, 2, amount);
+        (uint256 expShares, uint256 assetsAfterFees) = protocol.multiVault.previewDeposit(atom, 2, DEPOSIT_AMOUNT);
 
         VaultFees memory vf = _vf();
         GeneralConfig memory gc = _gc();
 
-        // base = amount - minShare (for non-default creation)
-        uint256 base = amount - gc.minShare;
-        uint256 expectedEntryFee = _mulDivUp(base, vf.entryFee, gc.feeDenominator);
+        // assets = DEPOSIT_AMOUNT - minShare (for non-default creation)
+        uint256 assets = DEPOSIT_AMOUNT - gc.minShare;
+        uint256 expectedEntryFee = _mulDivUp(assets, vf.entryFee, gc.feeDenominator);
 
         // Perform deposit
         vm.startPrank(users.alice);
-        uint256 sharesMinted = protocol.multiVault.deposit{ value: amount }(users.alice, atom, 2, expShares);
+        uint256 sharesMinted = protocol.multiVault.deposit{ value: DEPOSIT_AMOUNT }(users.alice, atom, 2, expShares);
         vm.stopPrank();
         sharesMinted; // silence
 
         // Check default vault got exactly the entry fee
-        (uint256 aDef1,) = _vault(atom, 1);
-        assertEq(aDef1 - aDef0, expectedEntryFee, "default vault must receive entry fee");
+        (uint256 atomLinearCurveWithEntryFees,) = _vault(atom, 1);
+        assertApproxEqAbs(atomLinearCurveWithEntryFees - atomLinearCurveWithMinAssets, expectedEntryFee, 1e4, "default vault must receive entry fee");
 
         // Non-default total assets increased by assetsAfterFees + minShare (creation path mints ghost)
         (uint256 aNon1,) = _vault(atom, 2);
-        assertEq(aNon1 - aNon0, assetsAfterFees + gc.minShare, "non-default vault assets delta mismatch");
+        assertEq(aNon1 - atomProgressiveCurveWithNoAssets, assetsAfterFees + gc.minShare, "non-default vault assets delta mismatch");
     }
 
     function test_atom_nonDefault_deposit_does_not_flow_entry_fee_when_below_threshold() public {

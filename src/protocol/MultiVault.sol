@@ -741,7 +741,7 @@ contract MultiVault is
 
         /* --- Add entry fee to vault (Protocol Owned) --- */
         if (_shouldChargeFees(termId)) {
-            _increaseProRataVaultAssets(termId, _feeOnRaw(assets, vaultFees.entryFee), _vaultType);
+            _increaseProRataVaultAssets(termId, _feeOnRaw(assetsAfterMinSharesCost, vaultFees.entryFee), _vaultType);
         }
 
         /* --- Apply atom or triple specific fees --- */
@@ -749,7 +749,7 @@ contract MultiVault is
             _accumulateAtomWalletFees(termId, assetsAfterMinSharesCost);
         } else {
             if (_shouldChargeAtomDepositFraction(termId)) {
-                _increaseProRataVaultsAssets(termId, _feeOnRaw(assets, tripleConfig.atomDepositFractionForTriple));
+                _increaseProRataVaultsAssets(termId, _feeOnRaw(assetsAfterMinSharesCost, tripleConfig.atomDepositFractionForTriple));
             }
         }
 
