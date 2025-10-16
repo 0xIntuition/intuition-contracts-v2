@@ -3,6 +3,7 @@ pragma solidity 0.8.29;
 
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
@@ -111,7 +112,7 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
             uint256 minDeposit,
             uint256 minShare,
             uint256 atomDataMaxLength,
-            uint256 decimalPrecision
+            uint256 feeThreshold
         ) = protocol.multiVault.generalConfig();
 
         // Prepare a new config with changed values (keep admin same to not disturb roles)
@@ -123,7 +124,7 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
             minDeposit: minDeposit + 1,
             minShare: minShare + 1,
             atomDataMaxLength: atomDataMaxLength + 7,
-            decimalPrecision: decimalPrecision
+            feeThreshold: feeThreshold
         });
 
         resetPrank({ msgSender: users.admin });
@@ -138,7 +139,7 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
             uint256 newMinDeposit,
             uint256 newMinShare,
             uint256 newAtomDataMaxLength,
-            uint256 newDecimalPrecision
+            uint256 newFeeThreshold
         ) = protocol.multiVault.generalConfig();
 
         assertEq(newMultisig, users.controller);
@@ -147,7 +148,7 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
         assertEq(newMinDeposit, minDeposit + 1);
         assertEq(newMinShare, minShare + 1);
         assertEq(newAtomDataMaxLength, atomDataMaxLength + 7);
-        assertEq(newDecimalPrecision, decimalPrecision);
+        assertEq(newFeeThreshold, feeThreshold);
     }
 
     function testSetGeneralConfig_RevertWhen_NonAdmin() public {
@@ -192,20 +193,18 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
     ////////////////////////////////////////////////////////////////////*/
 
     function testSetTripleConfig_OnlyAdmin_UpdatesFields() public {
-        (uint256 creationFee, uint256 staticAtomDeposits, uint256 atomDepositFrac) = protocol.multiVault.tripleConfig();
+        (uint256 creationFee, uint256 atomDepositFrac) = protocol.multiVault.tripleConfig();
 
         TripleConfig memory tc = TripleConfig({
             tripleCreationProtocolFee: creationFee + 1,
-            totalAtomDepositsOnTripleCreation: staticAtomDeposits + 2,
             atomDepositFractionForTriple: atomDepositFrac + 3
         });
 
         resetPrank({ msgSender: users.admin });
         protocol.multiVault.setTripleConfig(tc);
 
-        (uint256 nCreationFee, uint256 nStaticDeposits, uint256 nFrac) = protocol.multiVault.tripleConfig();
+        (uint256 nCreationFee, uint256 nFrac) = protocol.multiVault.tripleConfig();
         assertEq(nCreationFee, creationFee + 1);
-        assertEq(nStaticDeposits, staticAtomDeposits + 2);
         assertEq(nFrac, atomDepositFrac + 3);
     }
 
@@ -269,9 +268,21 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
 
     function testSetBondingCurveConfig_OnlyAdmin_UpdatesFields() public {
         // Deploy a fresh registry and at least one curve so defaultCurveId=1 is valid
-        BondingCurveRegistry newReg = new BondingCurveRegistry(users.admin);
+        BondingCurveRegistry newRegImpl = new BondingCurveRegistry();
+        TransparentUpgradeableProxy newReg = new TransparentUpgradeableProxy(
+            address(newRegImpl),
+            users.admin,
+            abi.encodeWithSelector(BondingCurveRegistry.initialize.selector, users.admin)
+        );
+        BondingCurveRegistry newRegInstance = BondingCurveRegistry(address(newReg));
+
+        LinearCurve lc = new LinearCurve();
+        TransparentUpgradeableProxy lcProxy = new TransparentUpgradeableProxy(
+            address(lc), users.admin, abi.encodeWithSelector(LinearCurve.initialize.selector, "Linear")
+        );
+
         resetPrank(users.admin);
-        newReg.addBondingCurve(address(new LinearCurve("Linear")));
+        newRegInstance.addBondingCurve(address(lcProxy));
         // set to the fresh registry, default curve id 1
         BondingCurveConfig memory bc = BondingCurveConfig({ registry: address(newReg), defaultCurveId: 1 });
 
@@ -304,7 +315,7 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
             atomWarden: address(0xCAFE),
             atomWalletBeacon: address(0xFEED),
             atomWalletFactory: atomWalletFactory // leave same
-         });
+        });
 
         resetPrank({ msgSender: users.admin });
         protocol.multiVault.setWalletConfig(wc);

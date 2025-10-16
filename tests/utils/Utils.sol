@@ -13,11 +13,7 @@ abstract contract Utils is CommonBase, Constants, PRBMathUtils {
     using SafeCastLib for uint256;
 
     /// @dev Bound deposit amount to avoid overflow.
-    function boundDepositAmount(
-        uint128 amount,
-        uint128 balance,
-        uint8 decimals
-    )
+    function boundDepositAmount(uint128 amount, uint128 balance, uint8 decimals)
         internal
         pure
         returns (uint128 depositAmount)
@@ -32,7 +28,7 @@ abstract contract Utils is CommonBase, Constants, PRBMathUtils {
 
     /// @dev Bounds the rate per second between a realistic range i.e. for USDC [$50/month $5000/month].
     function boundRatePerSecond(UD21x18 ratePerSecond) internal pure returns (UD21x18) {
-        return ud21x18(boundUint128(ratePerSecond.unwrap(), 0.00002e18, 0.002e18));
+        return ud21x18(boundUint128(ratePerSecond.unwrap(), 0.000_02e18, 0.002e18));
     }
 
     /// @dev Bounds a `uint128` number.

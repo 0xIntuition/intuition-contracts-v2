@@ -280,8 +280,9 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
 
         uint256 prevEpoch = _currEpoch - 1;
         uint256 userClaimedReward = userClaimedRewardsForEpoch[account][prevEpoch];
-        uint256 userEligibleReward = _userEligibleRewardsForEpoch(account, prevEpoch)
-            * _getPersonalUtilizationRatio(account, prevEpoch) / BASIS_POINTS_DIVISOR;
+        uint256 userEligibleReward =
+            _userEligibleRewardsForEpoch(account, prevEpoch) * _getPersonalUtilizationRatio(account, prevEpoch)
+            / BASIS_POINTS_DIVISOR;
 
         if (userEligibleReward <= userClaimedReward) {
             return 0;
@@ -503,8 +504,8 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         }
 
         // Fetch the personal utilization before and after the epoch
-        int256 userUtilizationBefore = IMultiVault(multiVault).getUserUtilizationForEpoch(_account, _epoch - 1);
-        int256 userUtilizationAfter = IMultiVault(multiVault).getUserUtilizationForEpoch(_account, _epoch);
+        int256 userUtilizationBefore = IMultiVault(multiVault).getUserUtilization(_account, _epoch - 1);
+        int256 userUtilizationAfter = IMultiVault(multiVault).getUserUtilization(_account, _epoch);
 
         // Since rawUtilizationDelta is signed, we only do a sign check, as the explicit underflow check is not needed
         int256 rawUtilizationDelta = userUtilizationAfter - userUtilizationBefore;
@@ -588,11 +589,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
      * @param lowerBound The lower bound for the utilization ratio
      * @return The normalized utilization ratio for the given parameters
      */
-    function _getNormalizedUtilizationRatio(
-        uint256 delta,
-        uint256 target,
-        uint256 lowerBound
-    )
+    function _getNormalizedUtilizationRatio(uint256 delta, uint256 target, uint256 lowerBound)
         internal
         pure
         returns (uint256)

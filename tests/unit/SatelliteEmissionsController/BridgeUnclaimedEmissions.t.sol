@@ -25,9 +25,8 @@ contract BridgeUnclaimedEmissionsTest is TrustBondingBase {
         _setupUserWrappedTokenAndTrustBonding(users.charlie);
         vm.deal(address(protocol.satelliteEmissionsController), 10_000_000 ether);
         _addToTrustBondingWhiteList(users.alice);
-        protocol.satelliteEmissionsController.grantRole(
-            protocol.satelliteEmissionsController.OPERATOR_ROLE(), users.admin
-        );
+        protocol.satelliteEmissionsController
+            .grantRole(protocol.satelliteEmissionsController.OPERATOR_ROLE(), users.admin);
     }
 
     /*//////////////////////////////////////////////////////////////

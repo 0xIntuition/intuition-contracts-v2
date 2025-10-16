@@ -43,7 +43,7 @@ contract UtilizationTest is BaseTest {
             int256(amount),
             "Personal utilization delta should equal gross deposit"
         );
-        assertEq(protocol.multiVault.lastActiveEpoch(users.alice), epoch, "lastActiveEpoch set to current epoch");
+        assertEq(protocol.multiVault.getUserLastActiveEpoch(users.alice), epoch, "getUserLastActiveEpoch set to current epoch");
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -70,7 +70,7 @@ contract UtilizationTest is BaseTest {
         assertEq(protocol.multiVault.totalUtilization(epoch) - baseSys, int256(amount));
         assertEq(protocol.multiVault.personalUtilization(users.bob, epoch) - baseBob, int256(amount));
         assertEq(protocol.multiVault.personalUtilization(users.alice, epoch) - baseAlice, int256(0));
-        assertEq(protocol.multiVault.lastActiveEpoch(users.bob), epoch);
+        assertEq(protocol.multiVault.getUserLastActiveEpoch(users.bob), epoch);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -107,12 +107,12 @@ contract UtilizationTest is BaseTest {
         // First action in N+1 rolls over N totals, then adds new amount
         assertEq(protocol.multiVault.totalUtilization(epochN1), sysN_total + int256(amountN1), "system carry + add");
         assertEq(
-            protocol.multiVault.personalUtilization(users.alice, epochN1) + sysN_total,
+            protocol.multiVault.personalUtilization(users.alice, epochN1),
             meN_total + int256(amountN1),
             "me carry + add"
         );
 
-        assertEq(protocol.multiVault.lastActiveEpoch(users.alice), epochN1);
+        assertEq(protocol.multiVault.getUserLastActiveEpoch(users.alice), epochN1);
     }
 
     // /*//////////////////////////////////////////////////////////////
@@ -145,11 +145,11 @@ contract UtilizationTest is BaseTest {
         // Expect carry – rawAssets
         assertEq(protocol.multiVault.totalUtilization(epochN1), sysN_total - int256(rawAssets), "system carry - raw");
         assertEq(
-            protocol.multiVault.personalUtilization(users.alice, epochN1) + sysN_total,
+            protocol.multiVault.personalUtilization(users.alice, epochN1),
             meN_total - int256(rawAssets),
             "me carry - raw"
         );
-        assertEq(protocol.multiVault.lastActiveEpoch(users.alice), epochN1);
+        assertEq(protocol.multiVault.getUserLastActiveEpoch(users.alice), epochN1);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -223,7 +223,7 @@ contract UtilizationTest is BaseTest {
 
         // After rollover: Bob's N utilization is copied into N+1, then amountN1 is added
         assertEq(
-            protocol.multiVault.personalUtilization(users.bob, epochN1) + meN_total,
+            protocol.multiVault.personalUtilization(users.bob, epochN1),
             meN_total + int256(amountN1),
             "on-behalf deposit should copy prior epoch personal utilization, then add"
         );
@@ -235,7 +235,7 @@ contract UtilizationTest is BaseTest {
             "sender (Alice) gets no personal utilization for on-behalf deposit"
         );
 
-        // And Bob's lastActiveEpoch is now the new epoch
-        assertEq(protocol.multiVault.lastActiveEpoch(users.bob), epochN1, "lastActiveEpoch rolled to N+1");
+        // And Bob's getUserLastActiveEpoch is now the new epoch
+        assertEq(protocol.multiVault.getUserLastActiveEpoch(users.bob), epochN1, "getUserLastActiveEpoch rolled to N+1");
     }
 }

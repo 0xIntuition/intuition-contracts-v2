@@ -214,13 +214,6 @@ interface IMultiVault {
     /*                        GETTERS                      */
     /* =================================================== */
 
-    /**
-     * @notice Returns the accumulated protocol fees for a specific epoch
-     * @param epoch The epoch number to query
-     * @return The accumulated protocol fees for the epoch
-     */
-    function accumulatedProtocolFees(uint256 epoch) external view returns (uint256);
-
     /// @notice Returns the amount of assets deposited into underlying atoms when depositing into a triple vault
     function atomDepositFractionAmount(uint256 assets) external view returns (uint256);
 
@@ -307,6 +300,25 @@ interface IMultiVault {
      */
     function getUserUtilizationForEpoch(address user, uint256 epoch) external view returns (int256);
 
+    /**
+     * @notice Returns the last active epoch for a user
+     * @param user The user address to query
+     * @return The last epoch number in which the user had activity
+     */
+    function getUserLastActiveEpoch(address user) external view returns (uint256);
+
+    /**
+     * @notice Returns a user's utilization value prior to a specified epoch
+     * @dev If the user had no recorded activity in the epoch immediately preceding
+     *      the given one, this function falls back to their last active epoch
+     *      to determine the utilization before the specified epoch
+     * @param user The address of the user to query
+     * @param epoch The epoch number to check utilization before
+     * @return utilization The user's utilization value before the specified epoch,
+     *         which may be positive or negative
+     */
+    function getUserUtilization(address user, uint256 epoch) external view returns (int256);
+
     /// @notice Returns the total assets and total shares in a vault for a given term and bonding curve
     /// @param termId The ID of the term (atom or triple)
     /// @param curveId The ID of the bonding curve
@@ -331,7 +343,6 @@ interface IMultiVault {
     /// @notice Simulates the creation of an atom with an initial deposit
     /// @dev Returns the expected shares to be minted and the net assets credited after fees
     /// @param termId The ID of the atom
-    /// @param curveId The ID of the bonding curve
     /// @param assets The amount of assets the user would send
     /// @return shares The expected shares to be minted for the user
     /// @return assetsAfterFixedFees The net assets that will be added to the vault (after fixed fees, before dynamic
@@ -339,7 +350,6 @@ interface IMultiVault {
     /// @return assetsAfterFees The net assets that will be added to the vault (after all fees)
     function previewAtomCreate(
         bytes32 termId,
-        uint256 curveId,
         uint256 assets
     )
         external
@@ -353,11 +363,7 @@ interface IMultiVault {
     /// @param assets The amount of assets the user would send
     /// @return shares The expected shares to be minted for the user
     /// @return assetsAfterFees The net assets that will be added to the vault (after all fees)
-    function previewDeposit(
-        bytes32 termId,
-        uint256 curveId,
-        uint256 assets
-    )
+    function previewDeposit(bytes32 termId, uint256 curveId, uint256 assets)
         external
         view
         returns (uint256 shares, uint256 assetsAfterFees);
@@ -369,11 +375,7 @@ interface IMultiVault {
     /// @param shares The amount of shares the user would redeem
     /// @return assetsAfterFees The net assets that would be sent to the user (after protocol and exit fees)
     /// @return sharesUsed The shares that would be burned (returned for convenience)
-    function previewRedeem(
-        bytes32 termId,
-        uint256 curveId,
-        uint256 shares
-    )
+    function previewRedeem(bytes32 termId, uint256 curveId, uint256 shares)
         external
         view
         returns (uint256 assetsAfterFees, uint256 sharesUsed);
@@ -381,7 +383,6 @@ interface IMultiVault {
     /// @notice Simulates the creation of a triple with an initial deposit
     /// @dev Returns the expected shares to be minted and the net assets credited after fees
     /// @param termId The ID of the triple
-    /// @param curveId The ID of the bonding curve
     /// @param assets The amount of assets the user would send
     /// @return shares The expected shares to be minted for the user
     /// @return assetsAfterFixedFees The net assets that will be added to the vault (after fixed fees like protocol and
@@ -389,7 +390,6 @@ interface IMultiVault {
     /// @return assetsAfterFees The net assets that will be added to the vault (after all fees)
     function previewTripleCreate(
         bytes32 termId,
-        uint256 curveId,
         uint256 assets
     )
         external
@@ -416,10 +416,7 @@ interface IMultiVault {
      * @param assets Array of asset amounts to deposit into each atom vault
      * @return Array of atom IDs (termIds) for the created atoms
      */
-    function createAtoms(
-        bytes[] calldata atomDatas,
-        uint256[] calldata assets
-    )
+    function createAtoms(bytes[] calldata atomDatas, uint256[] calldata assets)
         external
         payable
         returns (bytes32[] memory);
@@ -450,12 +447,7 @@ interface IMultiVault {
      * @param minShares Minimum number of shares expected to be minted
      * @return Number of shares minted to the receiver
      */
-    function deposit(
-        address receiver,
-        bytes32 termId,
-        uint256 curveId,
-        uint256 minShares
-    )
+    function deposit(address receiver, bytes32 termId, uint256 curveId, uint256 minShares)
         external
         payable
         returns (uint256);
@@ -489,13 +481,7 @@ interface IMultiVault {
      * @param minAssets Minimum number of assets expected to be returned
      * @return Number of assets returned to the receiver
      */
-    function redeem(
-        address receiver,
-        bytes32 termId,
-        uint256 curveId,
-        uint256 shares,
-        uint256 minAssets
-    )
+    function redeem(address receiver, bytes32 termId, uint256 curveId, uint256 shares, uint256 minAssets)
         external
         returns (uint256);
 
@@ -518,11 +504,18 @@ interface IMultiVault {
         external
         returns (uint256[] memory);
 
-    /// @notice Pauses the contract, preventing deposits and redemptions
-    function pause() external;
+    /**
+     * @notice Returns the accumulated protocol fees for a specific epoch
+     * @param epoch The epoch number to query
+     * @return The accumulated protocol fees for the epoch
+     */
+    function accumulatedProtocolFees(uint256 epoch) external view returns (uint256);
 
     /// @notice Sweeps the accumulated protocol fees for a specified epoch to the protocol multisig
     function sweepAccumulatedProtocolFees(uint256 epoch) external;
+
+    /// @notice Pauses the contract, preventing deposits and redemptions
+    function pause() external;
 
     /// @notice Unpauses the contract, allowing deposits and redemptions
     function unpause() external;

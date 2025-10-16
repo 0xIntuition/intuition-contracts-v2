@@ -141,8 +141,9 @@ contract AtomWalletFactory is IAtomWalletFactory, Initializable {
         bytes memory code = type(BeaconProxy).creationCode;
 
         // encode the init function of the AtomWallet contract with the correct initialization arguments
-        bytes memory initData =
-            abi.encodeWithSelector(AtomWallet.initialize.selector, IEntryPoint(entryPoint), address(multiVault), atomId);
+        bytes memory initData = abi.encodeWithSelector(
+            AtomWallet.initialize.selector, IEntryPoint(entryPoint), address(multiVault), atomId
+        );
 
         // encode constructor arguments of the BeaconProxy contract (address beacon, bytes memory data)
         bytes memory encodedArgs = abi.encode(atomWalletBeacon, initData);

@@ -94,6 +94,9 @@ contract TrustBondingGetUserInfoTest is TrustBondingBase {
         _setUserClaimedRewardsForEpoch(users.alice, EPOCHS_TO_ADVANCE - 1, targetUtilization);
         _setUserClaimedRewardsForEpoch(users.alice, EPOCHS_TO_ADVANCE, targetUtilization);
 
+        _setActiveEpoch(users.alice, 1, EPOCHS_TO_ADVANCE - 1);
+        _setActiveEpoch(users.alice, 0, EPOCHS_TO_ADVANCE);
+
         UserInfo memory userInfo = protocol.trustBonding.getUserInfo(users.alice);
         assertEq(userInfo.personalUtilization, BASIS_POINTS_DIVISOR, "Personal utilization should be 100%");
         assertEq(

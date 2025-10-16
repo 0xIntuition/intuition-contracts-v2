@@ -184,7 +184,7 @@ contract TrustBondingBase is BaseTest {
         // This would typically be found by examining the contract's storage layout
         // For now, we'll use a placeholder approach that works with vm.store
 
-        bytes32 slot = keccak256(abi.encode(epoch, uint256(31))); // MultiVault totalUtilization storage slot
+        bytes32 slot = keccak256(abi.encode(epoch, uint256(30))); // MultiVault totalUtilization storage slot
         vm.store(address(protocol.multiVault), slot, bytes32(uint256(utilization)));
     }
 
@@ -194,9 +194,18 @@ contract TrustBondingBase is BaseTest {
         // mapping(address user => mapping(uint256 epoch => int256 utilization)) public personalUtilization;
 
         // Calculate the storage slot for the nested mapping
-        bytes32 userSlot = keccak256(abi.encode(user, uint256(32))); // MultiVault personalUtilization storage slot
+        bytes32 userSlot = keccak256(abi.encode(user, uint256(31))); // MultiVault personalUtilization storage slot
         bytes32 finalSlot = keccak256(abi.encode(epoch, userSlot));
         vm.store(address(protocol.multiVault), finalSlot, bytes32(uint256(utilization)));
+    }
+
+    /// @dev Set epoch for a user using vm.store
+    function _setActiveEpoch(address user, uint256 index, uint256 epoch) internal {
+        require(index < 3, "index out of bounds");
+        uint256 mappingSlot = 32; // storage slot for userEpochHistory mapping in MultiVault
+        bytes32 baseSlot = keccak256(abi.encode(user, uint256(mappingSlot)));
+        bytes32 targetSlot = bytes32(uint256(baseSlot) + index);
+        vm.store(address(protocol.multiVault), targetSlot, bytes32(epoch));
     }
 
     /// @dev Set total claimed rewards for a specific epoch using vm.store

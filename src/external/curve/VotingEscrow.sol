@@ -438,10 +438,7 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
 
     /// @notice Extend the unlock time and/or for `msg.sender` to `_unlock_time`
     /// @param _unlock_time New epoch time for unlocking
-    function increase_amount_and_time(
-        uint256 _value,
-        uint256 _unlock_time
-    )
+    function increase_amount_and_time(uint256 _value, uint256 _unlock_time)
         external
         nonReentrant
         onlyUserOrWhitelist
@@ -490,10 +487,7 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     /// @notice Deposit `_value` tokens for `msg.sender` and lock until `_unlock_time`
     /// @param _value Amount to deposit
     /// @param _unlock_time Epoch time when tokens unlock, rounded down to whole weeks
-    function withdraw_and_create_lock(
-        uint256 _value,
-        uint256 _unlock_time
-    )
+    function withdraw_and_create_lock(uint256 _value, uint256 _unlock_time)
         external
         nonReentrant
         onlyUserOrWhitelist
