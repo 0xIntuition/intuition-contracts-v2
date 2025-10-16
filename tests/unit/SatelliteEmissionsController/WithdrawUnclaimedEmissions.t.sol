@@ -172,6 +172,35 @@ contract WithdrawUnclaimedEmissionsTest is TrustBondingBase {
         protocol.satelliteEmissionsController.withdrawUnclaimedEmissions(2, users.bob);
     }
 
+    function test_withdrawUnclaimedEmissions_revertWhen_trustBondingIsNotSetYet() external {
+        // Deploy a new SatelliteEmissionsController without setting TrustBonding
+        SatelliteEmissionsController newSatelliteEmissionsController = _deploySatelliteEmissionsController();
+
+        address baseEmissionsController = address(0xABC);
+
+        // Initialize the new SatelliteEmissionsController
+        newSatelliteEmissionsController.initialize(
+            users.admin,
+            baseEmissionsController, // placeholder address for BaseEmissionsController
+            metaERC20DispatchInit,
+            coreEmissionsInit
+        );
+
+        newSatelliteEmissionsController.grantRole(newSatelliteEmissionsController.OPERATOR_ROLE(), users.admin);
+
+        // Advance to epoch 4 to ensure there are bridgeable rewards
+        _createLock(users.alice, initialTokens);
+        _advanceToEpoch(4);
+
+        resetPrank(users.admin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ISatelliteEmissionsController.SatelliteEmissionsController_TrustBondingNotSet.selector
+            )
+        );
+        newSatelliteEmissionsController.withdrawUnclaimedEmissions(2, users.bob);
+    }
+
     function test_withdrawUnclaimedEmissions_revertWhen_previouslyWithdrawn() external {
         _createLock(users.alice, initialTokens);
         _advanceToEpoch(4);

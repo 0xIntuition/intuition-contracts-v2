@@ -7,9 +7,8 @@ import { Test, console } from "forge-std/src/Test.sol";
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { MultiVaultCore } from "src/protocol/MultiVaultCore.sol";
-import { IMultiVault } from "src/interfaces/IMultiVault.sol";
+import { IMultiVault, ApprovalTypes } from "src/interfaces/IMultiVault.sol";
 import { GeneralConfig, BondingCurveConfig, VaultFees } from "src/interfaces/IMultiVaultCore.sol";
-import { ApprovalTypes } from "src/interfaces/IMultiVault.sol";
 
 contract DepositTest is BaseTest {
     uint256 internal CURVE_ID; // Default linear curve ID

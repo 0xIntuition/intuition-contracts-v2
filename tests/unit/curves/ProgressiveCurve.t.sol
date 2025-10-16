@@ -2,7 +2,7 @@
 pragma solidity 0.8.29;
 
 import { Test, console } from "forge-std/src/Test.sol";
-import { UD60x18, ud60x18 } from "@prb/math/src/UD60x18.sol";
+import { UD60x18, ud60x18, convert } from "@prb/math/src/UD60x18.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { ProgressiveCurve } from "src/protocol/curves/ProgressiveCurve.sol";
 import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
@@ -31,16 +31,6 @@ contract ProgressiveCurveTest is Test {
         assertEq(curve.name(), "Test Curve");
     }
 
-    function test_initialize_revertsOnZeroSlope() public {
-        ProgressiveCurve progressiveCurveImpl = new ProgressiveCurve();
-        TransparentUpgradeableProxy progressiveCurveProxy =
-            new TransparentUpgradeableProxy(address(progressiveCurveImpl), address(this), "");
-        curve = ProgressiveCurve(address(progressiveCurveProxy));
-
-        vm.expectRevert("PC: Slope must be > 0");
-        curve.initialize("Test Curve", 0);
-    }
-
     function test_initialize_revertsOnEmptyName() public {
         ProgressiveCurve progressiveCurveImpl = new ProgressiveCurve();
         TransparentUpgradeableProxy progressiveCurveProxy =
@@ -49,6 +39,26 @@ contract ProgressiveCurveTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_EmptyStringNotAllowed.selector));
         curve.initialize("", SLOPE);
+    }
+
+    function test_initialize_revertsOnZeroSlope() public {
+        ProgressiveCurve progressiveCurveImpl = new ProgressiveCurve();
+        TransparentUpgradeableProxy progressiveCurveProxy =
+            new TransparentUpgradeableProxy(address(progressiveCurveImpl), address(this), "");
+        curve = ProgressiveCurve(address(progressiveCurveProxy));
+
+        vm.expectRevert(abi.encodeWithSelector(ProgressiveCurve.ProgressiveCurve_InvalidSlope.selector));
+        curve.initialize("Test Curve", 0);
+    }
+
+    function test_initialize_revertsOnOddSlope() public {
+        ProgressiveCurve progressiveCurveImpl = new ProgressiveCurve();
+        TransparentUpgradeableProxy progressiveCurveProxy =
+            new TransparentUpgradeableProxy(address(progressiveCurveImpl), address(this), "");
+        curve = ProgressiveCurve(address(progressiveCurveProxy));
+
+        vm.expectRevert(abi.encodeWithSelector(ProgressiveCurve.ProgressiveCurve_InvalidSlope.selector));
+        curve.initialize("Test Curve", 3); // odd
     }
 
     function test_previewDeposit_zeroShares() public view {
@@ -122,5 +132,107 @@ contract ProgressiveCurveTest is Test {
         // Since SLOPE is already in 18 decimal format (0.001e18 = 1e15)
         uint256 expectedPrice = totalShares * SLOPE;
         assertEq(price, expectedPrice);
+    }
+
+    function test_previewMint_isCeil_of_previewRedeem_floor() public view {
+        uint256 s0 = 10e18;
+        uint256 n = 1e18;
+
+        uint256 assetsUp = curve.previewMint(n, s0, 0);
+        uint256 assetsFloor = curve.previewRedeem(n, s0 + n, 0);
+
+        assertGe(assetsUp, assetsFloor);
+        assertLe(assetsUp - assetsFloor, 1); // at most 1 wei diff
+    }
+
+    function test_previewWithdraw_isMinimal() public view {
+        uint256 s0 = 10e18;
+        uint256 a = 1e18;
+
+        uint256 shUp = curve.previewWithdraw(a, a, s0);
+        uint256 aWithShUp = curve.previewRedeem(shUp, s0, 0);
+        assertGe(aWithShUp, a);
+
+        if (shUp > 0) {
+            uint256 aWithShUpMinus1 = curve.previewRedeem(shUp - 1, s0, 0);
+            assertLt(aWithShUpMinus1, a); // minimality of rounding up
+        }
+    }
+
+    function test_previewDeposit_equals_convertToShares() public view {
+        uint256 s0 = 10e18;
+        uint256 a = 3e18;
+        assertEq(curve.previewDeposit(a, 0, s0), curve.convertToShares(a, 0, s0));
+    }
+
+    function test_previewRedeem_equals_convertToAssets() public view {
+        uint256 s0 = 10e18;
+        uint256 r = 2e18;
+        assertEq(curve.previewRedeem(r, s0, 0), curve.convertToAssets(r, s0, 0));
+    }
+    
+    function test_previewMint_mintMaxSharesFromZero_succeeds() public view {
+        uint256 sMax = curve.maxShares();
+        uint256 assets = curve.previewMint(sMax, 0, 0);
+        assertGt(assets, 0);
+
+        UD60x18 rawExpected = _expectedMintCostFromZeroRaw(sMax);
+        uint256 expected = _ceilUdToUint(rawExpected);
+        assertEq(assets, expected);
+    }
+
+    function test_previewMint_mintPastMaxSharesFromZero_reverts() public {
+        uint256 sMax = curve.maxShares();
+        vm.expectRevert(); // rely on PRB-math overflow revert
+        curve.previewMint(sMax + 1, 0, 0);
+    }
+
+    function test_previewMint_boundaryFromNonZeroSupply_succeeds() public view {
+        uint256 sMax = curve.maxShares();
+        uint256 s0 = sMax - 1;
+        uint256 n = 1; // s0 + n == sMax
+        uint256 assets = curve.previewMint(n, s0, 0);
+        assertGt(assets, 0);
+    }
+
+    function test_previewMint_crossesMaxFromNonZeroSupply_reverts() public {
+        uint256 sMax = curve.maxShares();
+        uint256 s0 = sMax - 1;
+        uint256 n = 2; // s0 + n == sMax + 1 -> should overflow
+        vm.expectRevert();
+        curve.previewMint(n, s0, 0);
+    }
+
+    function test_previewRedeem_allAtMaxShares_succeeds() public view {
+        uint256 sMax = curve.maxShares();
+
+        // Mint cost from 0 -> sMax == redeem proceeds from sMax -> 0 (ignoring fees; pure curve math)
+        uint256 expected = _expectedMintCostFromZero(sMax);
+        uint256 assets = curve.previewRedeem(sMax, sMax, 0);
+        assertEq(assets, expected);
+    }
+
+    /* ===================================================== */
+    /*                  INTERNAL HELPERS                     */
+    /* ===================================================== */
+
+    /// @dev Helper to compute expected mint cost from zero supply
+    function _expectedMintCostFromZero(uint256 shares) internal view returns (uint256) {
+        // Cost = (s^2) * (m/2)
+        UD60x18 s = convert(shares);
+        return convert(s.powu(2).mul(curve.HALF_SLOPE()));
+    }
+
+    /// @dev Helper to compute expected mint cost from zero supply, returning raw UD60x18
+    function _expectedMintCostFromZeroRaw(uint256 shares) internal view returns (UD60x18) {
+        // Cost = (s^2) * (m/2)
+        UD60x18 s = convert(shares);
+        return s.powu(2).mul(curve.HALF_SLOPE());
+    }
+
+    /// @dev Converts a UD60x18 to a uint256 by ceiling the value (i.e. rounding up)
+    function _ceilUdToUint(UD60x18 x) internal pure returns (uint256) {
+        uint256 raw = UD60x18.unwrap(x); // 18-decimal scaled
+        return raw / 1e18 + ((raw % 1e18 == 0) ? 0 : 1); // ceil to uint256
     }
 }

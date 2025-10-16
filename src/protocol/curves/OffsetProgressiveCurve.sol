@@ -2,6 +2,7 @@
 pragma solidity 0.8.29;
 
 import { UD60x18, ud60x18, convert, uMAX_UD60x18, uUNIT } from "@prb/math/src/UD60x18.sol";
+import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 
 import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
 
@@ -64,6 +65,9 @@ contract OffsetProgressiveCurve is BaseCurve {
     /// beyond that point.
     uint256 public MAX_ASSETS;
 
+    /// @notice Custom errors
+    error OffsetProgressiveCurve_InvalidSlope();
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -78,17 +82,24 @@ contract OffsetProgressiveCurve is BaseCurve {
     function initialize(string calldata _name, uint256 slope18, uint256 offset18) external initializer {
         __BaseCurve_init(_name);
 
-        require(slope18 > 0, "PC: Slope must be > 0");
+        if (slope18 == 0 || slope18 % 2 != 0) revert OffsetProgressiveCurve_InvalidSlope();
 
         SLOPE = UD60x18.wrap(slope18);
         HALF_SLOPE = UD60x18.wrap(slope18 / 2);
         OFFSET = UD60x18.wrap(offset18);
+
         // Find max values
-        // powu(2) will overflow first, therefore maximum totalShares is sqrt(MAX_UD60x18)
-        // Then the maximum assets is the total shares * slope / 2, because multiplication will overflow at this point
-        UD60x18 MAX_SQRT = UD60x18.wrap(uMAX_UD60x18 / uUNIT);
-        MAX_SHARES = MAX_SQRT.sqrt().sub(OFFSET).unwrap();
-        MAX_ASSETS = MAX_SQRT.mul(HALF_SLOPE).unwrap();
+        uint256 r = FixedPointMathLib.sqrt(type(uint256).max / 1e18);
+
+        // Offset applies to (s + o), so subtract the unscaled offset from the unscaled cap.
+        uint256 oUnscaled = OFFSET.unwrap() / 1e18; // convert UD -> uint
+        MAX_SHARES = r > oUnscaled ? r - oUnscaled : 0;
+
+        // cost = ((s+o)^2 - o^2) * (m/2)
+        // UD60x18 math - `convert(UD)` returns unscaled uint
+        UD60x18 sMax = convert(MAX_SHARES);
+        UD60x18 sPlusO = sMax.add(OFFSET);
+        MAX_ASSETS = _ceilUdToUint(sPlusO.powu(2).sub(OFFSET.powu(2)).mul(HALF_SLOPE));
     }
 
     /// @inheritdoc BaseCurve
@@ -171,9 +182,13 @@ contract OffsetProgressiveCurve is BaseCurve {
         returns (uint256 assets)
     {
         _checkMintBounds(shares, totalShares, MAX_SHARES);
-        UD60x18 currentSupplyOfShares = convert(totalShares).add(OFFSET);
-        UD60x18 supplyOfSharesAfterMint = convert(totalShares + shares).add(OFFSET);
-        assets = convert(_convertToAssets(currentSupplyOfShares, supplyOfSharesAfterMint));
+ 
+        UD60x18 s0 = convert(totalShares).add(OFFSET);
+        UD60x18 s1 = convert(totalShares + shares).add(OFFSET);
+        UD60x18 aUD = _convertToAssets(s0, s1);
+
+        assets = _ceilUdToUint(aUD);
+  
         _checkMintOut(assets, totalAssets, MAX_ASSETS);
     }
 
@@ -198,10 +213,10 @@ contract OffsetProgressiveCurve is BaseCurve {
     {
         _checkWithdraw(assets, totalAssets);
         UD60x18 currentSupplyOfShares = convert(totalShares).add(OFFSET);
-        return
-            convert(
-                currentSupplyOfShares.sub(currentSupplyOfShares.powu(2).sub(convert(assets).div(HALF_SLOPE)).sqrt())
-            );
+        UD60x18 preciseShares =
+            currentSupplyOfShares.sub(currentSupplyOfShares.powu(2).sub(convert(assets).div(HALF_SLOPE)).sqrt());
+
+        shares = _ceilUdToUint(preciseShares);
     }
 
     /// @inheritdoc BaseCurve
@@ -307,6 +322,12 @@ contract OffsetProgressiveCurve is BaseCurve {
     function _convertToAssets(UD60x18 juniorSupply, UD60x18 seniorSupply) internal view returns (UD60x18 assets) {
         UD60x18 sqrDiff = seniorSupply.powu(2).sub(juniorSupply.powu(2));
         return sqrDiff.mul(HALF_SLOPE);
+    }
+
+    /// @dev Converts a UD60x18 to a uint256 by ceiling the value (i.e. rounding up)
+    function _ceilUdToUint(UD60x18 x) internal pure returns (uint256) {
+        uint256 raw = UD60x18.unwrap(x); // 18-decimal scaled
+        return raw / 1e18 + ((raw % 1e18 == 0) ? 0 : 1); // ceil to uint256
     }
 
     /// @inheritdoc BaseCurve

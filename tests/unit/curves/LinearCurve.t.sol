@@ -2,6 +2,7 @@
 pragma solidity 0.8.29;
 
 import { Test } from "forge-std/src/Test.sol";
+import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
 import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
@@ -117,6 +118,50 @@ contract LinearCurveTest is Test {
         assertEq(assets, shares * totalAssets / totalShares);
     }
 
+    function test_previewMint_roundsUp_onRemainder() public view {
+        uint256 shares = 1e18;
+        uint256 totalShares = 2e18;
+        uint256 totalAssets = 3e18 + 1; // force remainder
+
+        uint256 expectedAssets = FixedPointMathLib.mulDivUp(shares, totalAssets, totalShares);
+        uint256 actualAssets = curve.previewMint(shares, totalShares, totalAssets);
+        assertEq(actualAssets, expectedAssets); // will be 1.5e18 + 1 wei
+    }
+
+    // 2) Withdraw already rounds up in your inputs; assert the correct ceil
+    function test_previewWithdraw_roundsUp_onRemainder() public view {
+        uint256 assets = 1e18;
+        uint256 totalAssets = 3e18;
+        uint256 totalShares = 2e18;
+
+        uint256 expectedShares = FixedPointMathLib.mulDivUp(assets, totalShares, totalAssets);
+        uint256 actualShares = curve.previewWithdraw(assets, totalAssets, totalShares);
+        assertEq(actualShares, expectedShares); // 666666666666666667 wei
+    }
+
+    function test_convertToAssets_extremeValues_noOverflow() public view {
+        // Extreme but valid ratios; solady mulDiv uses 512-bit path
+        uint256 shares = type(uint128).max - 1;
+        uint256 totalShares = type(uint128).max;
+        uint256 totalAssets = type(uint128).max;
+
+        uint256 assets = curve.convertToAssets(shares, totalShares, totalAssets);
+        // Should be approximately shares * totalAssets / totalShares ~= shares
+        assertLe(assets, totalAssets);
+        assertGt(assets, 0);
+    }
+
+    function test_convertToShares_extremeValues_noOverflow() public view {
+        uint256 assets = type(uint128).max - 1;
+        uint256 totalAssets = type(uint128).max;
+        uint256 totalShares = type(uint128).max;
+
+        uint256 shares = curve.convertToShares(assets, totalAssets, totalShares);
+        // Should be approximately assets * totalShares / totalAssets ~= assets
+        assertLe(shares, totalShares);
+        assertGt(shares, 0);
+    }
+    
     function test_previewWithdraw_reverts_whenAssetsExceedTotalAssets() public {
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_AssetsExceedTotalAssets.selector));
         curve.previewWithdraw(2, /*totalAssets=*/ 1, /*totalShares=*/ 10);

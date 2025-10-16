@@ -61,7 +61,7 @@ contract LinearCurve is BaseCurve {
         returns (uint256 assets)
     {
         _checkMintBounds(shares, totalShares, MAX_SHARES);
-        assets = _convertToAssets(shares, totalShares, totalAssets);
+        assets = totalShares == 0 ? shares : shares.mulDivUp(totalAssets, totalShares);
         _checkMintOut(assets, totalAssets, MAX_ASSETS);
     }
 
@@ -73,7 +73,7 @@ contract LinearCurve is BaseCurve {
         returns (uint256 shares)
     {
         _checkWithdraw(assets, totalAssets);
-        shares = _convertToShares(assets, totalAssets, totalShares);
+        shares = totalShares == 0 ? assets : assets.mulDivUp(totalShares, totalAssets);
     }
 
     /// @inheritdoc BaseCurve
