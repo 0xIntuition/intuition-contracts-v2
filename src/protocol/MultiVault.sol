@@ -1766,7 +1766,7 @@ contract MultiVault is
 
     /// @notice Determine if exit fees should be charged based on the remaining total shares in the default curve vault
     /// after redemption
-    /// @param termId The ID of the atom or triple
+    /// @param termId The ID of the atom or triple unnecessary 
     /// @param curveId The ID of the bonding curve
     /// @param sharesToRedeem The number of shares to be redeemed
     /// @return bool Whether exit fees should be charged or not
@@ -1784,7 +1784,7 @@ contract MultiVault is
         uint256 remainingSharesInDefaultVault;
 
         if (curveId == defaultCurveId) {
-            remainingSharesInDefaultVault = sharesToRedeem >= totalShares ? 0 : totalShares - sharesToRedeem;
+            remainingSharesInDefaultVault = totalShares - sharesToRedeem;
         } else {
             remainingSharesInDefaultVault = totalShares;
         }
