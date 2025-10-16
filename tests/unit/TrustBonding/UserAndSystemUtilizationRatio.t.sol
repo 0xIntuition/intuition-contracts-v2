@@ -246,6 +246,7 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         // Set user utilization for epoch 2 to 2000e18 (positive increase)
         _setUserUtilizationForEpoch(users.alice, 2, 2000e18);
         // No claimed rewards for user in epoch 1 (target utilization = 0)
+        _setActiveEpoch(users.alice, 0, 2);
 
         uint256 ratio = protocol.trustBonding.getPersonalUtilizationRatio(users.alice, 2);
         assertEq(ratio, BASIS_POINTS_DIVISOR, "No target utilization should return max ratio");
@@ -260,6 +261,7 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         _setUserUtilizationForEpoch(users.alice, 1, 1000e18);
         // Set user utilization for epoch 2 to 3000e18 (delta = 2000e18)
         _setUserUtilizationForEpoch(users.alice, 2, 3000e18);
+        _setActiveEpoch(users.alice, 0, 2);
         // Set user claimed rewards for epoch 1 to 1000e18 (target < delta)
         _setUserClaimedRewardsForEpoch(users.alice, 1, 1000e18);
 
@@ -478,15 +480,15 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
 
     function test_getUserUtilization_lastEqualsTargetEpoch_usesPreviousActive() external {
         // target epoch = 5  -> prevEpoch = 4
-        _advanceToEpoch(5);
+        _advanceToEpoch(6);
 
         _setUserUtilizationForEpoch(users.alice, 4, 444);
         _setUserUtilizationForEpoch(users.alice, 5, 555);
         _setActiveEpoch(users.alice, 0, 5); // last == target epoch
         _setActiveEpoch(users.alice, 1, 4);
 
-        int256 before = IMultiVault(address(protocol.multiVault)).getUserUtilization(users.alice, 5);
-        assertEq(before, int256(444), "When last >= target, must use previousActiveEpoch");
+        int256 utilAfter = IMultiVault(address(protocol.multiVault)).getUserUtilization(users.alice, 5);
+        assertEq(utilAfter, int256(555), "When calling with the epoch that is immediately before current global one, must return utilization for previous global epoch");
     }
 
     function test_getUserUtilization_sparseActivityFarBehind_usesThatSparseLast() external {
@@ -562,10 +564,10 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         getUserUtilization() — explicit path coverage
     //////////////////////////////////////////////////////////////*/
 
-    function test_getUserUtilization_epochZero_returnsZero() external view {
+    function test_getUserUtilization_epochZero_returnsZero() external {
         // Querying strictly before epoch 0 is nonsensical by definition
+        vm.expectRevert(MultiVault.MultiVault_InvalidEpoch.selector);
         int256 before = IMultiVault(address(protocol.multiVault)).getUserUtilization(users.alice, 0);
-        assertEq(before, int256(0), "epoch ==0  must return 0");
     }
 
     // Case A: lastActive < epoch -> return personal[lastActive]
@@ -609,11 +611,11 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         // last=10, previous=5 (== target), previousPrevious=3; util[3]=303
         _setUserUtilizationForEpoch(users.alice, 3, 303);
         _setUserUtilizationForEpoch(users.alice, 5, 555);
-        _setActiveEpoch(users.alice, 0, 10);
+        _setActiveEpoch(users.alice, 0, 6);
         _setActiveEpoch(users.alice, 1, 5);
         _setActiveEpoch(users.alice, 2, 3);
 
-        int256 before = IMultiVault(address(protocol.multiVault)).getUserUtilization(users.alice, 5);
+        int256 before = IMultiVault(address(protocol.multiVault)).getUserUtilization(users.alice, 4);
         assertEq(before, int256(303), "Case C: previous == epoch, so use previousPrevious");
     }
 

@@ -232,8 +232,8 @@ contract MultiVault is
     function getUserUtilization(address user, uint256 epoch) external view returns (int256) {
         uint256 _currentEpoch = _currentEpoch();
 
-        // Revert if calling with future epoch
-        if (epoch > _currentEpoch) revert MultiVault_InvalidEpoch();
+        // Revert if calling with future epoch or during epoch 0
+        if (_currentEpoch == 0 || epoch > _currentEpoch) revert MultiVault_InvalidEpoch();
 
         // If calling with previous global epoch, return utilization for that epoch
         if (epoch == _currentEpoch - 1) {
