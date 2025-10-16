@@ -2,7 +2,7 @@
 pragma solidity 0.8.29;
 
 import { Test, console } from "forge-std/src/Test.sol";
-import { UD60x18, ud60x18 } from "@prb/math/src/UD60x18.sol";
+import { UD60x18, ud60x18, convert } from "@prb/math/src/UD60x18.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { ProgressiveCurve } from "src/protocol/curves/ProgressiveCurve.sol";
 import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";

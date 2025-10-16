@@ -2,7 +2,7 @@
 pragma solidity 0.8.29;
 
 import { Test, console } from "forge-std/src/Test.sol";
-import { UD60x18, ud60x18 } from "@prb/math/src/UD60x18.sol";
+import { UD60x18, ud60x18, convert } from "@prb/math/src/UD60x18.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCurve.sol";
 import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
@@ -179,6 +179,8 @@ contract OffsetProgressiveCurveTest is Test {
         UD60x18 sPlusO = convert(shares).add(o);
         UD60x18 diff = sPlusO.powu(2).sub(o.powu(2));
         return convert(diff.mul(curve.HALF_SLOPE()));
+    }
+
     function test_previewDeposit_allowsZeroAssets_returnsZero() public view {
         uint256 shares = curve.previewDeposit(0, /*totalAssets=*/ 0, /*totalShares=*/ 123e18);
         assertEq(shares, 0);
