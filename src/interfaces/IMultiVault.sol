@@ -317,7 +317,7 @@ interface IMultiVault {
      * @return utilization The user's utilization value before the specified epoch,
      *         which may be positive or negative
      */
-    function getUserUtilizationBefore(address user, uint256 epoch) external view returns (int256 utilization);
+    function getUserUtilization(address user, uint256 epoch) external view returns (int256);
 
     /// @notice Returns the total assets and total shares in a vault for a given term and bonding curve
     /// @param termId The ID of the term (atom or triple)
@@ -525,10 +525,6 @@ interface IMultiVault {
     )
         external
         returns (uint256[] memory);
-
-    /* =================================================== */
-    /*                    VIEW FUNCTIONS                   */
-    /* =================================================== */
 
     /**
      * @notice Returns the accumulated protocol fees for a specific epoch

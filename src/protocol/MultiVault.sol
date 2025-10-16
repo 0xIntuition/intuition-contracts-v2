@@ -140,6 +140,10 @@ contract MultiVault is
 
     error MultiVault_TermDoesNotExist(bytes32 termId);
 
+    error MultiVault_EpochNotTracked();
+
+    error MultiVault_InvalidEpoch();
+
     /* =================================================== */
     /*                    CONSTRUCTOR                      */
     /* =================================================== */
@@ -225,29 +229,36 @@ contract MultiVault is
     }
 
     /// @inheritdoc IMultiVault
-    function getUserUtilizationBefore(address user, uint256 epoch) external view returns (int256) {
-        // Nothing exists strictly before epoch 0
-        if (epoch == 0) return 0;
+    function getUserUtilization(address user, uint256 epoch) external view returns (int256) {
+        uint256 _currentEpoch = _currentEpoch();
+
+        // Revert if calling with future epoch
+        if (epoch > _currentEpoch) revert MultiVault_InvalidEpoch();
+
+        // If calling with previous global epoch, return utilization for that epoch
+        if (epoch == _currentEpoch - 1) {
+            return personalUtilization[user][_currentEpoch - 1];
+        }
 
         uint256[3] memory _userEpochHistory = userEpochHistory[user];
         
         // Case A: check most recent activity
-        if (_userEpochHistory[0] < epoch) {
+        if (_userEpochHistory[0] <= epoch) {
             return personalUtilization[user][_userEpochHistory[0]];
         }
 
         // Case B: check previous activity
-        if (_userEpochHistory[1] < epoch) {
+        if (_userEpochHistory[1] <= epoch) {
             return personalUtilization[user][_userEpochHistory[1]];
         }
 
         // Case C: check previous-previous activity
-        if (_userEpochHistory[2] < epoch) {
+        if (_userEpochHistory[2] <= epoch) {
             return personalUtilization[user][_userEpochHistory[2]];
         }
 
         // No tracked epoch strictly earlier than `epoch`
-        return 0;
+        revert MultiVault_EpochNotTracked();
     }
 
     /// @inheritdoc IMultiVault
