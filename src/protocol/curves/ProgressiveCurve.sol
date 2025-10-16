@@ -2,6 +2,7 @@
 pragma solidity 0.8.29;
 
 import { UD60x18, ud60x18, convert, uMAX_UD60x18, uUNIT } from "@prb/math/src/UD60x18.sol";
+import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 
 import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
 
@@ -79,11 +80,13 @@ contract ProgressiveCurve is BaseCurve {
         HALF_SLOPE = UD60x18.wrap(slope18 / 2);
 
         // Find max values
-        // powu(2) will overflow first, therefore maximum totalShares is sqrt(MAX_UD60x18)
-        // Then the maximum assets is the total shares * slope / 2, because multiplication will overflow at this point
-        UD60x18 MAX_SQRT = UD60x18.wrap(uMAX_UD60x18 / uUNIT);
-        MAX_SHARES = MAX_SQRT.sqrt().unwrap();
-        MAX_ASSETS = MAX_SQRT.mul(HALF_SLOPE).unwrap();
+        // s <= floor(sqrt(MAX_UINT256 / 1e18))
+        uint256 r = FixedPointMathLib.sqrt(type(uint256).max / 1e18);
+        MAX_SHARES = r;
+
+        // realistic ceiling for assets to reach MAX_SHARES from 0:
+        // assets_max = (s^2) * (m/2)  with UD60x18 scaling handled via `convert`
+        MAX_ASSETS = convert(convert(r).powu(2).mul(HALF_SLOPE));
     }
 
     /// @inheritdoc BaseCurve

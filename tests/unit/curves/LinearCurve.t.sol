@@ -139,6 +139,29 @@ contract LinearCurveTest is Test {
         assertEq(actualShares, expectedShares); // 666666666666666667 wei
     }
 
+    function test_convertToAssets_extremeValues_noOverflow() public view {
+        // Extreme but valid ratios; solady mulDiv uses 512-bit path
+        uint256 shares = type(uint128).max - 1;
+        uint256 totalShares = type(uint128).max;
+        uint256 totalAssets = type(uint128).max;
+
+        uint256 assets = curve.convertToAssets(shares, totalShares, totalAssets);
+        // Should be approximately shares * totalAssets / totalShares ~= shares
+        assertLe(assets, totalAssets);
+        assertGt(assets, 0);
+    }
+
+    function test_convertToShares_extremeValues_noOverflow() public view {
+        uint256 assets = type(uint128).max - 1;
+        uint256 totalAssets = type(uint128).max;
+        uint256 totalShares = type(uint128).max;
+
+        uint256 shares = curve.convertToShares(assets, totalAssets, totalShares);
+        // Should be approximately assets * totalShares / totalAssets ~= assets
+        assertLe(shares, totalShares);
+        assertGt(shares, 0);
+    }
+    
     function test_previewWithdraw_reverts_whenAssetsExceedTotalAssets() public {
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_AssetsExceedTotalAssets.selector));
         curve.previewWithdraw(2, /*totalAssets=*/ 1, /*totalShares=*/ 10);

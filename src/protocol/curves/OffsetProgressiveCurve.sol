@@ -2,6 +2,7 @@
 pragma solidity 0.8.29;
 
 import { UD60x18, ud60x18, convert, uMAX_UD60x18, uUNIT } from "@prb/math/src/UD60x18.sol";
+import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 
 import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
 
@@ -86,12 +87,19 @@ contract OffsetProgressiveCurve is BaseCurve {
         SLOPE = UD60x18.wrap(slope18);
         HALF_SLOPE = UD60x18.wrap(slope18 / 2);
         OFFSET = UD60x18.wrap(offset18);
+
         // Find max values
-        // powu(2) will overflow first, therefore maximum totalShares is sqrt(MAX_UD60x18)
-        // Then the maximum assets is the total shares * slope / 2, because multiplication will overflow at this point
-        UD60x18 MAX_SQRT = UD60x18.wrap(uMAX_UD60x18 / uUNIT);
-        MAX_SHARES = MAX_SQRT.sqrt().sub(OFFSET).unwrap();
-        MAX_ASSETS = MAX_SQRT.mul(HALF_SLOPE).unwrap();
+        uint256 r = FixedPointMathLib.sqrt(type(uint256).max / 1e18);
+
+        // Offset applies to (s + o), so subtract the unscaled offset from the unscaled cap.
+        uint256 oUnscaled = OFFSET.unwrap() / 1e18; // convert UD -> uint
+        MAX_SHARES = r > oUnscaled ? r - oUnscaled : 0;
+
+        // cost = ((s+o)^2 - o^2) * (m/2)
+        // UD60x18 math - `convert(UD)` returns unscaled uint
+        UD60x18 sMax = convert(MAX_SHARES);
+        UD60x18 sPlusO = sMax.add(OFFSET);
+        MAX_ASSETS = convert(sPlusO.powu(2).sub(OFFSET.powu(2)).mul(HALF_SLOPE));
     }
 
     /// @inheritdoc BaseCurve

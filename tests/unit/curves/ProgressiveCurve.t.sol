@@ -2,7 +2,7 @@
 pragma solidity 0.8.29;
 
 import { Test, console } from "forge-std/src/Test.sol";
-import { UD60x18, ud60x18 } from "@prb/math/src/UD60x18.sol";
+import { UD60x18, ud60x18, convert } from "@prb/math/src/UD60x18.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { ProgressiveCurve } from "src/protocol/curves/ProgressiveCurve.sol";
 import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
@@ -169,5 +169,53 @@ contract ProgressiveCurveTest is Test {
         uint256 s0 = 10e18;
         uint256 r = 2e18;
         assertEq(curve.previewRedeem(r, s0, 0), curve.convertToAssets(r, s0, 0));
+    }
+    
+    function test_previewMint_mintMaxSharesFromZero_succeeds() public view {
+        uint256 sMax = curve.maxShares();
+        uint256 assets = curve.previewMint(sMax, 0, 0);
+        assertGt(assets, 0);
+
+        // Optional: exact equality against the closed-form cost
+        uint256 expected = _expectedMintCostFromZero(sMax);
+        assertEq(assets, expected);
+    }
+
+    function test_previewMint_mintPastMaxSharesFromZero_reverts() public {
+        uint256 sMax = curve.maxShares();
+        vm.expectRevert(); // rely on PRB-math overflow revert
+        curve.previewMint(sMax + 1, 0, 0);
+    }
+
+    function test_previewMint_boundaryFromNonZeroSupply_succeeds() public view {
+        uint256 sMax = curve.maxShares();
+        uint256 s0 = sMax - 1;
+        uint256 n = 1; // s0 + n == sMax
+        uint256 assets = curve.previewMint(n, s0, 0);
+        assertGt(assets, 0);
+    }
+
+    function test_previewMint_crossesMaxFromNonZeroSupply_reverts() public {
+        uint256 sMax = curve.maxShares();
+        uint256 s0 = sMax - 1;
+        uint256 n = 2; // s0 + n == sMax + 1 -> should overflow
+        vm.expectRevert();
+        curve.previewMint(n, s0, 0);
+    }
+
+    function test_previewRedeem_allAtMaxShares_succeeds() public view {
+        uint256 sMax = curve.maxShares();
+
+        // Mint cost from 0 -> sMax == redeem proceeds from sMax -> 0 (ignoring fees; pure curve math)
+        uint256 expected = _expectedMintCostFromZero(sMax);
+        uint256 assets = curve.previewRedeem(sMax, sMax, 0);
+        assertEq(assets, expected);
+    }
+
+    /// @dev Helper to compute expected mint cost from zero supply
+    function _expectedMintCostFromZero(uint256 shares) internal view returns (uint256) {
+        // Cost = (s^2) * (m/2)
+        UD60x18 s = convert(shares);
+        return convert(s.powu(2).mul(curve.HALF_SLOPE()));
     }
 }
