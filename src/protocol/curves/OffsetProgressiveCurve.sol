@@ -99,7 +99,7 @@ contract OffsetProgressiveCurve is BaseCurve {
         // UD60x18 math - `convert(UD)` returns unscaled uint
         UD60x18 sMax = convert(MAX_SHARES);
         UD60x18 sPlusO = sMax.add(OFFSET);
-        MAX_ASSETS = convert(sPlusO.powu(2).sub(OFFSET.powu(2)).mul(HALF_SLOPE));
+        MAX_ASSETS = _ceilUdToUint(sPlusO.powu(2).sub(OFFSET.powu(2)).mul(HALF_SLOPE));
     }
 
     /// @inheritdoc BaseCurve

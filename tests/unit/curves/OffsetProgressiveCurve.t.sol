@@ -183,7 +183,8 @@ contract OffsetProgressiveCurveTest is Test {
         uint256 assets = curve.previewMint(sMax, 0, 0);
         assertGt(assets, 0);
 
-        uint256 expected = _expectedMintCostFromZero(sMax);
+        UD60x18 rawExpected = _expectedMintCostFromZeroRaw(sMax);
+        uint256 expected = _ceilUdToUint(rawExpected);
         assertEq(assets, expected);
     }
 
@@ -214,15 +215,6 @@ contract OffsetProgressiveCurveTest is Test {
         uint256 expected = _expectedMintCostFromZero(sMax);
         uint256 assets = curve.previewRedeem(sMax, sMax, 0);
         assertEq(assets, expected);
-    }
-
-    /// @dev Helper to compute expected mint cost from zero supply
-    function _expectedMintCostFromZero(uint256 shares) internal view returns (uint256) {
-        // Cost = ((s+o)^2 - o^2) * (m/2)
-        UD60x18 o = curve.OFFSET();
-        UD60x18 sPlusO = convert(shares).add(o);
-        UD60x18 diff = sPlusO.powu(2).sub(o.powu(2));
-        return convert(diff.mul(curve.HALF_SLOPE()));
     }
 
     function test_previewDeposit_allowsZeroAssets_returnsZero() public view {
@@ -271,5 +263,32 @@ contract OffsetProgressiveCurveTest is Test {
         uint256 maxA = curve.maxAssets();
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_AssetsOverflowMax.selector));
         curve.previewMint( /*shares=*/ 1, /*totalShares=*/ 1, /*totalAssets=*/ maxA);
+    }
+
+    /* ===================================================== */
+    /*                  INTERNAL HELPERS                     */
+    /* ===================================================== */
+
+    /// @dev Helper to compute expected mint cost from zero supply
+    function _expectedMintCostFromZero(uint256 shares) internal view returns (uint256) {
+        // Cost = ((s+o)^2 - o^2) * (m/2)
+        UD60x18 o = curve.OFFSET();
+        UD60x18 sPlusO = convert(shares).add(o);
+        UD60x18 diff = sPlusO.powu(2).sub(o.powu(2));
+        return convert(diff.mul(curve.HALF_SLOPE()));
+    }
+
+    /// @dev Helper to compute expected mint cost from zero supply, returning raw UD60x18
+    function _expectedMintCostFromZeroRaw(uint256 shares) internal view returns (UD60x18) {
+        UD60x18 o = curve.OFFSET();
+        UD60x18 sPlusO = convert(shares).add(o);
+        UD60x18 diff = sPlusO.powu(2).sub(o.powu(2));
+        return diff.mul(curve.HALF_SLOPE());
+    }
+
+    /// @dev Converts a UD60x18 to a uint256 by ceiling the value (i.e. rounding up)
+    function _ceilUdToUint(UD60x18 x) internal pure returns (uint256) {
+        uint256 raw = UD60x18.unwrap(x); // 18-decimal scaled
+        return raw / 1e18 + ((raw % 1e18 == 0) ? 0 : 1); // ceil to uint256
     }
 }

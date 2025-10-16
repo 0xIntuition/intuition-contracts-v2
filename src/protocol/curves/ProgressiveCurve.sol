@@ -86,7 +86,7 @@ contract ProgressiveCurve is BaseCurve {
 
         // realistic ceiling for assets to reach MAX_SHARES from 0:
         // assets_max = (s^2) * (m/2)  with UD60x18 scaling handled via `convert`
-        MAX_ASSETS = convert(convert(r).powu(2).mul(HALF_SLOPE));
+        MAX_ASSETS = _ceilUdToUint(convert(r).powu(2).mul(HALF_SLOPE));
     }
 
     /// @inheritdoc BaseCurve

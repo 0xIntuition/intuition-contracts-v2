@@ -176,8 +176,8 @@ contract ProgressiveCurveTest is Test {
         uint256 assets = curve.previewMint(sMax, 0, 0);
         assertGt(assets, 0);
 
-        // Optional: exact equality against the closed-form cost
-        uint256 expected = _expectedMintCostFromZero(sMax);
+        UD60x18 rawExpected = _expectedMintCostFromZeroRaw(sMax);
+        uint256 expected = _ceilUdToUint(rawExpected);
         assertEq(assets, expected);
     }
 
@@ -212,10 +212,27 @@ contract ProgressiveCurveTest is Test {
         assertEq(assets, expected);
     }
 
+    /* ===================================================== */
+    /*                  INTERNAL HELPERS                     */
+    /* ===================================================== */
+
     /// @dev Helper to compute expected mint cost from zero supply
     function _expectedMintCostFromZero(uint256 shares) internal view returns (uint256) {
         // Cost = (s^2) * (m/2)
         UD60x18 s = convert(shares);
         return convert(s.powu(2).mul(curve.HALF_SLOPE()));
+    }
+
+    /// @dev Helper to compute expected mint cost from zero supply, returning raw UD60x18
+    function _expectedMintCostFromZeroRaw(uint256 shares) internal view returns (UD60x18) {
+        // Cost = (s^2) * (m/2)
+        UD60x18 s = convert(shares);
+        return s.powu(2).mul(curve.HALF_SLOPE());
+    }
+
+    /// @dev Converts a UD60x18 to a uint256 by ceiling the value (i.e. rounding up)
+    function _ceilUdToUint(UD60x18 x) internal pure returns (uint256) {
+        uint256 raw = UD60x18.unwrap(x); // 18-decimal scaled
+        return raw / 1e18 + ((raw % 1e18 == 0) ? 0 : 1); // ceil to uint256
     }
 }
