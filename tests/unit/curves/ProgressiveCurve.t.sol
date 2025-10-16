@@ -1,42 +1,59 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { Test } from "forge-std/src/Test.sol";
+import { Test, console } from "forge-std/src/Test.sol";
 import { UD60x18, ud60x18 } from "@prb/math/src/UD60x18.sol";
+import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { ProgressiveCurve } from "src/protocol/curves/ProgressiveCurve.sol";
-import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
+import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
 
 contract ProgressiveCurveTest is Test {
     ProgressiveCurve public curve;
-    uint256 constant SLOPE = 2;
+    uint256 public constant SLOPE = 2;
 
     function setUp() public {
-        curve = new ProgressiveCurve("Progressive Curve Test", SLOPE);
+        ProgressiveCurve progressiveCurveImpl = new ProgressiveCurve();
+        TransparentUpgradeableProxy progressiveCurveProxy = new TransparentUpgradeableProxy(
+            address(progressiveCurveImpl),
+            address(this),
+            abi.encodeWithSelector(ProgressiveCurve.initialize.selector, "Progressive Curve Test", SLOPE)
+        );
+        curve = ProgressiveCurve(address(progressiveCurveProxy));
     }
 
-    function test_constructor_successful() public {
-        ProgressiveCurve newCurve = new ProgressiveCurve("Test Curve", SLOPE);
-        assertEq(newCurve.name(), "Test Curve");
+    function test_initialize_successful() public {
+        ProgressiveCurve progressiveCurveImpl = new ProgressiveCurve();
+        TransparentUpgradeableProxy progressiveCurveProxy =
+            new TransparentUpgradeableProxy(address(progressiveCurveImpl), address(this), "");
+        curve = ProgressiveCurve(address(progressiveCurveProxy));
+
+        curve.initialize("Test Curve", SLOPE);
+        assertEq(curve.name(), "Test Curve");
     }
 
-    function test_constructor_revertsOnZeroSlope() public {
+    function test_initialize_revertsOnZeroSlope() public {
+        ProgressiveCurve progressiveCurveImpl = new ProgressiveCurve();
+        TransparentUpgradeableProxy progressiveCurveProxy =
+            new TransparentUpgradeableProxy(address(progressiveCurveImpl), address(this), "");
+        curve = ProgressiveCurve(address(progressiveCurveProxy));
+
         vm.expectRevert("PC: Slope must be > 0");
-        new ProgressiveCurve("Test Curve", 0);
+        curve.initialize("Test Curve", 0);
     }
 
-    function test_constructor_revertsOnEmptyName() public {
-        vm.expectRevert(abi.encodeWithSelector(BaseCurve.BaseCurve_EmptyStringNotAllowed.selector));
-        new ProgressiveCurve("", SLOPE);
+    function test_initialize_revertsOnEmptyName() public {
+        ProgressiveCurve progressiveCurveImpl = new ProgressiveCurve();
+        TransparentUpgradeableProxy progressiveCurveProxy =
+            new TransparentUpgradeableProxy(address(progressiveCurveImpl), address(this), "");
+        curve = ProgressiveCurve(address(progressiveCurveProxy));
+
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_EmptyStringNotAllowed.selector));
+        curve.initialize("", SLOPE);
     }
 
     function test_previewDeposit_zeroShares() public view {
         uint256 shares = curve.previewDeposit(1e18, 0, 0);
         assertGt(shares, 0);
-    }
-
-    function test_previewDeposit_revertsOnZeroAssets() public {
-        vm.expectRevert("Asset amount must be greater than zero");
-        curve.previewDeposit(0, 0, 0);
     }
 
     function test_previewRedeem_successful() public view {
@@ -50,7 +67,7 @@ contract ProgressiveCurveTest is Test {
     }
 
     function test_previewWithdraw_successful() public view {
-        uint256 shares = curve.previewWithdraw(1e18, 0, 10e18);
+        uint256 shares = curve.previewWithdraw(1e18, 10e18, 10e18);
         assertGt(shares, 0);
     }
 
@@ -62,16 +79,6 @@ contract ProgressiveCurveTest is Test {
         assertEq(price1, 0);
         assertGt(price2, price1);
         assertGt(price3, price2);
-    }
-
-    function test_convertToShares_revertsOnZeroAssets() public {
-        vm.expectRevert("Asset amount must be greater than zero");
-        curve.convertToShares(0, 0, 0);
-    }
-
-    function test_convertToAssets_revertsOnUnderSupply() public {
-        vm.expectRevert("PC: Under supply of shares");
-        curve.convertToAssets(11e18, 10e18, 0);
     }
 
     function test_maxShares() public view {

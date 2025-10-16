@@ -328,8 +328,7 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
         }
     }
 
-    /// @dev Internal function to get the vault type for a given term ID
-    /// @param termId The term ID to check
+    /// @dev Internal function to determine the vault type for a given term ID
     function _getVaultType(bytes32 termId) internal view returns (VaultType) {
         bool _isVaultAtom = _isAtom(termId);
         bool _isVaultTriple = _isTriple[termId];
@@ -353,7 +352,6 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
     /// @dev Internal function to get the static costs that go into creating a triple
     /// @return tripleCost the static costs of creating a triple
     function _getTripleCost() internal view returns (uint256) {
-        return tripleConfig.tripleCreationProtocolFee + tripleConfig.totalAtomDepositsOnTripleCreation
-            + generalConfig.minShare * 2;
+        return tripleConfig.tripleCreationProtocolFee + generalConfig.minShare * 2;
     }
 }

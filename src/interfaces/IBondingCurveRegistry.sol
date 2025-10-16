@@ -131,4 +131,9 @@ interface IBondingCurveRegistry {
     /// @param name The curve name to query
     /// @return True if the curve name is registered, false otherwise
     function registeredCurveNames(string memory name) external view returns (bool);
+
+    /// @notice Check if a curve ID is valid
+    /// @param id Curve ID to check
+    /// @return valid True if the curve ID is valid, false otherwise
+    function isCurveIdValid(uint256 id) external view returns (bool valid);
 }

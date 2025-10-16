@@ -7,8 +7,9 @@ import { Test, console } from "forge-std/src/Test.sol";
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { MultiVaultCore } from "src/protocol/MultiVaultCore.sol";
-import { IMultiVault, ApprovalTypes } from "src/interfaces/IMultiVault.sol";
-import { GeneralConfig, BondingCurveConfig } from "src/interfaces/IMultiVaultCore.sol";
+import { IMultiVault } from "src/interfaces/IMultiVault.sol";
+import { GeneralConfig, BondingCurveConfig, VaultFees } from "src/interfaces/IMultiVaultCore.sol";
+import { ApprovalTypes } from "src/interfaces/IMultiVault.sol";
 
 contract DepositTest is BaseTest {
     uint256 internal CURVE_ID; // Default linear curve ID
@@ -323,11 +324,7 @@ contract DefaultCurveEntryFeeImpactTest is BaseTest {
 
         (, uint256 defaultCurveId) = protocol.multiVault.bondingCurveConfig();
         DEFAULT_CURVE_ID = defaultCurveId; // expected 1 (linear)
-        NON_DEFAULT_CURVE_ID = (defaultCurveId == 1) ? 2 : 1; // pick 2 as non-default if possible
-            // sanity in case registry changed later:
-        if (NON_DEFAULT_CURVE_ID == DEFAULT_CURVE_ID) {
-            NON_DEFAULT_CURVE_ID = DEFAULT_CURVE_ID == 1 ? 2 : 1;
-        }
+        NON_DEFAULT_CURVE_ID = 2; // expected 2 (offset progressive)
     }
 
     /// Proves: first deposit on a brand-new non-default vault waives entry fee,
@@ -356,6 +353,11 @@ contract DefaultCurveEntryFeeImpactTest is BaseTest {
     /// Proves: subsequent non-default deposits *do* drip entry fee into default curve,
     /// increasing default assets (not shares), raising price and reducing shares/asset on default curve.
     function test_defaultCurve_FeeDripFromSubsequentNonDefaultDeposits() public {
+        vm.stopPrank();
+        // Switch the fee threshold to 0 to ensure all fees drip immediately -this proves that the share price grows
+        // much more than expected (not an issue from the technical standpoint, but may lead to bad UX in practice)
+        _setFeeThreshold(0);
+
         bytes32 atomId = createSimpleAtom("atom-fee-next", ATOM_COST[0], users.alice);
 
         // Initialize the non-default vault with a first deposit (no entry fee)
@@ -389,6 +391,11 @@ contract DefaultCurveEntryFeeImpactTest is BaseTest {
     /// A simple staircase test: multiple non-default deposits add up linearly on the default
     /// curve’s assets, and previewed shares on default for a fixed asset amount is non-increasing.
     function test_defaultCurve_StaircaseIncreasingDeposits() public {
+        vm.stopPrank();
+        // Switch the fee threshold to 0 to ensure all fees drip immediately -this proves that the share price grows
+        // much more than expected (not an issue from the technical standpoint, but may lead to bad UX in practice)
+        _setFeeThreshold(0);
+
         bytes32 atomId = createSimpleAtom("atom-stair", ATOM_COST[0], users.alice);
 
         // prime non-default
@@ -418,36 +425,15 @@ contract DefaultCurveEntryFeeImpactTest is BaseTest {
         }
     }
 
-    /* --------------------------- helpers --------------------------- */
-
-    function _readVaultFees() internal view returns (uint256 entry, uint256 exit, uint256 protocolBps, uint256 den) {
-        entry = protocol.multiVault.getVaultFees().entryFee; // 100
-        exit = protocol.multiVault.getVaultFees().exitFee; // 100
-        protocolBps = protocol.multiVault.getVaultFees().protocolFee; // 100
-        den = protocol.multiVault.getGeneralConfig().feeDenominator; // 10_000
-    }
-
-    function _mulDivUp(uint256 a, uint256 b, uint256 d) internal pure returns (uint256) {
-        // matches solady FixedPointMathLib.mulDivUp
-        return (a == 0 || b == 0) ? 0 : ((a * b) + (d - 1)) / d;
-    }
-}
-
-contract DefaultCurveEntryFeeImpactFuzzTest is BaseTest {
-    uint256 internal DEFAULT_CURVE_ID;
-    uint256 internal NON_DEFAULT_CURVE_ID;
-
-    function setUp() public override {
-        super.setUp();
-        (, uint256 defaultCurveId) = protocol.multiVault.bondingCurveConfig();
-        DEFAULT_CURVE_ID = defaultCurveId;
-        NON_DEFAULT_CURVE_ID = (defaultCurveId == 1) ? 2 : 1;
-    }
-
     /// For a sequence of non-default deposits:
     ///  - default curve’s totalAssets must equal minShare + sum(ceil(entryFee * amount)) excluding the first deposit
     ///  - previewed shares on the default curve for a fixed assets amount must be non-increasing
     function testFuzz_DefaultCurve_AccruesEntryFeeAndReducesSharesPerAsset(uint96[10] memory raw) public {
+        vm.stopPrank();
+        // Switch the fee threshold to 0 to ensure all fees drip immediately -this proves that the share price grows
+        // much more than expected (not an issue from the technical standpoint, but may lead to bad UX in practice)
+        _setFeeThreshold(0);
+
         bytes32 atomId = createSimpleAtom("atom-fuzz", ATOM_COST[0], users.alice);
 
         // prime non-default (no entry fee dripped)
@@ -479,6 +465,8 @@ contract DefaultCurveEntryFeeImpactFuzzTest is BaseTest {
         }
     }
 
+    /* --------------------------- helpers --------------------------- */
+
     function _sanitize(uint96 x) internal view returns (uint256) {
         // keep deposits in a safe and meaningful band:
         //  >= minDeposit + minShare (to avoid min-share check on non-default new vault)
@@ -492,5 +480,47 @@ contract DefaultCurveEntryFeeImpactFuzzTest is BaseTest {
 
     function _mulDivUp(uint256 a, uint256 b, uint256 d) internal pure returns (uint256) {
         return (a == 0 || b == 0) ? 0 : ((a * b) + (d - 1)) / d;
+    }
+
+    function _readVaultFees() internal view returns (uint256 entry, uint256 exit, uint256 protocolBps, uint256 den) {
+        entry = protocol.multiVault.getVaultFees().entryFee; // 100
+        exit = protocol.multiVault.getVaultFees().exitFee; // 100
+        protocolBps = protocol.multiVault.getVaultFees().protocolFee; // 100
+        den = protocol.multiVault.getGeneralConfig().feeDenominator; // 10_000
+    }
+
+    function _gc() internal view returns (GeneralConfig memory gc) {
+        (
+            address admin,
+            address protocolMultisig,
+            uint256 feeDenominator,
+            address trustBonding,
+            uint256 minDeposit,
+            uint256 minShare,
+            uint256 atomDataMaxLength,
+            uint256 feeThreshold
+        ) = protocol.multiVault.generalConfig();
+        gc = GeneralConfig({
+            admin: admin,
+            protocolMultisig: protocolMultisig,
+            feeDenominator: feeDenominator,
+            trustBonding: trustBonding,
+            minDeposit: minDeposit,
+            minShare: minShare,
+            atomDataMaxLength: atomDataMaxLength,
+            feeThreshold: feeThreshold
+        });
+    }
+
+    function _vf() internal view returns (VaultFees memory vf) {
+        (uint256 entryFee, uint256 exitFee, uint256 protocolFee) = protocol.multiVault.vaultFees();
+        vf = VaultFees({ entryFee: entryFee, exitFee: exitFee, protocolFee: protocolFee });
+    }
+
+    function _setFeeThreshold(uint256 newThreshold) internal {
+        GeneralConfig memory gc = _gc();
+        gc.feeThreshold = newThreshold;
+        vm.prank(gc.admin);
+        protocol.multiVault.setGeneralConfig(gc);
     }
 }

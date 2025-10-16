@@ -201,7 +201,7 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
     ///         wallet is considered owned by the user and this action cannot be undone.
     /// NOTE: Overrides the acceptOwnership function of Ownable2StepUpgradeable
     function acceptOwnership() public override {
-        address sender = _msgSender();
+        address sender = msg.sender;
 
         if (pendingOwner() != sender) {
             revert OwnableUnauthorizedAccount(sender);

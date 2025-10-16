@@ -3,6 +3,7 @@ pragma solidity 0.8.29;
 
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { WalletConfig } from "src/interfaces/IMultiVaultCore.sol";
+import { MultiVault } from "src/protocol/MultiVault.sol";
 
 contract MultiVaultHelpersTest is BaseTest {
     /*////////////////////////////////////////////////////////////////////
@@ -58,7 +59,7 @@ contract MultiVaultHelpersTest is BaseTest {
     }
 
     function test_atomDepositFractionAmount_ZeroAndNonZero() public view {
-        (,, uint256 atomFracBps) = protocol.multiVault.tripleConfig();
+        (, uint256 atomFracBps) = protocol.multiVault.tripleConfig();
         uint256 denom = FEE_DENOMINATOR;
 
         assertEq(protocol.multiVault.atomDepositFractionAmount(0), 0);
@@ -73,7 +74,7 @@ contract MultiVaultHelpersTest is BaseTest {
         assets = bound(assets, 0, type(uint128).max);
 
         (uint256 entryBps, uint256 exitBps, uint256 protBps) = protocol.multiVault.vaultFees();
-        (,, uint256 atomFracBps) = protocol.multiVault.tripleConfig();
+        (, uint256 atomFracBps) = protocol.multiVault.tripleConfig();
 
         uint256 denom = FEE_DENOMINATOR;
 
@@ -133,7 +134,8 @@ contract MultiVaultHelpersTest is BaseTest {
 
     function test_currentSharePrice_equalsConvertToAssets1Share() public {
         // create a real atom so the vault exists with non-zero totals
-        bytes32 atomId = createSimpleAtom("price-atom", getAtomCreationCost(), users.admin);
+        uint256 assets = 2 ether;
+        bytes32 atomId = createSimpleAtom("price-atom", getAtomCreationCost() + assets, users.admin);
         uint256 curveId = getDefaultCurveId();
 
         uint256 oneShareAssets = protocol.multiVault.convertToAssets(atomId, curveId, ONE_SHARE);
@@ -156,10 +158,13 @@ contract MultiVaultHelpersTest is BaseTest {
         uint256 assets = atomCost + 5 ether;
 
         (uint256 shares, uint256 assetsAfterFixed, uint256 assetsAfterFees) =
-            protocol.multiVault.previewAtomCreate(preAtomId, curveId, assets);
+            protocol.multiVault.previewAtomCreate(preAtomId, assets);
 
         // sanity: assetsAfterFixed = assets - atomCost
         assertEq(assetsAfterFixed, assets - atomCost);
+
+        // create atom with just atomCost to ensure it exists
+        createSimpleAtom("pre-atom", atomCost, users.admin);
 
         // shares should equal convertToShares(termId, curveId, assetsAfterFees) on empty vault
         uint256 sharesFromView = protocol.multiVault.convertToShares(preAtomId, curveId, assetsAfterFees);
@@ -168,16 +173,22 @@ contract MultiVaultHelpersTest is BaseTest {
 
     function test_previewTripleCreate_calculatesFeesAndShares() public {
         // Compute an id that isn't created yet: hash of three atoms (we don't need real atoms for preview)
-        bytes32 preTripleId = keccak256(abi.encodePacked("s", "p", "o", "triple"));
+        bytes32 subjectId = protocol.multiVault.calculateAtomId(abi.encodePacked("s"));
+        bytes32 predicateId = protocol.multiVault.calculateAtomId(abi.encodePacked("p"));
+        bytes32 objectId = protocol.multiVault.calculateAtomId(abi.encodePacked("o"));
+        bytes32 preTripleId = protocol.multiVault.calculateTripleId(subjectId, predicateId, objectId);
         uint256 curveId = getDefaultCurveId();
 
         uint256 tripleCost = protocol.multiVault.getTripleCost();
         uint256 assets = tripleCost + 7 ether;
 
         (uint256 shares, uint256 assetsAfterFixed, uint256 assetsAfterFees) =
-            protocol.multiVault.previewTripleCreate(preTripleId, curveId, assets);
+            protocol.multiVault.previewTripleCreate(preTripleId, assets);
 
         assertEq(assetsAfterFixed, assets - tripleCost);
+
+        // create triple with just tripleCost to ensure it exists
+        createTripleWithAtoms("s", "p", "o", getAtomCreationCost(), tripleCost, users.admin);
 
         uint256 sharesFromView = protocol.multiVault.convertToShares(preTripleId, curveId, assetsAfterFees);
         assertEq(shares, sharesFromView);
@@ -200,6 +211,15 @@ contract MultiVaultHelpersTest is BaseTest {
         assertEq(shares, shares2);
         assertGt(shares, 0);
         assertGt(netAssets, 0);
+    }
+
+    function test_previewDeposit_shouldRevertWhen_AtomDoesNotExist() public {
+        bytes memory data = abi.encodePacked("nonexistent-atom");
+        bytes32 atomId = calculateAtomId(data);
+        uint256 curveId = getDefaultCurveId();
+
+        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_TermDoesNotExist.selector, atomId));
+        protocol.multiVault.previewDeposit(atomId, curveId, 1 ether);
     }
 
     function test_previewDeposit_atom_nonDefaultCurve_newVault_subtractsMinShare() public {
@@ -236,6 +256,14 @@ contract MultiVaultHelpersTest is BaseTest {
         assertGe(gross - netAssets, minShare * 2); // at least 2*minShare difference + fees
     }
 
+    function test_previewDeposit_shouldRevertWhen_TripleDoesNotExist() public {
+        bytes32 fakeTripleId = keccak256(abi.encodePacked("s", "p", "o"));
+        uint256 curveId = getDefaultCurveId();
+
+        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_TermDoesNotExist.selector, fakeTripleId));
+        protocol.multiVault.previewDeposit(fakeTripleId, curveId, 1 ether);
+    }
+
     /*////////////////////////////////////////////////////////////////////
                                previewRedeem
     ////////////////////////////////////////////////////////////////////*/
@@ -260,6 +288,15 @@ contract MultiVaultHelpersTest is BaseTest {
         assertGt(netAssets, 0);
     }
 
+    function test_previewRedeem_shouldRevertWhen_AtomDoesNotExist() public {
+        bytes memory data = abi.encodePacked("nonexistent-atom");
+        bytes32 atomId = calculateAtomId(data);
+        uint256 curveId = getDefaultCurveId();
+
+        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_TermDoesNotExist.selector, atomId));
+        protocol.multiVault.previewRedeem(atomId, curveId, 1 ether);
+    }
+
     function test_previewRedeem_triple_returnsNetAssetsAndSharesEcho() public {
         (bytes32 tripleId,) = createTripleWithAtoms(
             "s2", "p2", "o2", getAtomCreationCost(), protocol.multiVault.getTripleCost(), users.bob
@@ -278,6 +315,14 @@ contract MultiVaultHelpersTest is BaseTest {
         assertGt(netAssets, 0);
     }
 
+    function test_previewRedeem_shouldRevertWhen_TripleDoesNotExist() public {
+        bytes32 fakeTripleId = keccak256(abi.encodePacked("s", "p", "o"));
+        uint256 curveId = getDefaultCurveId();
+
+        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_TermDoesNotExist.selector, fakeTripleId));
+        protocol.multiVault.previewRedeem(fakeTripleId, curveId, 1 ether);
+    }
+
     /*////////////////////////////////////////////////////////////////////
                          convertToShares / convertToAssets
     ////////////////////////////////////////////////////////////////////*/
@@ -287,7 +332,7 @@ contract MultiVaultHelpersTest is BaseTest {
         uint256 curveId = getDefaultCurveId();
 
         // use a small assets amount to avoid large state shifts in implicit reasoning
-        uint256 assets = 1 ether;
+        uint256 assets = protocol.multiVault.getGeneralConfig().minShare;
         uint256 shares = protocol.multiVault.convertToShares(atomId, curveId, assets);
         // Converting back at current state should be close; we assert monotonic: non-zero roundtrip
         uint256 assetsBack = protocol.multiVault.convertToAssets(atomId, curveId, shares);
@@ -296,18 +341,52 @@ contract MultiVaultHelpersTest is BaseTest {
         assertGt(assetsBack, 0);
     }
 
+    function test_convertToShares_shouldRevertWhen_AtomDoesNotExist() public {
+        bytes memory data = abi.encodePacked("nonexistent-atom");
+        bytes32 atomId = calculateAtomId(data);
+        uint256 curveId = getDefaultCurveId();
+
+        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_TermDoesNotExist.selector, atomId));
+        protocol.multiVault.convertToShares(atomId, curveId, 1 ether);
+    }
+
+    function test_convertToAssets_shouldRevertWhen_AtomDoesNotExist() public {
+        bytes memory data = abi.encodePacked("nonexistent-atom");
+        bytes32 atomId = calculateAtomId(data);
+        uint256 curveId = getDefaultCurveId();
+
+        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_TermDoesNotExist.selector, atomId));
+        protocol.multiVault.convertToAssets(atomId, curveId, 1 ether);
+    }
+
     function test_convertToSharesAndBack_basicConsistency_triple() public {
         (bytes32 tripleId,) = createTripleWithAtoms(
             "sx", "px", "ox", getAtomCreationCost(), protocol.multiVault.getTripleCost(), users.admin
         );
         uint256 curveId = getDefaultCurveId();
 
-        uint256 assets = 1 ether;
+        uint256 assets = protocol.multiVault.getGeneralConfig().minShare;
         uint256 shares = protocol.multiVault.convertToShares(tripleId, curveId, assets);
         uint256 assetsBack = protocol.multiVault.convertToAssets(tripleId, curveId, shares);
 
         assertGt(shares, 0);
         assertGt(assetsBack, 0);
+    }
+
+    function test_convertToShares_shouldRevertWhen_TripleDoesNotExist() public {
+        bytes32 fakeTripleId = keccak256(abi.encodePacked("s", "p", "o"));
+        uint256 curveId = getDefaultCurveId();
+
+        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_TermDoesNotExist.selector, fakeTripleId));
+        protocol.multiVault.convertToShares(fakeTripleId, curveId, 1 ether);
+    }
+
+    function test_convertToAssets_shouldRevertWhen_TripleDoesNotExist() public {
+        bytes32 fakeTripleId = keccak256(abi.encodePacked("s", "p", "o"));
+        uint256 curveId = getDefaultCurveId();
+
+        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_TermDoesNotExist.selector, fakeTripleId));
+        protocol.multiVault.convertToAssets(fakeTripleId, curveId, 1 ether);
     }
 
     /*////////////////////////////////////////////////////////////////////

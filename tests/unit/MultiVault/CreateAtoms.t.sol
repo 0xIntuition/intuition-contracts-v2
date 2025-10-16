@@ -13,9 +13,11 @@ contract CreateAtomsTest is BaseTest {
     //////////////////////////////////////////////////////////////*/
 
     function test_createAtoms_SingleAtom_Success() public {
+        uint256 totalTermsCreatedBefore = protocol.multiVault.totalTermsCreated();
         bytes32 atomId = createSimpleAtom("Simple atom data", ATOM_COST[0], users.alice);
 
         assertTrue(protocol.multiVault.isTermCreated(atomId), "Atom should exist");
+        assertEq(protocol.multiVault.totalTermsCreated(), totalTermsCreatedBefore + 1, "Total terms should increment");
     }
 
     function test_createAtoms_MultipleAtoms_Success() public {
