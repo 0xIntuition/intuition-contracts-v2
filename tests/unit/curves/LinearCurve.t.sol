@@ -1,27 +1,42 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
-
-import { Test, console } from "forge-std/src/Test.sol";
+import { Test } from "forge-std/src/Test.sol";
+import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
-import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
+import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
 
 contract LinearCurveTest is Test {
     LinearCurve public curve;
 
     function setUp() public {
-        curve = new LinearCurve("Linear Curve Test");
+        LinearCurve linearCurveImpl = new LinearCurve();
+        TransparentUpgradeableProxy linearCurveProxy = new TransparentUpgradeableProxy(
+            address(linearCurveImpl),
+            address(this),
+            abi.encodeWithSelector(LinearCurve.initialize.selector, "Linear Curve Test")
+        );
+        curve = LinearCurve(address(linearCurveProxy));
     }
 
-    function test_constructor_successful() public {
-        LinearCurve newCurve = new LinearCurve("Test Curve");
-        assertEq(newCurve.name(), "Test Curve");
+    function test_initialize_successful() public {
+        LinearCurve linearCurveImpl = new LinearCurve();
+        TransparentUpgradeableProxy linearCurveProxy =
+            new TransparentUpgradeableProxy(address(linearCurveImpl), address(this), "");
+        curve = LinearCurve(address(linearCurveProxy));
+
+        curve.initialize("Linear Curve Test");
+        assertEq(LinearCurve(address(linearCurveProxy)).name(), "Linear Curve Test");
     }
 
-    function test_constructor_revertsOnEmptyName() public {
-        vm.expectRevert(abi.encodeWithSelector(BaseCurve.BaseCurve_EmptyStringNotAllowed.selector));
-        new LinearCurve("");
+    function test_initialize_revertsOnEmptyName() public {
+        LinearCurve linearCurveImpl = new LinearCurve();
+        TransparentUpgradeableProxy linearCurveProxy =
+            new TransparentUpgradeableProxy(address(linearCurveImpl), address(this), "");
+        curve = LinearCurve(address(linearCurveProxy));
+
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_EmptyStringNotAllowed.selector));
+        curve.initialize("");
     }
 
     function test_previewDeposit_zeroSupply() public view {
@@ -57,11 +72,6 @@ contract LinearCurveTest is Test {
     function test_convertToShares_withExistingSupply() public view {
         uint256 shares = curve.convertToShares(2e18, 10e18, 10e18);
         assertEq(shares, 2e18);
-    }
-
-    function test_convertToAssets_zeroSupply() public view {
-        uint256 assets = curve.convertToAssets(1e18, 0, 0);
-        assertEq(assets, 1e18);
     }
 
     function test_convertToAssets_withExistingSupply() public view {
@@ -126,5 +136,77 @@ contract LinearCurveTest is Test {
         uint256 expectedShares = FixedPointMathLib.mulDivUp(assets, totalShares, totalAssets);
         uint256 actualShares = curve.previewWithdraw(assets, totalAssets, totalShares);
         assertEq(actualShares, expectedShares); // 666666666666666667 wei
+    }
+
+    function test_previewWithdraw_reverts_whenAssetsExceedTotalAssets() public {
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_AssetsExceedTotalAssets.selector));
+        curve.previewWithdraw(2, /*totalAssets=*/ 1, /*totalShares=*/ 10);
+    }
+
+    function test_previewRedeem_reverts_whenSharesExceedTotalShares() public {
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_SharesExceedTotalShares.selector));
+        curve.previewRedeem( /*shares=*/ 11, /*totalShares=*/ 10, /*totalAssets=*/ 100);
+    }
+
+    function test_convertToAssets_reverts_whenSharesExceedTotalShares() public {
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_SharesExceedTotalShares.selector));
+        curve.convertToAssets( /*shares=*/ 11, /*totalShares=*/ 10, /*totalAssets=*/ 100);
+    }
+
+    // Deposit bounds: assets + totalAssets > MAX_ASSETS
+    function test_previewDeposit_reverts_whenAssetsOverflowMaxAssets() public {
+        uint256 max = type(uint256).max;
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_AssetsOverflowMax.selector));
+        curve.previewDeposit( /*assets=*/ 1, /*totalAssets=*/ max, /*totalShares=*/ 0);
+    }
+
+    // Deposit out: sharesOut + totalShares > MAX_SHARES
+    function test_previewDeposit_reverts_whenSharesOutWouldOverflowMaxShares() public {
+        uint256 max = type(uint256).max;
+        // Make deposit bounds pass (assets == max - totalAssets), then sharesOut > 0 triggers SharesOverflowMax
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_SharesOverflowMax.selector));
+        curve.previewDeposit(
+            /*assets=*/
+            1,
+            /*totalAssets=*/
+            max - 1,
+            /*totalShares=*/
+            max
+        );
+    }
+
+    // Mint bounds: shares + totalShares > MAX_SHARES
+    function test_previewMint_reverts_whenSharesOverflowMaxShares() public {
+        uint256 max = type(uint256).max;
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_SharesOverflowMax.selector));
+        curve.previewMint( /*shares=*/ 1, /*totalShares=*/ max, /*totalAssets=*/ 0);
+    }
+
+    // Mint out: assetsOut + totalAssets > MAX_ASSETS
+    function test_previewMint_reverts_whenAssetsOutWouldOverflowMaxAssets() public {
+        uint256 max = type(uint256).max;
+        // With totalShares=1, shares=1, convertToAssets() = totalAssets, so assetsOut = max -> will overflow maxAssets
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_AssetsOverflowMax.selector));
+        curve.previewMint( /*shares=*/ 1, /*totalShares=*/ 1, /*totalAssets=*/ max);
+    }
+
+    function test_convertToAssets_zeroSupply_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_SharesExceedTotalShares.selector));
+        curve.convertToAssets(1, 0, 0);
+    }
+
+    // Fuzz negative: convertToAssets must revert when shares > totalShares
+    function testFuzz_convertToAssets_reverts_whenSharesExceedTotalShares(
+        uint256 totalShares,
+        uint256 totalAssets
+    )
+        public
+    {
+        totalShares = bound(totalShares, 0, type(uint128).max);
+        totalAssets = bound(totalAssets, 0, type(uint128).max);
+
+        uint256 shares = totalShares + 1; // strictly greater
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_SharesExceedTotalShares.selector));
+        curve.convertToAssets(shares, totalShares, totalAssets);
     }
 }
