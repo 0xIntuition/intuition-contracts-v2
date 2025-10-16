@@ -209,9 +209,9 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         // Set user utilization for epoch 2 to 500e18 (decrease)
         _setUserUtilizationForEpoch(users.alice, 2, 500e18);
         // Ensure last active epoch is set to 2
-        _setLastActiveEpochForUser(users.alice, 2);
+        _setActiveEpoch(users.alice, 0, 2);
         // Ensure previous active epoch is set to 1
-        _setPreviousActiveEpochForUser(users.alice, 1);
+        _setActiveEpoch(users.alice, 1, 1);
 
         uint256 ratio = protocol.trustBonding.getPersonalUtilizationRatio(users.alice, 2);
         assertEq(ratio, PERSONAL_UTILIZATION_LOWER_BOUND, "Negative utilization delta should return lower bound");
@@ -227,9 +227,9 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         // Set user utilization for epoch 2 to 1000e18 (no change)
         _setUserUtilizationForEpoch(users.alice, 2, 1000e18);
         // Ensure last active epoch is set to 2
-        _setLastActiveEpochForUser(users.alice, 2);
+        _setActiveEpoch(users.alice, 0, 2);
         // Ensure previous active epoch is set to 1
-        _setPreviousActiveEpochForUser(users.alice, 1);
+        _setActiveEpoch(users.alice, 1, 1);
 
         uint256 ratio = protocol.trustBonding.getPersonalUtilizationRatio(users.alice, 2);
         assertEq(ratio, PERSONAL_UTILIZATION_LOWER_BOUND, "Zero utilization delta should return lower bound");
@@ -278,9 +278,9 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         // Set user claimed rewards for epoch 1 to 1000e18 (target = 1000e18)
         _setUserClaimedRewardsForEpoch(users.alice, 1, 1000e18);
         // Ensure last active epoch is set to 2
-        _setLastActiveEpochForUser(users.alice, 2);
+        _setActiveEpoch(users.alice, 0, 2);
         // Ensure previous active epoch is set to 1
-        _setPreviousActiveEpochForUser(users.alice, 1);
+        _setActiveEpoch(users.alice, 1, 1);
 
         // Expected calculation:
         // delta = 500e18, target = 1000e18
@@ -305,9 +305,9 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         // Set user claimed rewards for epoch 1 to 1000e18 (target = 1000e18)
         _setUserClaimedRewardsForEpoch(users.alice, 1, 1000e18);
         // Ensure last active epoch is set to 2
-        _setLastActiveEpochForUser(users.alice, 2);
+        _setActiveEpoch(users.alice, 0, 2);
         // Ensure previous active epoch is set to 1
-        _setPreviousActiveEpochForUser(users.alice, 1);
+        _setActiveEpoch(users.alice, 1, 1);
 
         // Expected calculation:
         // delta = 250e18, target = 1000e18
@@ -332,9 +332,9 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         // Set user claimed rewards for epoch 1 to 1000e18 (target = 1000e18)
         _setUserClaimedRewardsForEpoch(users.alice, 1, 1000e18);
         // Ensure last active epoch is set to 2
-        _setLastActiveEpochForUser(users.alice, 2);
+        _setActiveEpoch(users.alice, 0, 2);
         // Ensure previous active epoch is set to 1
-        _setPreviousActiveEpochForUser(users.alice, 1);
+        _setActiveEpoch(users.alice, 1, 1);
 
         // Expected calculation:
         // delta = 750e18, target = 1000e18
@@ -368,8 +368,8 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         _setUserUtilizationForEpoch(users.alice, 1, 500e18);
         _setUserUtilizationForEpoch(users.alice, 2, 750e18); // delta = 250e18
         _setUserClaimedRewardsForEpoch(users.alice, 1, 500e18); // target = 500e18
-        _setLastActiveEpochForUser(users.alice, 2);
-        _setPreviousActiveEpochForUser(users.alice, 1);
+        _setActiveEpoch(users.alice, 0, 2);
+        _setActiveEpoch(users.alice, 1, 1);
 
         // Expected system ratio: 5000 + (500 * 5000) / 1000 = 7500
         uint256 expectedSystemRatio = 7500;
@@ -438,8 +438,8 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         _advanceToEpoch(5);
 
         _setUserUtilizationForEpoch(users.alice, 2, 111);
-        _setLastActiveEpochForUser(users.alice, 2); // last (2) < prevEpoch (4)
-        _setPreviousActiveEpochForUser(users.alice, 1);
+        _setActiveEpoch(users.alice, 0, 2); // last (2) < prevEpoch (4)
+        _setActiveEpoch(users.alice, 1, 1);
 
         int256 before = IMultiVault(address(protocol.multiVault)).getUserUtilizationBefore(users.alice, 5);
         assertEq(before, int256(111), "Should use lastActiveEpoch when last < prevEpoch");
@@ -451,8 +451,8 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
 
         _setUserUtilizationForEpoch(users.alice, 3, 333);
         _setUserUtilizationForEpoch(users.alice, 4, 444);
-        _setLastActiveEpochForUser(users.alice, 4); // last == prevEpoch (4)
-        _setPreviousActiveEpochForUser(users.alice, 3);
+        _setActiveEpoch(users.alice, 0, 4); // last == prevEpoch (4)
+        _setActiveEpoch(users.alice, 1, 3);
 
         int256 before = IMultiVault(address(protocol.multiVault)).getUserUtilizationBefore(users.alice, 5);
         assertEq(before, int256(444), "When last == prevEpoch, must use previousActiveEpoch");
@@ -464,8 +464,8 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
 
         _setUserUtilizationForEpoch(users.alice, 4, 444);
         _setUserUtilizationForEpoch(users.alice, 5, 555);
-        _setLastActiveEpochForUser(users.alice, 5); // last == target epoch
-        _setPreviousActiveEpochForUser(users.alice, 4);
+        _setActiveEpoch(users.alice, 0, 5); // last == target epoch
+        _setActiveEpoch(users.alice, 1, 4);
 
         int256 before = IMultiVault(address(protocol.multiVault)).getUserUtilizationBefore(users.alice, 5);
         assertEq(before, int256(444), "When last >= target, must use previousActiveEpoch");
@@ -476,8 +476,8 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         _advanceToEpoch(8);
 
         _setUserUtilizationForEpoch(users.alice, 1, 777);
-        _setLastActiveEpochForUser(users.alice, 1); // last (1) < prevEpoch (7)
-        _setPreviousActiveEpochForUser(users.alice, 0);
+        _setActiveEpoch(users.alice, 0, 1); // last (1) < prevEpoch (7)
+        _setActiveEpoch(users.alice, 1, 0);
 
         int256 before = IMultiVault(address(protocol.multiVault)).getUserUtilizationBefore(users.alice, 8);
         assertEq(before, int256(777), "Should use sparse lastActiveEpoch when far behind");
@@ -487,8 +487,8 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         // target epoch = 3  -> prevEpoch = 2
         _advanceToEpoch(3);
 
-        _setLastActiveEpochForUser(users.alice, 0);
-        _setPreviousActiveEpochForUser(users.alice, 0);
+        _setActiveEpoch(users.alice, 0, 0);
+        _setActiveEpoch(users.alice, 1, 0);
         // personal[alice][0] defaults to 0
 
         int256 before = IMultiVault(address(protocol.multiVault)).getUserUtilizationBefore(users.alice, 3);
@@ -500,8 +500,8 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         _advanceToEpoch(4);
 
         _setUserUtilizationForEpoch(users.alice, 2, 222);
-        _setLastActiveEpochForUser(users.alice, 7); // last >> target
-        _setPreviousActiveEpochForUser(users.alice, 2);
+        _setActiveEpoch(users.alice, 0, 7); // last >> target
+        _setActiveEpoch(users.alice, 1, 2);
 
         int256 before = IMultiVault(address(protocol.multiVault)).getUserUtilizationBefore(users.alice, 4);
         assertEq(before, int256(222), "Future lastActiveEpoch -> use previousActiveEpoch");
@@ -517,8 +517,8 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
 
         // No locks -> no eligibility in epoch 1; set a positive delta so sign is > 0
         _setUserUtilizationForEpoch(users.alice, 2, 1000);
-        _setLastActiveEpochForUser(users.alice, 2);
-        _setPreviousActiveEpochForUser(users.alice, 0);
+        _setActiveEpoch(users.alice, 0, 2);
+        _setActiveEpoch(users.alice, 1, 0);
 
         uint256 ratio = protocol.trustBonding.getPersonalUtilizationRatio(users.alice, 2);
         assertEq(ratio, BASIS_POINTS_DIVISOR, "No eligibility last epoch -> 100% personal utilization");
@@ -532,8 +532,8 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         // Positive delta between 1 and 2
         _setUserUtilizationForEpoch(users.alice, 1, 100);
         _setUserUtilizationForEpoch(users.alice, 2, 200);
-        _setLastActiveEpochForUser(users.alice, 2);
-        _setPreviousActiveEpochForUser(users.alice, 1);
+        _setActiveEpoch(users.alice, 0, 2);
+        _setActiveEpoch(users.alice, 1, 1);
 
         // userClaimedRewardsForEpoch[alice][1] is 0 by default -> target==0 AND had eligibility
         uint256 ratio = protocol.trustBonding.getPersonalUtilizationRatio(users.alice, 2);
@@ -556,9 +556,9 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
 
         // last=4, prev=2, pprev=0; util[4] = 444
         _setUserUtilizationForEpoch(users.alice, 4, 444);
-        _setLastActiveEpochForUser(users.alice, 4);
-        _setPreviousActiveEpochForUser(users.alice, 2);
-        _setPreviousPreviousActiveEpochForUser(users.alice, 0);
+        _setActiveEpoch(users.alice, 0, 4);
+        _setActiveEpoch(users.alice, 1, 2);
+        _setActiveEpoch(users.alice, 2, 0);
 
         int256 before = IMultiVault(address(protocol.multiVault)).getUserUtilizationBefore(users.alice, 7);
         assertEq(before, int256(444), "Case A should return utilization at lastActive (4)");
@@ -570,9 +570,9 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
 
         // last=10, prev=6; util[6] = 606
         _setUserUtilizationForEpoch(users.alice, 6, 606);
-        _setLastActiveEpochForUser(users.alice, 10);
-        _setPreviousActiveEpochForUser(users.alice, 6);
-        _setPreviousPreviousActiveEpochForUser(users.alice, 3);
+        _setActiveEpoch(users.alice, 0, 10);
+        _setActiveEpoch(users.alice, 1, 6);
+        _setActiveEpoch(users.alice, 2, 3);
 
         int256 before1 = IMultiVault(address(protocol.multiVault)).getUserUtilizationBefore(users.alice, 9);
         assertEq(before1, int256(606), "Case B: last(10)>=9, previous(6)<9 -> util[6]");
@@ -591,9 +591,9 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         // last=10, previous=5 (== target), previousPrevious=3; util[3]=303
         _setUserUtilizationForEpoch(users.alice, 3, 303);
         _setUserUtilizationForEpoch(users.alice, 5, 555);
-        _setLastActiveEpochForUser(users.alice, 10);
-        _setPreviousActiveEpochForUser(users.alice, 5);
-        _setPreviousPreviousActiveEpochForUser(users.alice, 3);
+        _setActiveEpoch(users.alice, 0, 10);
+        _setActiveEpoch(users.alice, 1, 5);
+        _setActiveEpoch(users.alice, 2, 3);
 
         int256 before = IMultiVault(address(protocol.multiVault)).getUserUtilizationBefore(users.alice, 5);
         assertEq(before, int256(303), "Case C: previous == epoch, so use previousPrevious");
@@ -605,9 +605,9 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
 
         // Make all pointers >= query epoch
         // earliest tracked = 30, query epoch = 20 => none < 20
-        _setLastActiveEpochForUser(users.alice, 70);
-        _setPreviousActiveEpochForUser(users.alice, 50);
-        _setPreviousPreviousActiveEpochForUser(users.alice, 30);
+        _setActiveEpoch(users.alice, 0, 70);
+        _setActiveEpoch(users.alice, 1, 50);
+        _setActiveEpoch(users.alice, 2, 30);
 
         // even if epoch 0 had some value, we don't want to reuse it here
         _setUserUtilizationForEpoch(users.alice, 0, 999);
@@ -622,9 +622,9 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
 
         // last=0 (<3), previous=0, pprev=0; util[0]=123
         _setUserUtilizationForEpoch(users.alice, 0, 123);
-        _setLastActiveEpochForUser(users.alice, 0);
-        _setPreviousActiveEpochForUser(users.alice, 0);
-        _setPreviousPreviousActiveEpochForUser(users.alice, 0);
+        _setActiveEpoch(users.alice, 0, 0);
+        _setActiveEpoch(users.alice, 1, 0);
+        _setActiveEpoch(users.alice, 2, 0);
 
         int256 before = IMultiVault(address(protocol.multiVault)).getUserUtilizationBefore(users.alice, 3);
         assertEq(before, int256(123), "Case A should return util[0] when last == 0 < epoch");

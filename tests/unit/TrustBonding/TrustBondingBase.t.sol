@@ -199,25 +199,13 @@ contract TrustBondingBase is BaseTest {
         vm.store(address(protocol.multiVault), finalSlot, bytes32(uint256(utilization)));
     }
 
-    /// @dev Set last active epoch for a user using vm.store
-    function _setLastActiveEpochForUser(address user, uint256 epoch) internal {
-        // mapping(address user => uint256 epoch) public lastActiveEpoch;
-        bytes32 slot = keccak256(abi.encode(user, uint256(32))); // MultiVault lastActiveEpoch storage slot
-        vm.store(address(protocol.multiVault), slot, bytes32(epoch));
-    }
-
-    /// @dev Set previous active epoch for a user using vm.store
-    function _setPreviousActiveEpochForUser(address user, uint256 epoch) internal {
-        // mapping(address user => uint256 epoch) public previousActiveEpoch;
-        bytes32 slot = keccak256(abi.encode(user, uint256(33))); // MultiVault previousActiveEpoch storage slot
-        vm.store(address(protocol.multiVault), slot, bytes32(epoch));
-    }
-
-    /// @dev Set previous-previous active epoch for a user using vm.store
-    function _setPreviousPreviousActiveEpochForUser(address user, uint256 epoch) internal {
-        // mapping(address user => uint256 epoch) public previousPreviousActiveEpoch;
-        bytes32 slot = keccak256(abi.encode(user, uint256(34))); // MultiVault previousPreviousActiveEpoch storage slot
-        vm.store(address(protocol.multiVault), slot, bytes32(epoch));
+    /// @dev Set epoch for a user using vm.store
+    function _setActiveEpoch(address user, uint256 index, uint256 epoch) internal {
+        require(index < 3, "index out of bounds");
+        uint256 mappingSlot = 32; // storage slot for userEpochHistory mapping in MultiVault
+        bytes32 baseSlot = keccak256(abi.encode(user, uint256(mappingSlot)));
+        bytes32 targetSlot = bytes32(uint256(baseSlot) + index);
+        vm.store(address(protocol.multiVault), targetSlot, bytes32(epoch));
     }
 
     /// @dev Set total claimed rewards for a specific epoch using vm.store
