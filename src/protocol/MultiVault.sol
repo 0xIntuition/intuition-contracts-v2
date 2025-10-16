@@ -132,6 +132,8 @@ contract MultiVault is
 
     error MultiVault_ActionExceedsMaxAssets();
 
+    error MultiVault_ActionExceedsMaxShares();
+
     error MultiVault_DefaultCurveMustBeInitializedViaCreatePaths();
 
     error MultiVault_DepositTooSmallToCoverMinShares();
@@ -1664,11 +1666,17 @@ contract MultiVault is
     )
         internal
     {
+        IBondingCurveRegistry registry = IBondingCurveRegistry(bondingCurveConfig.registry);
+
+        uint256 maxAssets = registry.getCurveMaxAssets(curveId);
+        uint256 maxShares = registry.getCurveMaxShares(curveId);
+        if (totalAssets > maxAssets) revert MultiVault_ActionExceedsMaxAssets();
+        if (totalShares > maxShares) revert MultiVault_ActionExceedsMaxShares();
+
         VaultState storage vaultState = _vaults[termId][curveId];
         vaultState.totalAssets = totalAssets;
         vaultState.totalShares = totalShares;
 
-        IBondingCurveRegistry registry = IBondingCurveRegistry(bondingCurveConfig.registry);
         uint256 price = registry.currentPrice(curveId, totalShares, totalAssets);
 
         emit SharePriceChanged(termId, curveId, price, totalAssets, totalShares, vaultType);
@@ -1717,14 +1725,23 @@ contract MultiVault is
         internal
         view
     {
+        IBondingCurveRegistry registry = IBondingCurveRegistry(bondingCurveConfig.registry);
+        
+        // Prevent zero share deposits
         if (sharesForReceiver == 0) revert MultiVault_DepositOrRedeemZeroShares();
 
-        uint256 maxAssets = IBondingCurveRegistry(bondingCurveConfig.registry).getCurveMaxAssets(curveId);
+        bool isNew = _isNewVault(termId, curveId);
         uint256 minShareCost = assets - assetsAfterMinSharesCost;
 
-        uint256 projectedAssets = _vaults[termId][curveId].totalAssets + minShareCost + assetsAfterFees;
-        if (projectedAssets > maxAssets) revert MultiVault_ActionExceedsMaxAssets();
+        // Check the incoming assets will not exceed max assets for the curve
+        uint256 projectedAssets = _vaults[termId][curveId].totalAssets + assetsAfterFees + minShareCost;
+        if (projectedAssets > registry.getCurveMaxAssets(curveId)) revert MultiVault_ActionExceedsMaxAssets();
 
+        // Check the incoming shares will not exceed max shares for the curve
+        uint256 projectedShares = _vaults[termId][curveId].totalShares + sharesForReceiver + (isNew ? generalConfig.minShare : 0);
+        if (projectedShares > registry.getCurveMaxShares(curveId)) revert MultiVault_ActionExceedsMaxShares();
+        
+        // Ensure the deposit converts to at least minSharesForReceiver shares
         if (sharesForReceiver < minSharesForReceiver) {
             revert MultiVault_SlippageExceeded();
         }
