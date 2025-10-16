@@ -340,8 +340,7 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
         }
     }
 
-    /// @dev Internal function to get the vault type for a given term ID
-    /// @param termId The term ID to check
+    /// @dev Internal function to determine the vault type for a given term ID
     function _getVaultType(bytes32 termId) internal view returns (VaultType) {
         bool _isVaultAtom = _isAtom(termId);
         bool _isVaultTriple = _isTriple[termId];

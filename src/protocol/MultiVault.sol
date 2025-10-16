@@ -295,7 +295,7 @@ contract MultiVault is
     {
         if (!_isTermCreated(termId)) revert MultiVault_TermDoesNotExist(termId);
         bool isAtomVault = _isAtom(termId);
-        return _calculateDeposit(termId, curveId, assets, isAtomVault);
+        (shares,, assetsAfterFees) = _calculateDeposit(termId, curveId, assets, isAtomVault);
     }
 
     /// @inheritdoc IMultiVault
@@ -710,15 +710,14 @@ contract MultiVault is
     {
         // --- validations independent of vault type ---
         _validateMinDeposit(assets);
-        _validateMinShares(termId, curveId, assets, minShares);
 
         // --- discover vault type and basic flags up front ---
-        (bool isAtomVault, VaultType _vaultType) = _requireVaultType(termId);
+        VaultType _vaultType = _getVaultType(termId);
         bool isNew = _isNewVault(termId, curveId);
         bool isDefault = curveId == bondingCurveConfig.defaultCurveId;
 
         // --- triple-only invariants before any state changes ---
-        if (!isAtomVault) {
+        if (_vaultType != VaultType.ATOM) {
             if (_hasCounterStake(termId, curveId, receiver)) revert MultiVault_HasCounterStake();
             if (isNew && _isCounterTriple(termId)) revert MultiVault_CannotDirectlyInitializeCounterTriple();
         }
@@ -729,25 +728,28 @@ contract MultiVault is
         }
 
         /* --- Calculate final shares and assets after fees --- */
-        (uint256 sharesForReceiver, uint256 assetsAfterFees) = _calculateDeposit(termId, curveId, assets, isAtomVault);
+        (uint256 sharesForReceiver, uint256 assetsAfterMinSharesCost, uint256 assetsAfterFees) =
+            _calculateDeposit(termId, curveId, assets, _vaultType == VaultType.ATOM);
 
-        /* --- Account for the minShare cost only for non-default curve vaults --- */
-        if (isNew && !isDefault) assets -= _minShareCostFor(_vaultType);
+        /* --- Slippage check --- */
+        _validateMinShares(
+            termId, curveId, assets, sharesForReceiver, assetsAfterMinSharesCost, assetsAfterFees, minShares
+        );
 
         /* --- Accumulate dynamic fees --- */
-        _accumulateVaultProtocolFees(assets);
+        _accumulateVaultProtocolFees(assetsAfterMinSharesCost);
 
         /* --- Add entry fee to vault (Protocol Owned) --- */
         if (_shouldChargeFees(termId)) {
-            _increaseProRataVaultAssets(termId, _feeOnRaw(assets, vaultFees.entryFee), _vaultType);
+            _increaseProRataVaultAssets(termId, _feeOnRaw(assetsAfterMinSharesCost, vaultFees.entryFee), _vaultType);
         }
 
         /* --- Apply atom or triple specific fees --- */
-        if (isAtomVault) {
-            _accumulateAtomWalletFees(termId, assets);
+        if (_vaultType == VaultType.ATOM) {
+            _accumulateAtomWalletFees(termId, assetsAfterMinSharesCost);
         } else {
             if (_shouldChargeAtomDepositFraction(termId)) {
-                _increaseProRataVaultsAssets(termId, _feeOnRaw(assets, tripleConfig.atomDepositFractionForTriple));
+                _increaseProRataVaultsAssets(termId, _feeOnRaw(assetsAfterMinSharesCost, tripleConfig.atomDepositFractionForTriple));
             }
         }
 
@@ -758,7 +760,7 @@ contract MultiVault is
             userBalanceAfter =
                 _updateVaultOnCreation(receiver, termId, curveId, assetsAfterFees, sharesForReceiver, _vaultType);
 
-            if (!isAtomVault) {
+            if (_vaultType != VaultType.ATOM) {
                 bytes32 _counterTripleId = _calculateCounterTripleId(termId);
 
                 /* --- Initialize the counter vault with min shares --- */
@@ -868,7 +870,9 @@ contract MultiVault is
         internal
         returns (uint256, uint256)
     {
-        (bool isAtomVault, VaultType _vaultType) = _requireVaultType(termId);
+        VaultType _vaultType = _getVaultType(termId);
+        bool _isAtom = _vaultType == VaultType.ATOM;
+
         _validateRedeem(termId, curveId, receiver, shares, minAssets);
 
         uint256 rawAssetsBeforeFees = _convertToAssets(termId, curveId, shares);
@@ -1048,6 +1052,7 @@ contract MultiVault is
     /// @param assets the number of assets to deposit
     /// @param isAtomVault whether the vault is an atom or triple vault
     /// @return shares the number of shares that would be minted for the deposit
+    /// @return assetsAfterMinSharesCost the assets remaining after min shares cost (if applicable)
     /// @return assetsAfterFees the assets remaining after all fees
     function _calculateDeposit(
         bytes32 termId,
@@ -1057,7 +1062,7 @@ contract MultiVault is
     )
         internal
         view
-        returns (uint256 shares, uint256 assetsAfterFees)
+        returns (uint256 shares, uint256 assetsAfterMinSharesCost, uint256 assetsAfterFees)
     {
         if (isAtomVault) {
             return _calculateAtomDeposit(termId, curveId, assets);
@@ -1107,31 +1112,36 @@ contract MultiVault is
     function _calculateAtomDeposit(
         bytes32 termId,
         uint256 curveId,
-        uint256 assets
+        uint256 assets // assets before any fees
     )
         internal
         view
-        returns (uint256, uint256)
+        returns (uint256, uint256, uint256)
     {
-        bool isNew = _isNewVault(termId, curveId);
-        bool isDefault = curveId == bondingCurveConfig.defaultCurveId;
+        uint256 assetsAfterFees;
+        uint256 assetsAfterMinSharesCost = assets;
 
-        uint256 base = assets; // assets before any fees
-
-        // Account for the minShare cost only for non-default curve
-        if (isNew && !isDefault) {
-            uint256 minShareCost = generalConfig.minShare;
+        // Account for the minShare cost
+        if (_isNewVault(termId, curveId)) {
+            uint256 minShareCost = _minShareCostFor(VaultType.ATOM, curveId);
             if (assets <= minShareCost) revert MultiVault_DepositTooSmallToCoverMinShares();
-            base = assets - minShareCost;
+            assetsAfterMinSharesCost -= minShareCost;
         }
 
-        uint256 protocolFee = _feeOnRaw(base, vaultFees.protocolFee);
-        uint256 entryFee = _shouldChargeFees(termId) ? _feeOnRaw(base, vaultFees.entryFee) : 0;
-        uint256 atomWalletDepositFee = _feeOnRaw(base, atomConfig.atomWalletDepositFee);
+        uint256 protocolFee = _feeOnRaw(assetsAfterMinSharesCost, vaultFees.protocolFee);
+        uint256 entryFee = _shouldChargeFees(termId) ? _feeOnRaw(assetsAfterMinSharesCost, vaultFees.entryFee) : 0;
+        uint256 atomWalletDepositFee = _feeOnRaw(assetsAfterMinSharesCost, atomConfig.atomWalletDepositFee);
 
-        uint256 assetsAfterFees = base - protocolFee - entryFee - atomWalletDepositFee;
-        uint256 shares = _convertToShares(termId, curveId, assetsAfterFees);
-        return (shares, assetsAfterFees);
+        assetsAfterFees = assetsAfterMinSharesCost - protocolFee - entryFee - atomWalletDepositFee;
+
+        // If it's an initial deposit into a non-default curve vault, we calculate user's shares as if minShare was
+        // already minted
+        uint256 shares = _isNewVault(termId, curveId)
+            ? IBondingCurveRegistry(bondingCurveConfig.registry).previewDeposit(
+                assetsAfterFees, _minAssetsForCurve(curveId, generalConfig.minShare), generalConfig.minShare, curveId
+            )
+            : _convertToShares(termId, curveId, assetsAfterFees);
+        return (shares, assetsAfterMinSharesCost, assetsAfterFees);
     }
 
     /// @dev calculates the assets received after fees and shares minted for a given creation deposit
@@ -1170,36 +1180,41 @@ contract MultiVault is
     function _calculateTripleDeposit(
         bytes32 termId,
         uint256 curveId,
-        uint256 assets
+        uint256 assets // assets before any fees
     )
         internal
         view
-        returns (uint256, uint256)
+        returns (uint256, uint256, uint256)
     {
-        bool isNew = _isNewVault(termId, curveId);
-        bool isDefault = curveId == bondingCurveConfig.defaultCurveId;
+        uint256 assetsAfterFees;
+        uint256 assetsAfterMinSharesCost = assets;
 
-        if (isNew && _isCounterTriple(termId)) {
+        if (_isNewVault(termId, curveId) && _isCounterTriple(termId)) {
             revert MultiVault_CannotDirectlyInitializeCounterTriple();
         }
 
-        uint256 base = assets; // assets before any fees
-
-        // Account for the minShare cost only for non-default curve
-        if (isNew && !isDefault) {
-            uint256 minShareCost = generalConfig.minShare * 2; // positive + counter triple min shares
+        // Account for the minShare cost
+        if (_isNewVault(termId, curveId)) {
+            uint256 minShareCost = _minShareCostFor(VaultType.TRIPLE, curveId);
             if (assets <= minShareCost) revert MultiVault_DepositTooSmallToCoverMinShares();
-            base = assets - minShareCost;
+            assetsAfterMinSharesCost -= minShareCost;
         }
 
-        uint256 protocolFee = _feeOnRaw(base, vaultFees.protocolFee);
-        uint256 entryFee = _shouldChargeFees(termId) ? _feeOnRaw(base, vaultFees.entryFee) : 0;
+        uint256 protocolFee = _feeOnRaw(assetsAfterMinSharesCost, vaultFees.protocolFee);
+        uint256 entryFee = _shouldChargeFees(termId) ? _feeOnRaw(assetsAfterMinSharesCost, vaultFees.entryFee) : 0;
         uint256 atomDepositFraction =
-            _shouldChargeAtomDepositFraction(termId) ? _feeOnRaw(base, tripleConfig.atomDepositFractionForTriple) : 0;
+            _shouldChargeAtomDepositFraction(termId) ? _feeOnRaw(assetsAfterMinSharesCost, tripleConfig.atomDepositFractionForTriple) : 0;
 
-        uint256 assetsAfterFees = base - protocolFee - entryFee - atomDepositFraction;
-        uint256 shares = _convertToShares(termId, curveId, assetsAfterFees);
-        return (shares, assetsAfterFees);
+        assetsAfterFees = assetsAfterMinSharesCost - protocolFee - entryFee - atomDepositFraction;
+
+        // If it's an initial deposit into a non-default curve vault, we calculate user's shares as if minShare was
+        // already minted
+        uint256 shares = _isNewVault(termId, curveId)
+            ? IBondingCurveRegistry(bondingCurveConfig.registry).previewDeposit(
+                assetsAfterFees, _minAssetsForCurve(curveId, generalConfig.minShare), generalConfig.minShare, curveId
+            )
+            : _convertToShares(termId, curveId, assetsAfterFees);
+        return (shares, assetsAfterMinSharesCost, assetsAfterFees);
     }
 
     /// @dev calculates the assets received after fees and shares burned for a given share redemption
@@ -1362,13 +1377,13 @@ contract MultiVault is
         _setVaultTotals(
             counterTripleId,
             curveId,
-            vaultState.totalAssets + minShare,
+            vaultState.totalAssets + _minAssetsForCurve(curveId, minShare),
             vaultState.totalShares + minShare,
             VaultType.COUNTER_TRIPLE
         );
 
         // Mint min shares to the burn address for the counter vault
-        _mint(BURN_ADDRESS, counterTripleId, curveId, generalConfig.minShare);
+        _mint(BURN_ADDRESS, counterTripleId, curveId, minShare);
     }
 
     /// @dev mint vault shares to address `to`
@@ -1504,21 +1519,21 @@ contract MultiVault is
         internal
         returns (uint256)
     {
-        uint256 minShares = generalConfig.minShare;
+        uint256 minShare = generalConfig.minShare;
         VaultState storage vaultState = _vaults[termId][curveId];
 
         _setVaultTotals(
             termId,
             curveId,
-            vaultState.totalAssets + assets + minShares,
-            vaultState.totalShares + shares + minShares,
+            vaultState.totalAssets + assets + _minAssetsForCurve(curveId, minShare),
+            vaultState.totalShares + shares + minShare,
             vaultType
         );
 
         uint256 sharesTotal = _mint(receiver, termId, curveId, shares);
 
         // Mint min shares to the burn address. Once created, the vault can never have less than min shares.
-        _mint(BURN_ADDRESS, termId, curveId, minShares);
+        _mint(BURN_ADDRESS, termId, curveId, minShare);
 
         return sharesTotal;
     }
@@ -1635,26 +1650,27 @@ contract MultiVault is
         return total;
     }
 
-    /// @dev Validate a deposit operation
-    /// @param _termId the atom or triple ID
-    /// @param _curveId the bonding curve ID
-    /// @param _assets the amount of assets to deposit
-    /// @param _minShares the minimum amount of shares to receive
-    function _validateMinShares(bytes32 _termId, uint256 _curveId, uint256 _assets, uint256 _minShares) internal view {
-        uint256 maxAssets = IBondingCurveRegistry(bondingCurveConfig.registry).getCurveMaxAssets(_curveId);
+    function _validateMinShares(
+        bytes32 termId,
+        uint256 curveId,
+        uint256 assets,
+        uint256 sharesForReceiver,
+        uint256 assetsAfterMinSharesCost,
+        uint256 assetsAfterFees,
+        uint256 minSharesForReceiver
+    )
+        internal
+        view
+    {
+        if (sharesForReceiver == 0) revert MultiVault_DepositOrRedeemZeroShares();
 
-        (uint256 expectedShares, uint256 netAssetsToVault) =
-            _calculateDeposit(_termId, _curveId, _assets, _isAtom(_termId));
-        if (expectedShares == 0) revert MultiVault_DepositOrRedeemZeroShares();
+        uint256 maxAssets = IBondingCurveRegistry(bondingCurveConfig.registry).getCurveMaxAssets(curveId);
+        uint256 minShareCost = assets - assetsAfterMinSharesCost;
 
-        bool isNew = _isNewVault(_termId, _curveId);
-        bool isDefault = _curveId == bondingCurveConfig.defaultCurveId;
-        uint256 minShareCost = (isNew && !isDefault) ? generalConfig.minShare : 0;
-
-        uint256 projectedAssets = _vaults[_termId][_curveId].totalAssets + netAssetsToVault + minShareCost;
+        uint256 projectedAssets = _vaults[termId][curveId].totalAssets + minShareCost + assetsAfterFees;
         if (projectedAssets > maxAssets) revert MultiVault_ActionExceedsMaxAssets();
 
-        if (expectedShares < _minShares) {
+        if (sharesForReceiver < minSharesForReceiver) {
             revert MultiVault_SlippageExceeded();
         }
     }
@@ -1721,10 +1737,19 @@ contract MultiVault is
 
     /// @notice Get the min shares cost for creating an atom or triple vault
     /// @param vaultType The type of vault
+    /// @param curveId The ID of the bonding curve
     /// @return uint256 The min shares cost for a given vault
-    function _minShareCostFor(VaultType vaultType) internal view returns (uint256) {
-        uint256 minShare = generalConfig.minShare;
-        return vaultType == VaultType.ATOM ? minShare : minShare * 2;
+    function _minShareCostFor(VaultType vaultType, uint256 curveId) internal view returns (uint256) {
+        uint256 minShareCost = _minAssetsForCurve(curveId, generalConfig.minShare);
+        return vaultType == VaultType.ATOM ? minShareCost : minShareCost * 2;
+    }
+
+    /// @notice Get the amount of assets required to mint minShare shares for a given bonding curve
+    /// @param curveId The ID of the bonding curve
+    /// @param minShare The minimum shares required
+    /// @return uint256 The amount of assets required to mint minShare shares
+    function _minAssetsForCurve(uint256 curveId, uint256 minShare) internal view returns (uint256) {
+        return IBondingCurveRegistry(bondingCurveConfig.registry).previewMint(minShare, 0, 0, curveId);
     }
 
     /// @notice Determine if fees should be charged based on the total shares in the default curve vault
@@ -1759,7 +1784,7 @@ contract MultiVault is
         uint256 remainingSharesInDefaultVault;
 
         if (curveId == defaultCurveId) {
-            remainingSharesInDefaultVault = sharesToRedeem >= totalShares ? 0 : totalShares - sharesToRedeem;
+            remainingSharesInDefaultVault = totalShares - sharesToRedeem;
         } else {
             remainingSharesInDefaultVault = totalShares;
         }

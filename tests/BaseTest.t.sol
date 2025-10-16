@@ -55,7 +55,7 @@ abstract contract BaseTest is Modifiers, Test {
 
     uint256[] internal ATOM_COST;
     uint256[] internal TRIPLE_COST;
-    uint256 internal FEE_THRESHOLD = 1e17;
+    uint256 internal FEE_THRESHOLD = 1e18;
     uint256 internal FEE_DENOMINATOR = 10_000;
     uint256 internal MIN_DEPOSIT = 1e17; // 0.1 Trust
     uint256 internal MIN_SHARES = 1e6; // Ghost Shares
@@ -67,7 +67,7 @@ abstract contract BaseTest is Modifiers, Test {
 
     // Triple Config
     uint256 internal TRIPLE_CREATION_PROTOCOL_FEE = 1e15; // 0.001 Trust (Fixed Cost)
-    uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 0.9% (Percentage Cost)
+    uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 500; // 5% (Percentage Cost)
 
     // Wallet Config
     address internal ENTRY_POINT = 0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108;
@@ -390,12 +390,12 @@ abstract contract BaseTest is Modifiers, Test {
         return GeneralConfig({
             admin: users.admin,
             protocolMultisig: users.admin,
-            feeDenominator: 10_000,
+            feeDenominator: FEE_DENOMINATOR,
             trustBonding: address(0),
             minDeposit: MIN_DEPOSIT,
             minShare: MIN_SHARES,
-            atomDataMaxLength: 1000,
-            feeThreshold: 1e17
+            atomDataMaxLength: ATOM_DATA_MAX_LENGTH,
+            feeThreshold: FEE_THRESHOLD
         });
     }
 
@@ -409,7 +409,7 @@ abstract contract BaseTest is Modifiers, Test {
     function _getDefaultTripleConfig() internal returns (TripleConfig memory) {
         return TripleConfig({
             tripleCreationProtocolFee: TRIPLE_CREATION_PROTOCOL_FEE,
-            atomDepositFractionForTriple: 500
+            atomDepositFractionForTriple: ATOM_DEPOSIT_FRACTION_FOR_TRIPLE
         });
     }
 
@@ -422,8 +422,8 @@ abstract contract BaseTest is Modifiers, Test {
         });
     }
 
-    function _getDefaultVaultFees() internal pure returns (VaultFees memory) {
-        return VaultFees({ entryFee: 50, exitFee: 50, protocolFee: 100 });
+    function _getDefaultVaultFees() internal view returns (VaultFees memory) {
+        return VaultFees({ entryFee: ENTRY_FEE, exitFee: EXIT_FEE, protocolFee: PROTOCOL_FEE });
     }
 
     function _getDefaultBondingCurveConfig() internal pure returns (BondingCurveConfig memory) {

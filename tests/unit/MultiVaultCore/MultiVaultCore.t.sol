@@ -80,8 +80,7 @@ contract MultiVaultCoreTest is BaseTest {
         // Triple
         TripleConfig memory t = protocol.multiVault.getTripleConfig();
         assertEq(t.tripleCreationProtocolFee, TRIPLE_CREATION_PROTOCOL_FEE, "tripleCreationProtocolFee");
-        // In BaseTest default we overwrite this to 500 in _getDefaultTripleConfig
-        assertEq(t.atomDepositFractionForTriple, 500, "atomDepositFractionForTriple");
+        assertEq(t.atomDepositFractionForTriple, ATOM_DEPOSIT_FRACTION_FOR_TRIPLE, "atomDepositFractionForTriple");
 
         // Wallet
         WalletConfig memory w = protocol.multiVault.getWalletConfig();
