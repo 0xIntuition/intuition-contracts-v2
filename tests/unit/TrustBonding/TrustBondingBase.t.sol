@@ -202,14 +202,14 @@ contract TrustBondingBase is BaseTest {
     /// @dev Set last active epoch for a user using vm.store
     function _setLastActiveEpochForUser(address user, uint256 epoch) internal {
         // mapping(address user => uint256 epoch) public lastActiveEpoch;
-        bytes32 slot = keccak256(abi.encode(user, uint256(33))); // MultiVault lastActiveEpoch storage slot
+        bytes32 slot = keccak256(abi.encode(user, uint256(32))); // MultiVault lastActiveEpoch storage slot
         vm.store(address(protocol.multiVault), slot, bytes32(epoch));
     }
 
     /// @dev Set previous active epoch for a user using vm.store
     function _setPreviousActiveEpochForUser(address user, uint256 epoch) internal {
         // mapping(address user => uint256 epoch) public previousActiveEpoch;
-        bytes32 slot = keccak256(abi.encode(user, uint256(34))); // MultiVault previousActiveEpoch storage slot
+        bytes32 slot = keccak256(abi.encode(user, uint256(33))); // MultiVault previousActiveEpoch storage slot
         vm.store(address(protocol.multiVault), slot, bytes32(epoch));
     }
 
