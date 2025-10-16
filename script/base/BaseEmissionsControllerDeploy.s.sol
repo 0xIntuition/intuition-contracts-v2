@@ -25,7 +25,7 @@ forge script script/base/BaseEmissionsControllerDeploy.s.sol:BaseEmissionsContro
 --broadcast \
 --slow
 
-MAINNET 
+MAINNET
 forge script script/base/BaseEmissionsControllerDeploy.s.sol:BaseEmissionsControllerDeploy \
 --optimizer-runs 10000 \
 --rpc-url base \

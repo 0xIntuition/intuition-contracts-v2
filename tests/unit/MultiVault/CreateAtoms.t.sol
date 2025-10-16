@@ -72,7 +72,7 @@ contract CreateAtomsTest is BaseTest {
     }
 
     /*//////////////////////////////////////////////////////////////
-                              ERROR CASES  
+                              ERROR CASES
     //////////////////////////////////////////////////////////////*/
 
     function test_createAtoms_RevertWhen_InsufficientAssets() public {

@@ -363,11 +363,7 @@ interface IMultiVault {
     /// @param assets The amount of assets the user would send
     /// @return shares The expected shares to be minted for the user
     /// @return assetsAfterFees The net assets that will be added to the vault (after all fees)
-    function previewDeposit(
-        bytes32 termId,
-        uint256 curveId,
-        uint256 assets
-    )
+    function previewDeposit(bytes32 termId, uint256 curveId, uint256 assets)
         external
         view
         returns (uint256 shares, uint256 assetsAfterFees);
@@ -379,11 +375,7 @@ interface IMultiVault {
     /// @param shares The amount of shares the user would redeem
     /// @return assetsAfterFees The net assets that would be sent to the user (after protocol and exit fees)
     /// @return sharesUsed The shares that would be burned (returned for convenience)
-    function previewRedeem(
-        bytes32 termId,
-        uint256 curveId,
-        uint256 shares
-    )
+    function previewRedeem(bytes32 termId, uint256 curveId, uint256 shares)
         external
         view
         returns (uint256 assetsAfterFees, uint256 sharesUsed);
@@ -424,10 +416,7 @@ interface IMultiVault {
      * @param assets Array of asset amounts to deposit into each atom vault
      * @return Array of atom IDs (termIds) for the created atoms
      */
-    function createAtoms(
-        bytes[] calldata atomDatas,
-        uint256[] calldata assets
-    )
+    function createAtoms(bytes[] calldata atomDatas, uint256[] calldata assets)
         external
         payable
         returns (bytes32[] memory);
@@ -458,12 +447,7 @@ interface IMultiVault {
      * @param minShares Minimum number of shares expected to be minted
      * @return Number of shares minted to the receiver
      */
-    function deposit(
-        address receiver,
-        bytes32 termId,
-        uint256 curveId,
-        uint256 minShares
-    )
+    function deposit(address receiver, bytes32 termId, uint256 curveId, uint256 minShares)
         external
         payable
         returns (uint256);
@@ -497,13 +481,7 @@ interface IMultiVault {
      * @param minAssets Minimum number of assets expected to be returned
      * @return Number of assets returned to the receiver
      */
-    function redeem(
-        address receiver,
-        bytes32 termId,
-        uint256 curveId,
-        uint256 shares,
-        uint256 minAssets
-    )
+    function redeem(address receiver, bytes32 termId, uint256 curveId, uint256 shares, uint256 minAssets)
         external
         returns (uint256);
 

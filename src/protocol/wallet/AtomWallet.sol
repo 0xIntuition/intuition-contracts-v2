@@ -132,11 +132,7 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
     /// @param dest the target address
     /// @param value the value to send
     /// @param data the function calldata
-    function execute(
-        address dest,
-        uint256 value,
-        bytes calldata data
-    )
+    function execute(address dest, uint256 value, bytes calldata data)
         external
         override
         onlyOwnerOrEntryPoint
@@ -150,11 +146,7 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
     /// @param dest the target addresses array
     /// @param values the values to send array
     /// @param data the function calldata array
-    function executeBatch(
-        address[] calldata dest,
-        uint256[] calldata values,
-        bytes[] calldata data
-    )
+    function executeBatch(address[] calldata dest, uint256[] calldata values, bytes[] calldata data)
         external
         payable
         onlyOwnerOrEntryPoint
@@ -263,10 +255,7 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
     ///
     /// @return validationData the validation data (0 if successful)
     /// NOTE: Implements the template method of BaseAccount
-    function _validateSignature(
-        PackedUserOperation calldata userOp,
-        bytes32 userOpHash
-    )
+    function _validateSignature(PackedUserOperation calldata userOp, bytes32 userOpHash)
         internal
         virtual
         override

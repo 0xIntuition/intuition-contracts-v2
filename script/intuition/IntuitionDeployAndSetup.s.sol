@@ -252,9 +252,8 @@ contract IntuitionDeployAndSetup is SetupScript {
             satelliteEmissionsController.setTrustBonding(address(trustBonding));
 
             // Grant CONTROLLER_ROLE to TrustBonding in SatelliteEmissionsController
-            IAccessControl(address(satelliteEmissionsController)).grantRole(
-                satelliteEmissionsController.CONTROLLER_ROLE(), address(trustBonding)
-            );
+            IAccessControl(address(satelliteEmissionsController))
+                .grantRole(satelliteEmissionsController.CONTROLLER_ROLE(), address(trustBonding));
             console2.log("CONTROLLER_ROLE in SatelliteEmissionsController granted to TrustBonding");
         }
 
@@ -311,8 +310,7 @@ contract IntuitionDeployAndSetup is SetupScript {
         });
 
         atomConfig = AtomConfig({
-            atomCreationProtocolFee: ATOM_CREATION_PROTOCOL_FEE,
-            atomWalletDepositFee: ATOM_WALLET_DEPOSIT_FEE
+            atomCreationProtocolFee: ATOM_CREATION_PROTOCOL_FEE, atomWalletDepositFee: ATOM_WALLET_DEPOSIT_FEE
         });
 
         tripleConfig = TripleConfig({
