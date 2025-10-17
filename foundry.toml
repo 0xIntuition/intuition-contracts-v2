@@ -15,8 +15,7 @@
   test = "tests"
   libs = ["node_modules", "lib"]
   extra_output = ["storageLayout", "metadata"]
-  ignored_error_codes = [2018, 2072, 5740, 3860, 8760, 5667] # 2072: unused parameter, 5740: unreachable code, 3860: contract size, 2018: function state mutability can be restricted to view
-  verbosity = 0
+  ignored_error_codes = [2072]
   remappings = [
     "forge-std/=lib/forge-std/",
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
@@ -32,6 +31,10 @@
 [profile.ci]
   fuzz = { runs = 10_000 }
   verbosity = 4
+
+[profile.test]
+  ignored_error_codes = [2018, 2072, 5740, 3860, 8760, 5667]  # 2072: unused parameter, 5740: unreachable code, 3860: contract size, 2018: function state mutability can be restricted to view
+  verbosity = 0
 
 [etherscan]
   mainnet = { key = "${API_KEY_ETHERSCAN}" }

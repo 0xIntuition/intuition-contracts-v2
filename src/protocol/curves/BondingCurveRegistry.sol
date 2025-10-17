@@ -53,8 +53,12 @@ contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2StepUpgradeable 
     /* =================================================== */
 
     modifier onlyValidCurveId(uint256 id) {
-        if (!_isCurveIdValid(id)) revert BondingCurveRegistry_InvalidCurveId();
+        _onlyValidCurveId(id);
         _;
+    }
+
+    function _onlyValidCurveId(uint256 id) internal view {
+        if (!_isCurveIdValid(id)) revert BondingCurveRegistry_InvalidCurveId();
     }
 
     /* =================================================== */

@@ -42,12 +42,12 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
 
     /// @notice The storage slot for the AtomWallet owner
     // keccak256(abi.encode(uint256(keccak256("openzeppelin.storage.Ownable")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant AtomWalletOwnerStorageLocation =
+    bytes32 private constant ATOM_WALLET_OWNER_STORAGE_LOCATION =
         0x9016d09d72d40fdae2fd8ceac6b6234c7706214fd39c1cd1e609a0528c199300;
 
     /// @notice The storage slot for the AtomWallet pending owner
     // keccak256(abi.encode(uint256(keccak256("openzeppelin.storage.Ownable2Step")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant AtomWalletPendingOwnerStorageLocation =
+    bytes32 private constant ATOM_WALLET_PENDING_OWNER_STORAGE_LOCATION =
         0x237e158222e3e6968b72b9db0d8043aacf074ad9f650f0d1606b4d82ee432c00;
 
     /* =================================================== */
@@ -344,7 +344,7 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
     /// @return $ the storage slot
     function _getAtomWalletOwnerStorage() private pure returns (OwnableStorage storage $) {
         assembly {
-            $.slot := AtomWalletOwnerStorageLocation
+            $.slot := ATOM_WALLET_OWNER_STORAGE_LOCATION
         }
     }
 
@@ -352,7 +352,7 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
     /// @return $ the storage slot
     function _getAtomWalletPendingOwnerStorage() private pure returns (Ownable2StepStorage storage $) {
         assembly {
-            $.slot := AtomWalletPendingOwnerStorageLocation
+            $.slot := ATOM_WALLET_PENDING_OWNER_STORAGE_LOCATION
         }
     }
 }
