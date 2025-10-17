@@ -202,6 +202,7 @@ contract IntuitionDeployAndSetup is SetupScript {
             finalityState: FinalityState.FINALIZED
         });
 
+        console2.log("EMISSIONS_START_TIMESTAMP:", EMISSIONS_START_TIMESTAMP);
         CoreEmissionsControllerInit memory coreEmissionsInit = CoreEmissionsControllerInit({
             startTimestamp: EMISSIONS_START_TIMESTAMP,
             emissionsLength: EMISSIONS_LENGTH,

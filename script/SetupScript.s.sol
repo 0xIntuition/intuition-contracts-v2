@@ -178,7 +178,7 @@ abstract contract SetupScript is Script {
 
             // CoreEmissionsController Config
             EMISSIONS_START_TIMESTAMP = BONDING_START_TIMESTAMP;
-            EMISSIONS_LENGTH = ONE_DAY;
+            EMISSIONS_LENGTH = TWO_WEEKS;
             EMISSIONS_REDUCTION_BASIS_POINTS = 1000; // 10%
             EMISSIONS_REDUCTION_CLIFF = 4; // 1 epoch
             EMISSIONS_PER_EPOCH = 1000 ether;
@@ -230,6 +230,19 @@ abstract contract SetupScript is Script {
             // MetaLayer Intuition Hub
             METALAYER_HUB_OR_SPOKE = 0x007700aa28A331B91219Ffa4A444711F0D9E57B5;
             SATELLITE_METALAYER_RECIPIENT_DOMAIN = 13_579;
+
+            // TrustBonding Config
+            BONDING_START_TIMESTAMP = block.timestamp + 100;
+            BONDING_EPOCH_LENGTH = TWO_WEEKS;
+            BONDING_SYSTEM_UTILIZATION_LOWER_BOUND = 4000; // 50%
+            BONDING_PERSONAL_UTILIZATION_LOWER_BOUND = 2500; // 25%
+
+            // CoreEmissionsController Config
+            EMISSIONS_START_TIMESTAMP = block.timestamp + 100;
+            EMISSIONS_LENGTH = TWO_WEEKS;
+            EMISSIONS_REDUCTION_BASIS_POINTS = 1000; // 10%
+            EMISSIONS_REDUCTION_CLIFF = 4; // 1 epoch
+            EMISSIONS_PER_EPOCH = 1000 ether;
         } else if (block.chainid == NETWORK_BASE) {
             TRUST_TOKEN = 0x6cd905dF2Ed214b22e0d48FF17CD4200C1C6d8A3;
             ADMIN = 0xBc01aB3839bE8933f6B93163d129a823684f4CDF;
