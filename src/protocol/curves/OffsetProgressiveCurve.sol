@@ -111,11 +111,7 @@ contract OffsetProgressiveCurve is BaseCurve {
     /// $$\text{shares} = \sqrt{(s + o)^2 + \frac{a}{m/2}} - (s + o)$$
     /// @dev or to say that another way:
     /// $$\text{shares} = \sqrt{(s + o)^2 + \frac{2a}{m}} - (s + o)$$
-    function previewDeposit(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function previewDeposit(uint256 assets, uint256 totalAssets, uint256 totalShares)
         external
         view
         override
@@ -171,24 +167,20 @@ contract OffsetProgressiveCurve is BaseCurve {
     /// $$\text{assets} = (2(s + o)n + n^2) \cdot \frac{m}{2}$$
     /// @dev Implementation note: This formula is computed via the _convertToAssets helper,
     /// @dev where juniorSupply = (s + o) and seniorSupply = (s + n + o)
-    function previewMint(
-        uint256 shares,
-        uint256 totalShares,
-        uint256 totalAssets
-    )
+    function previewMint(uint256 shares, uint256 totalShares, uint256 totalAssets)
         external
         view
         override
         returns (uint256 assets)
     {
         _checkMintBounds(shares, totalShares, MAX_SHARES);
- 
+
         UD60x18 s0 = convert(totalShares).add(OFFSET);
         UD60x18 s1 = convert(totalShares + shares).add(OFFSET);
         UD60x18 aUD = _convertToAssets(s0, s1);
 
         assets = _ceilUdToUint(aUD);
-  
+
         _checkMintOut(assets, totalAssets, MAX_ASSETS);
     }
 
@@ -201,20 +193,17 @@ contract OffsetProgressiveCurve is BaseCurve {
     /// $$\text{shares} = (s + o) - \sqrt{(s + o)^2 - \frac{a}{m/2}}$$
     /// @dev or to say that another way:
     /// $$\text{shares} = (s + o) - \sqrt{(s + o)^2 - \frac{2a}{m}}$$
-    function previewWithdraw(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function previewWithdraw(uint256 assets, uint256 totalAssets, uint256 totalShares)
         external
         view
         override
         returns (uint256 shares)
     {
         _checkWithdraw(assets, totalAssets);
+
         UD60x18 currentSupplyOfShares = convert(totalShares).add(OFFSET);
-        UD60x18 preciseShares =
-            currentSupplyOfShares.sub(currentSupplyOfShares.powu(2).sub(convert(assets).div(HALF_SLOPE)).sqrt());
+        UD60x18 deduct = _divUdUp(convert(assets), HALF_SLOPE);
+        UD60x18 preciseShares = currentSupplyOfShares.sub(currentSupplyOfShares.powu(2).sub(deduct).sqrt());
 
         shares = _ceilUdToUint(preciseShares);
     }
@@ -250,11 +239,7 @@ contract OffsetProgressiveCurve is BaseCurve {
     /// $$\text{shares} = \frac{a}{(s + o) \cdot m/2}$$
     /// @dev Or to say that another way:
     /// $$\text{shares} = \frac{2a}{(s + o) \cdot m}$$
-    function convertToShares(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function convertToShares(uint256 assets, uint256 totalAssets, uint256 totalShares)
         external
         view
         override
@@ -328,6 +313,13 @@ contract OffsetProgressiveCurve is BaseCurve {
     function _ceilUdToUint(UD60x18 x) internal pure returns (uint256) {
         uint256 raw = UD60x18.unwrap(x); // 18-decimal scaled
         return raw / 1e18 + ((raw % 1e18 == 0) ? 0 : 1); // ceil to uint256
+    }
+
+    /// @dev Helper to perform division with rounding up for UD60x18 values
+    function _divUdUp(UD60x18 x, UD60x18 y) internal pure returns (UD60x18) {
+        // x and y are 18-decimal scaled; divWadUp expects the same
+        uint256 q = FixedPointMathLib.divWadUp(UD60x18.unwrap(x), UD60x18.unwrap(y));
+        return UD60x18.wrap(q);
     }
 
     /// @inheritdoc BaseCurve

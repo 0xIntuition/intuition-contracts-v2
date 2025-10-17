@@ -348,10 +348,7 @@ interface IMultiVault {
     /// @return assetsAfterFixedFees The net assets that will be added to the vault (after fixed fees, before dynamic
     /// fees)
     /// @return assetsAfterFees The net assets that will be added to the vault (after all fees)
-    function previewAtomCreate(
-        bytes32 termId,
-        uint256 assets
-    )
+    function previewAtomCreate(bytes32 termId, uint256 assets)
         external
         view
         returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees);
@@ -388,10 +385,7 @@ interface IMultiVault {
     /// @return assetsAfterFixedFees The net assets that will be added to the vault (after fixed fees like protocol and
     /// entry fees)
     /// @return assetsAfterFees The net assets that will be added to the vault (after all fees)
-    function previewTripleCreate(
-        bytes32 termId,
-        uint256 assets
-    )
+    function previewTripleCreate(bytes32 termId, uint256 assets)
         external
         view
         returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees);

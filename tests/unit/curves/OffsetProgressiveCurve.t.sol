@@ -177,7 +177,7 @@ contract OffsetProgressiveCurveTest is Test {
         uint256 r = 2e18;
         assertEq(curve.previewRedeem(r, s0, 0), curve.convertToAssets(r, s0, 0));
     }
-    
+
     function test_previewMint_mintMaxSharesFromZero_succeeds() public view {
         uint256 sMax = curve.maxShares();
         uint256 assets = curve.previewMint(sMax, 0, 0);
@@ -218,51 +218,99 @@ contract OffsetProgressiveCurveTest is Test {
     }
 
     function test_previewDeposit_allowsZeroAssets_returnsZero() public view {
-        uint256 shares = curve.previewDeposit(0, /*totalAssets=*/ 0, /*totalShares=*/ 123e18);
+        uint256 shares = curve.previewDeposit(
+            0,
+            /*totalAssets=*/
+            0,
+            /*totalShares=*/
+            123e18
+        );
         assertEq(shares, 0);
     }
 
     function test_convertToShares_allowsZeroAssets_returnsZero() public view {
-        uint256 shares = curve.convertToShares(0, /*totalAssets=*/ 0, /*totalShares=*/ 123e18);
+        uint256 shares = curve.convertToShares(
+            0,
+            /*totalAssets=*/
+            0,
+            /*totalShares=*/
+            123e18
+        );
         assertEq(shares, 0);
     }
 
     // Withdraw bound: assets > totalAssets
     function test_previewWithdraw_reverts_whenAssetsExceedTotalAssets() public {
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_AssetsExceedTotalAssets.selector));
-        curve.previewWithdraw( /*assets=*/ 2, /*totalAssets=*/ 1, /*totalShares=*/ 10e18);
+        curve.previewWithdraw( /*assets=*/
+            2,
+            /*totalAssets=*/
+            1,
+            /*totalShares=*/
+            10e18
+        );
     }
 
     // Redeem bounds: shares > totalShares
     function test_previewRedeem_reverts_whenSharesExceedTotalShares() public {
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_SharesExceedTotalShares.selector));
-        curve.previewRedeem( /*shares=*/ 11e18, /*totalShares=*/ 10e18, /*totalAssets=*/ 0);
+        curve.previewRedeem( /*shares=*/
+            11e18,
+            /*totalShares=*/
+            10e18,
+            /*totalAssets=*/
+            0
+        );
     }
 
     function test_convertToAssets_reverts_whenSharesExceedTotalShares() public {
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_SharesExceedTotalShares.selector));
-        curve.convertToAssets( /*shares=*/ 11e18, /*totalShares=*/ 10e18, /*totalAssets=*/ 0);
+        curve.convertToAssets( /*shares=*/
+            11e18,
+            /*totalShares=*/
+            10e18,
+            /*totalAssets=*/
+            0
+        );
     }
 
     // Deposit bounds: assets + totalAssets > maxAssets
     function test_previewDeposit_reverts_whenAssetsOverflowMaxAssets() public {
         uint256 maxA = curve.maxAssets();
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_AssetsOverflowMax.selector));
-        curve.previewDeposit( /*assets=*/ 1, /*totalAssets=*/ maxA, /*totalShares=*/ 0);
+        curve.previewDeposit( /*assets=*/
+            1,
+            /*totalAssets=*/
+            maxA,
+            /*totalShares=*/
+            0
+        );
     }
 
     // Mint bounds: shares + totalShares > maxShares
     function test_previewMint_reverts_whenSharesOverflowMaxShares() public {
         uint256 maxS = curve.maxShares();
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_SharesOverflowMax.selector));
-        curve.previewMint( /*shares=*/ 1, /*totalShares=*/ maxS, /*totalAssets=*/ 0);
+        curve.previewMint( /*shares=*/
+            1,
+            /*totalShares=*/
+            maxS,
+            /*totalAssets=*/
+            0
+        );
     }
 
     // Mint out: assetsOut + totalAssets > maxAssets
     function test_previewMint_reverts_whenAssetsOutWouldOverflowMaxAssets() public {
         uint256 maxA = curve.maxAssets();
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_AssetsOverflowMax.selector));
-        curve.previewMint( /*shares=*/ 1, /*totalShares=*/ 1, /*totalAssets=*/ maxA);
+        curve.previewMint( /*shares=*/
+            1,
+            /*totalShares=*/
+            1,
+            /*totalAssets=*/
+            maxA
+        );
     }
 
     /* ===================================================== */
