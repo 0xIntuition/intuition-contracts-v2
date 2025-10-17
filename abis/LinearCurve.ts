@@ -1,13 +1,7 @@
 export const LinearCurveAbi = [
   {
     "type": "constructor",
-    "inputs": [
-      {
-        "name": "_name",
-        "type": "string",
-        "internalType": "string"
-      }
-    ],
+    "inputs": [],
     "stateMutability": "nonpayable"
   },
   {
@@ -130,6 +124,19 @@ export const LinearCurveAbi = [
       }
     ],
     "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "initialize",
+    "inputs": [
+      {
+        "name": "_name",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -287,8 +294,64 @@ export const LinearCurveAbi = [
     "stateMutability": "pure"
   },
   {
+    "type": "event",
+    "name": "CurveNameSet",
+    "inputs": [
+      {
+        "name": "name",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Initialized",
+    "inputs": [
+      {
+        "name": "version",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "BaseCurve_AssetsExceedTotalAssets",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BaseCurve_AssetsOverflowMax",
+    "inputs": []
+  },
+  {
     "type": "error",
     "name": "BaseCurve_EmptyStringNotAllowed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BaseCurve_SharesExceedTotalShares",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BaseCurve_SharesOverflowMax",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidInitialization",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotInitializing",
     "inputs": []
   }
 ] as const;

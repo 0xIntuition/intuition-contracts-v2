@@ -1,18 +1,7 @@
 export const ProgressiveCurveAbi = [
   {
     "type": "constructor",
-    "inputs": [
-      {
-        "name": "_name",
-        "type": "string",
-        "internalType": "string"
-      },
-      {
-        "name": "slope18",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
+    "inputs": [],
     "stateMutability": "nonpayable"
   },
   {
@@ -106,7 +95,7 @@ export const ProgressiveCurveAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "",
+        "name": "totalAssets",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -148,6 +137,24 @@ export const ProgressiveCurveAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "initialize",
+    "inputs": [
+      {
+        "name": "_name",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "slope18",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -198,7 +205,7 @@ export const ProgressiveCurveAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "",
+        "name": "totalAssets",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -232,7 +239,7 @@ export const ProgressiveCurveAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "",
+        "name": "totalAssets",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -285,7 +292,7 @@ export const ProgressiveCurveAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "",
+        "name": "totalAssets",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -305,8 +312,64 @@ export const ProgressiveCurveAbi = [
     "stateMutability": "view"
   },
   {
+    "type": "event",
+    "name": "CurveNameSet",
+    "inputs": [
+      {
+        "name": "name",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Initialized",
+    "inputs": [
+      {
+        "name": "version",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "BaseCurve_AssetsExceedTotalAssets",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BaseCurve_AssetsOverflowMax",
+    "inputs": []
+  },
+  {
     "type": "error",
     "name": "BaseCurve_EmptyStringNotAllowed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BaseCurve_SharesExceedTotalShares",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BaseCurve_SharesOverflowMax",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidInitialization",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotInitializing",
     "inputs": []
   },
   {
@@ -367,5 +430,10 @@ export const ProgressiveCurveAbi = [
         "internalType": "UD60x18"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "ProgressiveCurve_InvalidSlope",
+    "inputs": []
   }
 ] as const;
