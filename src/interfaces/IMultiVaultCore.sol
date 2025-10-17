@@ -19,7 +19,8 @@ struct GeneralConfig {
     uint256 minShare;
     /// @dev The maximum length of atom data that can be passed when creating atom vaults
     uint256 atomDataMaxLength;
-    /// @dev Threshold in terms of total shares in a default curve vault at which entry and exit fees start to be charged
+    /// @dev Threshold in terms of total shares in a default curve vault at which entry and exit fees start to be
+    /// charged
     uint256 feeThreshold;
 }
 
@@ -114,10 +115,7 @@ interface IMultiVaultCore {
      * @param tripleCreationProtocolFee The new triple creation protocol fee
      * @param atomDepositFractionForTriple The new atom deposit fraction for triple
      */
-    event TripleConfigUpdated(
-        uint256 tripleCreationProtocolFee,
-        uint256 atomDepositFractionForTriple
-    );
+    event TripleConfigUpdated(uint256 tripleCreationProtocolFee, uint256 atomDepositFractionForTriple);
 
     /**
      * @notice Emitted when the wallet configuration is updated

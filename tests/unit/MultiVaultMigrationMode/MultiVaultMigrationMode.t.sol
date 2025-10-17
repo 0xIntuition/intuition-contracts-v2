@@ -1004,7 +1004,7 @@ contract MultiVaultMigrationModeTest is BaseTest {
 
         // Send native TRUST to the proxy (must succeed if receive() is present in implementation)
         vm.prank(users.alice);
-        (bool success,) = address(multiVaultMigrationMode).call{value: amount}("");
+        (bool success,) = address(multiVaultMigrationMode).call{ value: amount }("");
         assertTrue(success, "native TRUST transfer should succeed");
 
         // The proxy holds the native balance

@@ -127,11 +127,7 @@ contract LinearCurve is BaseCurve {
     }
 
     /// @dev Internal function to convert assets to shares without checks.
-    function _convertToShares(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function _convertToShares(uint256 assets, uint256 totalAssets, uint256 totalShares)
         internal
         pure
         returns (uint256 shares)
@@ -141,11 +137,7 @@ contract LinearCurve is BaseCurve {
     }
 
     /// @dev Internal function to convert shares to assets without checks.
-    function _convertToAssets(
-        uint256 shares,
-        uint256 totalShares,
-        uint256 totalAssets
-    )
+    function _convertToAssets(uint256 shares, uint256 totalShares, uint256 totalAssets)
         internal
         pure
         returns (uint256 assets)
