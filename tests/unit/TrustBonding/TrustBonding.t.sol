@@ -496,8 +496,7 @@ contract TrustBondingTest is TrustBondingBase {
         uint256 bobInitialBalance = users.bob.balance;
         uint256 bobRawRewards =
             protocol.trustBonding.userEligibleRewardsForEpoch(users.bob, protocol.trustBonding.currentEpoch() - 1);
-        uint256 bobExpectedRewards =
-            bobRawRewards * TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND
+        uint256 bobExpectedRewards = bobRawRewards * TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND
             / protocol.trustBonding.BASIS_POINTS_DIVISOR();
 
         protocol.trustBonding.claimRewards(users.bob);

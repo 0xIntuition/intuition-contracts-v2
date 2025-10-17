@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { UD60x18, ud60x18, convert, uMAX_UD60x18, uUNIT } from "@prb/math/src/UD60x18.sol";
+import { UD60x18, ud60x18, convert, uUNIT } from "@prb/math/src/UD60x18.sol";
 import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 
 import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
@@ -182,13 +182,13 @@ contract OffsetProgressiveCurve is BaseCurve {
         returns (uint256 assets)
     {
         _checkMintBounds(shares, totalShares, MAX_SHARES);
- 
+
         UD60x18 s0 = convert(totalShares).add(OFFSET);
         UD60x18 s1 = convert(totalShares + shares).add(OFFSET);
         UD60x18 aUD = _convertToAssets(s0, s1);
 
         assets = _ceilUdToUint(aUD);
-  
+
         _checkMintOut(assets, totalAssets, MAX_ASSETS);
     }
 

@@ -42,7 +42,11 @@ contract LinearCurve is BaseCurve {
     }
 
     /// @inheritdoc BaseCurve
-    function previewDeposit(uint256 assets, uint256 totalAssets, uint256 totalShares)
+    function previewDeposit(
+        uint256 assets,
+        uint256 totalAssets,
+        uint256 totalShares
+    )
         external
         pure
         override
@@ -54,7 +58,11 @@ contract LinearCurve is BaseCurve {
     }
 
     /// @inheritdoc BaseCurve
-    function previewMint(uint256 shares, uint256 totalShares, uint256 totalAssets)
+    function previewMint(
+        uint256 shares,
+        uint256 totalShares,
+        uint256 totalAssets
+    )
         external
         pure
         override
@@ -66,7 +74,11 @@ contract LinearCurve is BaseCurve {
     }
 
     /// @inheritdoc BaseCurve
-    function previewWithdraw(uint256 assets, uint256 totalAssets, uint256 totalShares)
+    function previewWithdraw(
+        uint256 assets,
+        uint256 totalAssets,
+        uint256 totalShares
+    )
         external
         pure
         override
@@ -77,7 +89,11 @@ contract LinearCurve is BaseCurve {
     }
 
     /// @inheritdoc BaseCurve
-    function previewRedeem(uint256 shares, uint256 totalShares, uint256 totalAssets)
+    function previewRedeem(
+        uint256 shares,
+        uint256 totalShares,
+        uint256 totalAssets
+    )
         external
         pure
         override
@@ -88,7 +104,11 @@ contract LinearCurve is BaseCurve {
     }
 
     /// @inheritdoc BaseCurve
-    function convertToShares(uint256 assets, uint256 totalAssets, uint256 totalShares)
+    function convertToShares(
+        uint256 assets,
+        uint256 totalAssets,
+        uint256 totalShares
+    )
         public
         pure
         override
@@ -100,7 +120,11 @@ contract LinearCurve is BaseCurve {
     }
 
     /// @inheritdoc BaseCurve
-    function convertToAssets(uint256 shares, uint256 totalShares, uint256 totalAssets)
+    function convertToAssets(
+        uint256 shares,
+        uint256 totalShares,
+        uint256 totalAssets
+    )
         public
         pure
         override

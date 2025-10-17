@@ -161,7 +161,7 @@ contract LinearCurveTest is Test {
         assertLe(shares, totalShares);
         assertGt(shares, 0);
     }
-    
+
     function test_previewWithdraw_reverts_whenAssetsExceedTotalAssets() public {
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_AssetsExceedTotalAssets.selector));
         curve.previewWithdraw(2, /*totalAssets=*/ 1, /*totalShares=*/ 10);

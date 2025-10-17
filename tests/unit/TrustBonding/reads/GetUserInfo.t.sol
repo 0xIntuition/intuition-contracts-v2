@@ -27,7 +27,7 @@ contract TrustBondingGetUserInfoTest is TrustBondingBase {
     function test_getUserInfo_noStakingHistory() external view {
         UserInfo memory userInfo = protocol.trustBonding.getUserInfo(users.alice);
 
-        assertEq(userInfo.personalUtilization, 0, "Personal utilization should be 0 for new user");
+        assertEq(userInfo.personalUtilization, BASIS_POINTS_DIVISOR, "Personal utilization should be 0 for new user");
         assertEq(userInfo.eligibleRewards, 0, "Eligible rewards should be 0 for new user");
         assertEq(userInfo.maxRewards, 0, "Max rewards should be 0 for new user");
         assertEq(userInfo.lockedAmount, 0, "Locked amount should be 0 for new user");
@@ -36,21 +36,21 @@ contract TrustBondingGetUserInfoTest is TrustBondingBase {
     }
 
     function test_getUserInfo_firstEpoch() external {
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
-
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
+        uint256 eligibleRewards = protocol.trustBonding.emissionsForEpoch(0);
         UserInfo memory userInfo = protocol.trustBonding.getUserInfo(users.alice);
 
-        assertEq(userInfo.personalUtilization, 0, "Personal utilization should be 0 in first epoch");
-        assertEq(userInfo.eligibleRewards, 0, "Eligible rewards should be 0 in first epoch");
-        assertEq(userInfo.maxRewards, 0, "Max rewards should be 0 in first epoch");
-        assertEq(userInfo.lockedAmount, DEFAULT_DEPOSIT_AMOUNT, "Locked amount should equal staked amount");
+        assertEq(userInfo.personalUtilization, BASIS_POINTS_DIVISOR, "Personal utilization should be 0 in first epoch");
+        assertEq(userInfo.eligibleRewards, eligibleRewards, "Eligible rewards should be 0 in first epoch");
+        assertEq(userInfo.maxRewards, eligibleRewards, "Max rewards should be 0 in first epoch");
+        assertEq(userInfo.lockedAmount, MEDIUM_DEPOSIT_AMOUNT, "Locked amount should equal staked amount");
         assertGt(userInfo.lockEnd, block.timestamp, "Lock end should be in the future");
         assertGt(userInfo.bondedBalance, 0, "Bonded balance should be greater than 0");
     }
 
     function test_getUserInfo_withStaking() external {
         // Setup: Alice stakes
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
         _advanceToEpoch(3);
         _setTotalUtilizationForEpoch(1, int256(1000 * 1e18));
         _setUserUtilizationForEpoch(users.alice, 1, 1000 * 1e18);
@@ -75,11 +75,11 @@ contract TrustBondingGetUserInfoTest is TrustBondingBase {
             emissionsForEpoch,
             "Users max rewards should equal emissions per epoch with full utilization"
         );
-        assertEq(userInfo.lockedAmount, DEFAULT_DEPOSIT_AMOUNT, "Locked amount should equal staked amount");
+        assertEq(userInfo.lockedAmount, MEDIUM_DEPOSIT_AMOUNT, "Locked amount should equal staked amount");
     }
 
     function test_getUserInfo_perfectUtilization() external {
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
 
         uint256 EPOCHS_TO_ADVANCE = 3;
         _advanceToEpoch(EPOCHS_TO_ADVANCE);
@@ -106,7 +106,7 @@ contract TrustBondingGetUserInfoTest is TrustBondingBase {
 
     function test_getUserInfo_multipleLocks() external {
         // Setup: Alice creates initial lock
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
 
         // Advance to epoch 1
         _advanceToEpoch(1);
@@ -122,7 +122,7 @@ contract TrustBondingGetUserInfoTest is TrustBondingBase {
 
         UserInfo memory userInfo = protocol.trustBonding.getUserInfo(users.alice);
 
-        assertEq(userInfo.lockedAmount, DEFAULT_DEPOSIT_AMOUNT, "Locked amount should reflect stake");
+        assertEq(userInfo.lockedAmount, MEDIUM_DEPOSIT_AMOUNT, "Locked amount should reflect stake");
         assertGt(userInfo.maxRewards, 0, "Max rewards should be positive with locks");
         assertGt(userInfo.bondedBalance, 0, "Bonded balance should be positive");
     }

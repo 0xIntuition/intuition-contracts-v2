@@ -377,9 +377,8 @@ contract CoreEmissionsControllerTest is CoreEmissionsControllerBase {
         }
 
         // Expected: 26 epochs * 1M + 26 epochs * 900K + 26 epochs * 810K + 26 epochs * 729K + 26 epochs * 656.1K
-        uint256 expected =
-            (26 * 1_000_000 * 1e18) + (26 * 900_000 * 1e18) + (26 * 810_000 * 1e18) + (26 * 729_000 * 1e18)
-            + (26 * 656_100 * 1e18);
+        uint256 expected = (26 * 1_000_000 * 1e18) + (26 * 900_000 * 1e18) + (26 * 810_000 * 1e18)
+            + (26 * 729_000 * 1e18) + (26 * 656_100 * 1e18);
 
         assertEq(totalEmissions, expected, "Total emissions calculation incorrect");
     }
@@ -395,9 +394,8 @@ contract CoreEmissionsControllerTest is CoreEmissionsControllerBase {
         }
 
         // Expected: 52 epochs * 1M + 52 epochs * 900K + 52 epochs * 810K + 52 epochs * 729K + 52 epochs * 656.1K
-        uint256 expected =
-            (52 * 1_000_000 * 1e18) + (52 * 900_000 * 1e18) + (52 * 810_000 * 1e18) + (52 * 729_000 * 1e18)
-            + (52 * 656_100 * 1e18);
+        uint256 expected = (52 * 1_000_000 * 1e18) + (52 * 900_000 * 1e18) + (52 * 810_000 * 1e18)
+            + (52 * 729_000 * 1e18) + (52 * 656_100 * 1e18);
 
         assertEq(totalEmissions, expected, "Total emissions calculation incorrect");
     }
@@ -413,9 +411,8 @@ contract CoreEmissionsControllerTest is CoreEmissionsControllerBase {
         }
 
         // Expected: 365 epochs * 1M + 365 epochs * 900K + 365 epochs * 810K + 365 epochs * 729K + 365 epochs * 656.1K
-        uint256 expected =
-            (365 * 1_000_000 * 1e18) + (365 * 900_000 * 1e18) + (365 * 810_000 * 1e18) + (365 * 729_000 * 1e18)
-            + (365 * 656_100 * 1e18);
+        uint256 expected = (365 * 1_000_000 * 1e18) + (365 * 900_000 * 1e18) + (365 * 810_000 * 1e18)
+            + (365 * 729_000 * 1e18) + (365 * 656_100 * 1e18);
 
         assertEq(totalEmissions, expected, "Total emissions calculation incorrect");
     }

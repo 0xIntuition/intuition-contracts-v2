@@ -31,14 +31,14 @@ contract TrustBondingGetUserInfoTest is TrustBondingBase {
     }
 
     function test_getUserCurrentClaimableRewards_firstEpoch() external {
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
 
         uint256 claimableRewards = protocol.trustBonding.getUserCurrentClaimableRewards(users.alice);
         assertEq(claimableRewards, 0, "No rewards should be claimable in first epoch");
     }
 
     function test_getUserCurrentClaimableRewards_singleStakePeriod() external {
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
         _advanceToEpoch(1);
 
         uint256 claimableRewards = protocol.trustBonding.getUserCurrentClaimableRewards(users.alice);
@@ -51,7 +51,7 @@ contract TrustBondingGetUserInfoTest is TrustBondingBase {
 
     function test_getUserCurrentClaimableRewards_alreadyClaimed() external {
         // Setup: Alice stakes in epoch 0
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
         _advanceToEpoch(2);
 
         _setTotalUtilizationForEpoch(0, int256(1000 * 1e18));
@@ -68,7 +68,7 @@ contract TrustBondingGetUserInfoTest is TrustBondingBase {
     }
 
     function test_getUserCurrentClaimableRewards_multipleStakePeriods() external {
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
         _advanceToEpoch(2);
 
         // Mock utilization data across multiple epochs

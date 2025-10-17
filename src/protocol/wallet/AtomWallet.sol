@@ -12,7 +12,7 @@ import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 
 // For SIG_VALIDATION_FAILED
-import "@account-abstraction/core/Helpers.sol";
+import { SIG_VALIDATION_FAILED } from "@account-abstraction/core/Helpers.sol";
 
 /**
  * @title  AtomWallet
@@ -75,10 +75,14 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
 
     /// @dev Modifier to allow only the owner or entry point to call a function
     modifier onlyOwnerOrEntryPoint() {
+        _onlyOwnerOrEntryPoint();
+        _;
+    }
+
+    function _onlyOwnerOrEntryPoint() internal {
         if (!(msg.sender == address(entryPoint()) || msg.sender == owner())) {
             revert AtomWallet_OnlyOwnerOrEntryPoint();
         }
-        _;
     }
 
     /* =================================================== */
@@ -132,7 +136,11 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
     /// @param dest the target address
     /// @param value the value to send
     /// @param data the function calldata
-    function execute(address dest, uint256 value, bytes calldata data)
+    function execute(
+        address dest,
+        uint256 value,
+        bytes calldata data
+    )
         external
         override
         onlyOwnerOrEntryPoint
@@ -146,7 +154,11 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
     /// @param dest the target addresses array
     /// @param values the values to send array
     /// @param data the function calldata array
-    function executeBatch(address[] calldata dest, uint256[] calldata values, bytes[] calldata data)
+    function executeBatch(
+        address[] calldata dest,
+        uint256[] calldata values,
+        bytes[] calldata data
+    )
         external
         payable
         onlyOwnerOrEntryPoint
@@ -255,7 +267,10 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
     ///
     /// @return validationData the validation data (0 if successful)
     /// NOTE: Implements the template method of BaseAccount
-    function _validateSignature(PackedUserOperation calldata userOp, bytes32 userOpHash)
+    function _validateSignature(
+        PackedUserOperation calldata userOp,
+        bytes32 userOpHash
+    )
         internal
         virtual
         override

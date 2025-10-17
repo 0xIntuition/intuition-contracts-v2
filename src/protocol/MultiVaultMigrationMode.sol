@@ -125,9 +125,9 @@ contract MultiVaultMigrationMode is MultiVault {
         for (uint256 i = 0; i < length;) {
             bytes32 tripleId = _calculateTripleId(tripleAtomIds[i][0], tripleAtomIds[i][1], tripleAtomIds[i][2]);
             bytes32 counterTripleId = _calculateCounterTripleId(tripleId);
-            
+
             _initializeTripleState(tripleId, counterTripleId, tripleAtomIds[i]);
-            
+
             emit TripleCreated(creators[i], tripleId, tripleAtomIds[i][0], tripleAtomIds[i][1], tripleAtomIds[i][2]);
             unchecked {
                 ++i;

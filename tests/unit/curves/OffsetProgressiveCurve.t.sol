@@ -177,7 +177,7 @@ contract OffsetProgressiveCurveTest is Test {
         uint256 r = 2e18;
         assertEq(curve.previewRedeem(r, s0, 0), curve.convertToAssets(r, s0, 0));
     }
-    
+
     function test_previewMint_mintMaxSharesFromZero_succeeds() public view {
         uint256 sMax = curve.maxShares();
         uint256 assets = curve.previewMint(sMax, 0, 0);

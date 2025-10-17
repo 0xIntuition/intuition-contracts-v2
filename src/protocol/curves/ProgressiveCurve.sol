@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { UD60x18, ud60x18, convert, uMAX_UD60x18, uUNIT } from "@prb/math/src/UD60x18.sol";
+import { UD60x18, convert, uMAX_UD60x18 } from "@prb/math/src/UD60x18.sol";
 import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 
 import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
@@ -73,7 +73,7 @@ contract ProgressiveCurve is BaseCurve {
     /// @dev Computes Slope / 2 as commonly used constant
     function initialize(string calldata _name, uint256 slope18) external initializer {
         if (slope18 == 0 || slope18 % 2 != 0) revert ProgressiveCurve_InvalidSlope();
-        
+
         __BaseCurve_init(_name);
 
         SLOPE = UD60x18.wrap(slope18);
@@ -162,13 +162,13 @@ contract ProgressiveCurve is BaseCurve {
         returns (uint256 assets)
     {
         _checkMintBounds(shares, totalShares, MAX_SHARES);
-      
+
         UD60x18 s0 = convert(totalShares);
         UD60x18 s1 = convert(totalShares + shares);
         UD60x18 aUD = _convertToAssets(s0, s1); // precise fixed-point
-        
+
         assets = _ceilUdToUint(aUD);
-      
+
         _checkMintOut(assets, totalAssets, MAX_ASSETS);
     }
 

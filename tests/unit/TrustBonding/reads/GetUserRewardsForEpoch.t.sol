@@ -25,7 +25,7 @@ contract TrustBondingGetUserInfoTest is TrustBondingBase {
     /* =================================================== */
 
     function test_getUserRewardsForEpoch_firstEpoch() external {
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
 
         (uint256 eligible, uint256 available) = protocol.trustBonding.getUserRewardsForEpoch(users.alice, 0);
         assertEq(eligible, 0, "No eligible rewards in first epoch");
@@ -33,7 +33,7 @@ contract TrustBondingGetUserInfoTest is TrustBondingBase {
     }
 
     function test_getUserRewardsForEpoch_futureEpoch() external {
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
 
         uint256 currentEpoch = protocol.trustBonding.currentEpoch();
         (uint256 eligible, uint256 available) =
@@ -45,7 +45,7 @@ contract TrustBondingGetUserInfoTest is TrustBondingBase {
 
     function test_getUserRewardsForEpoch_validEpoch() external {
         // Setup: Alice stakes
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
 
         // Advance to epoch 2
         _advanceToEpoch(2);
@@ -75,7 +75,7 @@ contract TrustBondingGetUserInfoTest is TrustBondingBase {
 
     function test_getUserRewardsForEpoch_multipleEpochs() external {
         // Setup: Alice stakes
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
 
         // Advance through multiple epochs
         _advanceToEpoch(3);

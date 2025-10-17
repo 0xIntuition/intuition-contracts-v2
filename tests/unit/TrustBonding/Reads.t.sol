@@ -108,18 +108,18 @@ contract TrustBondingReadsTest is TrustBondingBase {
     }
 
     function test_totalLocked_afterBonding() external {
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
 
         uint256 totalLocked = protocol.trustBonding.totalLocked();
-        assertEq(totalLocked, DEFAULT_DEPOSIT_AMOUNT);
+        assertEq(totalLocked, MEDIUM_DEPOSIT_AMOUNT);
     }
 
     function test_totalLocked_multipleBonds() external {
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
-        _createLock(users.bob, DEFAULT_DEPOSIT_AMOUNT * 2);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
+        _createLock(users.bob, MEDIUM_DEPOSIT_AMOUNT * 2);
 
         uint256 totalLocked = protocol.trustBonding.totalLocked();
-        assertEq(totalLocked, DEFAULT_DEPOSIT_AMOUNT * 3);
+        assertEq(totalLocked, MEDIUM_DEPOSIT_AMOUNT * 3);
     }
 
     function test_totalBondedBalance_initialState() external view {
@@ -128,8 +128,8 @@ contract TrustBondingReadsTest is TrustBondingBase {
     }
 
     function test_totalBondedBalance_afterBonding() external {
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
-        _createLock(users.bob, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
+        _createLock(users.bob, MEDIUM_DEPOSIT_AMOUNT);
 
         uint256 totalBonded = protocol.trustBonding.totalBondedBalance();
         uint256 aliceBalance = protocol.trustBonding.balanceOf(users.alice);
@@ -140,7 +140,7 @@ contract TrustBondingReadsTest is TrustBondingBase {
     }
 
     function test_totalBondedBalanceAtEpochEnd_validEpoch() external {
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
 
         uint256 currentEpoch = protocol.trustBonding.currentEpoch();
         uint256 totalBondedAtEnd = protocol.trustBonding.totalBondedBalanceAtEpochEnd(currentEpoch);
@@ -157,7 +157,7 @@ contract TrustBondingReadsTest is TrustBondingBase {
     }
 
     function test_userBondedBalanceAtEpochEnd_validUser() external {
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
 
         uint256 currentEpoch = protocol.trustBonding.currentEpoch();
         uint256 userBalance = protocol.trustBonding.userBondedBalanceAtEpochEnd(users.alice, currentEpoch);
@@ -188,7 +188,7 @@ contract TrustBondingReadsTest is TrustBondingBase {
     }
 
     function test_userEligibleRewardsForEpoch_validUser() external {
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
 
         uint256 currentEpoch = protocol.trustBonding.currentEpoch();
         uint256 rewards = protocol.trustBonding.userEligibleRewardsForEpoch(users.alice, currentEpoch);
@@ -226,7 +226,7 @@ contract TrustBondingReadsTest is TrustBondingBase {
     }
 
     function test_hasClaimedRewardsForEpoch_afterClaim() external {
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
         vm.warp(TRUST_BONDING_START_TIMESTAMP + TRUST_BONDING_EPOCH_LENGTH);
 
         uint256 currentEpoch = protocol.trustBonding.currentEpoch();
@@ -337,7 +337,7 @@ contract TrustBondingReadsTest is TrustBondingBase {
     }
 
     function test_getUnclaimedRewards_withUnclaimedFromPastEpochs() external {
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
 
         // Advance multiple epochs without claiming
         vm.warp(TRUST_BONDING_START_TIMESTAMP + TRUST_BONDING_EPOCH_LENGTH * 3);
@@ -348,8 +348,8 @@ contract TrustBondingReadsTest is TrustBondingBase {
     }
 
     function test_getUnclaimedRewards_afterPartialClaiming() external {
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
-        _createLock(users.bob, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
+        _createLock(users.bob, MEDIUM_DEPOSIT_AMOUNT);
 
         // Move to epoch 2
         vm.warp(TRUST_BONDING_START_TIMESTAMP + TRUST_BONDING_EPOCH_LENGTH * 2);
@@ -372,7 +372,7 @@ contract TrustBondingReadsTest is TrustBondingBase {
     }
 
     function test_userClaimedRewardsForEpoch_afterClaim() external {
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
         vm.warp(TRUST_BONDING_START_TIMESTAMP + TRUST_BONDING_EPOCH_LENGTH);
 
         uint256 prevEpoch = protocol.trustBonding.currentEpoch() - 1;
@@ -410,7 +410,7 @@ contract TrustBondingReadsTest is TrustBondingBase {
     }
 
     function test_totalClaimedRewardsForEpoch_afterClaim() external {
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
         vm.warp(TRUST_BONDING_START_TIMESTAMP + TRUST_BONDING_EPOCH_LENGTH);
 
         uint256 prevEpoch = protocol.trustBonding.currentEpoch() - 1;
