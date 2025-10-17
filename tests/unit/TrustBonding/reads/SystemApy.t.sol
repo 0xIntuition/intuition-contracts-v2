@@ -70,7 +70,7 @@ contract TrustBondingSystemApyTest is TrustBondingBase {
      * @dev Verifies APY is calculated correctly in epoch 0 - always 100% utilization
      */
     function test_getSystemApy_epochZero() external {
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
 
         (uint256 currentApy, uint256 maxApy) = protocol.trustBonding.getSystemApy();
 
@@ -105,7 +105,7 @@ contract TrustBondingSystemApyTest is TrustBondingBase {
         uint256 minTime = protocol.trustBonding.MINTIME();
         uint256 unlockTime = _calculateUnlockTime(minTime);
 
-        _createLockWithDuration(users.alice, DEFAULT_DEPOSIT_AMOUNT, unlockTime);
+        _createLockWithDuration(users.alice, MEDIUM_DEPOSIT_AMOUNT, unlockTime);
 
         (uint256 currentApy, uint256 maxApy) = protocol.trustBonding.getSystemApy();
 
@@ -122,7 +122,7 @@ contract TrustBondingSystemApyTest is TrustBondingBase {
         uint256 maxTime = protocol.trustBonding.MAXTIME();
         uint256 unlockTime = _calculateUnlockTime(maxTime);
 
-        _createLockWithDuration(users.alice, DEFAULT_DEPOSIT_AMOUNT, unlockTime);
+        _createLockWithDuration(users.alice, MEDIUM_DEPOSIT_AMOUNT, unlockTime);
 
         (uint256 currentApy, uint256 maxApy) = protocol.trustBonding.getSystemApy();
 
@@ -162,7 +162,7 @@ contract TrustBondingSystemApyTest is TrustBondingBase {
         vm.stopPrank();
 
         // Medium lock
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
         (uint256 apyMedium,) = protocol.trustBonding.getSystemApy();
 
         // Advance time again
@@ -190,8 +190,8 @@ contract TrustBondingSystemApyTest is TrustBondingBase {
      * @dev Verifies APY calculation with multiple equal participants
      */
     function test_getSystemApy_twoUsersEqualLocks() external {
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
-        _createLock(users.bob, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
+        _createLock(users.bob, MEDIUM_DEPOSIT_AMOUNT);
 
         (uint256 currentApy, uint256 maxApy) = protocol.trustBonding.getSystemApy();
 
@@ -205,7 +205,7 @@ contract TrustBondingSystemApyTest is TrustBondingBase {
      */
     function test_getSystemApy_threeUsersDifferentAmounts() external {
         _createLock(users.alice, SMALL_DEPOSIT_AMOUNT);
-        _createLock(users.bob, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.bob, MEDIUM_DEPOSIT_AMOUNT);
         _createLock(users.charlie, LARGE_DEPOSIT_AMOUNT);
 
         (uint256 currentApy, uint256 maxApy) = protocol.trustBonding.getSystemApy();
@@ -222,9 +222,9 @@ contract TrustBondingSystemApyTest is TrustBondingBase {
         uint256 minTime = protocol.trustBonding.MINTIME();
         uint256 maxTime = protocol.trustBonding.MAXTIME();
 
-        _createLockWithDuration(users.alice, DEFAULT_DEPOSIT_AMOUNT, _calculateUnlockTime(minTime));
-        _createLock(users.bob, DEFAULT_DEPOSIT_AMOUNT); // Default 2 years
-        _createLockWithDuration(users.charlie, DEFAULT_DEPOSIT_AMOUNT, _calculateUnlockTime(maxTime));
+        _createLockWithDuration(users.alice, MEDIUM_DEPOSIT_AMOUNT, _calculateUnlockTime(minTime));
+        _createLock(users.bob, MEDIUM_DEPOSIT_AMOUNT); // Default 2 years
+        _createLockWithDuration(users.charlie, MEDIUM_DEPOSIT_AMOUNT, _calculateUnlockTime(maxTime));
 
         (uint256 currentApy, uint256 maxApy) = protocol.trustBonding.getSystemApy();
 
@@ -465,7 +465,7 @@ contract TrustBondingSystemApyTest is TrustBondingBase {
     function test_getSystemApy_multipleUsersMultipleEpochs() external {
         // Initial setup: Two users with different amounts
         _createLock(users.alice, LARGE_DEPOSIT_AMOUNT);
-        _createLock(users.bob, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.bob, MEDIUM_DEPOSIT_AMOUNT);
 
         // Epoch 1: Always 100%
         _advanceToEpoch(1);
@@ -524,7 +524,7 @@ contract TrustBondingSystemApyTest is TrustBondingBase {
      */
     function test_getSystemApy_supplyImpact() external {
         // First measurement with single user
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
 
         // Move to epoch 2 for consistent comparison
         _advanceToEpoch(1);
@@ -540,7 +540,7 @@ contract TrustBondingSystemApyTest is TrustBondingBase {
         (uint256 currentApy1, uint256 maxApy1) = protocol.trustBonding.getSystemApy();
 
         // Double the supply by adding bob
-        _createLock(users.bob, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.bob, MEDIUM_DEPOSIT_AMOUNT);
 
         // Epoch 3: Keep same utilization ratio
         _advanceToEpoch(3);

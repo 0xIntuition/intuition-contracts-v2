@@ -166,7 +166,11 @@ contract NormalizedUtilizationRatioTest is TrustBondingBase {
     /*                    FUZZ TESTS                       */
     /* =================================================== */
 
-    function testFuzz_getNormalizedUtilizationRatio_validInputs(uint256 delta, uint256 target, uint256 lowerBound)
+    function testFuzz_getNormalizedUtilizationRatio_validInputs(
+        uint256 delta,
+        uint256 target,
+        uint256 lowerBound
+    )
         external
         view
     {

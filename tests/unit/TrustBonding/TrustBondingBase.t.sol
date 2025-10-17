@@ -39,8 +39,8 @@ contract TrustBondingBase is BaseTest {
 
     uint256 public constant DEAL_AMOUNT = 1_000_000 ether;
     uint256 public constant SMALL_DEPOSIT_AMOUNT = 10 ether;
-    uint256 public constant DEFAULT_DEPOSIT_AMOUNT = 100 ether;
-    uint256 public constant LARGE_DEPOSIT_AMOUNT = 5000 ether;
+    uint256 public constant MEDIUM_DEPOSIT_AMOUNT = 100 ether;
+    uint256 public constant LARGE_DEPOSIT_AMOUNT = 1000 ether;
     uint256 public constant XLARGE_DEPOSIT_AMOUNT = 10_000 ether;
 
     /* =================================================== */

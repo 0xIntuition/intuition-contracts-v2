@@ -95,16 +95,15 @@ contract MultiVaultHelpersTest is BaseTest {
         // update via admin and verify
         resetPrank({ msgSender: users.admin });
         (address entryPoint,, address beacon, address factory) = protocol.multiVault.walletConfig();
-        protocol.multiVault
-            .setWalletConfig(
-                // set only the fields we change/keep; keep factory same as in deployment
-                WalletConfig({
-                    entryPoint: entryPoint,
-                    atomWarden: address(0xAbCd),
-                    atomWalletBeacon: beacon,
-                    atomWalletFactory: factory
-                })
-            );
+        protocol.multiVault.setWalletConfig(
+            // set only the fields we change/keep; keep factory same as in deployment
+            WalletConfig({
+                entryPoint: entryPoint,
+                atomWarden: address(0xAbCd),
+                atomWalletBeacon: beacon,
+                atomWalletFactory: factory
+            })
+        );
 
         assertEq(protocol.multiVault.getAtomWarden(), address(0xAbCd));
     }

@@ -26,7 +26,7 @@ contract TrustBondingUserClaimedRewardsForEpochTest is TrustBondingBase {
     }
 
     function test_userClaimedRewardsForEpoch_afterClaim() external {
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
         vm.warp(TRUST_BONDING_START_TIMESTAMP + TRUST_BONDING_EPOCH_LENGTH);
 
         uint256 prevEpoch = protocol.trustBonding.currentEpoch() - 1;

@@ -12,7 +12,7 @@ import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 
 // For SIG_VALIDATION_FAILED
-import "@account-abstraction/core/Helpers.sol";
+import { SIG_VALIDATION_FAILED } from "@account-abstraction/core/Helpers.sol";
 
 /**
  * @title  AtomWallet
@@ -42,12 +42,12 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
 
     /// @notice The storage slot for the AtomWallet owner
     // keccak256(abi.encode(uint256(keccak256("openzeppelin.storage.Ownable")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant AtomWalletOwnerStorageLocation =
+    bytes32 private constant ATOM_WALLET_OWNER_STORAGE_LOCATION =
         0x9016d09d72d40fdae2fd8ceac6b6234c7706214fd39c1cd1e609a0528c199300;
 
     /// @notice The storage slot for the AtomWallet pending owner
     // keccak256(abi.encode(uint256(keccak256("openzeppelin.storage.Ownable2Step")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant AtomWalletPendingOwnerStorageLocation =
+    bytes32 private constant ATOM_WALLET_PENDING_OWNER_STORAGE_LOCATION =
         0x237e158222e3e6968b72b9db0d8043aacf074ad9f650f0d1606b4d82ee432c00;
 
     /* =================================================== */
@@ -75,10 +75,14 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
 
     /// @dev Modifier to allow only the owner or entry point to call a function
     modifier onlyOwnerOrEntryPoint() {
+        _onlyOwnerOrEntryPoint();
+        _;
+    }
+
+    function _onlyOwnerOrEntryPoint() internal {
         if (!(msg.sender == address(entryPoint()) || msg.sender == owner())) {
             revert AtomWallet_OnlyOwnerOrEntryPoint();
         }
-        _;
     }
 
     /* =================================================== */
@@ -132,7 +136,11 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
     /// @param dest the target address
     /// @param value the value to send
     /// @param data the function calldata
-    function execute(address dest, uint256 value, bytes calldata data)
+    function execute(
+        address dest,
+        uint256 value,
+        bytes calldata data
+    )
         external
         override
         onlyOwnerOrEntryPoint
@@ -146,7 +154,11 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
     /// @param dest the target addresses array
     /// @param values the values to send array
     /// @param data the function calldata array
-    function executeBatch(address[] calldata dest, uint256[] calldata values, bytes[] calldata data)
+    function executeBatch(
+        address[] calldata dest,
+        uint256[] calldata values,
+        bytes[] calldata data
+    )
         external
         payable
         onlyOwnerOrEntryPoint
@@ -255,7 +267,10 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
     ///
     /// @return validationData the validation data (0 if successful)
     /// NOTE: Implements the template method of BaseAccount
-    function _validateSignature(PackedUserOperation calldata userOp, bytes32 userOpHash)
+    function _validateSignature(
+        PackedUserOperation calldata userOp,
+        bytes32 userOpHash
+    )
         internal
         virtual
         override
@@ -329,7 +344,7 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
     /// @return $ the storage slot
     function _getAtomWalletOwnerStorage() private pure returns (OwnableStorage storage $) {
         assembly {
-            $.slot := AtomWalletOwnerStorageLocation
+            $.slot := ATOM_WALLET_OWNER_STORAGE_LOCATION
         }
     }
 
@@ -337,7 +352,7 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
     /// @return $ the storage slot
     function _getAtomWalletPendingOwnerStorage() private pure returns (Ownable2StepStorage storage $) {
         assembly {
-            $.slot := AtomWalletPendingOwnerStorageLocation
+            $.slot := ATOM_WALLET_PENDING_OWNER_STORAGE_LOCATION
         }
     }
 }

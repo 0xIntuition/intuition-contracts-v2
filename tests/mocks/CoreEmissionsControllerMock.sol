@@ -53,7 +53,11 @@ contract CoreEmissionsControllerMock is CoreEmissionsController {
         return _emissionsAtEpoch(epochNumber);
     }
 
-    function applyCliffReductions(uint256 baseEmissions, uint256 retentionFactor, uint256 cliffsToApply)
+    function applyCliffReductions(
+        uint256 baseEmissions,
+        uint256 retentionFactor,
+        uint256 cliffsToApply
+    )
         external
         pure
         returns (uint256)
@@ -85,7 +89,7 @@ contract CoreEmissionsControllerMock is CoreEmissionsController {
             emissionsPerEpoch: 1_000_000 * 1e18, // 1M tokens
             emissionsReductionCliff: 26, // 26 * 2 weeks = 52 weeks = 1 year
             emissionsReductionBasisPoints: 1000 // 10%
-        });
+         });
     }
 
     function setupWeeklyScenario() external {
@@ -96,7 +100,7 @@ contract CoreEmissionsControllerMock is CoreEmissionsController {
             emissionsPerEpoch: 1_000_000 * 1e18, // 1M tokens
             emissionsReductionCliff: 52, // 52 * 1 week = 52 weeks = 1 year
             emissionsReductionBasisPoints: 1000 // 10%
-        });
+         });
     }
 
     function setupDailyScenario() external {
@@ -107,7 +111,7 @@ contract CoreEmissionsControllerMock is CoreEmissionsController {
             emissionsPerEpoch: 1_000_000 * 1e18, // 1M tokens
             emissionsReductionCliff: 365, // 365 * 1 day = 365 days = 1 year
             emissionsReductionBasisPoints: 1000 // 10%
-        });
+         });
     }
 
     function setupCustomScenario(

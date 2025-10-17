@@ -80,7 +80,7 @@ abstract contract BaseTest is Modifiers, Test {
 
     // TrustBonding configuration
     uint256 internal TRUST_BONDING_START_TIMESTAMP = block.timestamp + 20;
-    uint256 internal TRUST_BONDING_EPOCH_LENGTH = 1 days * 14;
+    uint256 internal TRUST_BONDING_EPOCH_LENGTH = TWO_WEEKS;
     uint256 internal TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND = 5000; // 50%
     uint256 internal TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND = 3000; // 30%
 
@@ -89,7 +89,7 @@ abstract contract BaseTest is Modifiers, Test {
 
     // CoreEmissions Controller
     uint256 internal constant EMISSIONS_CONTROLLER_EPOCH_LENGTH = TWO_WEEKS;
-    uint256 internal constant EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH = 1000 * 1e18; // 1K tokens
+    uint256 internal constant EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH = 1000 ether; // 1K tokens
     uint256 internal constant EMISSIONS_CONTROLLER_CLIFF = 26;
     uint256 internal constant EMISSIONS_CONTROLLER_REDUCTION_BP = 1000; // 10%
 
@@ -181,54 +181,43 @@ abstract contract BaseTest is Modifiers, Test {
     function _deployMultiVaultSystem() internal {
         // Deploy MultiVault implementation
         MultiVault multiVaultImpl = new MultiVault();
-        console2.log("MultiVault implementation address: ", address(multiVaultImpl));
 
         // Deploy MultiVault proxy
         multiVaultProxy = new TransparentUpgradeableProxy(address(multiVaultImpl), users.admin, "");
         protocol.multiVault = MultiVault(address(multiVaultProxy));
-        console2.log("MultiVault proxy address: ", address(multiVaultProxy));
 
         // Deploy AtomWallet implementation and beacon
         AtomWallet atomWalletImpl = new AtomWallet();
-        console2.log("AtomWallet implementation deployed at:", address(atomWalletImpl));
 
         atomWalletBeacon = new UpgradeableBeacon(address(atomWalletImpl), users.admin);
         protocol.atomWalletBeacon = atomWalletBeacon;
-        console2.log("AtomWalletBeacon deployed at:", address(atomWalletBeacon));
 
         // Deploy AtomWalletFactory implementation
         AtomWalletFactory atomWalletFactoryImpl = new AtomWalletFactory();
-        console2.log("AtomWalletFactory implementation address: ", address(atomWalletFactoryImpl));
 
         // Deploy AtomWalletFactory proxy
         atomWalletFactoryProxy = new TransparentUpgradeableProxy(address(atomWalletFactoryImpl), users.admin, "");
         AtomWalletFactory atomWalletFactory = AtomWalletFactory(address(atomWalletFactoryProxy));
-        console2.log("AtomWalletFactory proxy address: ", address(atomWalletFactoryProxy));
         protocol.atomWalletFactory = atomWalletFactory;
 
         // Deploy WrappedTrust
         WrappedTrust wtrust = new WrappedTrust();
         protocol.wrappedTrust = wtrust;
-        console2.log("WrappedTrust address: ", address(wtrust));
 
         // Deploy TrustBonding implementation
         TrustBonding trustBondingImpl = new TrustBonding();
         protocol.trustBonding = TrustBonding(address(trustBondingImpl));
-        console2.log("TrustBonding implementation address: ", address(trustBondingImpl));
 
         // Deploy TrustBonding proxy
         trustBondingProxy = new TransparentUpgradeableProxy(address(trustBondingImpl), users.admin, "");
         protocol.trustBonding = TrustBonding(address(trustBondingProxy));
-        console2.log("TrustBonding proxy address: ", address(trustBondingProxy));
 
         // Deploy SatelliteEmissionsController implementation and proxy
         SatelliteEmissionsController satelliteEmissionsControllerImpl = new SatelliteEmissionsController();
-        console2.log("SatelliteEmissionsController Implementation", address(satelliteEmissionsControllerImpl));
 
         satelliteEmissionsControllerProxy =
             new TransparentUpgradeableProxy(address(satelliteEmissionsControllerImpl), users.admin, "");
         protocol.satelliteEmissionsController = SatelliteEmissionsController(payable(satelliteEmissionsControllerProxy));
-        console2.log("SatelliteEmissionsController Proxy", address(satelliteEmissionsControllerProxy));
 
         // Deploy BondingCurveRegistry implementation and proxy
         bondingCurveRegistryImpl = new BondingCurveRegistry();
@@ -238,7 +227,6 @@ abstract contract BaseTest is Modifiers, Test {
             abi.encodeWithSelector(BondingCurveRegistry.initialize.selector, users.admin)
         );
         protocol.curveRegistry = BondingCurveRegistry(address(bondingCurveRegistryProxy));
-        console2.log("BondingCurveRegistry address: ", address(bondingCurveRegistryProxy));
 
         // Deploy bonding curve implementations
         LinearCurve linearCurveImpl = new LinearCurve();
@@ -267,18 +255,11 @@ abstract contract BaseTest is Modifiers, Test {
         );
         offsetProgressiveCurve = OffsetProgressiveCurve(address(offsetProgressiveCurveProxy));
 
-        console2.log("LinearCurve address: ", address(linearCurve));
-        console2.log("OffsetProgressiveCurve address: ", address(offsetProgressiveCurve));
-        console2.log("ProgressiveCurve address: ", address(progressiveCurve));
-
         // Add curves to registry
         resetPrank(users.admin);
         protocol.curveRegistry.addBondingCurve(address(linearCurve));
         protocol.curveRegistry.addBondingCurve(address(offsetProgressiveCurve));
         protocol.curveRegistry.addBondingCurve(address(progressiveCurve));
-        console2.log("Added LinearCurve to registry with ID: 1");
-        console2.log("Added OffsetProgressiveCurve to registry with ID: 2");
-        console2.log("Added ProgressiveCurve to registry with ID: 3");
 
         // Label contracts for debugging
         vm.label(address(multiVaultImpl), "MultiVaultImpl");
@@ -301,42 +282,41 @@ abstract contract BaseTest is Modifiers, Test {
         MetalayerRouterMock metaERC20Router = new MetalayerRouterMock(address(IIGP));
         MetaERC20HubOrSpokeMock metaERC20HubOrSpoke = new MetaERC20HubOrSpokeMock(address(metaERC20Router));
 
-        protocol.satelliteEmissionsController
-            .initialize(
-                users.admin,
-                address(1), // BaseEmissionsController placeholder
-                MetaERC20DispatchInit({
-                    hubOrSpoke: address(metaERC20HubOrSpoke),
-                    recipientDomain: 1,
-                    gasLimit: 125_000,
-                    finalityState: FinalityState.INSTANT
-                }),
-                CoreEmissionsControllerInit({
-                    startTimestamp: block.timestamp,
-                    emissionsLength: EMISSIONS_CONTROLLER_EPOCH_LENGTH,
-                    emissionsPerEpoch: EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH,
-                    emissionsReductionCliff: EMISSIONS_CONTROLLER_CLIFF,
-                    emissionsReductionBasisPoints: EMISSIONS_CONTROLLER_REDUCTION_BP
-                })
-            );
+        protocol.satelliteEmissionsController.initialize(
+            users.admin,
+            address(1), // BaseEmissionsController placeholder
+            MetaERC20DispatchInit({
+                hubOrSpoke: address(metaERC20HubOrSpoke),
+                recipientDomain: 1,
+                gasLimit: 125_000,
+                finalityState: FinalityState.INSTANT
+            }),
+            CoreEmissionsControllerInit({
+                startTimestamp: block.timestamp,
+                emissionsLength: EMISSIONS_CONTROLLER_EPOCH_LENGTH,
+                emissionsPerEpoch: EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH,
+                emissionsReductionCliff: EMISSIONS_CONTROLLER_CLIFF,
+                emissionsReductionBasisPoints: EMISSIONS_CONTROLLER_REDUCTION_BP
+            })
+        );
 
         protocol.satelliteEmissionsController.setTrustBonding(address(protocol.trustBonding));
-        protocol.satelliteEmissionsController
-            .grantRole(protocol.satelliteEmissionsController.CONTROLLER_ROLE(), address((trustBondingProxy)));
+        protocol.satelliteEmissionsController.grantRole(
+            protocol.satelliteEmissionsController.CONTROLLER_ROLE(), address((trustBondingProxy))
+        );
 
         // Initialize AtomWalletFactory
         atomWalletFactory.initialize(address(protocol.multiVault));
 
-        protocol.trustBonding
-            .initialize(
-                users.admin, // owner
-                users.timelock, // timelock
-                address(protocol.wrappedTrust), // trustToken
-                TRUST_BONDING_EPOCH_LENGTH, // epochLength (minimum 2 weeks required)
-                address(protocol.satelliteEmissionsController), // satelliteEmissionsController
-                TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound (50%)
-                TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound (30%)
-            );
+        protocol.trustBonding.initialize(
+            users.admin, // owner
+            users.timelock, // timelock
+            address(protocol.wrappedTrust), // trustToken
+            TRUST_BONDING_EPOCH_LENGTH, // epochLength (minimum 2 weeks required)
+            address(protocol.satelliteEmissionsController), // satelliteEmissionsController
+            TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound (50%)
+            TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound (30%)
+        );
 
         // Prepare configuration structs with deployed addresses
         GeneralConfig memory generalConfig = _getDefaultGeneralConfig();
@@ -354,15 +334,14 @@ abstract contract BaseTest is Modifiers, Test {
         bondingCurveConfig.registry = address(protocol.curveRegistry);
 
         // Initialize MultiVault
-        protocol.multiVault
-            .initialize(
-                generalConfig,
-                _getDefaultAtomConfig(),
-                _getDefaultTripleConfig(),
-                walletConfig,
-                _getDefaultVaultFees(),
-                bondingCurveConfig
-            );
+        protocol.multiVault.initialize(
+            generalConfig,
+            _getDefaultAtomConfig(),
+            _getDefaultTripleConfig(),
+            walletConfig,
+            _getDefaultVaultFees(),
+            bondingCurveConfig
+        );
 
         resetPrank(users.timelock);
         protocol.trustBonding.setMultiVault(address(protocol.multiVault));
@@ -403,7 +382,8 @@ abstract contract BaseTest is Modifiers, Test {
 
     function _getDefaultAtomConfig() internal returns (AtomConfig memory) {
         return AtomConfig({
-            atomCreationProtocolFee: ATOM_CREATION_PROTOCOL_FEE, atomWalletDepositFee: ATOM_WALLET_DEPOSIT_FEE
+            atomCreationProtocolFee: ATOM_CREATION_PROTOCOL_FEE,
+            atomWalletDepositFee: ATOM_WALLET_DEPOSIT_FEE
         });
     }
 
@@ -431,7 +411,11 @@ abstract contract BaseTest is Modifiers, Test {
         return BondingCurveConfig({ registry: address(0), defaultCurveId: 1 });
     }
 
-    function createAtomWithDeposit(bytes memory atomData, uint256 depositAmount, address creator)
+    function createAtomWithDeposit(
+        bytes memory atomData,
+        uint256 depositAmount,
+        address creator
+    )
         internal
         returns (bytes32)
     {
@@ -444,7 +428,11 @@ abstract contract BaseTest is Modifiers, Test {
         return atomIds[0];
     }
 
-    function createSimpleAtom(string memory atomString, uint256 depositAmount, address creator)
+    function createSimpleAtom(
+        string memory atomString,
+        uint256 depositAmount,
+        address creator
+    )
         internal
         returns (bytes32)
     {
@@ -474,7 +462,11 @@ abstract contract BaseTest is Modifiers, Test {
     }
 
     // Helper function to create multiple atoms with uniform costs
-    function createAtomsWithUniformCost(bytes[] memory atomDataArray, uint256 costPerAtom, address creator)
+    function createAtomsWithUniformCost(
+        bytes[] memory atomDataArray,
+        uint256 costPerAtom,
+        address creator
+    )
         internal
         returns (bytes32[] memory)
     {
@@ -577,7 +569,11 @@ abstract contract BaseTest is Modifiers, Test {
     }
 
     // Helper function to create multiple atoms and return their IDs
-    function createMultipleAtoms(string[] memory atomStrings, uint256[] memory costs, address creator)
+    function createMultipleAtoms(
+        string[] memory atomStrings,
+        uint256[] memory costs,
+        address creator
+    )
         internal
         returns (bytes32[] memory)
     {

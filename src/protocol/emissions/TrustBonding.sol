@@ -97,10 +97,14 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
      * @notice Modifier to restrict access to functions to only the timelock address
      */
     modifier onlyTimelock() {
+        _onlyTimelock();
+        _;
+    }
+
+    function _onlyTimelock() internal {
         if (msg.sender != timelock) {
             revert TrustBonding_OnlyTimelock();
         }
-        _;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -237,10 +241,8 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         uint256 userRewards;
         uint256 personalUtilization;
 
-        if (_currEpoch > 0) {
-            userRewards = _userEligibleRewardsForEpoch(account, _currEpoch);
-            personalUtilization = _getPersonalUtilizationRatio(account, _currEpoch);
-        }
+        userRewards = _userEligibleRewardsForEpoch(account, _currEpoch);
+        personalUtilization = _getPersonalUtilizationRatio(account, _currEpoch);
 
         LockedBalance memory userLocked = locked[account];
         return UserInfo({
@@ -280,9 +282,8 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
 
         uint256 prevEpoch = _currEpoch - 1;
         uint256 userClaimedReward = userClaimedRewardsForEpoch[account][prevEpoch];
-        uint256 userEligibleReward =
-            _userEligibleRewardsForEpoch(account, prevEpoch) * _getPersonalUtilizationRatio(account, prevEpoch)
-            / BASIS_POINTS_DIVISOR;
+        uint256 userEligibleReward = _userEligibleRewardsForEpoch(account, prevEpoch)
+            * _getPersonalUtilizationRatio(account, prevEpoch) / BASIS_POINTS_DIVISOR;
 
         if (userEligibleReward <= userClaimedReward) {
             return 0;
@@ -589,7 +590,11 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
      * @param lowerBound The lower bound for the utilization ratio
      * @return The normalized utilization ratio for the given parameters
      */
-    function _getNormalizedUtilizationRatio(uint256 delta, uint256 target, uint256 lowerBound)
+    function _getNormalizedUtilizationRatio(
+        uint256 delta,
+        uint256 target,
+        uint256 lowerBound
+    )
         internal
         pure
         returns (uint256)

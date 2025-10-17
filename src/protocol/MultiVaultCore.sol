@@ -3,7 +3,7 @@ pragma solidity 0.8.29;
 
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
-import { IMultiVault, VaultType } from "src/interfaces/IMultiVault.sol";
+import { VaultType } from "src/interfaces/IMultiVault.sol";
 import {
     IMultiVaultCore,
     GeneralConfig,
@@ -206,7 +206,11 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
     }
 
     /// @inheritdoc IMultiVaultCore
-    function calculateTripleId(bytes32 subjectId, bytes32 predicateId, bytes32 objectId)
+    function calculateTripleId(
+        bytes32 subjectId,
+        bytes32 predicateId,
+        bytes32 objectId
+    )
         external
         pure
         returns (bytes32)
@@ -215,7 +219,11 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
     }
 
     /// @inheritdoc IMultiVaultCore
-    function calculateCounterTripleId(bytes32 subjectId, bytes32 predicateId, bytes32 objectId)
+    function calculateCounterTripleId(
+        bytes32 subjectId,
+        bytes32 predicateId,
+        bytes32 objectId
+    )
         external
         pure
         returns (bytes32)
@@ -271,7 +279,11 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
     /// @param predicateId The atom id of the predicate
     /// @param objectId The atom id of the object
     /// @return id The calculated triple id
-    function _calculateTripleId(bytes32 subjectId, bytes32 predicateId, bytes32 objectId)
+    function _calculateTripleId(
+        bytes32 subjectId,
+        bytes32 predicateId,
+        bytes32 objectId
+    )
         internal
         pure
         returns (bytes32)

@@ -219,7 +219,11 @@ contract CoreEmissionsController is ICoreEmissionsController {
      * @param cliffsToApply Number of cliff reductions to apply
      * @return Final emissions after all cliff reductions
      */
-    function _applyCliffReductions(uint256 baseEmissions, uint256 retentionFactor, uint256 cliffsToApply)
+    function _applyCliffReductions(
+        uint256 baseEmissions,
+        uint256 retentionFactor,
+        uint256 cliffsToApply
+    )
         internal
         pure
         returns (uint256)

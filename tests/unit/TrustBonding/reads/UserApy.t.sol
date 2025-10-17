@@ -6,6 +6,7 @@ import { console, Vm } from "forge-std/src/Test.sol";
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { TrustBondingBase } from "tests/unit/TrustBonding/TrustBondingBase.t.sol";
 import { ITrustBonding, UserInfo } from "src/interfaces/ITrustBonding.sol";
+import { ICoreEmissionsController } from "src/interfaces/ICoreEmissionsController.sol";
 
 /// @dev forge test --match-path 'tests/unit/TrustBonding/reads/UserApy.t.sol'
 
@@ -115,7 +116,7 @@ contract TrustBondingUserApyTest is TrustBondingBase {
         uint256 minTime = protocol.trustBonding.MINTIME();
         uint256 unlockTime = _calculateUnlockTime(minTime);
 
-        _createLockWithDuration(users.alice, DEFAULT_DEPOSIT_AMOUNT, unlockTime);
+        _createLockWithDuration(users.alice, MEDIUM_DEPOSIT_AMOUNT, unlockTime);
 
         (uint256 currentApy, uint256 maxApy) = protocol.trustBonding.getUserApy(users.alice);
 
@@ -132,7 +133,7 @@ contract TrustBondingUserApyTest is TrustBondingBase {
         uint256 maxTime = protocol.trustBonding.MAXTIME();
         uint256 unlockTime = _calculateUnlockTime(maxTime);
 
-        _createLockWithDuration(users.alice, DEFAULT_DEPOSIT_AMOUNT, unlockTime);
+        _createLockWithDuration(users.alice, MEDIUM_DEPOSIT_AMOUNT, unlockTime);
 
         (uint256 currentApy, uint256 maxApy) = protocol.trustBonding.getUserApy(users.alice);
 
@@ -168,8 +169,8 @@ contract TrustBondingUserApyTest is TrustBondingBase {
      * @dev Both users should have same APY
      */
     function test_getUserApy_twoUsersEqualLocks() external {
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
-        _createLock(users.bob, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
+        _createLock(users.bob, MEDIUM_DEPOSIT_AMOUNT);
 
         (uint256 aliceCurrentApy, uint256 aliceMaxApy) = protocol.trustBonding.getUserApy(users.alice);
         (uint256 bobCurrentApy, uint256 bobMaxApy) = protocol.trustBonding.getUserApy(users.bob);
@@ -253,6 +254,17 @@ contract TrustBondingUserApyTest is TrustBondingBase {
         _setActiveEpoch(users.alice, 0, 2);
 
         (uint256 currentApy, uint256 maxApy) = protocol.trustBonding.getUserApy(users.alice);
+        uint256 epochsPerYear = protocol.trustBonding.epochsPerYear();
+        uint256 emissionsForEpoch = protocol.trustBonding.emissionsForEpoch(2);
+        uint256 maxEmissionsForEpoch = protocol.satelliteEmissionsController.getEmissionsAtEpoch(2);
+
+        uint256 totalEmissionsPerYear = epochsPerYear * emissionsForEpoch;
+        console.log("Epochs Per Year:", epochsPerYear);
+        console.log("Emissions For Epoch:", emissionsForEpoch);
+        console.log("Max Emissions For Epoch:", maxEmissionsForEpoch);
+        console.log("Total Emissions Per Year:", totalEmissionsPerYear);
+        console.log("Current APY:", currentApy);
+        console.log("Max APY:", maxApy);
 
         assertGt(currentApy, 0, "Current APY should be greater than 0");
         assertEq(currentApy, maxApy, "Current APY should equal max APY with full utilization");
@@ -277,8 +289,8 @@ contract TrustBondingUserApyTest is TrustBondingBase {
         _advanceToEpoch(2);
         int256 userUtilizationEpoch2 = 500 ether;
         _setUserUtilizationForEpoch(users.alice, 2, userUtilizationEpoch2);
-        _setActiveEpoch(users.alice,0, 2); // Ensure last active epoch is updated
-        _setActiveEpoch(users.alice,1, 1); // Ensure previous active epoch is set correctly
+        _setActiveEpoch(users.alice, 0, 2); // Ensure last active epoch is updated
+        _setActiveEpoch(users.alice, 1, 1); // Ensure previous active epoch is set correctly
 
         (uint256 currentApy, uint256 maxApy) = protocol.trustBonding.getUserApy(users.alice);
 
@@ -406,8 +418,8 @@ contract TrustBondingUserApyTest is TrustBondingBase {
         _setUserClaimedRewardsForEpoch(users.alice, 1, claimedInEpoch1);
         int256 userUtilizationEpoch1 = 100 ether;
         _setUserUtilizationForEpoch(users.alice, 1, userUtilizationEpoch1);
-        _setActiveEpoch(users.alice,0, 1); // Ensure last active epoch is updated
-        _setActiveEpoch(users.alice,1, 0); // Ensure previous active epoch is set correctly
+        _setActiveEpoch(users.alice, 0, 1); // Ensure last active epoch is updated
+        _setActiveEpoch(users.alice, 1, 0); // Ensure previous active epoch is set correctly
 
         (uint256 currentApy1, uint256 maxApy1) = protocol.trustBonding.getUserApy(users.alice);
 
@@ -417,8 +429,8 @@ contract TrustBondingUserApyTest is TrustBondingBase {
         _setUserClaimedRewardsForEpoch(users.alice, 2, claimedInEpoch2);
         int256 userUtilizationEpoch2 = userUtilizationEpoch1 + 500 ether;
         _setUserUtilizationForEpoch(users.alice, 2, userUtilizationEpoch2);
-        _setActiveEpoch(users.alice,0, 2); // Ensure last active epoch is updated
-        _setActiveEpoch(users.alice,1, 1); // Ensure previous active epoch is set correctly
+        _setActiveEpoch(users.alice, 0, 2); // Ensure last active epoch is updated
+        _setActiveEpoch(users.alice, 1, 1); // Ensure previous active epoch is set correctly
 
         (uint256 currentApy2, uint256 maxApy2) = protocol.trustBonding.getUserApy(users.alice);
 
@@ -428,8 +440,8 @@ contract TrustBondingUserApyTest is TrustBondingBase {
         _setUserClaimedRewardsForEpoch(users.alice, 3, claimedInEpoch3);
         int256 userUtilizationEpoch3 = userUtilizationEpoch2 + 200 ether;
         _setUserUtilizationForEpoch(users.alice, 3, userUtilizationEpoch3);
-        _setActiveEpoch(users.alice,0, 3); // Ensure last active epoch is updated
-        _setActiveEpoch(users.alice,1, 2); // Ensure previous active epoch is set correctly
+        _setActiveEpoch(users.alice, 0, 3); // Ensure last active epoch is updated
+        _setActiveEpoch(users.alice, 1, 2); // Ensure previous active epoch is set correctly
 
         (uint256 currentApy3, uint256 maxApy3) = protocol.trustBonding.getUserApy(users.alice);
 
@@ -437,8 +449,8 @@ contract TrustBondingUserApyTest is TrustBondingBase {
         _advanceToEpoch(4);
         int256 userUtilizationEpoch4 = userUtilizationEpoch3 + 700 ether;
         _setUserUtilizationForEpoch(users.alice, 4, userUtilizationEpoch4);
-        _setActiveEpoch(users.alice,0, 4); // Ensure last active epoch is updated
-        _setActiveEpoch(users.alice,1, 3); // Ensure previous active epoch is set correctly
+        _setActiveEpoch(users.alice, 0, 4); // Ensure last active epoch is updated
+        _setActiveEpoch(users.alice, 1, 3); // Ensure previous active epoch is set correctly
 
         (uint256 currentApy4, uint256 maxApy4) = protocol.trustBonding.getUserApy(users.alice);
 
@@ -459,16 +471,19 @@ contract TrustBondingUserApyTest is TrustBondingBase {
      * @dev Verifies that each user's APY is independent based on their own utilization
      */
     function test_getUserApy_multipleUsersDifferentUtilization() external {
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
-        _createLock(users.bob, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
+        _createLock(users.bob, MEDIUM_DEPOSIT_AMOUNT);
+
+        uint256 CLAIMED_AMOUNT = 500 ether;
+        int256 UTILIZATION_AMOUNT = 500 ether;
 
         // Epoch 1: Both 100%
         _advanceToEpoch(1);
-        uint256 claimedInEpoch1 = 500 ether;
+        uint256 claimedInEpoch1 = CLAIMED_AMOUNT;
         _setUserClaimedRewardsForEpoch(users.alice, 1, claimedInEpoch1);
         _setUserClaimedRewardsForEpoch(users.bob, 1, claimedInEpoch1);
 
-        int256 utilizationEpoch1 = 100 ether;
+        int256 utilizationEpoch1 = UTILIZATION_AMOUNT;
         _setUserUtilizationForEpoch(users.alice, 1, utilizationEpoch1);
         _setUserUtilizationForEpoch(users.bob, 1, utilizationEpoch1);
 
@@ -476,22 +491,129 @@ contract TrustBondingUserApyTest is TrustBondingBase {
         _advanceToEpoch(2);
 
         // Alice: High utilization (500/500 = 100%)
-        int256 aliceUtilizationEpoch2 = utilizationEpoch1 + 500 ether;
+        int256 aliceUtilizationEpoch2 = utilizationEpoch1 + UTILIZATION_AMOUNT;
         _setUserUtilizationForEpoch(users.alice, 2, aliceUtilizationEpoch2);
-        _setActiveEpoch(users.alice,0, 2); // Ensure last active epoch is updated
+        _setActiveEpoch(users.alice, 0, 2); // Ensure last active epoch is updated
 
         // Bob: Low utilization (100/500 = 20%)
         int256 bobUtilizationEpoch2 = utilizationEpoch1 + 100 ether;
         _setUserUtilizationForEpoch(users.bob, 2, bobUtilizationEpoch2);
-        _setActiveEpoch(users.alice,0, 2); // Ensure last active epoch is updated
+        _setActiveEpoch(users.alice, 0, 2); // Ensure last active epoch is updated
 
         (uint256 aliceCurrentApy, uint256 aliceMaxApy) = protocol.trustBonding.getUserApy(users.alice);
         (uint256 bobCurrentApy, uint256 bobMaxApy) = protocol.trustBonding.getUserApy(users.bob);
+
+        uint256 aliceExpectedApy = _calculateUserApy(users.alice, 2);
+        uint256 bobExpectedApy = _calculateUserApy(users.bob, 2);
+
+        assertEq(aliceCurrentApy, aliceExpectedApy, "Alice's current APY should match expected");
+        assertEq(bobCurrentApy, bobExpectedApy, "Bob's current APY should match expected");
 
         // Alice should have higher current APY due to higher utilization
         assertEq(aliceCurrentApy, aliceMaxApy, "Alice should have 100% utilization");
         assertLt(bobCurrentApy, bobMaxApy, "Bob should have partial utilization");
         assertGt(aliceCurrentApy, bobCurrentApy, "Alice's current APY should be higher than Bob's");
+
+        // Max APY should be same (same lock amount)
+        assertEq(aliceMaxApy, bobMaxApy, "Max APY should be equal with equal locks");
+    }
+
+    function test_getUserApy_multipleUsersDifferentStakingLength() external {
+        _createLockWithDurationWithBlockTimestamp(users.alice, MEDIUM_DEPOSIT_AMOUNT, TWO_YEARS);
+
+        _createLockWithDurationWithBlockTimestamp(users.bob, MEDIUM_DEPOSIT_AMOUNT, ONE_YEAR);
+
+        uint256 CLAIMED_AMOUNT = 500 ether;
+        int256 UTILIZATION_AMOUNT = 500 ether;
+
+        // Epoch 1: Both 100%
+        _advanceToEpoch(1);
+        uint256 claimedInEpoch1 = CLAIMED_AMOUNT;
+        _setUserClaimedRewardsForEpoch(users.alice, 1, claimedInEpoch1);
+        _setUserClaimedRewardsForEpoch(users.bob, 1, claimedInEpoch1);
+
+        int256 utilizationEpoch1 = UTILIZATION_AMOUNT;
+        _setUserUtilizationForEpoch(users.alice, 1, utilizationEpoch1);
+        _setUserUtilizationForEpoch(users.bob, 1, utilizationEpoch1);
+
+        // Epoch 2: Alice has high utilization, Bob has low
+        _advanceToEpoch(2);
+
+        // Alice: High utilization (500/500 = 100%)
+        int256 aliceUtilizationEpoch2 = utilizationEpoch1 + UTILIZATION_AMOUNT;
+        _setUserUtilizationForEpoch(users.alice, 2, aliceUtilizationEpoch2);
+        _setActiveEpoch(users.alice, 0, 2); // Ensure last active epoch is updated
+
+        // Bob: Low utilization (500/500 = 100%)
+        int256 bobUtilizationEpoch2 = utilizationEpoch1 + UTILIZATION_AMOUNT;
+        _setUserUtilizationForEpoch(users.bob, 2, bobUtilizationEpoch2);
+        _setActiveEpoch(users.alice, 0, 2); // Ensure last active epoch is updated
+
+        (uint256 aliceCurrentApy, uint256 aliceMaxApy) = protocol.trustBonding.getUserApy(users.alice);
+        (uint256 bobCurrentApy, uint256 bobMaxApy) = protocol.trustBonding.getUserApy(users.bob);
+
+        uint256 aliceExpectedApy = _calculateUserApy(users.alice, 2);
+        uint256 bobExpectedApy = _calculateUserApy(users.bob, 2);
+
+        assertEq(aliceCurrentApy, aliceExpectedApy, "Alice's current APY should match expected");
+        assertEq(bobCurrentApy, bobExpectedApy, "Bob's current APY should match expected");
+
+        // Alice should have higher current APY due to higher utilization
+        assertEq(aliceCurrentApy, aliceMaxApy, "Alice should have 100% utilization");
+        assertLt(bobCurrentApy, bobMaxApy, "Bob current APY should be lower due to shorter lock");
+        assertGt(aliceCurrentApy, bobCurrentApy, "Alice's current APY should be higher than Bob's");
+
+        // Max APY should be same (same lock amount)
+        assertGt(aliceMaxApy, bobMaxApy, "Alice's max APY should be higher due to longer lock");
+        console.log("Alice Max APY:", aliceMaxApy);
+        console.log("Bob Max APY:", bobMaxApy);
+    }
+
+    function test_getUserApy_multipleUsersMatchingStakingAndUtilization() external {
+        _createLockWithDurationWithBlockTimestamp(users.alice, MEDIUM_DEPOSIT_AMOUNT, TWO_YEARS);
+        _createLockWithDurationWithBlockTimestamp(users.bob, MEDIUM_DEPOSIT_AMOUNT, TWO_YEARS);
+
+        uint256 CLAIMED_AMOUNT = 500 ether;
+        int256 UTILIZATION_AMOUNT = 500 ether;
+
+        // Epoch 1: Both 100%
+        _advanceToEpoch(1);
+        uint256 claimedInEpoch1 = CLAIMED_AMOUNT;
+        _setUserClaimedRewardsForEpoch(users.alice, 1, claimedInEpoch1);
+        _setUserClaimedRewardsForEpoch(users.bob, 1, claimedInEpoch1);
+
+        int256 utilizationEpoch1 = UTILIZATION_AMOUNT;
+        _setUserUtilizationForEpoch(users.alice, 1, utilizationEpoch1);
+        _setUserUtilizationForEpoch(users.bob, 1, utilizationEpoch1);
+
+        // Epoch 2: Alice has high utilization, Bob has low
+        _advanceToEpoch(2);
+
+        // Alice: High utilization (500/500 = 100%)
+        int256 aliceUtilizationEpoch2 = utilizationEpoch1 + UTILIZATION_AMOUNT;
+        _setUserUtilizationForEpoch(users.alice, 2, aliceUtilizationEpoch2);
+        _setActiveEpoch(users.alice, 0, 2);
+        _setActiveEpoch(users.alice, 1, 1);
+
+        // Bob: Low utilization (500/500 = 100%)
+        int256 bobUtilizationEpoch2 = utilizationEpoch1 + UTILIZATION_AMOUNT;
+        _setUserUtilizationForEpoch(users.bob, 2, bobUtilizationEpoch2);
+        _setActiveEpoch(users.bob, 0, 2);
+        _setActiveEpoch(users.bob, 1, 1); // Ensure last active epoch is updated
+
+        (uint256 aliceCurrentApy, uint256 aliceMaxApy) = protocol.trustBonding.getUserApy(users.alice);
+        (uint256 bobCurrentApy, uint256 bobMaxApy) = protocol.trustBonding.getUserApy(users.bob);
+
+        uint256 aliceExpectedApy = _calculateUserApy(users.alice, 2);
+        uint256 bobExpectedApy = _calculateUserApy(users.bob, 2);
+
+        assertEq(aliceCurrentApy, aliceExpectedApy, "Alice's current APY should match expected");
+        assertEq(bobCurrentApy, bobExpectedApy, "Bob's current APY should match expected");
+
+        // Alice should have higher current APY due to higher utilization
+        assertEq(aliceCurrentApy, aliceMaxApy, "Alice should have 100% utilization");
+        assertEq(bobCurrentApy, bobMaxApy, "Bob should have partial utilization");
+        assertEq(aliceCurrentApy, bobCurrentApy, "Alice's current APY should be equal to Bob's");
 
         // Max APY should be same (same lock amount)
         assertEq(aliceMaxApy, bobMaxApy, "Max APY should be equal with equal locks");
@@ -578,14 +700,14 @@ contract TrustBondingUserApyTest is TrustBondingBase {
      * @dev APY should adjust based on new lock amount
      */
     function test_getUserApy_increaseLockAmount() external {
-        _createLock(users.alice, DEFAULT_DEPOSIT_AMOUNT);
+        _createLock(users.alice, MEDIUM_DEPOSIT_AMOUNT);
 
         (uint256 initialCurrentApy, uint256 initialMaxApy) = protocol.trustBonding.getUserApy(users.alice);
 
         // Increase lock - need to approve first
         vm.startPrank(users.alice);
-        protocol.wrappedTrust.approve(address(protocol.trustBonding), DEFAULT_DEPOSIT_AMOUNT);
-        protocol.trustBonding.increase_amount(DEFAULT_DEPOSIT_AMOUNT);
+        protocol.wrappedTrust.approve(address(protocol.trustBonding), MEDIUM_DEPOSIT_AMOUNT);
+        protocol.trustBonding.increase_amount(MEDIUM_DEPOSIT_AMOUNT);
         vm.stopPrank();
 
         (uint256 newCurrentApy, uint256 newMaxApy) = protocol.trustBonding.getUserApy(users.alice);
@@ -593,5 +715,27 @@ contract TrustBondingUserApyTest is TrustBondingBase {
         // APY should decrease (same rewards, more locked)
         assertLt(newCurrentApy, initialCurrentApy, "Current APY should decrease with increased lock");
         assertLt(newMaxApy, initialMaxApy, "Max APY should decrease with increased lock");
+    }
+
+    function _calculateApyManually(
+        uint256 userRewards,
+        uint256 epochsPerYear,
+        uint256 lockAmount
+    )
+        internal
+        view
+        returns (uint256)
+    {
+        return (userRewards * epochsPerYear * BASIS_POINTS_DIVISOR) / lockAmount;
+    }
+
+    function _calculateUserApy(address user, uint256 epoch) internal view returns (uint256) {
+        (int128 lockedAmount, uint256 unlockTime) = protocol.trustBonding.locked(user);
+        uint256 epochsPerYear = protocol.trustBonding.epochsPerYear();
+        uint256 personalUtilization = protocol.trustBonding.getPersonalUtilizationRatio(user, epoch);
+        uint256 userCurrentRewards = protocol.trustBonding.userEligibleRewardsForEpoch(user, epoch);
+        uint256 userApy = (userCurrentRewards * epochsPerYear * personalUtilization) / uint256(uint128(lockedAmount));
+        console.log("User APY for address %s: %s", user, userApy);
+        return userApy;
     }
 }

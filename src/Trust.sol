@@ -28,10 +28,14 @@ contract Trust is ITrust, TrustToken, AccessControlUpgradeable {
 
     /// @notice Modifier to restrict access to only the BaseEmissionsController
     modifier onlyBaseEmissionsController() {
+        _onlyBaseEmissionsController();
+        _;
+    }
+
+    function _onlyBaseEmissionsController() internal {
         if (msg.sender != baseEmissionsController) {
             revert Trust_OnlyBaseEmissionsController();
         }
-        _;
     }
 
     /* =================================================== */

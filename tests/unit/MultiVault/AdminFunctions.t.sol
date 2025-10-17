@@ -315,7 +315,7 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
             atomWarden: address(0xCAFE),
             atomWalletBeacon: address(0xFEED),
             atomWalletFactory: atomWalletFactory // leave same
-        });
+         });
 
         resetPrank({ msgSender: users.admin });
         protocol.multiVault.setWalletConfig(wc);

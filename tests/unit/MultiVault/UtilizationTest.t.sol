@@ -43,7 +43,11 @@ contract UtilizationTest is BaseTest {
             int256(amount),
             "Personal utilization delta should equal gross deposit"
         );
-        assertEq(protocol.multiVault.getUserLastActiveEpoch(users.alice), epoch, "getUserLastActiveEpoch set to current epoch");
+        assertEq(
+            protocol.multiVault.getUserLastActiveEpoch(users.alice),
+            epoch,
+            "getUserLastActiveEpoch set to current epoch"
+        );
     }
 
     /*//////////////////////////////////////////////////////////////
