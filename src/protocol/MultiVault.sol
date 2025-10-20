@@ -78,7 +78,7 @@ contract MultiVault is
     // TRUST
     // deposited and redeemed by the user
     mapping(address user => mapping(uint256 epoch => int256 utilizationAmount)) public personalUtilization;
-    
+
     /// @notice Mapping of the last 3 active epochs for each user
     mapping(address user => uint256[3] epoch) public userEpochHistory;
 
@@ -231,10 +231,11 @@ contract MultiVault is
     }
 
     /// @inheritdoc IMultiVault
-    function getUserUtilization(address user, uint256 epoch) external view returns (int256) {
+    function getUserUtilizationForPreviousActiveEpoch(address user, uint256 epoch) external view returns (int256) {
         uint256 _currentEpoch = _currentEpoch();
 
-        // Revert if calling with future epoch or during epoch 0
+        // Revert if calling with future epoch or during epoch 0, since during epoch 0 there is no previous epoch in
+        // which a user could've been active
         if (_currentEpoch == 0 || epoch > _currentEpoch) revert MultiVault_InvalidEpoch();
 
         // If calling with previous global epoch, return utilization for that epoch
@@ -243,7 +244,7 @@ contract MultiVault is
         }
 
         uint256[3] memory _userEpochHistory = userEpochHistory[user];
-        
+
         // Case A: check most recent activity
         if (_userEpochHistory[0] <= epoch) {
             return personalUtilization[user][_userEpochHistory[0]];
@@ -302,10 +303,7 @@ contract MultiVault is
     }
 
     /// @inheritdoc IMultiVault
-    function previewAtomCreate(
-        bytes32 termId,
-        uint256 assets
-    )
+    function previewAtomCreate(bytes32 termId, uint256 assets)
         external
         view
         returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees)
@@ -314,10 +312,7 @@ contract MultiVault is
     }
 
     /// @inheritdoc IMultiVault
-    function previewTripleCreate(
-        bytes32 termId,
-        uint256 assets
-    )
+    function previewTripleCreate(bytes32 termId, uint256 assets)
         external
         view
         returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees)
@@ -759,7 +754,9 @@ contract MultiVault is
             _accumulateAtomWalletFees(termId, assetsAfterMinSharesCost);
         } else {
             if (_shouldChargeAtomDepositFraction(termId)) {
-                _increaseProRataVaultsAssets(termId, _feeOnRaw(assetsAfterMinSharesCost, tripleConfig.atomDepositFractionForTriple));
+                _increaseProRataVaultsAssets(
+                    termId, _feeOnRaw(assetsAfterMinSharesCost, tripleConfig.atomDepositFractionForTriple)
+                );
             }
         }
 
@@ -975,10 +972,7 @@ contract MultiVault is
     /// @inheritdoc IMultiVault
     function setTripleConfig(TripleConfig memory _tripleConfig) external onlyRole(DEFAULT_ADMIN_ROLE) {
         tripleConfig = _tripleConfig;
-        emit TripleConfigUpdated(
-            _tripleConfig.tripleCreationProtocolFee,
-            _tripleConfig.atomDepositFractionForTriple
-        );
+        emit TripleConfigUpdated(_tripleConfig.tripleCreationProtocolFee, _tripleConfig.atomDepositFractionForTriple);
     }
 
     /// @inheritdoc IMultiVault
@@ -1075,10 +1069,7 @@ contract MultiVault is
     /// @return shares the number of shares that would be minted for the deposit
     /// @return assetsAfterFixedFees the assets remaining after fixed fees (atom/triple cost)
     /// @return assetsAfterFees the assets remaining after all fees
-    function _calculateAtomCreate(
-        bytes32 termId,
-        uint256 assets
-    )
+    function _calculateAtomCreate(bytes32 termId, uint256 assets)
         internal
         view
         returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees)
@@ -1135,9 +1126,13 @@ contract MultiVault is
         // If it's an initial deposit into a non-default curve vault, we calculate user's shares as if minShare was
         // already minted
         uint256 shares = _isNewVault(termId, curveId)
-            ? IBondingCurveRegistry(bondingCurveConfig.registry).previewDeposit(
-                assetsAfterFees, _minAssetsForCurve(curveId, generalConfig.minShare), generalConfig.minShare, curveId
-            )
+            ? IBondingCurveRegistry(bondingCurveConfig.registry)
+                .previewDeposit(
+                    assetsAfterFees,
+                    _minAssetsForCurve(curveId, generalConfig.minShare),
+                    generalConfig.minShare,
+                    curveId
+                )
             : _convertToShares(termId, curveId, assetsAfterFees);
         return (shares, assetsAfterMinSharesCost, assetsAfterFees);
     }
@@ -1200,17 +1195,22 @@ contract MultiVault is
 
         uint256 protocolFee = _feeOnRaw(assetsAfterMinSharesCost, vaultFees.protocolFee);
         uint256 entryFee = _shouldChargeFees(termId) ? _feeOnRaw(assetsAfterMinSharesCost, vaultFees.entryFee) : 0;
-        uint256 atomDepositFraction =
-            _shouldChargeAtomDepositFraction(termId) ? _feeOnRaw(assetsAfterMinSharesCost, tripleConfig.atomDepositFractionForTriple) : 0;
+        uint256 atomDepositFraction = _shouldChargeAtomDepositFraction(termId)
+            ? _feeOnRaw(assetsAfterMinSharesCost, tripleConfig.atomDepositFractionForTriple)
+            : 0;
 
         assetsAfterFees = assetsAfterMinSharesCost - protocolFee - entryFee - atomDepositFraction;
 
         // If it's an initial deposit into a non-default curve vault, we calculate user's shares as if minShare was
         // already minted
         uint256 shares = _isNewVault(termId, curveId)
-            ? IBondingCurveRegistry(bondingCurveConfig.registry).previewDeposit(
-                assetsAfterFees, _minAssetsForCurve(curveId, generalConfig.minShare), generalConfig.minShare, curveId
-            )
+            ? IBondingCurveRegistry(bondingCurveConfig.registry)
+                .previewDeposit(
+                    assetsAfterFees,
+                    _minAssetsForCurve(curveId, generalConfig.minShare),
+                    generalConfig.minShare,
+                    curveId
+                )
             : _convertToShares(termId, curveId, assetsAfterFees);
         return (shares, assetsAfterMinSharesCost, assetsAfterFees);
     }
@@ -1678,7 +1678,7 @@ contract MultiVault is
         view
     {
         IBondingCurveRegistry registry = IBondingCurveRegistry(bondingCurveConfig.registry);
-        
+
         // Prevent zero share deposits
         if (sharesForReceiver == 0) revert MultiVault_DepositOrRedeemZeroShares();
 
@@ -1690,9 +1690,10 @@ contract MultiVault is
         if (projectedAssets > registry.getCurveMaxAssets(curveId)) revert MultiVault_ActionExceedsMaxAssets();
 
         // Check the incoming shares will not exceed max shares for the curve
-        uint256 projectedShares = _vaults[termId][curveId].totalShares + sharesForReceiver + (isNew ? generalConfig.minShare : 0);
+        uint256 projectedShares =
+            _vaults[termId][curveId].totalShares + sharesForReceiver + (isNew ? generalConfig.minShare : 0);
         if (projectedShares > registry.getCurveMaxShares(curveId)) revert MultiVault_ActionExceedsMaxShares();
-        
+
         // Ensure the deposit converts to at least minSharesForReceiver shares
         if (sharesForReceiver < minSharesForReceiver) {
             revert MultiVault_SlippageExceeded();
@@ -1788,11 +1789,7 @@ contract MultiVault is
     /// @param curveId The ID of the bonding curve
     /// @param sharesToRedeem The number of shares to be redeemed
     /// @return bool Whether exit fees should be charged or not
-    function _shouldChargeExitFees(
-        bytes32 termId,
-        uint256 curveId,
-        uint256 sharesToRedeem
-    )
+    function _shouldChargeExitFees(bytes32 termId, uint256 curveId, uint256 sharesToRedeem)
         internal
         view
         returns (bool)
@@ -1818,7 +1815,7 @@ contract MultiVault is
     /// @return bool Whether the atom deposit fraction should be charged or not
     function _shouldChargeAtomDepositFraction(bytes32 tripleId) internal view returns (bool) {
         bytes32[3] memory atomIds = _triples[tripleId];
-        return _shouldChargeFees(atomIds[0]) && _shouldChargeFees(atomIds[1]) &&  _shouldChargeFees(atomIds[2]);
+        return _shouldChargeFees(atomIds[0]) && _shouldChargeFees(atomIds[1]) && _shouldChargeFees(atomIds[2]);
     }
 
     /// @notice Get the maximum shares that can be redeemed by a user for a given vault

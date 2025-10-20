@@ -111,11 +111,7 @@ contract OffsetProgressiveCurve is BaseCurve {
     /// $$\text{shares} = \sqrt{(s + o)^2 + \frac{a}{m/2}} - (s + o)$$
     /// @dev or to say that another way:
     /// $$\text{shares} = \sqrt{(s + o)^2 + \frac{2a}{m}} - (s + o)$$
-    function previewDeposit(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function previewDeposit(uint256 assets, uint256 totalAssets, uint256 totalShares)
         external
         view
         override
@@ -171,24 +167,20 @@ contract OffsetProgressiveCurve is BaseCurve {
     /// $$\text{assets} = (2(s + o)n + n^2) \cdot \frac{m}{2}$$
     /// @dev Implementation note: This formula is computed via the _convertToAssets helper,
     /// @dev where juniorSupply = (s + o) and seniorSupply = (s + n + o)
-    function previewMint(
-        uint256 shares,
-        uint256 totalShares,
-        uint256 totalAssets
-    )
+    function previewMint(uint256 shares, uint256 totalShares, uint256 totalAssets)
         external
         view
         override
         returns (uint256 assets)
     {
         _checkMintBounds(shares, totalShares, MAX_SHARES);
- 
+
         UD60x18 s0 = convert(totalShares).add(OFFSET);
         UD60x18 s1 = convert(totalShares + shares).add(OFFSET);
         UD60x18 aUD = _convertToAssets(s0, s1);
 
         assets = _ceilUdToUint(aUD);
-  
+
         _checkMintOut(assets, totalAssets, MAX_ASSETS);
     }
 
@@ -201,11 +193,7 @@ contract OffsetProgressiveCurve is BaseCurve {
     /// $$\text{shares} = (s + o) - \sqrt{(s + o)^2 - \frac{a}{m/2}}$$
     /// @dev or to say that another way:
     /// $$\text{shares} = (s + o) - \sqrt{(s + o)^2 - \frac{2a}{m}}$$
-    function previewWithdraw(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function previewWithdraw(uint256 assets, uint256 totalAssets, uint256 totalShares)
         external
         view
         override
@@ -250,11 +238,7 @@ contract OffsetProgressiveCurve is BaseCurve {
     /// $$\text{shares} = \frac{a}{(s + o) \cdot m/2}$$
     /// @dev Or to say that another way:
     /// $$\text{shares} = \frac{2a}{(s + o) \cdot m}$$
-    function convertToShares(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function convertToShares(uint256 assets, uint256 totalAssets, uint256 totalShares)
         external
         view
         override
