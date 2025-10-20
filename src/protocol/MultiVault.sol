@@ -238,25 +238,20 @@ contract MultiVault is
         // which a user could've been active
         if (_currentEpoch == 0 || epoch > _currentEpoch) revert MultiVault_InvalidEpoch();
 
-        // If calling with previous global epoch, return utilization for that epoch
-        if (epoch == _currentEpoch - 1) {
-            return personalUtilization[user][_currentEpoch - 1];
-        }
-
         uint256[3] memory _userEpochHistory = userEpochHistory[user];
 
         // Case A: check most recent activity
-        if (_userEpochHistory[0] <= epoch) {
+        if (_userEpochHistory[0] < epoch) {
             return personalUtilization[user][_userEpochHistory[0]];
         }
 
         // Case B: check previous activity
-        if (_userEpochHistory[1] <= epoch) {
+        if (_userEpochHistory[1] < epoch) {
             return personalUtilization[user][_userEpochHistory[1]];
         }
 
         // Case C: check previous-previous activity
-        if (_userEpochHistory[2] <= epoch) {
+        if (_userEpochHistory[2] < epoch) {
             return personalUtilization[user][_userEpochHistory[2]];
         }
 
