@@ -436,14 +436,15 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
     // - never active (returns 0 via util[0]==0)
     // - last >> target (B)
 
-    function test_getUserUtilization_revertsOnFutureEpoch() external {
+    function test_getUserUtilizationForPreviousActiveEpochrevertsOnFutureEpoch() external {
         uint256 futureEpoch = protocol.trustBonding.currentEpoch() + 1;
         vm.expectRevert(MultiVault.MultiVault_InvalidEpoch.selector);
         IMultiVault(address(protocol.multiVault)).getUserUtilizationForPreviousActiveEpoch(users.alice, futureEpoch);
     }
 
-    function test_getUserUtilization_returnsPreviousActiveEpochsUtilization_priorToEpochBeingCalledWith() external {
-        // target epoch = 3  -> prevEpoch = 2
+    function test_getUserUtilizationForPreviousActiveEpoch_returnsPreviousActiveEpochsUtilization_priorToEpochBeingCalledWith()
+        external
+    {
         _advanceToEpoch(3);
 
         _setUserUtilizationForEpoch(users.alice, 1, 222);
@@ -460,8 +461,7 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         );
     }
 
-    function test_getUserUtilization_lastBeforePrevEpoch_usesLastActive() external {
-        // target epoch = 5  -> prevEpoch = 4
+    function test_getUserUtilizationForPreviousActiveEpochlastBeforePrevEpoch_usesLastActive() external {
         _advanceToEpoch(5);
 
         _setUserUtilizationForEpoch(users.alice, 2, 111);
@@ -472,8 +472,7 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         assertEq(before, int256(111), "Should use lastActiveEpoch when last < prevEpoch");
     }
 
-    function test_getUserUtilization_lastEqualsPrevEpoch_usesPreviousActive() external {
-        // target epoch = 5  -> prevEpoch = 4
+    function test_getUserUtilizationForPreviousActiveEpochlastEqualsPrevEpoch_usesPreviousActive() external {
         _advanceToEpoch(5);
 
         _setUserUtilizationForEpoch(users.alice, 3, 333);
@@ -486,22 +485,7 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         assertEq(before, int256(444), "When last == prevEpoch, must use previousActiveEpoch");
     }
 
-    function test_getUserUtilization_lastEqualsTargetEpoch_usesPreviousActive() external {
-        // target epoch = 5  -> prevEpoch = 4
-        _advanceToEpoch(6);
-
-        _setUserUtilizationForEpoch(users.alice, 4, 444);
-        _setUserUtilizationForEpoch(users.alice, 5, 555);
-        _setActiveEpoch(users.alice, 0, 5); // last == target epoch
-        _setActiveEpoch(users.alice, 1, 4);
-
-        int256 utilAfter =
-            IMultiVault(address(protocol.multiVault)).getUserUtilizationForPreviousActiveEpoch(users.alice, 5);
-        assertEq(utilAfter, int256(444), "When last == target epoch, must use previousActiveEpoch");
-    }
-
-    function test_getUserUtilization_sparseActivityFarBehind_usesThatSparseLast() external {
-        // target epoch = 8  -> prevEpoch = 7
+    function test_getUserUtilizationForPreviousActiveEpochsparseActivityFarBehind_usesThatSparseLast() external {
         _advanceToEpoch(8);
 
         _setUserUtilizationForEpoch(users.alice, 0, 555);
@@ -514,19 +498,15 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         assertEq(before, int256(777), "Should use sparse lastActiveEpoch when far behind");
     }
 
-    function test_getUserUtilization_neverActive_returnsZero() external {
-        // target epoch = 3  -> prevEpoch = 2
+    function test_getUserUtilizationForPreviousActiveEpochneverActive_returnsZero() external {
         _advanceToEpoch(3);
-
-        // personal[alice][0] defaults to 0
 
         int256 before =
             IMultiVault(address(protocol.multiVault)).getUserUtilizationForPreviousActiveEpoch(users.alice, 3);
         assertEq(before, int256(0), "Never active -> before is 0");
     }
 
-    function test_getUserUtilization_lastAfterTargetEpoch_usesPreviousActive() external {
-        // target epoch = 4  -> prevEpoch = 3
+    function test_getUserUtilizationForPreviousActiveEpochlastAfterTargetEpoch_usesPreviousActive() external {
         _advanceToEpoch(4);
 
         _setUserUtilizationForEpoch(users.alice, 2, 222);
@@ -554,7 +534,6 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
     }
 
     function test_personalUtilRatio_targetZero_hadEligibilityButDidNotClaim_returnsFloor() external {
-        _addToTrustBondingWhiteList(users.alice);
         _createLock(users.alice, initialTokens); // ensures eligibility exists for epoch 1
         _advanceToEpoch(2);
 
@@ -573,14 +552,14 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         getUserUtilizationForPreviousActiveEpoch() — explicit path coverage
     //////////////////////////////////////////////////////////////*/
 
-    function test_getUserUtilization_epochZero_returnsZero() external {
+    function test_getUserUtilizationForPreviousActiveEpochepochZero_returnsZero() external {
         // Querying strictly before epoch 0 is nonsensical by definition during epoch 0
         vm.expectRevert(MultiVault.MultiVault_InvalidEpoch.selector);
         IMultiVault(address(protocol.multiVault)).getUserUtilizationForPreviousActiveEpoch(users.alice, 0);
     }
 
     // Case A: lastActive < epoch -> return personal[lastActive]
-    function test_getUserUtilization_caseA_lastBeforeTarget() external {
+    function test_getUserUtilizationForPreviousActiveEpochcaseA_lastBeforeTarget() external {
         _advanceToEpoch(10);
 
         // last=4, prev=2, pprev=0; util[4] = 444
@@ -593,13 +572,13 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
     }
 
     // Case B: lastActive >= epoch, previousActive < epoch -> return personal[previousActive]
-    function test_getUserUtilization_caseB_previousBeforeTarget() external {
+    function test_getUserUtilizationForPreviousActiveEpochcaseB_previousBeforeTarget() external {
         _advanceToEpoch(12);
 
         // last=10, prev=6; util[6] = 606
-        _setUserUtilizationForEpoch(users.alice, 10, 707);
-        _setUserUtilizationForEpoch(users.alice, 6, 606);
         _setUserUtilizationForEpoch(users.alice, 3, 505);
+        _setUserUtilizationForEpoch(users.alice, 6, 606);
+        _setUserUtilizationForEpoch(users.alice, 10, 707);
         _setActiveEpoch(users.alice, 0, 10);
         _setActiveEpoch(users.alice, 1, 6);
         _setActiveEpoch(users.alice, 2, 3);
@@ -616,14 +595,14 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
 
     // Case C: lastActive >= epoch, previousActive == epoch (or ≥),
     //         previousPrevious < epoch -> return personal[previousPrevious]
-    function test_getUserUtilization_caseC_prevEqualsTarget_usesPrevPrev() external {
+    function test_getUserUtilizationForPreviousActiveEpochcaseC_prevEqualsTarget_usesPrevPrev() external {
         // target epoch = 5
         _advanceToEpoch(6);
 
         // last=10, previous=5 (== target), previousPrevious=3; util[3]=303
-        _setUserUtilizationForEpoch(users.alice, 6, 1000);
-        _setUserUtilizationForEpoch(users.alice, 5, 555);
         _setUserUtilizationForEpoch(users.alice, 3, 303);
+        _setUserUtilizationForEpoch(users.alice, 5, 555);
+        _setUserUtilizationForEpoch(users.alice, 6, 1000);
         _setActiveEpoch(users.alice, 0, 6);
         _setActiveEpoch(users.alice, 1, 5);
         _setActiveEpoch(users.alice, 2, 3);
@@ -634,21 +613,18 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
     }
 
     // Final fallback: no tracked epoch strictly earlier than target -> return 0
-    function test_getUserUtilization_fallbackNoneTrackedEarlier_returnsZero() external {
+    function test_getUserUtilizationForPreviousActiveEpochfallbackNoneTrackedEarlier_returnsZero() external {
         _advanceToEpoch(100);
 
         // Make all pointers >= query epoch
-        // earliest tracked = 30, query epoch = 20 => none < 20
-        _setActiveEpoch(users.alice, 0, 70);
-        _setActiveEpoch(users.alice, 1, 50);
-
-        _setActiveEpoch(users.alice, 2, 30);
-
         // even if epoch 0 had some value, we don't want to reuse it here
         _setUserUtilizationForEpoch(users.alice, 0, 999);
         _setUserUtilizationForEpoch(users.alice, 30, 999);
         _setUserUtilizationForEpoch(users.alice, 50, 999);
         _setUserUtilizationForEpoch(users.alice, 70, 999);
+        _setActiveEpoch(users.alice, 0, 70);
+        _setActiveEpoch(users.alice, 1, 50);
+        _setActiveEpoch(users.alice, 2, 30);
 
         vm.expectRevert(MultiVault.MultiVault_EpochNotTracked.selector);
         int256 before =
@@ -656,7 +632,7 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
     }
 
     // Sanity: if lastActive == 0 (<epoch) and epoch 0 had activity, Case A returns util[0]
-    function test_getUserUtilization_epoch0Activity_returnsEpoch0ViaCaseA() external {
+    function test_getUserUtilizationForPreviousActiveEpochepoch0Activity_returnsEpoch0ViaCaseA() external {
         _advanceToEpoch(3);
 
         // last=0 (<3), previous=0, pprev=0; util[0]=123
