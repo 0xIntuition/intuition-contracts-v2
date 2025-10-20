@@ -234,7 +234,7 @@ abstract contract SetupScript is Script {
             // TrustBonding Config
             BONDING_START_TIMESTAMP = block.timestamp + 100;
             BONDING_EPOCH_LENGTH = TWO_WEEKS;
-            BONDING_SYSTEM_UTILIZATION_LOWER_BOUND = 4000; // 50%
+            BONDING_SYSTEM_UTILIZATION_LOWER_BOUND = 4000; // 40%
             BONDING_PERSONAL_UTILIZATION_LOWER_BOUND = 2500; // 25%
 
             // CoreEmissionsController Config
