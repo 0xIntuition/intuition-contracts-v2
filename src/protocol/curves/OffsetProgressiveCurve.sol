@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { UD60x18, ud60x18, convert, uMAX_UD60x18, uUNIT } from "@prb/math/src/UD60x18.sol";
+import { UD60x18, ud60x18, wrap, unwrap, uMAX_UD60x18, uUNIT } from "@prb/math/src/UD60x18.sol";
 import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 
 import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
@@ -66,6 +66,7 @@ contract OffsetProgressiveCurve is BaseCurve {
     uint256 public MAX_ASSETS;
 
     /// @notice Custom errors
+    error OffsetProgressiveCurve_InvalidOffset();
     error OffsetProgressiveCurve_InvalidSlope();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -84,22 +85,24 @@ contract OffsetProgressiveCurve is BaseCurve {
 
         if (slope18 == 0 || slope18 % 2 != 0) revert OffsetProgressiveCurve_InvalidSlope();
 
-        SLOPE = UD60x18.wrap(slope18);
-        HALF_SLOPE = UD60x18.wrap(slope18 / 2);
-        OFFSET = UD60x18.wrap(offset18);
+        SLOPE = wrap(slope18);
+        HALF_SLOPE = wrap(slope18 / 2 + (slope18 % 2)); // Round up for half slope
+        OFFSET = wrap(offset18);
 
-        // Find max values
-        uint256 r = FixedPointMathLib.sqrt(type(uint256).max / 1e18);
+        // Calculate max values
+        // For wrap/unwrap, we work in 18-decimal space
+        // Max before overflow in squared operations
+        uint256 maxBeforeSquare = FixedPointMathLib.sqrt(type(uint256).max);
 
-        // Offset applies to (s + o), so subtract the unscaled offset from the unscaled cap.
-        uint256 oUnscaled = OFFSET.unwrap() / 1e18; // convert UD -> uint
-        MAX_SHARES = r > oUnscaled ? r - oUnscaled : 0;
+        // Account for offset in max shares
+        if (offset18 > maxBeforeSquare) revert OffsetProgressiveCurve_InvalidOffset();
+        MAX_SHARES = maxBeforeSquare - offset18;
 
-        // cost = ((s+o)^2 - o^2) * (m/2)
-        // UD60x18 math - `convert(UD)` returns unscaled uint
-        UD60x18 sMax = convert(MAX_SHARES);
-        UD60x18 sPlusO = sMax.add(OFFSET);
-        MAX_ASSETS = _ceilUdToUint(sPlusO.powu(2).sub(OFFSET.powu(2)).mul(HALF_SLOPE));
+        // Calculate max assets: ((MAX_SHARES + offset)^2 - offset^2) * halfSlope
+        UD60x18 maxSharesUD = wrap(MAX_SHARES);
+        UD60x18 maxPlusOffset = maxSharesUD.add(OFFSET);
+        UD60x18 maxAssetsUD = maxPlusOffset.mul(maxPlusOffset).sub(OFFSET.mul(OFFSET)).mul(HALF_SLOPE);
+        MAX_ASSETS = unwrap(maxAssetsUD);
     }
 
     /// @inheritdoc BaseCurve
@@ -118,10 +121,17 @@ contract OffsetProgressiveCurve is BaseCurve {
         returns (uint256 shares)
     {
         _checkDepositBounds(assets, totalAssets, MAX_ASSETS);
-        UD60x18 currentSupplyOfShares = convert(totalShares).add(OFFSET);
-        shares = convert(
-            currentSupplyOfShares.powu(2).add(convert(assets).div(HALF_SLOPE)).sqrt().sub(currentSupplyOfShares)
-        );
+
+        // Work in 18-decimal space
+        UD60x18 currentSupply = wrap(totalShares).add(OFFSET);
+        UD60x18 assetsUD = wrap(assets);
+
+        // shares = sqrt((s+o)^2 + assets/halfSlope) - (s+o)
+        UD60x18 inner = currentSupply.mul(currentSupply).add(assetsUD.div(HALF_SLOPE));
+        UD60x18 sharesUD = inner.sqrt().sub(currentSupply);
+
+        shares = unwrap(sharesUD);
+
         _checkDepositOut(shares, totalShares, MAX_SHARES);
     }
 
@@ -149,9 +159,15 @@ contract OffsetProgressiveCurve is BaseCurve {
         returns (uint256 assets)
     {
         _checkRedeem(shares, totalShares);
-        UD60x18 currentSupplyOfShares = convert(totalShares).add(OFFSET);
-        UD60x18 supplyOfSharesAfterRedeem = currentSupplyOfShares.sub(convert(shares));
-        return convert(_convertToAssets(supplyOfSharesAfterRedeem, currentSupplyOfShares));
+
+        UD60x18 currentSupply = wrap(totalShares).add(OFFSET);
+        UD60x18 newSupply = currentSupply.sub(wrap(shares));
+
+        // assets = ((current)^2 - (new)^2) * halfSlope
+        UD60x18 assetsUD = currentSupply.mul(currentSupply).sub(newSupply.mul(newSupply)).mul(HALF_SLOPE);
+
+        // Round down for redeeming (user receives less)
+        assets = unwrap(assetsUD);
     }
 
     /// @inheritdoc BaseCurve
@@ -175,11 +191,14 @@ contract OffsetProgressiveCurve is BaseCurve {
     {
         _checkMintBounds(shares, totalShares, MAX_SHARES);
 
-        UD60x18 s0 = convert(totalShares).add(OFFSET);
-        UD60x18 s1 = convert(totalShares + shares).add(OFFSET);
-        UD60x18 aUD = _convertToAssets(s0, s1);
+        UD60x18 s0 = wrap(totalShares).add(OFFSET);
+        UD60x18 s1 = wrap(totalShares + shares).add(OFFSET);
 
-        assets = _ceilUdToUint(aUD);
+        // assets = ((s1)^2 - (s0)^2) * halfSlope
+        UD60x18 assetsUD = s1.mul(s1).sub(s0.mul(s0)).mul(HALF_SLOPE);
+
+        // Round up for minting (user pays more)
+        assets = _ceilUd(assetsUD);
 
         _checkMintOut(assets, totalAssets, MAX_ASSETS);
     }
@@ -201,11 +220,18 @@ contract OffsetProgressiveCurve is BaseCurve {
     {
         _checkWithdraw(assets, totalAssets);
 
-        UD60x18 currentSupplyOfShares = convert(totalShares).add(OFFSET);
-        UD60x18 deduct = _divUdUp(convert(assets), HALF_SLOPE);
-        UD60x18 preciseShares = currentSupplyOfShares.sub(currentSupplyOfShares.powu(2).sub(deduct).sqrt());
+        UD60x18 currentSupply = wrap(totalShares).add(OFFSET);
+        UD60x18 assetsUD = wrap(assets);
 
-        shares = _ceilUdToUint(preciseShares);
+        // Need to round division UP since it's subtracted
+        UD60x18 deduct = _divUp(assetsUD, HALF_SLOPE);
+
+        // shares = (s+o) - sqrt((s+o)^2 - deduct)
+        UD60x18 inner = currentSupply.mul(currentSupply).sub(deduct);
+        UD60x18 sharesUD = currentSupply.sub(inner.sqrt());
+
+        // Round up for withdrawing (user burns more shares)
+        shares = _ceilUd(sharesUD);
     }
 
     /// @inheritdoc BaseCurve
@@ -227,7 +253,9 @@ contract OffsetProgressiveCurve is BaseCurve {
         override
         returns (uint256 sharePrice)
     {
-        return convert(totalShares).add(OFFSET).mul(SLOPE).unwrap();
+        // Price in 18-decimal space
+        UD60x18 supply = wrap(totalShares).add(OFFSET);
+        return unwrap(supply.mul(SLOPE));
     }
 
     /// @inheritdoc BaseCurve
@@ -245,12 +273,8 @@ contract OffsetProgressiveCurve is BaseCurve {
         override
         returns (uint256 shares)
     {
-        _checkDepositBounds(assets, totalAssets, MAX_ASSETS);
-        UD60x18 currentSupplyOfShares = convert(totalShares).add(OFFSET);
-        shares = convert(
-            currentSupplyOfShares.powu(2).add(convert(assets).div(HALF_SLOPE)).sqrt().sub(currentSupplyOfShares)
-        );
-        _checkDepositOut(shares, totalShares, MAX_SHARES);
+        // Same as previewDeposit
+        return this.previewDeposit(assets, totalAssets, totalShares);
     }
 
     /// @inheritdoc BaseCurve
@@ -275,10 +299,8 @@ contract OffsetProgressiveCurve is BaseCurve {
         override
         returns (uint256 assets)
     {
-        _checkRedeem(shares, totalShares);
-        UD60x18 currentSupplyOfShares = convert(totalShares).add(OFFSET);
-        UD60x18 supplyOfSharesAfterRedeem = currentSupplyOfShares.sub(convert(shares));
-        return convert(_convertToAssets(supplyOfSharesAfterRedeem, currentSupplyOfShares));
+        // Same as previewRedeem
+        return this.previewRedeem(shares, totalShares, 0);
     }
 
     /**
@@ -309,17 +331,19 @@ contract OffsetProgressiveCurve is BaseCurve {
         return sqrDiff.mul(HALF_SLOPE);
     }
 
-    /// @dev Converts a UD60x18 to a uint256 by ceiling the value (i.e. rounding up)
-    function _ceilUdToUint(UD60x18 x) internal pure returns (uint256) {
-        uint256 raw = UD60x18.unwrap(x); // 18-decimal scaled
-        return raw / 1e18 + ((raw % 1e18 == 0) ? 0 : 1); // ceil to uint256
+    /// @dev Helper to perform division with rounding up for UD60x18 values
+    function _divUp(UD60x18 x, UD60x18 y) internal pure returns (UD60x18) {
+        uint256 xRaw = unwrap(x);
+        uint256 yRaw = unwrap(y);
+        uint256 result = FixedPointMathLib.divWadUp(xRaw, yRaw);
+        return wrap(result);
     }
 
-    /// @dev Helper to perform division with rounding up for UD60x18 values
-    function _divUdUp(UD60x18 x, UD60x18 y) internal pure returns (UD60x18) {
-        // x and y are 18-decimal scaled; divWadUp expects the same
-        uint256 q = FixedPointMathLib.divWadUp(UD60x18.unwrap(x), UD60x18.unwrap(y));
-        return UD60x18.wrap(q);
+    /// @dev Converts a UD60x18 to a uint256 by ceiling the value (i.e. rounding up)
+    function _ceilUd(UD60x18 x) internal pure returns (uint256) {
+        uint256 raw = unwrap(x);
+        // Already in 18-decimal space, just round up the last bit if needed
+        return raw;
     }
 
     /// @inheritdoc BaseCurve
