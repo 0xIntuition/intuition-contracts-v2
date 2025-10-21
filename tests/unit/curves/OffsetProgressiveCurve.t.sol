@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { Test, console } from "forge-std/src/Test.sol";
-import { UD60x18, ud60x18, wrap, unwrap } from "@prb/math/src/UD60x18.sol";
+import { Test } from "forge-std/src/Test.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCurve.sol";
 import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";

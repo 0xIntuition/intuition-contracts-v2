@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { Test, console } from "forge-std/src/Test.sol";
-import { UD60x18, ud60x18, convert } from "@prb/math/src/UD60x18.sol";
+import { Test } from "forge-std/src/Test.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { ProgressiveCurve } from "src/protocol/curves/ProgressiveCurve.sol";
 import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
 
 contract ProgressiveCurveTest is Test {
     ProgressiveCurve public curve;
-    uint256 public constant SLOPE = 2;
+    uint256 public constant SLOPE = 2e18;
 
     function setUp() public {
         ProgressiveCurve progressiveCurveImpl = new ProgressiveCurve();
@@ -128,9 +127,8 @@ contract ProgressiveCurveTest is Test {
         totalShares = bound(totalShares, 0, curve.maxShares());
 
         uint256 price = curve.currentPrice(totalShares, 0);
-        // The contract multiplies totalShares * SLOPE directly
-        // Since SLOPE is already in 18 decimal format (0.001e18 = 1e15)
-        uint256 expectedPrice = totalShares * SLOPE;
+        // wad-mul: (SLOPE * totalShares) / 1e18
+        uint256 expectedPrice = (SLOPE * totalShares) / 1e18;
         assertEq(price, expectedPrice);
     }
 
@@ -171,14 +169,18 @@ contract ProgressiveCurveTest is Test {
         assertEq(curve.previewRedeem(r, s0, 0), curve.convertToAssets(r, s0, 0));
     }
 
-    function test_previewMint_mintMaxSharesFromZero_succeeds() public view {
+    function test_previewMint_mintMaxSharesFromZero_succeeds() public {
         uint256 sMax = curve.maxShares();
-        uint256 assets = curve.previewMint(sMax, 0, 0);
-        assertGt(assets, 0);
+        uint256 maxA = curve.maxAssets();
 
-        UD60x18 rawExpected = _expectedMintCostFromZeroRaw(sMax);
-        uint256 expected = _ceilUdToUint(rawExpected);
-        assertEq(assets, expected);
+        // previewMint should revert due to assets out overflow - this happens because we ceil required assets for mint
+        // internally
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_AssetsOverflowMax.selector));
+        curve.previewMint(sMax, 0, 0);
+
+        // convertToAssets should return expected assets without ceil --> matches maxAssets
+        uint256 expectedWithoutCeil = curve.convertToAssets(sMax, sMax, 0);
+        assertEq(expectedWithoutCeil, maxA);
     }
 
     function test_previewMint_mintPastMaxSharesFromZero_reverts() public {
@@ -205,34 +207,8 @@ contract ProgressiveCurveTest is Test {
 
     function test_previewRedeem_allAtMaxShares_succeeds() public view {
         uint256 sMax = curve.maxShares();
-
-        // Mint cost from 0 -> sMax == redeem proceeds from sMax -> 0 (ignoring fees; pure curve math)
-        uint256 expected = _expectedMintCostFromZero(sMax);
+        uint256 expected = curve.maxAssets(); // redeem path returns floor; equals stored MAX_ASSETS
         uint256 assets = curve.previewRedeem(sMax, sMax, 0);
         assertEq(assets, expected);
-    }
-
-    /* ===================================================== */
-    /*                  INTERNAL HELPERS                     */
-    /* ===================================================== */
-
-    /// @dev Helper to compute expected mint cost from zero supply
-    function _expectedMintCostFromZero(uint256 shares) internal view returns (uint256) {
-        // Cost = (s^2) * (m/2)
-        UD60x18 s = convert(shares);
-        return convert(s.powu(2).mul(curve.HALF_SLOPE()));
-    }
-
-    /// @dev Helper to compute expected mint cost from zero supply, returning raw UD60x18
-    function _expectedMintCostFromZeroRaw(uint256 shares) internal view returns (UD60x18) {
-        // Cost = (s^2) * (m/2)
-        UD60x18 s = convert(shares);
-        return s.powu(2).mul(curve.HALF_SLOPE());
-    }
-
-    /// @dev Converts a UD60x18 to a uint256 by ceiling the value (i.e. rounding up)
-    function _ceilUdToUint(UD60x18 x) internal pure returns (uint256) {
-        uint256 raw = UD60x18.unwrap(x); // 18-decimal scaled
-        return raw / 1e18 + ((raw % 1e18 == 0) ? 0 : 1); // ceil to uint256
     }
 }

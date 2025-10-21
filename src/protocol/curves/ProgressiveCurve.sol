@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { UD60x18, ud60x18, convert, uMAX_UD60x18, uUNIT } from "@prb/math/src/UD60x18.sol";
+import { UD60x18, wrap, unwrap, uUNIT } from "@prb/math/src/UD60x18.sol";
 import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 
 import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
@@ -72,21 +72,20 @@ contract ProgressiveCurve is BaseCurve {
     /// @dev Computes maximum values given constructor arguments
     /// @dev Computes Slope / 2 as commonly used constant
     function initialize(string calldata _name, uint256 slope18) external initializer {
-        if (slope18 == 0 || slope18 % 2 != 0) revert ProgressiveCurve_InvalidSlope();
-
         __BaseCurve_init(_name);
 
-        SLOPE = UD60x18.wrap(slope18);
-        HALF_SLOPE = UD60x18.wrap(slope18 / 2);
+        if (slope18 == 0 || slope18 % 2 != 0) revert ProgressiveCurve_InvalidSlope();
 
-        // Find max values
-        // s <= floor(sqrt(MAX_UINT256 / 1e18))
+        SLOPE = wrap(slope18);
+        HALF_SLOPE = wrap(slope18 / 2);
+
         uint256 r = FixedPointMathLib.sqrt(type(uint256).max / 1e18);
         MAX_SHARES = r;
 
-        // realistic ceiling for assets to reach MAX_SHARES from 0:
-        // assets_max = (s^2) * (m/2)  with UD60x18 scaling handled via `convert`
-        MAX_ASSETS = _ceilUdToUint(convert(r).powu(2).mul(HALF_SLOPE));
+        // MAX_ASSETS = (r^2) * (m/2), rounded DOWN
+        UD60x18 sMax = wrap(r);
+        UD60x18 aMax = _square(sMax).mul(HALF_SLOPE); // mul (down)
+        MAX_ASSETS = unwrap(aMax);
     }
 
     /// @inheritdoc BaseCurve
@@ -108,10 +107,12 @@ contract ProgressiveCurve is BaseCurve {
         returns (uint256 shares)
     {
         _checkDepositBounds(assets, totalAssets, MAX_ASSETS);
-        UD60x18 currentSupplyOfShares = convert(totalShares);
-        shares = convert(
-            currentSupplyOfShares.powu(2).add(convert(assets).div(HALF_SLOPE)).sqrt().sub(currentSupplyOfShares)
-        );
+
+        UD60x18 s = wrap(totalShares);
+        UD60x18 inner = _square(s).add(wrap(assets).div(HALF_SLOPE)); // div down
+        UD60x18 out = inner.sqrt().sub(s); // sqrt down
+        shares = unwrap(out); // down
+
         _checkDepositOut(shares, totalShares, MAX_SHARES);
     }
 
@@ -136,9 +137,13 @@ contract ProgressiveCurve is BaseCurve {
         returns (uint256 assets)
     {
         _checkRedeem(shares, totalShares);
-        UD60x18 currentSupplyOfShares = convert(totalShares);
-        UD60x18 supplyOfSharesAfterRedeem = currentSupplyOfShares.sub(convert(shares));
-        return convert(_convertToAssets(supplyOfSharesAfterRedeem, currentSupplyOfShares));
+
+        UD60x18 s = wrap(totalShares);
+        UD60x18 ns = s.sub(wrap(shares));
+
+        UD60x18 area = _square(s).sub(_squareUp(ns)); // A down - B up
+        UD60x18 assetsUD = area.mul(HALF_SLOPE); // mul down
+        assets = unwrap(assetsUD); // down
     }
 
     /// @inheritdoc BaseCurve
@@ -163,11 +168,12 @@ contract ProgressiveCurve is BaseCurve {
     {
         _checkMintBounds(shares, totalShares, MAX_SHARES);
 
-        UD60x18 s0 = convert(totalShares);
-        UD60x18 s1 = convert(totalShares + shares);
-        UD60x18 aUD = _convertToAssets(s0, s1); // precise fixed-point
+        UD60x18 s0 = wrap(totalShares);
+        UD60x18 s1 = wrap(totalShares + shares);
 
-        assets = _ceilUdToUint(aUD);
+        UD60x18 area = _squareUp(s1).sub(_square(s0)); // A up - B down
+        UD60x18 aUD = _mulUp(area, HALF_SLOPE); // mul up
+        assets = unwrap(aUD); // up
 
         _checkMintOut(assets, totalAssets, MAX_ASSETS);
     }
@@ -192,11 +198,12 @@ contract ProgressiveCurve is BaseCurve {
     {
         _checkWithdraw(assets, totalAssets);
 
-        UD60x18 currentSupplyOfShares = convert(totalShares);
-        UD60x18 deduct = _divUdUp(convert(assets), HALF_SLOPE);
-        UD60x18 preciseShares = currentSupplyOfShares.sub(currentSupplyOfShares.powu(2).sub(deduct).sqrt());
+        UD60x18 s = wrap(totalShares);
+        UD60x18 deduct = _divUp(wrap(assets), HALF_SLOPE); // up (because it’s subtracted)
+        UD60x18 inner = _square(s).sub(deduct);
+        UD60x18 out = s.sub(inner.sqrt()); // sqrt down → result up
 
-        shares = _ceilUdToUint(preciseShares);
+        shares = unwrap(out); // up
     }
 
     /// @inheritdoc BaseCurve
@@ -216,7 +223,7 @@ contract ProgressiveCurve is BaseCurve {
         override
         returns (uint256 sharePrice)
     {
-        return convert(totalShares).mul(SLOPE).unwrap();
+        return unwrap(wrap(totalShares).mul(SLOPE));
     }
 
     /// @inheritdoc BaseCurve
@@ -237,12 +244,8 @@ contract ProgressiveCurve is BaseCurve {
         override
         returns (uint256 shares)
     {
-        _checkDepositBounds(assets, totalAssets, MAX_ASSETS);
-        UD60x18 currentSupplyOfShares = convert(totalShares);
-        shares = convert(
-            currentSupplyOfShares.powu(2).add(convert(assets).div(HALF_SLOPE)).sqrt().sub(currentSupplyOfShares)
-        );
-        _checkDepositOut(shares, totalShares, MAX_SHARES);
+        // Same as previewDeposit
+        return this.previewDeposit(assets, totalAssets, totalShares);
     }
 
     /// @inheritdoc BaseCurve
@@ -265,10 +268,18 @@ contract ProgressiveCurve is BaseCurve {
         override
         returns (uint256 assets)
     {
-        _checkRedeem(shares, totalShares);
-        UD60x18 currentSupplyOfShares = convert(totalShares);
-        UD60x18 supplyOfSharesAfterRedeem = currentSupplyOfShares.sub(convert(shares));
-        return convert(_convertToAssets(supplyOfSharesAfterRedeem, currentSupplyOfShares));
+        // Same as previewRedeem
+        return this.previewRedeem(shares, totalShares, 0);
+    }
+
+    /// @inheritdoc BaseCurve
+    function maxShares() external view override returns (uint256) {
+        return MAX_SHARES;
+    }
+
+    /// @inheritdoc BaseCurve
+    function maxAssets() external view override returns (uint256) {
+        return MAX_ASSETS;
     }
 
     /**
@@ -289,30 +300,27 @@ contract ProgressiveCurve is BaseCurve {
      * @return assets The computed assets as an instance of UD60x18 (a fixed-point number).
      */
     function _convertToAssets(UD60x18 juniorSupply, UD60x18 seniorSupply) internal view returns (UD60x18 assets) {
-        UD60x18 sqrDiff = seniorSupply.powu(2).sub(juniorSupply.powu(2));
+        UD60x18 sqrDiff = _square(seniorSupply).sub(_square(juniorSupply));
         return sqrDiff.mul(HALF_SLOPE);
     }
 
-    /// @dev Converts a UD60x18 to a uint256 by ceiling the value (i.e. rounding up)
-    function _ceilUdToUint(UD60x18 x) internal pure returns (uint256) {
-        uint256 raw = UD60x18.unwrap(x); // 18-decimal scaled
-        return raw / 1e18 + ((raw % 1e18 == 0) ? 0 : 1); // ceil to uint256
+    /// @dev Rounding helpers for UD60x18 operations
+    function _mulUp(UD60x18 x, UD60x18 y) internal pure returns (UD60x18) {
+        uint256 r = FixedPointMathLib.fullMulDivUp(unwrap(x), unwrap(y), uUNIT);
+        return wrap(r);
     }
 
-    /// @dev Helper to perform division with rounding up for UD60x18 values
-    function _divUdUp(UD60x18 x, UD60x18 y) internal pure returns (UD60x18) {
-        // x and y are 18-decimal scaled; divWadUp expects the same
-        uint256 q = FixedPointMathLib.divWadUp(UD60x18.unwrap(x), UD60x18.unwrap(y));
-        return UD60x18.wrap(q);
+    function _divUp(UD60x18 x, UD60x18 y) internal pure returns (UD60x18) {
+        uint256 r = FixedPointMathLib.fullMulDivUp(unwrap(x), uUNIT, unwrap(y));
+        return wrap(r);
     }
 
-    /// @inheritdoc BaseCurve
-    function maxShares() external view override returns (uint256) {
-        return MAX_SHARES;
+    function _square(UD60x18 x) internal pure returns (UD60x18) {
+        // rounds down (like UD mul)
+        return x.mul(x);
     }
 
-    /// @inheritdoc BaseCurve
-    function maxAssets() external view override returns (uint256) {
-        return MAX_ASSETS;
+    function _squareUp(UD60x18 x) internal pure returns (UD60x18) {
+        return _mulUp(x, x);
     }
 }

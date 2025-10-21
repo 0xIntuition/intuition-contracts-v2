@@ -19,8 +19,9 @@ contract BondingCurveRegistryTest is Test {
     address public admin = makeAddr("admin");
     address public nonAdmin = makeAddr("nonAdmin");
 
-    uint256 constant SLOPE = 2;
-    uint256 constant OFFSET = 5e35;
+    uint256 public constant PROGRESSIVE_CURVE_SLOPE = 2e18;
+    uint256 public constant OFFSET_PROGRESSIVE_CURVE_SLOPE = 2e18;
+    uint256 public constant OFFSET_PROGRESSIVE_CURVE_OFFSET = 5e17;
 
     event BondingCurveAdded(uint256 indexed curveId, address indexed curveAddress, string indexed curveName);
 
@@ -47,14 +48,19 @@ contract BondingCurveRegistryTest is Test {
         TransparentUpgradeableProxy progressiveCurveProxy = new TransparentUpgradeableProxy(
             address(new ProgressiveCurve()),
             admin,
-            abi.encodeWithSelector(ProgressiveCurve.initialize.selector, "Progressive Curve", 2)
+            abi.encodeWithSelector(ProgressiveCurve.initialize.selector, "Progressive Curve", PROGRESSIVE_CURVE_SLOPE)
         );
         progressiveCurve = ProgressiveCurve(address(progressiveCurveProxy));
 
         TransparentUpgradeableProxy offsetProgressiveCurveProxy = new TransparentUpgradeableProxy(
             address(offsetProgressiveCurveImpl),
             admin,
-            abi.encodeWithSelector(OffsetProgressiveCurve.initialize.selector, "Offset Progressive Curve", 2, 5e35)
+            abi.encodeWithSelector(
+                OffsetProgressiveCurve.initialize.selector,
+                "Offset Progressive Curve",
+                OFFSET_PROGRESSIVE_CURVE_SLOPE,
+                OFFSET_PROGRESSIVE_CURVE_OFFSET
+            )
         );
         offsetProgressiveCurve = OffsetProgressiveCurve(address(offsetProgressiveCurveProxy));
     }

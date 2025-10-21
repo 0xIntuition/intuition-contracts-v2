@@ -85,7 +85,9 @@ abstract contract BaseTest is Modifiers, Test {
     uint256 internal TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND = 3000; // 30%
 
     // Curve Configurations
-    uint256 internal PROGRESSIVE_CURVE_SLOPE = 1e15; // 0.001 slope
+    uint256 internal PROGRESSIVE_CURVE_SLOPE = 2e18;
+    uint256 internal OFFSET_PROGRESSIVE_CURVE_SLOPE = 2e18;
+    uint256 internal OFFSET_PROGRESSIVE_CURVE_OFFSET = 5e17;
 
     // CoreEmissions Controller
     uint256 internal constant EMISSIONS_CONTROLLER_EPOCH_LENGTH = TWO_WEEKS;
@@ -256,14 +258,19 @@ abstract contract BaseTest is Modifiers, Test {
         progressiveCurveProxy = new TransparentUpgradeableProxy(
             address(progressiveCurveImpl),
             users.admin,
-            abi.encodeWithSelector(ProgressiveCurve.initialize.selector, "Progressive Curve", 2)
+            abi.encodeWithSelector(ProgressiveCurve.initialize.selector, "Progressive Curve", PROGRESSIVE_CURVE_SLOPE)
         );
         progressiveCurve = ProgressiveCurve(address(progressiveCurveProxy));
 
         offsetProgressiveCurveProxy = new TransparentUpgradeableProxy(
             address(offsetProgressiveCurveImpl),
             users.admin,
-            abi.encodeWithSelector(OffsetProgressiveCurve.initialize.selector, "Offset Progressive Curve", 2, 5e35)
+            abi.encodeWithSelector(
+                OffsetProgressiveCurve.initialize.selector,
+                "Offset Progressive Curve",
+                OFFSET_PROGRESSIVE_CURVE_SLOPE,
+                OFFSET_PROGRESSIVE_CURVE_OFFSET
+            )
         );
         offsetProgressiveCurve = OffsetProgressiveCurve(address(offsetProgressiveCurveProxy));
 

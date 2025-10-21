@@ -302,6 +302,16 @@ contract OffsetProgressiveCurve is BaseCurve {
         return this.previewRedeem(shares, totalShares, 0);
     }
 
+    /// @inheritdoc BaseCurve
+    function maxShares() external view override returns (uint256) {
+        return MAX_SHARES;
+    }
+
+    /// @inheritdoc BaseCurve
+    function maxAssets() external view override returns (uint256) {
+        return MAX_ASSETS;
+    }
+
     /**
      * @notice Computes assets as the area under a linear curve with a simplified form of the area of a trapezium,
      * now including the offset:
@@ -326,11 +336,11 @@ contract OffsetProgressiveCurve is BaseCurve {
      * @return assets The computed assets as an instance of UD60x18 (a fixed-point number).
      */
     function _convertToAssets(UD60x18 juniorSupply, UD60x18 seniorSupply) internal view returns (UD60x18 assets) {
-        UD60x18 sqrDiff = seniorSupply.powu(2).sub(juniorSupply.powu(2));
+        UD60x18 sqrDiff = _square(seniorSupply).sub(_square(juniorSupply));
         return sqrDiff.mul(HALF_SLOPE);
     }
 
-    // Rounding helpers for UD60x18
+    /// @dev Rounding helpers for UD60x18 operations
     function _mulUp(UD60x18 x, UD60x18 y) internal pure returns (UD60x18) {
         uint256 r = FixedPointMathLib.fullMulDivUp(unwrap(x), unwrap(y), uUNIT);
         return wrap(r);
@@ -348,22 +358,5 @@ contract OffsetProgressiveCurve is BaseCurve {
 
     function _squareUp(UD60x18 x) internal pure returns (UD60x18) {
         return _mulUp(x, x);
-    }
-
-    // True ceil-to-uint unwrapping for UD60x18 -> uint256
-    function _ceilUnwrap(UD60x18 x) internal pure returns (uint256) {
-        uint256 raw = unwrap(x); // 18-decimal scaled
-        uint256 q = raw / 1e18;
-        return q + ((raw % 1e18 == 0) ? 0 : 1);
-    }
-
-    /// @inheritdoc BaseCurve
-    function maxShares() external view override returns (uint256) {
-        return MAX_SHARES;
-    }
-
-    /// @inheritdoc BaseCurve
-    function maxAssets() external view override returns (uint256) {
-        return MAX_ASSETS;
     }
 }

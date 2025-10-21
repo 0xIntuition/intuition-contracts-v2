@@ -110,8 +110,8 @@ abstract contract SetupScript is Script {
     uint256 internal PROTOCOL_FEE = 100; // 1% of assets deposited after fixed costs (Percentage Cost)
 
     // Curve Configurations
-    uint256 internal OFFSET_PROGRESSIVE_CURVE_SLOPE = 2;
-    uint256 internal OFFSET_PROGRESSIVE_CURVE_OFFSET = 5e35;
+    uint256 internal OFFSET_PROGRESSIVE_CURVE_SLOPE = 2e18;
+    uint256 internal OFFSET_PROGRESSIVE_CURVE_OFFSET = 5e17;
 
     constructor() {
         if (block.chainid == NETWORK_BASE) {
