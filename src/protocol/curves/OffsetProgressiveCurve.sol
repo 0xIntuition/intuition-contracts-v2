@@ -84,24 +84,19 @@ contract OffsetProgressiveCurve is BaseCurve {
         __BaseCurve_init(_name);
 
         if (slope18 == 0 || slope18 % 2 != 0) revert OffsetProgressiveCurve_InvalidSlope();
-
         SLOPE = wrap(slope18);
-        HALF_SLOPE = wrap(slope18 / 2 + (slope18 % 2)); // Round up for half slope
+        HALF_SLOPE = wrap(slope18 / 2);
         OFFSET = wrap(offset18);
 
-        // Calculate max values
-        // For wrap/unwrap, we work in 18-decimal space
-        // Max before overflow in squared operations
-        uint256 maxBeforeSquare = FixedPointMathLib.sqrt(type(uint256).max);
+        // Correct domain bound for squaring UD numbers:
+        // require (s + o)^2 * 1e18 <= type(uint256).max  =>  s + o_unscaled <= sqrt(max / 1e18)
+        uint256 r = FixedPointMathLib.sqrt(type(uint256).max / 1e18);
+        uint256 oUnscaled = offset18 / 1e18; // 18-dec -> unscaled shares
+        MAX_SHARES = r > oUnscaled ? (r - oUnscaled) : 0;
 
-        // Account for offset in max shares
-        if (offset18 > maxBeforeSquare) revert OffsetProgressiveCurve_InvalidOffset();
-        MAX_SHARES = maxBeforeSquare - offset18;
-
-        // Calculate max assets: ((MAX_SHARES + offset)^2 - offset^2) * halfSlope
-        UD60x18 maxSharesUD = wrap(MAX_SHARES);
-        UD60x18 maxPlusOffset = maxSharesUD.add(OFFSET);
-        UD60x18 maxAssetsUD = maxPlusOffset.mul(maxPlusOffset).sub(OFFSET.mul(OFFSET)).mul(HALF_SLOPE);
+        // MAX_ASSETS = ((MAX_SHARES+o)^2 - o^2) * (m/2), rounded DOWN (safety)
+        UD60x18 sMax = wrap(MAX_SHARES).add(OFFSET);
+        UD60x18 maxAssetsUD = _square(sMax).sub(_square(OFFSET)).mul(HALF_SLOPE); // mul rounds down
         MAX_ASSETS = unwrap(maxAssetsUD);
     }
 
@@ -114,7 +109,11 @@ contract OffsetProgressiveCurve is BaseCurve {
     /// $$\text{shares} = \sqrt{(s + o)^2 + \frac{a}{m/2}} - (s + o)$$
     /// @dev or to say that another way:
     /// $$\text{shares} = \sqrt{(s + o)^2 + \frac{2a}{m}} - (s + o)$$
-    function previewDeposit(uint256 assets, uint256 totalAssets, uint256 totalShares)
+    function previewDeposit(
+        uint256 assets,
+        uint256 totalAssets,
+        uint256 totalShares
+    )
         external
         view
         override
@@ -122,14 +121,9 @@ contract OffsetProgressiveCurve is BaseCurve {
     {
         _checkDepositBounds(assets, totalAssets, MAX_ASSETS);
 
-        // Work in 18-decimal space
-        UD60x18 currentSupply = wrap(totalShares).add(OFFSET);
-        UD60x18 assetsUD = wrap(assets);
-
-        // shares = sqrt((s+o)^2 + assets/halfSlope) - (s+o)
-        UD60x18 inner = currentSupply.mul(currentSupply).add(assetsUD.div(HALF_SLOPE));
-        UD60x18 sharesUD = inner.sqrt().sub(currentSupply);
-
+        UD60x18 s = wrap(totalShares).add(OFFSET);
+        UD60x18 inner = _square(s).add(wrap(assets).div(HALF_SLOPE)); // plain div -> down
+        UD60x18 sharesUD = inner.sqrt().sub(s); // sqrt rounds down
         shares = unwrap(sharesUD);
 
         _checkDepositOut(shares, totalShares, MAX_SHARES);
@@ -160,14 +154,13 @@ contract OffsetProgressiveCurve is BaseCurve {
     {
         _checkRedeem(shares, totalShares);
 
-        UD60x18 currentSupply = wrap(totalShares).add(OFFSET);
-        UD60x18 newSupply = currentSupply.sub(wrap(shares));
+        UD60x18 cur = wrap(totalShares).add(OFFSET);
+        UD60x18 newS = cur.sub(wrap(shares));
 
-        // assets = ((current)^2 - (new)^2) * halfSlope
-        UD60x18 assetsUD = currentSupply.mul(currentSupply).sub(newSupply.mul(newSupply)).mul(HALF_SLOPE);
-
-        // Round down for redeeming (user receives less)
-        assets = unwrap(assetsUD);
+        // Down where it matters: A - B with A down, B up
+        UD60x18 area = _square(cur).sub(_squareUp(newS));
+        UD60x18 assetsUD = area.mul(HALF_SLOPE); // mul down
+        assets = unwrap(assetsUD); // down
     }
 
     /// @inheritdoc BaseCurve
@@ -183,7 +176,11 @@ contract OffsetProgressiveCurve is BaseCurve {
     /// $$\text{assets} = (2(s + o)n + n^2) \cdot \frac{m}{2}$$
     /// @dev Implementation note: This formula is computed via the _convertToAssets helper,
     /// @dev where juniorSupply = (s + o) and seniorSupply = (s + n + o)
-    function previewMint(uint256 shares, uint256 totalShares, uint256 totalAssets)
+    function previewMint(
+        uint256 shares,
+        uint256 totalShares,
+        uint256 totalAssets
+    )
         external
         view
         override
@@ -194,11 +191,10 @@ contract OffsetProgressiveCurve is BaseCurve {
         UD60x18 s0 = wrap(totalShares).add(OFFSET);
         UD60x18 s1 = wrap(totalShares + shares).add(OFFSET);
 
-        // assets = ((s1)^2 - (s0)^2) * halfSlope
-        UD60x18 assetsUD = s1.mul(s1).sub(s0.mul(s0)).mul(HALF_SLOPE);
-
-        // Round up for minting (user pays more)
-        assets = _ceilUd(assetsUD);
+        // Up where it matters: A - B with A up, B down
+        UD60x18 area = _squareUp(s1).sub(_square(s0));
+        UD60x18 assetsUD = _mulUp(area, HALF_SLOPE); // final mul up
+        assets = unwrap(assetsUD); // up
 
         _checkMintOut(assets, totalAssets, MAX_ASSETS);
     }
@@ -212,7 +208,11 @@ contract OffsetProgressiveCurve is BaseCurve {
     /// $$\text{shares} = (s + o) - \sqrt{(s + o)^2 - \frac{a}{m/2}}$$
     /// @dev or to say that another way:
     /// $$\text{shares} = (s + o) - \sqrt{(s + o)^2 - \frac{2a}{m}}$$
-    function previewWithdraw(uint256 assets, uint256 totalAssets, uint256 totalShares)
+    function previewWithdraw(
+        uint256 assets,
+        uint256 totalAssets,
+        uint256 totalShares
+    )
         external
         view
         override
@@ -220,18 +220,13 @@ contract OffsetProgressiveCurve is BaseCurve {
     {
         _checkWithdraw(assets, totalAssets);
 
-        UD60x18 currentSupply = wrap(totalShares).add(OFFSET);
-        UD60x18 assetsUD = wrap(assets);
+        UD60x18 s = wrap(totalShares).add(OFFSET);
+        // deduct = assets/(m/2) rounded UP (because it is subtracted)
+        UD60x18 deduct = _divUp(wrap(assets), HALF_SLOPE);
 
-        // Need to round division UP since it's subtracted
-        UD60x18 deduct = _divUp(assetsUD, HALF_SLOPE);
-
-        // shares = (s+o) - sqrt((s+o)^2 - deduct)
-        UD60x18 inner = currentSupply.mul(currentSupply).sub(deduct);
-        UD60x18 sharesUD = currentSupply.sub(inner.sqrt());
-
-        // Round up for withdrawing (user burns more shares)
-        shares = _ceilUd(sharesUD);
+        UD60x18 inner = _square(s).sub(deduct);
+        UD60x18 sharesUD = s.sub(inner.sqrt()); // sqrt down => increases result (okay for "up" target)
+        shares = unwrap(sharesUD);
     }
 
     /// @inheritdoc BaseCurve
@@ -267,7 +262,11 @@ contract OffsetProgressiveCurve is BaseCurve {
     /// $$\text{shares} = \frac{a}{(s + o) \cdot m/2}$$
     /// @dev Or to say that another way:
     /// $$\text{shares} = \frac{2a}{(s + o) \cdot m}$$
-    function convertToShares(uint256 assets, uint256 totalAssets, uint256 totalShares)
+    function convertToShares(
+        uint256 assets,
+        uint256 totalAssets,
+        uint256 totalShares
+    )
         external
         view
         override
@@ -331,19 +330,31 @@ contract OffsetProgressiveCurve is BaseCurve {
         return sqrDiff.mul(HALF_SLOPE);
     }
 
-    /// @dev Helper to perform division with rounding up for UD60x18 values
-    function _divUp(UD60x18 x, UD60x18 y) internal pure returns (UD60x18) {
-        uint256 xRaw = unwrap(x);
-        uint256 yRaw = unwrap(y);
-        uint256 result = FixedPointMathLib.divWadUp(xRaw, yRaw);
-        return wrap(result);
+    // Rounding helpers for UD60x18
+    function _mulUp(UD60x18 x, UD60x18 y) internal pure returns (UD60x18) {
+        uint256 r = FixedPointMathLib.fullMulDivUp(unwrap(x), unwrap(y), uUNIT);
+        return wrap(r);
     }
 
-    /// @dev Converts a UD60x18 to a uint256 by ceiling the value (i.e. rounding up)
-    function _ceilUd(UD60x18 x) internal pure returns (uint256) {
-        uint256 raw = unwrap(x);
-        // Already in 18-decimal space, just round up the last bit if needed
-        return raw;
+    function _divUp(UD60x18 x, UD60x18 y) internal pure returns (UD60x18) {
+        uint256 r = FixedPointMathLib.fullMulDivUp(unwrap(x), uUNIT, unwrap(y));
+        return wrap(r);
+    }
+
+    function _square(UD60x18 x) internal pure returns (UD60x18) {
+        // rounds down (like UD mul)
+        return x.mul(x);
+    }
+
+    function _squareUp(UD60x18 x) internal pure returns (UD60x18) {
+        return _mulUp(x, x);
+    }
+
+    // True ceil-to-uint unwrapping for UD60x18 -> uint256
+    function _ceilUnwrap(UD60x18 x) internal pure returns (uint256) {
+        uint256 raw = unwrap(x); // 18-decimal scaled
+        uint256 q = raw / 1e18;
+        return q + ((raw % 1e18 == 0) ? 0 : 1);
     }
 
     /// @inheritdoc BaseCurve

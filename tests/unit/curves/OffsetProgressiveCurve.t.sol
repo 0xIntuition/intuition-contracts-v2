@@ -9,8 +9,8 @@ import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
 
 contract OffsetProgressiveCurveTest is Test {
     OffsetProgressiveCurve public curve;
-    uint256 public constant SLOPE = 2;
-    uint256 public constant OFFSET = 5e35;
+    uint256 public constant SLOPE = 2e18;
+    uint256 public constant OFFSET = 5e17;
 
     function setUp() public {
         OffsetProgressiveCurve offsetProgressiveCurveImpl = new OffsetProgressiveCurve();
@@ -254,14 +254,18 @@ contract OffsetProgressiveCurveTest is Test {
         assertEq(curve.previewRedeem(r, s0, 0), curve.convertToAssets(r, s0, 0));
     }
 
-    function test_previewMint_mintMaxSharesFromZero_succeeds() public view {
+    function test_previewMint_mintMaxSharesFromZero_succeeds() public {
         uint256 sMax = curve.maxShares();
-        uint256 assets = curve.previewMint(sMax, 0, 0);
-        assertGt(assets, 0);
+        uint256 maxA = curve.maxAssets();
 
-        UD60x18 rawExpected = _expectedMintCostFromZeroRaw(sMax);
-        uint256 expected = UD60x18.unwrap(rawExpected);
-        assertEq(assets, expected);
+        // previewMint should revert due to assets out overflow - this happens because we ceil required assets for mint
+        // internally
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_AssetsOverflowMax.selector));
+        curve.previewMint(sMax, 0, 0);
+
+        // convertToAssets should return expected assets without ceil --> matches maxAssets
+        uint256 expectedWithoutCeil = curve.convertToAssets(sMax, sMax, 0);
+        assertEq(expectedWithoutCeil, maxA);
     }
 
     function test_previewMint_mintPastMaxSharesFromZero_reverts() public {
@@ -288,7 +292,7 @@ contract OffsetProgressiveCurveTest is Test {
 
     function test_previewRedeem_allAtMaxShares_succeeds() public view {
         uint256 sMax = curve.maxShares();
-        uint256 expected = _expectedMintCostFromZero(sMax);
+        uint256 expected = curve.maxAssets(); // redeem path returns floor; equals stored MAX_ASSETS
         uint256 assets = curve.previewRedeem(sMax, sMax, 0);
         assertEq(assets, expected);
     }
@@ -394,21 +398,50 @@ contract OffsetProgressiveCurveTest is Test {
     /* ===================================================== */
 
     /// @dev Helper to compute expected mint cost from zero supply
-    function _expectedMintCostFromZero(uint256 shares) internal view returns (uint256) {
-        // Cost = ((s+o)^2 - o^2) * (m/2)
-        // Note: Use wrap() not convert() - values are already in 18-decimal space
-        UD60x18 o = curve.OFFSET();
-        UD60x18 sPlusO = wrap(shares).add(o);
-        UD60x18 diff = sPlusO.powu(2).sub(o.powu(2));
-        return unwrap(diff.mul(curve.HALF_SLOPE()));
+    // function _expectedMintCostFromZero(uint256 shares) internal view returns (uint256) {
+    //     // Cost = ((s+o)^2 - o^2) * (m/2)
+    //     // Note: Use wrap() not convert() - values are already in 18-decimal space
+    //     UD60x18 o = curve.OFFSET();
+    //     UD60x18 sPlusO = wrap(shares).add(o);
+    //     UD60x18 diff = sPlusO.powu(2).sub(o.powu(2));
+    //     return unwrap(diff.mul(curve.HALF_SLOPE()));
+    // }
+
+    // /// @dev Helper to compute expected mint cost from zero supply, returning raw UD60x18
+    // function _expectedMintCostFromZeroRaw(uint256 shares) internal view returns (UD60x18) {
+    //     // Note: Use wrap() not convert() - values are already in 18-decimal space
+    //     UD60x18 o = curve.OFFSET();
+    //     UD60x18 sPlusO = wrap(shares).add(o);
+    //     UD60x18 diff = sPlusO.powu(2).sub(o.powu(2));
+    //     return diff.mul(curve.HALF_SLOPE());
+    // }
+
+    function _squareDownRaw(uint256 xRaw) internal pure returns (uint256) {
+        // floor(x * x / 1e18)
+        uint256 prod = xRaw * xRaw;
+        return prod / 1e18;
     }
 
-    /// @dev Helper to compute expected mint cost from zero supply, returning raw UD60x18
-    function _expectedMintCostFromZeroRaw(uint256 shares) internal view returns (UD60x18) {
-        // Note: Use wrap() not convert() - values are already in 18-decimal space
-        UD60x18 o = curve.OFFSET();
-        UD60x18 sPlusO = wrap(shares).add(o);
-        UD60x18 diff = sPlusO.powu(2).sub(o.powu(2));
-        return diff.mul(curve.HALF_SLOPE());
+    function _squareUpRaw(uint256 xRaw) internal pure returns (uint256) {
+        // ceil(x * x / 1e18)
+        uint256 prod = xRaw * xRaw;
+        uint256 q = prod / 1e18;
+        return q + ((prod % 1e18 == 0) ? 0 : 1);
+    }
+
+    function _expectedMintCostFromZero(uint256 shares) internal view returns (uint256) {
+        // s0 = OFFSET, s1 = shares + OFFSET (all 18-decimals)
+        uint256 s1Raw = unwrap(wrap(shares).add(curve.OFFSET()));
+        uint256 s0Raw = unwrap(curve.OFFSET());
+
+        // area = ceil(s1^2) - floor(s0^2)
+        uint256 areaUpRaw = _squareUpRaw(s1Raw) - _squareDownRaw(s0Raw);
+
+        // assets = ceil(area * HALF_SLOPE / 1e18)
+        // With our SLOPE=2e18 → HALF_SLOPE=1e18, this reduces to exactly `areaUpRaw`.
+        uint256 hs = unwrap(curve.HALF_SLOPE());
+        uint256 prod = areaUpRaw * hs;
+        uint256 q = prod / 1e18;
+        return q + ((prod % 1e18 == 0) ? 0 : 1);
     }
 }

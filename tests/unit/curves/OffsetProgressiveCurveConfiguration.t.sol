@@ -298,7 +298,9 @@ contract OffsetProgressiveCurveConfigurationTest is Test {
             TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
                 address(impl),
                 address(this),
-                abi.encodeWithSelector(OffsetProgressiveCurve.initialize.selector, config.name, config.slope, config.offset)
+                abi.encodeWithSelector(
+                    OffsetProgressiveCurve.initialize.selector, config.name, config.slope, config.offset
+                )
             );
 
             curves[i] = OffsetProgressiveCurve(address(proxy));
@@ -790,9 +792,7 @@ contract OffsetProgressiveCurveConfigurationTest is Test {
             uint256 returnFromRedeem = curve.previewRedeem(sharesToMint, totalShares + sharesToMint, 0);
 
             // Should be very close (within 1 wei due to rounding)
-            assertApproxEqAbs(
-                costToMint, returnFromRedeem, 1, "Mint-redeem round trip should be approximately neutral"
-            );
+            assertApproxEqAbs(costToMint, returnFromRedeem, 1, "Mint-redeem round trip should be approximately neutral");
         }
     }
 
@@ -960,7 +960,10 @@ contract OffsetProgressiveCurveConfigurationTest is Test {
                 : 0;
 
             console.log("--- Config:", c.name, "---");
-            console.log("  Early cost/share growth (1-100e18): %", earlyVariance > 100 ? earlyVariance - 100 : 100 - earlyVariance);
+            console.log(
+                "  Early cost/share growth (1-100e18): %",
+                earlyVariance > 100 ? earlyVariance - 100 : 100 - earlyVariance
+            );
             console.log("  Late cost increase (500-2500e18): %", lateGrowth);
             console.log("  Gentleness score (lower = better early):", earlyVariance);
             console.log("  Steepness score (higher = better late):", lateGrowth);
@@ -1006,11 +1009,7 @@ contract OffsetProgressiveCurveConfigurationTest is Test {
 
             // In the gentle range, average cost per 1e18 shares should not increase dramatically
             // Allow up to 3x increase from 1e18 to 150e18 (this is still "gentle")
-            assertLt(
-                avgCost150,
-                avgCost1 * 3,
-                string.concat("Config should be gentle in target range: ", config.name)
-            );
+            assertLt(avgCost150, avgCost1 * 3, string.concat("Config should be gentle in target range: ", config.name));
         }
     }
 
@@ -1064,7 +1063,7 @@ contract OffsetProgressiveCurveConfigurationTest is Test {
             uint256 avgCost1 = m.costToMint1e18Shares / 1e18;
             uint256 avgCost100 = m.costToMint100e18Shares / 100e18;
             uint256 gentlenessVariance = avgCost100 > avgCost1
-                ? ((avgCost100 - avgCost1) * 1e18) / avgCost1 // Percentage variance
+                ? ((avgCost100 - avgCost1) * 1e18) / avgCost1  // Percentage variance
                 : 0;
 
             // Steepness: growth from 500e18 to 2500e18 (higher is better)
@@ -1077,7 +1076,8 @@ contract OffsetProgressiveCurveConfigurationTest is Test {
             uint256 costScore = m.costToMint2500e18Shares > 0 ? (1e36 / m.costToMint2500e18Shares) : 0;
 
             // Combined score (weights: steepness=50%, gentleness=30%, cost=20%)
-            uint256 score = (steepness * 50) / 100 + ((1e18 - gentlenessVariance) * 30) / 100 + (costScore * 20) / (1e18);
+            uint256 score =
+                (steepness * 50) / 100 + ((1e18 - gentlenessVariance) * 30) / 100 + (costScore * 20) / (1e18);
 
             if (score > bestScore) {
                 bestScore = score;
@@ -1171,7 +1171,9 @@ contract OffsetProgressiveCurveConfigurationTest is Test {
     {
         OffsetProgressiveCurve impl = new OffsetProgressiveCurve();
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
-            address(impl), address(this), abi.encodeWithSelector(OffsetProgressiveCurve.initialize.selector, name, slope, offset)
+            address(impl),
+            address(this),
+            abi.encodeWithSelector(OffsetProgressiveCurve.initialize.selector, name, slope, offset)
         );
         return OffsetProgressiveCurve(address(proxy));
     }

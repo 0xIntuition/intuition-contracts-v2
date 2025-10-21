@@ -431,7 +431,11 @@ abstract contract BaseTest is Modifiers, Test {
         return BondingCurveConfig({ registry: address(0), defaultCurveId: 1 });
     }
 
-    function createAtomWithDeposit(bytes memory atomData, uint256 depositAmount, address creator)
+    function createAtomWithDeposit(
+        bytes memory atomData,
+        uint256 depositAmount,
+        address creator
+    )
         internal
         returns (bytes32)
     {
@@ -444,7 +448,11 @@ abstract contract BaseTest is Modifiers, Test {
         return atomIds[0];
     }
 
-    function createSimpleAtom(string memory atomString, uint256 depositAmount, address creator)
+    function createSimpleAtom(
+        string memory atomString,
+        uint256 depositAmount,
+        address creator
+    )
         internal
         returns (bytes32)
     {
@@ -460,11 +468,27 @@ abstract contract BaseTest is Modifiers, Test {
         return protocol.multiVault.getAtomCost();
     }
 
-    function convertToShares(uint256 assets, bytes32 termId, uint256 bondingCurveId) internal view returns (uint256) {
+    function convertToShares(
+        uint256 assets,
+        bytes32 termId,
+        uint256 bondingCurveId
+    )
+        internal
+        view
+        returns (uint256)
+    {
         return protocol.multiVault.convertToShares(termId, bondingCurveId, assets);
     }
 
-    function convertToAssets(uint256 shares, bytes32 termId, uint256 bondingCurveId) internal view returns (uint256) {
+    function convertToAssets(
+        uint256 shares,
+        bytes32 termId,
+        uint256 bondingCurveId
+    )
+        internal
+        view
+        returns (uint256)
+    {
         return protocol.multiVault.convertToAssets(termId, bondingCurveId, shares);
     }
 
@@ -474,7 +498,11 @@ abstract contract BaseTest is Modifiers, Test {
     }
 
     // Helper function to create multiple atoms with uniform costs
-    function createAtomsWithUniformCost(bytes[] memory atomDataArray, uint256 costPerAtom, address creator)
+    function createAtomsWithUniformCost(
+        bytes[] memory atomDataArray,
+        uint256 costPerAtom,
+        address creator
+    )
         internal
         returns (bytes32[] memory)
     {
@@ -577,7 +605,11 @@ abstract contract BaseTest is Modifiers, Test {
     }
 
     // Helper function to create multiple atoms and return their IDs
-    function createMultipleAtoms(string[] memory atomStrings, uint256[] memory costs, address creator)
+    function createMultipleAtoms(
+        string[] memory atomStrings,
+        uint256[] memory costs,
+        address creator
+    )
         internal
         returns (bytes32[] memory)
     {
