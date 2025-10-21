@@ -2,7 +2,7 @@
 pragma solidity 0.8.29;
 
 import { Test, console } from "forge-std/src/Test.sol";
-import { UD60x18, ud60x18, convert } from "@prb/math/src/UD60x18.sol";
+import { UD60x18, ud60x18, wrap, unwrap } from "@prb/math/src/UD60x18.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCurve.sol";
 import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
@@ -127,18 +127,94 @@ contract OffsetProgressiveCurveTest is Test {
         assertGt(shares, 0);
     }
 
-    function testFuzz_currentPrice(uint256 totalShares) public view {
+    function testFuzz_currentPrice_linearityProperty(uint256 totalShares, uint256 delta) public view {
+        // Test the fundamental property: price should increase linearly with shares
+        // P(s + Δs) - P(s) = m * Δs, where m is the slope
+
+        totalShares = bound(totalShares, 0, curve.maxShares() - 1e18);
+        delta = bound(delta, 1, 1e18);
+
+        // Ensure we don't exceed max shares
+        if (totalShares + delta > curve.maxShares()) {
+            delta = curve.maxShares() - totalShares;
+        }
+
+        uint256 price1 = curve.currentPrice(totalShares, 0);
+        uint256 price2 = curve.currentPrice(totalShares + delta, 0);
+
+        // Calculate expected increase: SLOPE * delta
+        // Since SLOPE is in 18-decimal fixed point, we need: (SLOPE * delta) / 1e18
+        uint256 expectedIncrease = (SLOPE * delta) / 1e18;
+        uint256 actualIncrease = price2 - price1;
+
+        // Allow for 1 wei rounding error due to fixed-point arithmetic
+        assertApproxEqAbs(actualIncrease, expectedIncrease, 1, "Price should increase linearly by SLOPE * delta");
+    }
+
+    function testFuzz_currentPrice_offsetEffect(uint256 totalShares) public view {
+        // Test that the offset correctly shifts the price curve
+        // At totalShares = 0, price should be OFFSET * SLOPE
         totalShares = bound(totalShares, 0, curve.maxShares());
 
         uint256 price = curve.currentPrice(totalShares, 0);
-        // Looking at the contract: convert(totalShares).add(OFFSET).mul(SLOPE).unwrap()
-        // This means: (totalShares * 1e18 + OFFSET) * SLOPE / 1e18
-        // Since OFFSET is 0.0001e18 = 1e14, and SLOPE is 0.001e18 = 1e15
-        // The formula becomes: (totalShares * 1e18 + 1e14) * 1e15 / 1e18
-        // Which simplifies to: totalShares * 1e15 + 1e14 * 1e15 / 1e18
-        // Which is: totalShares * SLOPE + OFFSET * SLOPE / 1e18
-        uint256 expectedPrice = totalShares * SLOPE + (OFFSET * SLOPE / 1e18);
-        assertEq(price, expectedPrice);
+        uint256 priceAtZero = curve.currentPrice(0, 0);
+
+        // Price formula: P(s) = (s + offset) * slope
+        // So: P(s) - P(0) = s * slope
+        uint256 expectedDifference = (SLOPE * totalShares) / 1e18;
+        uint256 actualDifference = price - priceAtZero;
+
+        assertApproxEqAbs(actualDifference, expectedDifference, 1, "Price difference should equal shares * slope");
+
+        // Also verify the offset is applied correctly at zero
+        uint256 expectedPriceAtZero = (OFFSET * SLOPE) / 1e18;
+        assertEq(priceAtZero, expectedPriceAtZero, "Price at zero should equal offset * slope");
+    }
+
+    function testFuzz_currentPrice_integrationWithMint(uint256 sharesToMint) public view {
+        // Test that the integral of prices matches the mint cost
+        // This verifies the relationship between currentPrice and previewMint
+        sharesToMint = bound(sharesToMint, 1e15, 1e18); // Reasonable range for testing
+
+        uint256 totalShares = 10e18; // Start from non-zero supply
+
+        // The cost to mint should equal the area under the price curve
+        // For a linear curve: Cost = (P(s1) + P(s2)) / 2 * Δs
+        uint256 price1 = curve.currentPrice(totalShares, 0);
+        uint256 price2 = curve.currentPrice(totalShares + sharesToMint, 0);
+        uint256 averagePrice = (price1 + price2) / 2;
+        uint256 expectedCost = (averagePrice * sharesToMint) / 1e18;
+
+        uint256 actualCost = curve.previewMint(sharesToMint, totalShares, 0);
+
+        // Allow 0.1% tolerance for rounding in the integral calculation
+        uint256 tolerance = actualCost / 1000;
+        assertApproxEqAbs(actualCost, expectedCost, tolerance, "Mint cost should match integral of price curve");
+    }
+
+    function testFuzz_currentPrice_monotonicIncrease(uint256 shares1, uint256 shares2) public view {
+        // Test that price is monotonically increasing (or equal due to rounding)
+        shares1 = bound(shares1, 0, curve.maxShares());
+        shares2 = bound(shares2, 0, curve.maxShares());
+
+        uint256 price1 = curve.currentPrice(shares1, 0);
+        uint256 price2 = curve.currentPrice(shares2, 0);
+
+        if (shares1 < shares2) {
+            assertLe(price1, price2, "Price should be less than or equal when supply is lower");
+            // If the share difference is significant, price should strictly increase
+            if (shares2 - shares1 >= 1e18) {
+                assertLt(price1, price2, "Price should strictly increase for significant supply differences");
+            }
+        } else if (shares1 > shares2) {
+            assertGe(price1, price2, "Price should be greater than or equal when supply is higher");
+            // If the share difference is significant, price should strictly decrease
+            if (shares1 - shares2 >= 1e18) {
+                assertGt(price1, price2, "Price should strictly decrease for significant supply differences");
+            }
+        } else {
+            assertEq(price1, price2, "Same supply should have same price");
+        }
     }
 
     function test_offset_previewMint_isCeil_of_previewRedeem_floor() public view {
@@ -184,7 +260,7 @@ contract OffsetProgressiveCurveTest is Test {
         assertGt(assets, 0);
 
         UD60x18 rawExpected = _expectedMintCostFromZeroRaw(sMax);
-        uint256 expected = _ceilUdToUint(rawExpected);
+        uint256 expected = UD60x18.unwrap(rawExpected);
         assertEq(assets, expected);
     }
 
@@ -320,23 +396,19 @@ contract OffsetProgressiveCurveTest is Test {
     /// @dev Helper to compute expected mint cost from zero supply
     function _expectedMintCostFromZero(uint256 shares) internal view returns (uint256) {
         // Cost = ((s+o)^2 - o^2) * (m/2)
+        // Note: Use wrap() not convert() - values are already in 18-decimal space
         UD60x18 o = curve.OFFSET();
-        UD60x18 sPlusO = convert(shares).add(o);
+        UD60x18 sPlusO = wrap(shares).add(o);
         UD60x18 diff = sPlusO.powu(2).sub(o.powu(2));
-        return convert(diff.mul(curve.HALF_SLOPE()));
+        return unwrap(diff.mul(curve.HALF_SLOPE()));
     }
 
     /// @dev Helper to compute expected mint cost from zero supply, returning raw UD60x18
     function _expectedMintCostFromZeroRaw(uint256 shares) internal view returns (UD60x18) {
+        // Note: Use wrap() not convert() - values are already in 18-decimal space
         UD60x18 o = curve.OFFSET();
-        UD60x18 sPlusO = convert(shares).add(o);
+        UD60x18 sPlusO = wrap(shares).add(o);
         UD60x18 diff = sPlusO.powu(2).sub(o.powu(2));
         return diff.mul(curve.HALF_SLOPE());
-    }
-
-    /// @dev Converts a UD60x18 to a uint256 by ceiling the value (i.e. rounding up)
-    function _ceilUdToUint(UD60x18 x) internal pure returns (uint256) {
-        uint256 raw = UD60x18.unwrap(x); // 18-decimal scaled
-        return raw / 1e18 + ((raw % 1e18 == 0) ? 0 : 1); // ceil to uint256
     }
 }
