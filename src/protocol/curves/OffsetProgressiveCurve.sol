@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { UD60x18, ud60x18, wrap, unwrap, uMAX_UD60x18, uUNIT } from "@prb/math/src/UD60x18.sol";
+import { UD60x18, wrap, unwrap, uUNIT } from "@prb/math/src/UD60x18.sol";
 import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 
 import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
@@ -66,7 +66,6 @@ contract OffsetProgressiveCurve is BaseCurve {
     uint256 public MAX_ASSETS;
 
     /// @notice Custom errors
-    error OffsetProgressiveCurve_InvalidOffset();
     error OffsetProgressiveCurve_InvalidSlope();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -84,6 +83,7 @@ contract OffsetProgressiveCurve is BaseCurve {
         __BaseCurve_init(_name);
 
         if (slope18 == 0 || slope18 % 2 != 0) revert OffsetProgressiveCurve_InvalidSlope();
+
         SLOPE = wrap(slope18);
         HALF_SLOPE = wrap(slope18 / 2);
         OFFSET = wrap(offset18);

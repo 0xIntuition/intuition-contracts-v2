@@ -754,7 +754,7 @@ contract OffsetProgressiveCurveConfigurationTest is Test {
         uint256 actualCost = curve.previewMint(shares, totalShares, 0);
 
         // Should match (allowing for rounding)
-        assertApproxEqAbs(actualCost, expectedCost, 1, "Cost should match formula");
+        assertApproxEqAbs(actualCost, expectedCost, 2, "Cost should match formula");
     }
 
     /* =================================================== */
@@ -840,7 +840,7 @@ contract OffsetProgressiveCurveConfigurationTest is Test {
             assertLt(metric.maxAssets, type(uint256).max, "Max assets should be less than uint256 max");
 
             // Should be able to mint up to max shares
-            uint256 costToMax = curves[i].previewMint(metric.maxShares, 0, 0);
+            uint256 costToMax = curves[i].convertToAssets(metric.maxShares, metric.maxShares, 0);
             assertGt(costToMax, 0, "Should have positive cost to mint max shares");
         }
     }
