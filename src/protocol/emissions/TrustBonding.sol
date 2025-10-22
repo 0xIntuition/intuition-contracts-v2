@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
+import { console } from "forge-std/src/console.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
 import { ICoreEmissionsController } from "src/interfaces/ICoreEmissionsController.sol";
@@ -280,9 +281,8 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
 
         uint256 prevEpoch = _currEpoch - 1;
         uint256 userClaimedReward = userClaimedRewardsForEpoch[account][prevEpoch];
-        uint256 userEligibleReward =
-            _userEligibleRewardsForEpoch(account, prevEpoch) * _getPersonalUtilizationRatio(account, prevEpoch)
-            / BASIS_POINTS_DIVISOR;
+        uint256 userEligibleReward = _userEligibleRewardsForEpoch(account, prevEpoch)
+            * _getPersonalUtilizationRatio(account, prevEpoch) / BASIS_POINTS_DIVISOR;
 
         if (userEligibleReward <= userClaimedReward) {
             return 0;
@@ -503,12 +503,15 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
             return BASIS_POINTS_DIVISOR;
         }
 
-        // Fetch the personal utilization for the user for their previous active epoch (strictly prior to `_epoch`)
-        int256 userUtilizationBefore =
-            IMultiVault(multiVault).getUserUtilizationForPreviousActiveEpoch(_account, _epoch);
+        /// If the user had 0 utilization in the "after" epoch, we can assume the utilization delta will <= zero 
+        /// so we return the personalUtilizationLowerBound without requiring additional calculations.
+        int256 userUtilizationNow = IMultiVault(multiVault).getUserUtilizationForEpoch(_account, _epoch);
+        if (userUtilizationNow == 0) {
+            return personalUtilizationLowerBound;
+        }
 
-        // Fetch the personal utilization for the user for the previous global epoch
-        int256 userUtilizationAfter = IMultiVault(multiVault).getUserUtilizationForEpoch(_account, _epoch);
+        int256 userUtilizationBefore = IMultiVault(multiVault).getUserUtilizationForPreviousActiveEpoch(_account, _epoch - 1);
+        int256 userUtilizationAfter = IMultiVault(multiVault).getUserUtilizationForPreviousActiveEpoch(_account, _epoch);
 
         // Since rawUtilizationDelta is signed, we only do a sign check, as the explicit underflow check is not needed
         int256 rawUtilizationDelta = userUtilizationAfter - userUtilizationBefore;
@@ -592,7 +595,11 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
      * @param lowerBound The lower bound for the utilization ratio
      * @return The normalized utilization ratio for the given parameters
      */
-    function _getNormalizedUtilizationRatio(uint256 delta, uint256 target, uint256 lowerBound)
+    function _getNormalizedUtilizationRatio(
+        uint256 delta,
+        uint256 target,
+        uint256 lowerBound
+    )
         internal
         pure
         returns (uint256)

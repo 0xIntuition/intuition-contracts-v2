@@ -88,9 +88,9 @@ contract ClaimRewardsTest is TrustBondingBase {
         _createLock(users.alice, initialTokens);
         _advanceToEpoch(1);
 
-        uint256 prevEpoch = 0;
-        uint256 expectedRawRewards = protocol.trustBonding.userEligibleRewardsForEpoch(users.alice, prevEpoch);
-        uint256 personalUtilizationRatio = protocol.trustBonding.getPersonalUtilizationRatio(users.alice, prevEpoch);
+        uint256 PREVIOUS_EPOCH = 0;
+        uint256 expectedRawRewards = protocol.trustBonding.userEligibleRewardsForEpoch(users.alice, PREVIOUS_EPOCH);
+        uint256 personalUtilizationRatio = protocol.trustBonding.getPersonalUtilizationRatio(users.alice, PREVIOUS_EPOCH);
         uint256 expectedFinalRewards = expectedRawRewards * personalUtilizationRatio / BASIS_POINTS_DIVISOR;
 
         uint256 aliceBalanceBefore = users.alice.balance;
@@ -110,17 +110,17 @@ contract ClaimRewardsTest is TrustBondingBase {
 
         // Check storage updates
         assertEq(
-            protocol.trustBonding.totalClaimedRewardsForEpoch(prevEpoch),
+            protocol.trustBonding.totalClaimedRewardsForEpoch(PREVIOUS_EPOCH),
             expectedFinalRewards,
             "Total claimed rewards should be updated"
         );
         assertEq(
-            protocol.trustBonding.userClaimedRewardsForEpoch(users.alice, prevEpoch),
+            protocol.trustBonding.userClaimedRewardsForEpoch(users.alice, PREVIOUS_EPOCH),
             expectedFinalRewards,
             "User claimed rewards should be updated"
         );
         assertTrue(
-            protocol.trustBonding.hasClaimedRewardsForEpoch(users.alice, prevEpoch),
+            protocol.trustBonding.hasClaimedRewardsForEpoch(users.alice, PREVIOUS_EPOCH),
             "User should be marked as having claimed"
         );
     }
@@ -130,10 +130,10 @@ contract ClaimRewardsTest is TrustBondingBase {
         _createLock(users.bob, initialTokens);
         _advanceToEpoch(1);
 
-        uint256 prevEpoch = 0;
+        uint256 PREVIOUS_EPOCH = 0;
 
         // Alice claims to Bob
-        uint256 aliceExpectedRewards = _calculateExpectedRewards(users.alice, prevEpoch);
+        uint256 aliceExpectedRewards = _calculateExpectedRewards(users.alice, PREVIOUS_EPOCH);
         uint256 bobBalanceBefore = users.bob.balance;
 
         resetPrank(users.alice);
@@ -143,7 +143,7 @@ contract ClaimRewardsTest is TrustBondingBase {
         assertEq(bobBalanceAfter, bobBalanceBefore + aliceExpectedRewards, "Bob should receive Alice's rewards");
 
         // Bob claims to Charlie
-        uint256 bobExpectedRewards = _calculateExpectedRewards(users.bob, prevEpoch);
+        uint256 bobExpectedRewards = _calculateExpectedRewards(users.bob, PREVIOUS_EPOCH);
         uint256 charlieBalanceBefore = users.charlie.balance;
 
         resetPrank(users.bob);
@@ -159,12 +159,12 @@ contract ClaimRewardsTest is TrustBondingBase {
         _createLock(users.charlie, initialTokens / 2); // Different amounts
         _advanceToEpoch(1);
 
-        uint256 prevEpoch = 0;
+        uint256 PREVIOUS_EPOCH = 0;
 
         // Calculate expected rewards for each user
-        uint256 aliceExpected = _calculateExpectedRewards(users.alice, prevEpoch);
-        uint256 bobExpected = _calculateExpectedRewards(users.bob, prevEpoch);
-        uint256 charlieExpected = _calculateExpectedRewards(users.charlie, prevEpoch);
+        uint256 aliceExpected = _calculateExpectedRewards(users.alice, PREVIOUS_EPOCH);
+        uint256 bobExpected = _calculateExpectedRewards(users.bob, PREVIOUS_EPOCH);
+        uint256 charlieExpected = _calculateExpectedRewards(users.charlie, PREVIOUS_EPOCH);
 
         // All users claim
         resetPrank(users.alice);
@@ -177,14 +177,14 @@ contract ClaimRewardsTest is TrustBondingBase {
         protocol.trustBonding.claimRewards(users.charlie);
 
         // Verify total claimed rewards
-        uint256 totalClaimed = protocol.trustBonding.totalClaimedRewardsForEpoch(prevEpoch);
+        uint256 totalClaimed = protocol.trustBonding.totalClaimedRewardsForEpoch(PREVIOUS_EPOCH);
         uint256 expectedTotalClaimed = aliceExpected + bobExpected + charlieExpected;
         assertEq(totalClaimed, expectedTotalClaimed, "Total claimed should equal sum of individual claims");
 
         // Verify individual claimed rewards
-        assertEq(protocol.trustBonding.userClaimedRewardsForEpoch(users.alice, prevEpoch), aliceExpected);
-        assertEq(protocol.trustBonding.userClaimedRewardsForEpoch(users.bob, prevEpoch), bobExpected);
-        assertEq(protocol.trustBonding.userClaimedRewardsForEpoch(users.charlie, prevEpoch), charlieExpected);
+        assertEq(protocol.trustBonding.userClaimedRewardsForEpoch(users.alice, PREVIOUS_EPOCH), aliceExpected);
+        assertEq(protocol.trustBonding.userClaimedRewardsForEpoch(users.bob, PREVIOUS_EPOCH), bobExpected);
+        assertEq(protocol.trustBonding.userClaimedRewardsForEpoch(users.charlie, PREVIOUS_EPOCH), charlieExpected);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -195,15 +195,15 @@ contract ClaimRewardsTest is TrustBondingBase {
         _createLock(users.alice, initialTokens);
         _advanceToEpoch(2); // Need epoch 2+ for utilization calculations
 
-        uint256 prevEpoch = 1;
+        uint256 PREVIOUS_EPOCH = 1;
 
         // Set up scenario where Alice gets max utilization ratio (100%)
         _setUserUtilizationForEpoch(users.alice, 0, 1000e18);
         _setUserUtilizationForEpoch(users.alice, 1, 2000e18); // Doubled utilization
         _setUserClaimedRewardsForEpoch(users.alice, 0, 500e18); // Low target, high delta
 
-        uint256 rawRewards = protocol.trustBonding.userEligibleRewardsForEpoch(users.alice, prevEpoch);
-        uint256 utilizationRatio = protocol.trustBonding.getPersonalUtilizationRatio(users.alice, prevEpoch);
+        uint256 rawRewards = protocol.trustBonding.userEligibleRewardsForEpoch(users.alice, PREVIOUS_EPOCH);
+        uint256 utilizationRatio = protocol.trustBonding.getPersonalUtilizationRatio(users.alice, PREVIOUS_EPOCH);
 
         assertEq(utilizationRatio, BASIS_POINTS_DIVISOR, "Should get max utilization ratio");
 
@@ -213,7 +213,7 @@ contract ClaimRewardsTest is TrustBondingBase {
         protocol.trustBonding.claimRewards(users.alice);
 
         assertEq(
-            protocol.trustBonding.userClaimedRewardsForEpoch(users.alice, prevEpoch),
+            protocol.trustBonding.userClaimedRewardsForEpoch(users.alice, PREVIOUS_EPOCH),
             expectedRewards,
             "Should claim full raw rewards with max ratio"
         );
@@ -223,14 +223,14 @@ contract ClaimRewardsTest is TrustBondingBase {
         _createLock(users.alice, initialTokens);
         _advanceToEpoch(3);
 
-        uint256 prevEpoch = 2;
+        uint256 PREVIOUS_EPOCH = 2;
 
         // Set up scenario where Alice gets min utilization ratio (30%)
         _setUserUtilizationForEpoch(users.alice, 0, 2000e18);
         _setUserUtilizationForEpoch(users.alice, 1, 1000e18); // Decreased utilization (negative delta)
 
-        uint256 rawRewards = protocol.trustBonding.userEligibleRewardsForEpoch(users.alice, prevEpoch);
-        uint256 utilizationRatio = protocol.trustBonding.getPersonalUtilizationRatio(users.alice, prevEpoch);
+        uint256 rawRewards = protocol.trustBonding.userEligibleRewardsForEpoch(users.alice, PREVIOUS_EPOCH);
+        uint256 utilizationRatio = protocol.trustBonding.getPersonalUtilizationRatio(users.alice, PREVIOUS_EPOCH);
 
         assertEq(utilizationRatio, PERSONAL_UTILIZATION_LOWER_BOUND, "Should get min utilization ratio");
 
@@ -240,41 +240,103 @@ contract ClaimRewardsTest is TrustBondingBase {
         protocol.trustBonding.claimRewards(users.alice);
 
         assertEq(
-            protocol.trustBonding.userClaimedRewardsForEpoch(users.alice, prevEpoch),
+            protocol.trustBonding.userClaimedRewardsForEpoch(users.alice, PREVIOUS_EPOCH),
             expectedRewards,
             "Should claim reduced rewards with min ratio"
         );
     }
 
     function test_claimRewards_withPartialPersonalUtilizationRatio() external {
+        uint256 TARGET = 2000;
+        uint256 DEPOSIT = 1000;
+        uint256 DELTA = 500;
+        uint256 CURRENT_EPOCH = 3;
+        uint256 PREVIOUS_EPOCH = CURRENT_EPOCH - 1;
         _createLock(users.alice, initialTokens);
-        _advanceToEpoch(3);
+        _advanceToEpoch(CURRENT_EPOCH);
 
-        uint256 prevEpoch = 2;
-
-        // Set up scenario for 50% of target utilization delta
-        _setUserUtilizationForEpoch(users.alice, 1, 1000e18);
-        _setUserUtilizationForEpoch(users.alice, 2, 1500e18); // Delta = 500
-        _setUserClaimedRewardsForEpoch(users.alice, 1, 1000e18); // Target = 1000
-        _setActiveEpoch(users.alice, 0, 2); // Ensure last active epoch is set
-        _setActiveEpoch(users.alice, 1, 1); // Ensure previous active epoch is set
-
-        // Expected ratio = 3000 + (500 * 7000) / 1000 = 3000 + 3500 = 6500
-        uint256 expectedRatio = 6500;
-
-        uint256 rawRewards = protocol.trustBonding.userEligibleRewardsForEpoch(users.alice, prevEpoch);
-        uint256 utilizationRatio = protocol.trustBonding.getPersonalUtilizationRatio(users.alice, prevEpoch);
-
-        assertEq(utilizationRatio, expectedRatio, "Should get calculated utilization ratio");
-
-        uint256 expectedRewards = rawRewards * expectedRatio / BASIS_POINTS_DIVISOR;
+        // Set up scenario for 47.5% of target utilization delta
+        _setUserClaimedRewardsForEpoch(users.alice, 1, TARGET * 1e18);
+        _setUserUtilizationForEpoch(users.alice, 1, int256(DEPOSIT * 1e18));
+        _setUserUtilizationForEpoch(users.alice, 2, int256((DEPOSIT + DELTA) * 1e18));
+        _setActiveEpoch(users.alice, 0, 2);
+        _setActiveEpoch(users.alice, 1, 1);
+        
+        // lowerBound + (delta * ratioRange) / target;
+        uint256 expectedUtilizationRatio = PERSONAL_UTILIZATION_LOWER_BOUND + (DELTA * (BASIS_POINTS_DIVISOR - PERSONAL_UTILIZATION_LOWER_BOUND)) / TARGET;
+        uint256 rawRewards = protocol.trustBonding.userEligibleRewardsForEpoch(users.alice, PREVIOUS_EPOCH);
+        uint256 utilizationRatio = protocol.trustBonding.getPersonalUtilizationRatio(users.alice, PREVIOUS_EPOCH);
+        console.log('utilizationRatio', utilizationRatio);
 
         resetPrank(users.alice);
         protocol.trustBonding.claimRewards(users.alice);
-
+        
+        assertEq(utilizationRatio, expectedUtilizationRatio, "Should get calculated utilization ratio");
         assertEq(
-            protocol.trustBonding.userClaimedRewardsForEpoch(users.alice, prevEpoch),
-            expectedRewards,
+            protocol.trustBonding.userClaimedRewardsForEpoch(users.alice, PREVIOUS_EPOCH),
+            rawRewards * expectedUtilizationRatio / BASIS_POINTS_DIVISOR,
+            "Should claim rewards with partial ratio"
+        );
+    }
+    
+    function test_claimRewards_pastMeasurableEpochs() external {
+        uint256 TARGET = 10_000;
+        int256 DEPOSIT = 10_000;
+        int256 DELTA = 5_000;
+        uint256 CURRENT_EPOCH = 6;
+        uint256 PREVIOUS_EPOCH = CURRENT_EPOCH - 1;
+        _createLock(users.alice, initialTokens);
+        _advanceToEpoch(CURRENT_EPOCH);
+        /// Set up scenario for lower bound utilization ratio due to skipped epochs
+        /// Since we're 2 epochs ahead of the "userUtilizationBefore" utilization measurement delta is 0
+        _setUserClaimedRewardsForEpoch(users.alice, 1, TARGET * 1e18);
+        _setUserUtilizationForEpoch(users.alice, 3, DEPOSIT * 1e18);
+        _setUserUtilizationForEpoch(users.alice, 4, (DEPOSIT + DELTA) * 1e18);
+        _setActiveEpoch(users.alice, 0, 4);
+        _setActiveEpoch(users.alice, 1, 3);
+
+        uint256 expectedUtilizationRatio = PERSONAL_UTILIZATION_LOWER_BOUND;
+        uint256 rawRewards = protocol.trustBonding.userEligibleRewardsForEpoch(users.alice, PREVIOUS_EPOCH);
+        uint256 utilizationRatio = protocol.trustBonding.getPersonalUtilizationRatio(users.alice, PREVIOUS_EPOCH);
+
+        resetPrank(users.alice);
+        protocol.trustBonding.claimRewards(users.alice);
+        
+        assertEq(utilizationRatio, PERSONAL_UTILIZATION_LOWER_BOUND, "Utilization ratio should be at lower bound");
+        assertEq(
+            protocol.trustBonding.userClaimedRewardsForEpoch(users.alice, PREVIOUS_EPOCH),
+            rawRewards * expectedUtilizationRatio / BASIS_POINTS_DIVISOR,
+            "Should claim rewards with partial ratio"
+        );
+    }
+    
+    function test_claimRewards_negativeUtilization() external {
+        uint256 TARGET = 100;
+        int256 DEPOSIT = -10_000;
+        int256 DELTA = -5_000;
+        uint256 CURRENT_EPOCH = 5;
+        uint256 PREVIOUS_EPOCH = CURRENT_EPOCH - 1;
+        _createLock(users.alice, initialTokens);
+        _advanceToEpoch(CURRENT_EPOCH);
+
+        /// Set up scenario for lower bound utilization ratio due to negative utilization delta
+        _setUserClaimedRewardsForEpoch(users.alice, 1, TARGET * 1e18); // Target = 2000
+        _setUserUtilizationForEpoch(users.alice, 3, DEPOSIT * 1e18);
+        _setUserUtilizationForEpoch(users.alice, 4, (DEPOSIT + DELTA) * 1e18);
+        _setActiveEpoch(users.alice, 0, 4);
+        _setActiveEpoch(users.alice, 1, 3);
+
+        uint256 expectedUtilizationRatio = PERSONAL_UTILIZATION_LOWER_BOUND;
+        uint256 rawRewards = protocol.trustBonding.userEligibleRewardsForEpoch(users.alice, PREVIOUS_EPOCH);
+        uint256 utilizationRatio = protocol.trustBonding.getPersonalUtilizationRatio(users.alice, PREVIOUS_EPOCH);
+
+        resetPrank(users.alice);
+        protocol.trustBonding.claimRewards(users.alice);
+        
+        assertEq(utilizationRatio, PERSONAL_UTILIZATION_LOWER_BOUND, "Utilization ratio should be at lower bound");
+        assertEq(
+            protocol.trustBonding.userClaimedRewardsForEpoch(users.alice, PREVIOUS_EPOCH),
+            rawRewards * expectedUtilizationRatio / BASIS_POINTS_DIVISOR,
             "Should claim rewards with partial ratio"
         );
     }
@@ -287,7 +349,7 @@ contract ClaimRewardsTest is TrustBondingBase {
         _createLock(users.alice, initialTokens);
         _advanceToEpoch(3);
 
-        uint256 prevEpoch = 2;
+        uint256 PREVIOUS_EPOCH = 2;
 
         // Set up system utilization to affect emissions for epoch 1
         _setTotalUtilizationForEpoch(1, 1000e18);
@@ -297,11 +359,11 @@ contract ClaimRewardsTest is TrustBondingBase {
         // Expected system ratio = 5000 + (500 * 5000) / 1000 = 7500
         uint256 expectedSystemRatio = 7500;
 
-        uint256 systemRatio = protocol.trustBonding.getSystemUtilizationRatio(prevEpoch);
+        uint256 systemRatio = protocol.trustBonding.getSystemUtilizationRatio(PREVIOUS_EPOCH);
         assertEq(systemRatio, expectedSystemRatio, "System utilization ratio should be calculated correctly");
 
-        uint256 maxEmissions = protocol.satelliteEmissionsController.getEmissionsAtEpoch(prevEpoch);
-        uint256 actualEmissions = protocol.trustBonding.emissionsForEpoch(prevEpoch);
+        uint256 maxEmissions = protocol.satelliteEmissionsController.getEmissionsAtEpoch(PREVIOUS_EPOCH);
+        uint256 actualEmissions = protocol.trustBonding.emissionsForEpoch(PREVIOUS_EPOCH);
         uint256 expectedEmissions = maxEmissions * expectedSystemRatio / BASIS_POINTS_DIVISOR;
 
         assertEq(actualEmissions, expectedEmissions, "Emissions should be reduced by system utilization ratio");
@@ -311,7 +373,7 @@ contract ClaimRewardsTest is TrustBondingBase {
         protocol.trustBonding.claimRewards(users.alice);
 
         // The claimed rewards should be based on the reduced emissions
-        uint256 claimedRewards = protocol.trustBonding.userClaimedRewardsForEpoch(users.alice, prevEpoch);
+        uint256 claimedRewards = protocol.trustBonding.userClaimedRewardsForEpoch(users.alice, PREVIOUS_EPOCH);
         assertGt(claimedRewards, 0, "Should have claimed some rewards");
 
         // The claimed rewards should be less than what would be claimed with full emissions
@@ -415,7 +477,7 @@ contract ClaimRewardsTest is TrustBondingBase {
         _createLock(users.alice, initialTokens);
         _advanceToEpoch(2);
 
-        uint256 prevEpoch = 1;
+        uint256 PREVIOUS_EPOCH = 1;
 
         // Set up scenario that might cause rounding issues
         _setUserUtilizationForEpoch(users.alice, 0, 1);
@@ -425,10 +487,10 @@ contract ClaimRewardsTest is TrustBondingBase {
         resetPrank(users.alice);
         protocol.trustBonding.claimRewards(users.alice);
 
-        uint256 claimedRewards = protocol.trustBonding.userClaimedRewardsForEpoch(users.alice, prevEpoch);
+        uint256 claimedRewards = protocol.trustBonding.userClaimedRewardsForEpoch(users.alice, PREVIOUS_EPOCH);
         // Should get minimum ratio due to very small delta vs large target
-        uint256 rawRewards = protocol.trustBonding.userEligibleRewardsForEpoch(users.alice, prevEpoch);
-        uint256 utilizationRatio = protocol.trustBonding.getPersonalUtilizationRatio(users.alice, prevEpoch);
+        uint256 rawRewards = protocol.trustBonding.userEligibleRewardsForEpoch(users.alice, PREVIOUS_EPOCH);
+        uint256 utilizationRatio = protocol.trustBonding.getPersonalUtilizationRatio(users.alice, PREVIOUS_EPOCH);
         uint256 expectedMinRewards = rawRewards * utilizationRatio / BASIS_POINTS_DIVISOR;
 
         assertEq(claimedRewards, expectedMinRewards, "Should handle rounding correctly");

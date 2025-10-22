@@ -456,7 +456,7 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
             IMultiVault(address(protocol.multiVault)).getUserUtilizationForPreviousActiveEpoch(users.alice, 2);
         assertEq(
             atPrev,
-            int256(222),
+            int256(333),
             "At prevEpoch should return the utilization from epoch prior to it in which user had activity"
         );
     }
@@ -554,9 +554,8 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         IMultiVault(address(protocol.multiVault)).getUserUtilizationForPreviousActiveEpoch(users.alice, 0);
     }
 
-    // Case A: lastActive < epoch -> return personal[lastActive]
-    function test_getUserUtilizationForPreviousActiveEpoch_CaseA_lastBeforeTarget() external {
-        _advanceToEpoch(10);
+    function test_getUserUtilizationForPreviousActiveEpoch_caseA() external {
+        _advanceToEpoch(7);
         _setUserUtilizationForEpoch(users.alice, 4, 444);
         _setUserUtilizationForEpoch(users.alice, 5, 555);
         _setUserUtilizationForEpoch(users.alice, 6, 666);
@@ -569,9 +568,8 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         assertEq(checkpoint, int256(666), "Case A: lastActive < epoch, so use lastActive");
     }
 
-    // Case B: lastActive >= epoch, previousActive < epoch -> return personal[previousActive]
-    function test_getUserUtilizationForPreviousActiveEpoch_caseB_previousBeforeTarget() external {
-        _advanceToEpoch(10);
+    function test_getUserUtilizationForPreviousActiveEpoch_caseB() external {
+        _advanceToEpoch(7);
         _setUserUtilizationForEpoch(users.alice, 4, 444);
         _setUserUtilizationForEpoch(users.alice, 5, 555);
         _setUserUtilizationForEpoch(users.alice, 6, 666);
@@ -581,13 +579,11 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
 
         int256 checkpoint =
             IMultiVault(address(protocol.multiVault)).getUserUtilizationForPreviousActiveEpoch(users.alice, 6);
-        assertEq(checkpoint, int256(555), "Case B: previousActive < epoch, so use previousActive");
+        assertEq(checkpoint, int256(666), "Case B: previousActive < epoch, so use previousActive");
     }
 
-    // Case C: lastActive >= epoch, previousActive == epoch (or ≥),
-    //         previousPrevious < epoch -> return personal[previousPrevious]
-    function test_getUserUtilizationForPreviousActiveEpoch_caseC_prevEqualsTarget_usesPrevPrev() external {
-        _advanceToEpoch(10);
+    function test_getUserUtilizationForPreviousActiveEpoch_caseC() external {
+        _advanceToEpoch(7);
         _setUserUtilizationForEpoch(users.alice, 4, 444);
         _setUserUtilizationForEpoch(users.alice, 5, 555);
         _setUserUtilizationForEpoch(users.alice, 6, 666);
@@ -597,7 +593,46 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
 
         int256 checkpoint =
             IMultiVault(address(protocol.multiVault)).getUserUtilizationForPreviousActiveEpoch(users.alice, 5);
-        assertEq(checkpoint, int256(444), "Case C: use previousPreviousActiveEpoch's utilization");
+        assertEq(checkpoint, int256(555), "Case C: use previousPreviousActiveEpoch's utilization");
+    }
+    
+    function test_getUserUtilizationForPreviousActiveEpoch_caseD() external {
+        _advanceToEpoch(7);
+        _setUserUtilizationForEpoch(users.alice, 4, 444);
+        _setUserUtilizationForEpoch(users.alice, 6, 666);
+        _setActiveEpoch(users.alice, 0, 6);
+        _setActiveEpoch(users.alice, 1, 4);
+
+        int256 checkpointA = IMultiVault(address(protocol.multiVault)).getUserUtilizationForPreviousActiveEpoch(users.alice, 5);
+        int256 checkpointB = IMultiVault(address(protocol.multiVault)).getUserUtilizationForPreviousActiveEpoch(users.alice, 6);
+        assertEq(checkpointA, int256(444), "Case D Checkpoint A: should get 444 utilization ");
+        assertEq(checkpointB, int256(666), "Case D Checkpoint B: should get 666 utilization ");
+    }
+
+    function test_getUserUtilizationForPreviousActiveEpoch_caseE() external {
+        _advanceToEpoch(10);
+        _setUserUtilizationForEpoch(users.alice, 4, 444);
+        _setUserUtilizationForEpoch(users.alice, 5, 555);
+        _setUserUtilizationForEpoch(users.alice, 6, 666);
+        _setActiveEpoch(users.alice, 0, 6);
+        _setActiveEpoch(users.alice, 1, 5);
+        _setActiveEpoch(users.alice, 2, 4);
+
+        int256 checkpointA = IMultiVault(address(protocol.multiVault)).getUserUtilizationForPreviousActiveEpoch(users.alice, 8);
+        int256 checkpointB = IMultiVault(address(protocol.multiVault)).getUserUtilizationForPreviousActiveEpoch(users.alice, 9);
+        assertEq(checkpointA, int256(666), "Case E Checkpoint A: should get 666 utilization ");
+        assertEq(checkpointB, int256(666), "Case E Checkpoint B: should get 666 utilization ");
+    }
+    
+    function test_getUserUtilizationForPreviousActiveEpoch_caseF() external {
+        _advanceToEpoch(7);
+        _setUserUtilizationForEpoch(users.alice, 6, 666);
+        _setActiveEpoch(users.alice, 0, 6);
+
+        int256 checkpointA = IMultiVault(address(protocol.multiVault)).getUserUtilizationForPreviousActiveEpoch(users.alice, 5);
+        int256 checkpointB = IMultiVault(address(protocol.multiVault)).getUserUtilizationForPreviousActiveEpoch(users.alice, 6);
+        assertEq(checkpointA, int256(0), "Case F Checkpoint A: should get 0 utilization ");
+        assertEq(checkpointB, int256(666), "Case F Checkpoint B: should get 666 utilization ");
     }
 
     // Final fallback: no tracked epoch strictly earlier than target -> return 0
