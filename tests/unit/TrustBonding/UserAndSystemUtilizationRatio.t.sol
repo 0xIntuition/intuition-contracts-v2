@@ -548,12 +548,6 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         getUserUtilizationInEpoch() — explicit path coverage
     //////////////////////////////////////////////////////////////*/
 
-    function test_getUserUtilizationInEpoch_epochZero_returnsZero() external {
-        // Querying strictly before epoch 0 is nonsensical by definition during epoch 0
-        vm.expectRevert(MultiVault.MultiVault_InvalidEpoch.selector);
-        IMultiVault(address(protocol.multiVault)).getUserUtilizationInEpoch(users.alice, 0);
-    }
-
     function test_getUserUtilizationInEpoch_caseA() external {
         _advanceToEpoch(7);
         _setUserUtilizationForEpoch(users.alice, 4, 444);
