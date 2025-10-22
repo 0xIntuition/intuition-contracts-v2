@@ -231,7 +231,7 @@ contract MultiVault is
     }
 
     /// @inheritdoc IMultiVault
-    function getUserUtilizationForPreviousActiveEpoch(address user, uint256 epoch) external view returns (int256) {
+    function getUserUtilizationInEpoch(address user, uint256 epoch) external view returns (int256) {
         uint256 _currentEpoch = _currentEpoch();
 
         // Revert if calling with future epoch or during epoch 0, since during epoch 0 there is no previous epoch in

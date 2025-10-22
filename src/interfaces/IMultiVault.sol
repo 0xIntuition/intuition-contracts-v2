@@ -322,7 +322,7 @@ interface IMultiVault {
      * @return utilization The user's utilization value from their most recent tracked active epoch
      *         strictly before the specified `epoch`
      */
-    function getUserUtilizationForPreviousActiveEpoch(address user, uint256 epoch) external view returns (int256);
+    function getUserUtilizationInEpoch(address user, uint256 epoch) external view returns (int256);
 
     /// @notice Returns the total assets and total shares in a vault for a given term and bonding curve
     /// @param termId The ID of the term (atom or triple)
