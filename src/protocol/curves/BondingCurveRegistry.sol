@@ -162,26 +162,6 @@ contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2StepUpgradeable 
         return IBaseCurve(curveAddresses[id]).previewRedeem(shares, totalShares, totalAssets);
     }
 
-    /// @notice Preview how many shares would be redeemed for a withdrawal of assets
-    /// @param assets Quantity of assets to withdraw
-    /// @param totalAssets Total quantity of assets already staked into the curve
-    /// @param totalShares Total quantity of shares already awarded by the curve
-    /// @param id Curve ID to use for the calculation
-    /// @return shares The number of shares that would need to be redeemed
-    function previewWithdraw(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares,
-        uint256 id
-    )
-        external
-        view
-        onlyValidCurveId(id)
-        returns (uint256 shares)
-    {
-        return IBaseCurve(curveAddresses[id]).previewWithdraw(assets, totalAssets, totalShares);
-    }
-
     /// @notice Preview how many assets would be required to mint a specific amount of shares
     /// @param shares Quantity of shares to mint
     /// @param totalShares Total quantity of shares already awarded by the curve
@@ -200,6 +180,26 @@ contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2StepUpgradeable 
         returns (uint256 assets)
     {
         return IBaseCurve(curveAddresses[id]).previewMint(shares, totalShares, totalAssets);
+    }
+
+    /// @notice Preview how many shares would be redeemed for a withdrawal of assets
+    /// @param assets Quantity of assets to withdraw
+    /// @param totalAssets Total quantity of assets already staked into the curve
+    /// @param totalShares Total quantity of shares already awarded by the curve
+    /// @param id Curve ID to use for the calculation
+    /// @return shares The number of shares that would need to be redeemed
+    function previewWithdraw(
+        uint256 assets,
+        uint256 totalAssets,
+        uint256 totalShares,
+        uint256 id
+    )
+        external
+        view
+        onlyValidCurveId(id)
+        returns (uint256 shares)
+    {
+        return IBaseCurve(curveAddresses[id]).previewWithdraw(assets, totalAssets, totalShares);
     }
 
     /// @notice Convert assets to shares at a specific point on the curve

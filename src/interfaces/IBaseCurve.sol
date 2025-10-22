@@ -25,6 +25,7 @@ interface IBaseCurve {
     error BaseCurve_SharesExceedTotalShares();
     error BaseCurve_AssetsOverflowMax();
     error BaseCurve_SharesOverflowMax();
+    error BaseCurve_DomainExceeded();
 
     /* =================================================== */
     /*                    FUNCTIONS                       */

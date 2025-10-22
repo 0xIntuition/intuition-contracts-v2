@@ -1,84 +1,64 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { UD60x18, wrap, unwrap, uUNIT } from "@prb/math/src/UD60x18.sol";
+import { UD60x18, wrap, unwrap } from "@prb/math/src/UD60x18.sol";
 import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 
 import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
+import { ProgressiveCurveMathLib as PCMath } from "src/libraries/ProgressiveCurveMathLib.sol";
 
 /**
  * @title  OffsetProgressiveCurve
  * @author 0xIntuition
  * @notice A modified version of the Progressive bonding curve that introduces an offset parameter
  *         to control the initial price dynamics.
- *
- *         The price follows the formula:
- *         $$P(s) = m \cdot (s + \text{offset})$$
- *         where:
- *         - $m$ is the slope (in basis points)
- *         - $s$ is the total supply of shares
- *         - $\text{offset}$ shifts the starting point of the curve
- *
- *         The cost to mint shares is calculated as the area under this curve:
- *         $$\text{Cost} = ((s_2 + \text{offset})^2 - (s_1 + \text{offset})^2) \cdot \frac{m}{2}$$
- *         where $s_1$ is the starting share supply and $s_2$ is the final share supply.
- *
- *         The offset parameter allows for a more gradual initial price increase while maintaining
- *         the progressive pricing structure.
- *
- * @dev     Uses the prb-math library for performant, precise fixed point arithmetic with UD60x18
- * @dev     Fixed point precision used for all internal calculations, while return values are all
- *             represented as regular uint256s, and unwrapped.  I.e. we might use 123.456 internally
- *             and return 123.
- * @dev     The core equation:
- *             $$P(s) = m \cdot (s + \text{offset})$$
- *             and the cost equation:
- *             $$\text{Cost} = ((s_2 + \text{offset})^2 - (s_1 + \text{offset})^2) \cdot \frac{m}{2}$$
- *             comes from calculus - it's the integral of our modified linear price function. The area under
- *             the curve from point $s_1$ to $s_2$ gives us the total cost/return of minting/redeeming
- *             shares, but now shifted by our offset parameter.
- * @dev     Inspired by the Solaxy.sol contract: https://github.com/M3tering/Solaxy/blob/main/src/Solaxy.sol
- *          and https://m3tering.whynotswitch.com/token-economics/mint-and-distribution.  The key difference
- *          between the Solaxy contract and this one is that the economic state is handled by the MultiVault
- *          instead of directly in the curve implementation. The other significant difference is the inclusion
- *          of the OFFSET value, which we use to make the curve more gentle.
  */
 contract OffsetProgressiveCurve is BaseCurve {
-    /// @notice The slope of the curve, in basis points.  This is the rate at which the price of shares increases.
-    /// @dev 0.0025e18 -> 25 basis points, 0.0001e18 = 1 basis point, etc etc
-    /// @dev If minDeposit is 0.003 ether, this value would need to be 0.00007054e18 to avoid returning 0 shares for
-    /// minDeposit assets
+    /* =================================================== */
+    /*                     STATE                          */
+    /* =================================================== */
+
+    /// @notice The slope of the curve (18 decimal fixed-point multiplier). This is the rate at which the price of
+    /// shares increases
     UD60x18 public SLOPE;
 
-    /// @notice The offset of the curve.  This value is used to snip off a portion of the beginning of the curve,
-    /// realigning it to the
-    /// origin.  For more details, see the preview functions.
-    UD60x18 public OFFSET;
-
-    /// @notice The half of the slope, used for calculations.
+    /// @notice The half of the slope, used for calculations
     UD60x18 public HALF_SLOPE;
 
-    /// @dev Since powu(2) will overflow first (see slope equation), maximum totalShares is sqrt(MAX_UD60x18)
+    /// @notice The offset of the curve. This shifts the curve along the shares axis to adjust initial pricing behavior
+    UD60x18 public OFFSET;
+
+    /// @dev The maximum shares are sqrt(uint256.max / 1e18) - offset to prevent overflow in calculations
     uint256 public MAX_SHARES;
 
-    /// @dev The maximum assets is totalShares * slope / 2, because multiplication (see slope equation) would overflow
-    /// beyond that point.
+    /// @dev The maximum assets are derived from the maximum shares and slope to prevent overflow in calculations
     uint256 public MAX_ASSETS;
+
+    /* =================================================== */
+    /*                     ERRORS                          */
+    /* =================================================== */
 
     /// @notice Custom errors
     error OffsetProgressiveCurve_InvalidSlope();
+
+    /* =================================================== */
+    /*                     CONSTRUCTOR                     */
+    /* =================================================== */
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
 
-    /// @notice Initializes a new ProgressiveCurve with the given name and slope
-    /// @param _name The name of the curve (i.e. "Progressive Curve #465")
-    /// @param slope18 The slope of the curve, in basis points (i.e. 0.0025e18)
-    /// @param offset18 The offset of the curve, in basis points (i.e. 0.0001e18)
+    /* =================================================== */
+    /*                    INITIALIZER                      */
+    /* =================================================== */
+
+    /// @notice Initializes a new OffsetProgressiveCurve with the given name, slope, and offset
     /// @dev Computes maximum values given constructor arguments
-    /// @dev Computes Slope / 2 as commonly used constant
+    /// @param _name The name of the curve
+    /// @param slope18 The slope of the curve, in 18 decimal fixed-point format
+    /// @param offset18 The offset of the curve, in 18 decimal fixed-point format
     function initialize(string calldata _name, uint256 slope18, uint256 offset18) external initializer {
         __BaseCurve_init(_name);
 
@@ -88,219 +68,18 @@ contract OffsetProgressiveCurve is BaseCurve {
         HALF_SLOPE = wrap(slope18 / 2);
         OFFSET = wrap(offset18);
 
-        // Correct domain bound for squaring UD numbers:
-        // require (s + o)^2 * 1e18 <= type(uint256).max  =>  s + o_unscaled <= sqrt(max / 1e18)
         uint256 r = FixedPointMathLib.sqrt(type(uint256).max / 1e18);
-        uint256 oUnscaled = offset18 / 1e18; // 18-dec -> unscaled shares
+        uint256 oUnscaled = offset18 / 1e18;
         MAX_SHARES = r > oUnscaled ? (r - oUnscaled) : 0;
 
-        // MAX_ASSETS = ((MAX_SHARES+o)^2 - o^2) * (m/2), rounded DOWN (safety)
         UD60x18 sMax = wrap(MAX_SHARES).add(OFFSET);
-        UD60x18 maxAssetsUD = _square(sMax).sub(_square(OFFSET)).mul(HALF_SLOPE); // mul rounds down
+        UD60x18 maxAssetsUD = PCMath.square(sMax).sub(PCMath.square(OFFSET)).mul(HALF_SLOPE);
         MAX_ASSETS = unwrap(maxAssetsUD);
     }
 
-    /// @inheritdoc BaseCurve
-    /// @dev Let $s$ = current total supply
-    /// @dev Let $a$ = amount of assets to deposit
-    /// @dev Let $\frac{m}{2}$ = half of the slope
-    /// @dev Let $o$ = offset value
-    /// @dev shares:
-    /// $$\text{shares} = \sqrt{(s + o)^2 + \frac{a}{m/2}} - (s + o)$$
-    /// @dev or to say that another way:
-    /// $$\text{shares} = \sqrt{(s + o)^2 + \frac{2a}{m}} - (s + o)$$
-    function previewDeposit(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
-        external
-        view
-        override
-        returns (uint256 shares)
-    {
-        _checkDepositBounds(assets, totalAssets, MAX_ASSETS);
-
-        UD60x18 s = wrap(totalShares).add(OFFSET);
-        UD60x18 inner = _square(s).add(wrap(assets).div(HALF_SLOPE)); // plain div -> down
-        UD60x18 sharesUD = inner.sqrt().sub(s); // sqrt rounds down
-        shares = unwrap(sharesUD);
-
-        _checkDepositOut(shares, totalShares, MAX_SHARES);
-    }
-
-    /// @inheritdoc BaseCurve
-    /// @dev Let $s$ = initial total supply of shares
-    /// @dev Let $r$ = shares to redeem
-    /// @dev Let $\frac{m}{2}$ = half of the slope
-    /// @dev Let $o$ = offset value
-    /// @dev assets:
-    /// $$\text{assets} = ((s + o)^2 - ((s - r + o)^2)) \cdot \frac{m}{2}$$
-    /// @dev this can be expanded to:
-    /// $$\text{assets} = ((s + o)^2 - ((s + o)^2 - 2(s + o)r + r^2)) \cdot \frac{m}{2}$$
-    /// @dev which simplifies to:
-    /// $$\text{assets} = (2(s + o)r - r^2) \cdot \frac{m}{2}$$
-    /// @dev Implementation note: This formula is computed via the _convertToAssets helper,
-    /// @dev where juniorSupply = (s - r + o) and seniorSupply = (s + o)
-    function previewRedeem(
-        uint256 shares,
-        uint256 totalShares,
-        uint256 /*totalAssets*/
-    )
-        public
-        view
-        override
-        returns (uint256 assets)
-    {
-        _checkRedeem(shares, totalShares);
-
-        UD60x18 cur = wrap(totalShares).add(OFFSET);
-        UD60x18 newS = cur.sub(wrap(shares));
-
-        // Down where it matters: A - B with A down, B up
-        UD60x18 area = _square(cur).sub(_squareUp(newS));
-        UD60x18 assetsUD = area.mul(HALF_SLOPE); // mul down
-        assets = unwrap(assetsUD); // down
-    }
-
-    /// @inheritdoc BaseCurve
-    /// @dev Let $s$ = current total supply of shares
-    /// @dev Let $n$ = new shares to mint
-    /// @dev Let $\frac{m}{2}$ = half of the slope
-    /// @dev Let $o$ = offset value
-    /// @dev assets:
-    /// $$\text{assets} = ((s + n + o)^2 - (s + o)^2) \cdot \frac{m}{2}$$
-    /// @dev which can be expanded to:
-    /// $$\text{assets} = ((s + o)^2 + 2(s + o)n + n^2 - (s + o)^2) \cdot \frac{m}{2}$$
-    /// @dev which simplifies to:
-    /// $$\text{assets} = (2(s + o)n + n^2) \cdot \frac{m}{2}$$
-    /// @dev Implementation note: This formula is computed via the _convertToAssets helper,
-    /// @dev where juniorSupply = (s + o) and seniorSupply = (s + n + o)
-    function previewMint(
-        uint256 shares,
-        uint256 totalShares,
-        uint256 totalAssets
-    )
-        external
-        view
-        override
-        returns (uint256 assets)
-    {
-        _checkMintBounds(shares, totalShares, MAX_SHARES);
-
-        UD60x18 s0 = wrap(totalShares).add(OFFSET);
-        UD60x18 s1 = wrap(totalShares + shares).add(OFFSET);
-
-        // Up where it matters: A - B with A up, B down
-        UD60x18 area = _squareUp(s1).sub(_square(s0));
-        UD60x18 assetsUD = _mulUp(area, HALF_SLOPE); // final mul up
-        assets = unwrap(assetsUD); // up
-
-        _checkMintOut(assets, totalAssets, MAX_ASSETS);
-    }
-
-    /// @inheritdoc BaseCurve
-    /// @dev Let $s$ = current total supply of shares
-    /// @dev Let $a$ = assets to withdraw
-    /// @dev Let $\frac{m}{2}$ = half of the slope
-    /// @dev Let $o$ = offset value
-    /// @dev shares:
-    /// $$\text{shares} = (s + o) - \sqrt{(s + o)^2 - \frac{a}{m/2}}$$
-    /// @dev or to say that another way:
-    /// $$\text{shares} = (s + o) - \sqrt{(s + o)^2 - \frac{2a}{m}}$$
-    function previewWithdraw(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
-        external
-        view
-        override
-        returns (uint256 shares)
-    {
-        _checkWithdraw(assets, totalAssets);
-
-        UD60x18 s = wrap(totalShares).add(OFFSET);
-        // deduct = assets/(m/2) rounded UP (because it is subtracted)
-        UD60x18 deduct = _divUp(wrap(assets), HALF_SLOPE);
-
-        UD60x18 inner = _square(s).sub(deduct);
-        UD60x18 sharesUD = s.sub(inner.sqrt()); // sqrt down => increases result (okay for "up" target)
-        shares = unwrap(sharesUD);
-    }
-
-    /// @inheritdoc BaseCurve
-    /// @dev Let $s$ = current total supply of shares
-    /// @dev Let $m$ = the slope of the curve
-    /// @dev Let $o$ = offset value
-    /// @dev sharePrice:
-    /// $$\text{sharePrice} = (s + o) \cdot m$$
-    /// @dev This is the modified linear price function where the price increases linearly with the total supply plus
-    /// offset
-    /// @dev And the slope ($m$) determines how quickly the price increases
-    /// @dev TLDR: Each new share costs more than the last, but starting from an offset point on the curve
-    function currentPrice(
-        uint256 totalShares,
-        uint256 /* totalAssets */
-    )
-        public
-        view
-        override
-        returns (uint256 sharePrice)
-    {
-        // Price in 18-decimal space
-        UD60x18 supply = wrap(totalShares).add(OFFSET);
-        return unwrap(supply.mul(SLOPE));
-    }
-
-    /// @inheritdoc BaseCurve
-    /// @dev Let $s$ = the current total supply of shares
-    /// @dev Let $\frac{m}{2}$ = half of the slope
-    /// @dev Let $a$ = quantity of assets to convert to shares
-    /// @dev Let $o$ = offset value
-    /// @dev shares:
-    /// $$\text{shares} = \frac{a}{(s + o) \cdot m/2}$$
-    /// @dev Or to say that another way:
-    /// $$\text{shares} = \frac{2a}{(s + o) \cdot m}$$
-    function convertToShares(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
-        external
-        view
-        override
-        returns (uint256 shares)
-    {
-        // Same as previewDeposit
-        return this.previewDeposit(assets, totalAssets, totalShares);
-    }
-
-    /// @inheritdoc BaseCurve
-    /// @dev Let $s$ = current total supply of shares
-    /// @dev Let $\frac{m}{2}$ = half of the slope
-    /// @dev Let $n$ = quantity of shares to convert to assets
-    /// @dev Let $o$ = offset value
-    /// @dev conversion price:
-    /// $$\text{price} = (s + o) \cdot \frac{m}{2}$$
-    /// @dev where $\frac{m}{2}$ is average price per share
-    /// @dev assets:
-    /// $$\text{assets} = n \cdot ((s + o) \cdot \frac{m}{2})$$
-    /// @dev Or to say that another way:
-    /// $$\text{assets} = n \cdot (s + o) \cdot \frac{m}{2}$$
-    function convertToAssets(
-        uint256 shares,
-        uint256 totalShares,
-        uint256 /*totalAssets*/
-    )
-        external
-        view
-        override
-        returns (uint256 assets)
-    {
-        // Same as previewRedeem
-        return this.previewRedeem(shares, totalShares, 0);
-    }
+    /* =================================================== */
+    /*                   BASECURVE FUNCTIONS               */
+    /* =================================================== */
 
     /// @inheritdoc BaseCurve
     function maxShares() external view override returns (uint256) {
@@ -312,51 +91,167 @@ contract OffsetProgressiveCurve is BaseCurve {
         return MAX_ASSETS;
     }
 
-    /**
-     * @notice Computes assets as the area under a linear curve with a simplified form of the area of a trapezium,
-     * now including the offset:
-     * $$f(x) = m(x + o)$$
-     * $$\text{Area} = \frac{1}{2} \cdot (a + b) \cdot h$$
-     * where $a$ and $b$ can be both $f(\text{juniorSupply})$ or $f(\text{seniorSupply})$ depending if used in minting
-     * or redeeming,
-     * and $o$ is the offset value.
-     * Calculates area as:
-     * $$((seniorSupply + offset)^2 - (juniorSupply + offset)^2) \cdot \text{halfSlope}$$
-     * where:
-     * $$\text{halfSlope} = \frac{\text{slope}}{2}$$
-     *
-     * @dev This method is identical to the ProgressiveCurve because it works entirely with relative values, which are
-     * already
-     * offset by the invoking methods.
-     *
-     * @param juniorSupply The smaller supply in the operation (the initial supply during mint,
-     * or the final supply during a redeem operation).
-     * @param seniorSupply The larger supply in the operation (the final supply during mint,
-     * or the initial supply during a redeem operation).
-     * @return assets The computed assets as an instance of UD60x18 (a fixed-point number).
-     */
-    function _convertToAssets(UD60x18 juniorSupply, UD60x18 seniorSupply) internal view returns (UD60x18 assets) {
-        UD60x18 sqrDiff = _square(seniorSupply).sub(_square(juniorSupply));
-        return sqrDiff.mul(HALF_SLOPE);
+    /// @inheritdoc BaseCurve
+    function previewDeposit(
+        uint256 assets,
+        uint256 totalAssets,
+        uint256 totalShares
+    )
+        external
+        view
+        override
+        returns (uint256 shares)
+    {
+        shares = _convertToShares(assets, totalAssets, totalShares);
     }
 
-    /// @dev Rounding helpers for UD60x18 operations
-    function _mulUp(UD60x18 x, UD60x18 y) internal pure returns (UD60x18) {
-        uint256 r = FixedPointMathLib.fullMulDivUp(unwrap(x), unwrap(y), uUNIT);
-        return wrap(r);
+    /// @inheritdoc BaseCurve
+    function previewRedeem(
+        uint256 shares,
+        uint256 totalShares,
+        uint256 totalAssets
+    )
+        external
+        view
+        override
+        returns (uint256 assets)
+    {
+        assets = _convertToAssets(shares, totalShares, totalAssets);
     }
 
-    function _divUp(UD60x18 x, UD60x18 y) internal pure returns (UD60x18) {
-        uint256 r = FixedPointMathLib.fullMulDivUp(unwrap(x), uUNIT, unwrap(y));
-        return wrap(r);
+    /// @inheritdoc BaseCurve
+    function previewMint(
+        uint256 shares,
+        uint256 totalShares,
+        uint256 totalAssets
+    )
+        external
+        view
+        override
+        returns (uint256 assets)
+    {
+        _checkCurveDomains(totalAssets, totalShares, MAX_ASSETS, MAX_SHARES);
+        _checkMintBounds(shares, totalShares, MAX_SHARES);
+
+        UD60x18 s0 = wrap(totalShares).add(OFFSET);
+        UD60x18 s1 = wrap(totalShares + shares).add(OFFSET);
+
+        UD60x18 area = PCMath.squareUp(s1).sub(PCMath.square(s0));
+        UD60x18 assetsUD = PCMath.mulUp(area, HALF_SLOPE);
+        assets = unwrap(assetsUD);
+
+        _checkMintOut(assets, totalAssets, MAX_ASSETS);
     }
 
-    function _square(UD60x18 x) internal pure returns (UD60x18) {
-        // rounds down (like UD mul)
-        return x.mul(x);
+    /// @inheritdoc BaseCurve
+    function previewWithdraw(
+        uint256 assets,
+        uint256 totalAssets,
+        uint256 totalShares
+    )
+        external
+        view
+        override
+        returns (uint256 shares)
+    {
+        _checkCurveDomains(totalAssets, totalShares, MAX_ASSETS, MAX_SHARES);
+        _checkWithdraw(assets, totalAssets);
+
+        UD60x18 s = wrap(totalShares).add(OFFSET);
+        UD60x18 deduct = PCMath.divUp(wrap(assets), HALF_SLOPE);
+
+        UD60x18 inner = PCMath.square(s).sub(deduct);
+        UD60x18 sharesUD = s.sub(inner.sqrt());
+        shares = unwrap(sharesUD);
     }
 
-    function _squareUp(UD60x18 x) internal pure returns (UD60x18) {
-        return _mulUp(x, x);
+    /// @inheritdoc BaseCurve
+    function convertToShares(
+        uint256 assets,
+        uint256 totalAssets,
+        uint256 totalShares
+    )
+        external
+        view
+        override
+        returns (uint256 shares)
+    {
+        shares = _convertToShares(assets, totalAssets, totalShares);
+    }
+
+    /// @inheritdoc BaseCurve
+    function convertToAssets(
+        uint256 shares,
+        uint256 totalShares,
+        uint256 totalAssets
+    )
+        external
+        view
+        override
+        returns (uint256 assets)
+    {
+        assets = _convertToAssets(shares, totalShares, totalAssets);
+    }
+
+    /// @inheritdoc BaseCurve
+    function currentPrice(
+        uint256 totalShares,
+        uint256 totalAssets
+    )
+        external
+        view
+        override
+        returns (uint256 sharePrice)
+    {
+        _checkCurveDomains(totalAssets, totalShares, MAX_ASSETS, MAX_SHARES);
+
+        UD60x18 supply = wrap(totalShares).add(OFFSET);
+        return unwrap(supply.mul(SLOPE));
+    }
+
+    /* =================================================== */
+    /*                    INTERNAL FUNCTIONS               */
+    /* =================================================== */
+
+    /// @dev Internal function to convert assets to shares
+    function _convertToShares(
+        uint256 assets,
+        uint256 totalAssets,
+        uint256 totalShares
+    )
+        internal
+        view
+        returns (uint256 shares)
+    {
+        _checkCurveDomains(totalAssets, totalShares, MAX_ASSETS, MAX_SHARES);
+        _checkDepositBounds(assets, totalAssets, MAX_ASSETS);
+
+        UD60x18 s = wrap(totalShares).add(OFFSET);
+        UD60x18 inner = PCMath.square(s).add(wrap(assets).div(HALF_SLOPE));
+        UD60x18 sharesUD = inner.sqrt().sub(s);
+        shares = unwrap(sharesUD);
+
+        _checkDepositOut(shares, totalShares, MAX_SHARES);
+    }
+
+    /// @dev Internal function to convert shares to assets
+    function _convertToAssets(
+        uint256 shares,
+        uint256 totalShares,
+        uint256 totalAssets
+    )
+        internal
+        view
+        returns (uint256 assets)
+    {
+        _checkCurveDomains(totalAssets, totalShares, MAX_ASSETS, MAX_SHARES);
+        _checkRedeem(shares, totalShares);
+
+        UD60x18 cur = wrap(totalShares).add(OFFSET);
+        UD60x18 newS = cur.sub(wrap(shares));
+
+        UD60x18 area = PCMath.square(cur).sub(PCMath.squareUp(newS));
+        UD60x18 assetsUD = area.mul(HALF_SLOPE);
+        assets = unwrap(assetsUD);
     }
 }
