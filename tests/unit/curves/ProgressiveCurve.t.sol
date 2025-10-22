@@ -211,4 +211,46 @@ contract ProgressiveCurveTest is Test {
         uint256 assets = curve.previewRedeem(sMax, sMax, 0);
         assertEq(assets, expected);
     }
+
+    /* ── Domain checks (equality allowed, above-max reverts) ── */
+
+    function test_domainAllows_MAX_values_currentPrice_ProgressiveCurve() public view {
+        uint256 sMax = curve.maxShares();
+        uint256 aMax = curve.maxAssets();
+        // Should not revert
+        uint256 p = curve.currentPrice(sMax, aMax);
+        assertGe(p, 0);
+    }
+
+    function test_domainAllows_MAX_values_convertToAssets_ProgressiveCurve() public view {
+        uint256 sMax = curve.maxShares();
+        uint256 aMax = curve.maxAssets();
+        uint256 assets = curve.convertToAssets(1e18, sMax, aMax);
+        assertGt(assets, 0);
+    }
+
+    function test_domainRejects_totalShares_aboveMax_currentPrice_ProgressiveCurve() public {
+        uint256 sMax = curve.maxShares();
+        uint256 aMax = curve.maxAssets();
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_DomainExceeded.selector));
+        curve.currentPrice(sMax + 1, aMax);
+    }
+
+    function test_domainRejects_totalAssets_aboveMax_currentPrice_ProgressiveCurve() public {
+        uint256 sMax = curve.maxShares();
+        uint256 aMax = curve.maxAssets();
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_DomainExceeded.selector));
+        curve.currentPrice(sMax, aMax + 1);
+    }
+
+    function test_domainRejects_aboveMax_in_previewDeposit_ProgressiveCurve() public {
+        uint256 sMax = curve.maxShares();
+        uint256 aMax = curve.maxAssets();
+
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_DomainExceeded.selector));
+        curve.previewDeposit(0, aMax + 1, sMax);
+
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_DomainExceeded.selector));
+        curve.previewDeposit(0, aMax, sMax + 1);
+    }
 }

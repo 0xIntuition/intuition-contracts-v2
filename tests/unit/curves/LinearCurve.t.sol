@@ -269,4 +269,48 @@ contract LinearCurveTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_SharesExceedTotalShares.selector));
         curve.convertToAssets(shares, totalShares, totalAssets);
     }
+
+    // New: domain equality allowed at MAX values
+    function test_currentPrice_domainAllows_MAX_values() public view {
+        uint256 max = type(uint256).max;
+        uint256 price = curve.currentPrice(max, max);
+        assertEq(price, 1e18);
+    }
+
+    function test_convertToAssets_domainAllows_MAX_values() public view {
+        uint256 max = type(uint256).max;
+        uint256 assets = curve.convertToAssets(1e18, max, max);
+        assertEq(assets, 1e18);
+    }
+
+    function test_previewRedeem_domainAllows_MAX_values() public view {
+        uint256 max = type(uint256).max;
+        uint256 assets = curve.previewRedeem(1e18, max, max);
+        assertEq(assets, 1e18);
+    }
+
+    function test_previewDeposit_domainAllows_MAX_values_whenNoDelta() public view {
+        uint256 max = type(uint256).max;
+        uint256 out = curve.previewDeposit(0, max, max);
+        assertEq(out, 0);
+    }
+
+    function test_previewMint_domainAllows_MAX_values_whenNoDelta() public view {
+        uint256 max = type(uint256).max;
+        uint256 out = curve.previewMint(0, max, max);
+        assertEq(out, 0);
+    }
+
+    // New: convertToShares mirrors previewDeposit overflow reverts
+    function test_convertToShares_reverts_whenAssetsOverflowMaxAssets() public {
+        uint256 max = type(uint256).max;
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_AssetsOverflowMax.selector));
+        curve.convertToShares(1, max, 0);
+    }
+
+    function test_convertToShares_reverts_whenSharesOutWouldOverflowMaxShares() public {
+        uint256 max = type(uint256).max;
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_SharesOverflowMax.selector));
+        curve.convertToShares(1, max - 1, max);
+    }
 }
