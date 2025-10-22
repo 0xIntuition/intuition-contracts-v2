@@ -503,13 +503,6 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
             return BASIS_POINTS_DIVISOR;
         }
 
-        /// If the user had 0 utilization in the "after" epoch, we can assume the utilization delta will <= zero 
-        /// so we return the personalUtilizationLowerBound without requiring additional calculations.
-        int256 userUtilizationNow = IMultiVault(multiVault).getUserUtilizationForEpoch(_account, _epoch);
-        if (userUtilizationNow == 0) {
-            return personalUtilizationLowerBound;
-        }
-
         int256 userUtilizationBefore = IMultiVault(multiVault).getUserUtilizationForPreviousActiveEpoch(_account, _epoch - 1);
         int256 userUtilizationAfter = IMultiVault(multiVault).getUserUtilizationForPreviousActiveEpoch(_account, _epoch);
 
