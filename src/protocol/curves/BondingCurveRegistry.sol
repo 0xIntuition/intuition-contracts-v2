@@ -128,7 +128,12 @@ contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2StepUpgradeable 
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @param id Curve ID to use for the calculation
     /// @return shares The number of shares that would be minted
-    function previewDeposit(uint256 assets, uint256 totalAssets, uint256 totalShares, uint256 id)
+    function previewDeposit(
+        uint256 assets,
+        uint256 totalAssets,
+        uint256 totalShares,
+        uint256 id
+    )
         external
         view
         onlyValidCurveId(id)
@@ -143,7 +148,12 @@ contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2StepUpgradeable 
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @param id Curve ID to use for the calculation
     /// @return assets The number of assets that would be returned
-    function previewRedeem(uint256 shares, uint256 totalShares, uint256 totalAssets, uint256 id)
+    function previewRedeem(
+        uint256 shares,
+        uint256 totalShares,
+        uint256 totalAssets,
+        uint256 id
+    )
         external
         view
         onlyValidCurveId(id)
@@ -152,28 +162,18 @@ contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2StepUpgradeable 
         return IBaseCurve(curveAddresses[id]).previewRedeem(shares, totalShares, totalAssets);
     }
 
-    /// @notice Preview how many shares would be redeemed for a withdrawal of assets
-    /// @param assets Quantity of assets to withdraw
-    /// @param totalAssets Total quantity of assets already staked into the curve
-    /// @param totalShares Total quantity of shares already awarded by the curve
-    /// @param id Curve ID to use for the calculation
-    /// @return shares The number of shares that would need to be redeemed
-    function previewWithdraw(uint256 assets, uint256 totalAssets, uint256 totalShares, uint256 id)
-        external
-        view
-        onlyValidCurveId(id)
-        returns (uint256 shares)
-    {
-        return IBaseCurve(curveAddresses[id]).previewWithdraw(assets, totalAssets, totalShares);
-    }
-
     /// @notice Preview how many assets would be required to mint a specific amount of shares
     /// @param shares Quantity of shares to mint
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @param id Curve ID to use for the calculation
     /// @return assets The number of assets that would be required to mint the shares
-    function previewMint(uint256 shares, uint256 totalShares, uint256 totalAssets, uint256 id)
+    function previewMint(
+        uint256 shares,
+        uint256 totalShares,
+        uint256 totalAssets,
+        uint256 id
+    )
         external
         view
         onlyValidCurveId(id)
@@ -182,13 +182,38 @@ contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2StepUpgradeable 
         return IBaseCurve(curveAddresses[id]).previewMint(shares, totalShares, totalAssets);
     }
 
+    /// @notice Preview how many shares would be redeemed for a withdrawal of assets
+    /// @param assets Quantity of assets to withdraw
+    /// @param totalAssets Total quantity of assets already staked into the curve
+    /// @param totalShares Total quantity of shares already awarded by the curve
+    /// @param id Curve ID to use for the calculation
+    /// @return shares The number of shares that would need to be redeemed
+    function previewWithdraw(
+        uint256 assets,
+        uint256 totalAssets,
+        uint256 totalShares,
+        uint256 id
+    )
+        external
+        view
+        onlyValidCurveId(id)
+        returns (uint256 shares)
+    {
+        return IBaseCurve(curveAddresses[id]).previewWithdraw(assets, totalAssets, totalShares);
+    }
+
     /// @notice Convert assets to shares at a specific point on the curve
     /// @param assets Quantity of assets to convert to shares
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @param id Curve ID to use for the calculation
     /// @return shares The number of shares equivalent to the given assets
-    function convertToShares(uint256 assets, uint256 totalAssets, uint256 totalShares, uint256 id)
+    function convertToShares(
+        uint256 assets,
+        uint256 totalAssets,
+        uint256 totalShares,
+        uint256 id
+    )
         external
         view
         onlyValidCurveId(id)
@@ -203,7 +228,12 @@ contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2StepUpgradeable 
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @param id Curve ID to use for the calculation
     /// @return assets The number of assets equivalent to the given shares
-    function convertToAssets(uint256 shares, uint256 totalShares, uint256 totalAssets, uint256 id)
+    function convertToAssets(
+        uint256 shares,
+        uint256 totalShares,
+        uint256 totalAssets,
+        uint256 id
+    )
         external
         view
         onlyValidCurveId(id)
@@ -217,7 +247,11 @@ contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2StepUpgradeable 
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @return sharePrice The current price of a share
-    function currentPrice(uint256 id, uint256 totalShares, uint256 totalAssets)
+    function currentPrice(
+        uint256 id,
+        uint256 totalShares,
+        uint256 totalAssets
+    )
         external
         view
         onlyValidCurveId(id)

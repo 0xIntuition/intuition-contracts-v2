@@ -84,11 +84,25 @@ contract MultiVaultHarness is MultiVault {
     }
 
     // Expose the internal functions we want to hit
-    function burnForTest(address from, bytes32 termId, uint256 curveId, uint256 amount) external returns (uint256) {
+    function burnForTest(
+        address from,
+        bytes32 termId,
+        uint256 curveId,
+        uint256 amount
+    )
+        external
+        returns (uint256)
+    {
         return _burn(from, termId, curveId, amount);
     }
 
-    function validateRedeemForTest(bytes32 termId, uint256 curveId, address account, uint256 shares, uint256 minAssets)
+    function validateRedeemForTest(
+        bytes32 termId,
+        uint256 curveId,
+        address account,
+        uint256 shares,
+        uint256 minAssets
+    )
         external
         view
     {
