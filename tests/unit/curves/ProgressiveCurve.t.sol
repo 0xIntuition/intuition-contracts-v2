@@ -169,7 +169,7 @@ contract ProgressiveCurveTest is Test {
         assertEq(curve.previewRedeem(r, s0, 0), curve.convertToAssets(r, s0, 0));
     }
 
-    function test_previewMint_mintMaxSharesFromZero_succeeds() public view {
+    function test_previewMint_mintMaxSharesFromZero_succeeds() public {
         uint256 sMax = curve.maxShares();
         uint256 maxA = curve.maxAssets();
 
