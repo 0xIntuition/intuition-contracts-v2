@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { UD60x18, wrap, unwrap, add, sub, mul, div, sqrt } from "@prb/math/src/UD60x18.sol";
-import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
+import { UD60x18, wrap, unwrap, add, sub, mul, div, sqrt, uUNIT, uMAX_UD60x18 } from "@prb/math/src/UD60x18.sol";
 
 import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
 import { ProgressiveCurveMathLib as PCMath } from "src/libraries/ProgressiveCurveMathLib.sol";
@@ -68,13 +67,10 @@ contract OffsetProgressiveCurve is BaseCurve {
         HALF_SLOPE = div(SLOPE, wrap(2e18));
         OFFSET = wrap(offset18);
 
-        uint256 sqrtMax = FixedPointMathLib.sqrt(type(uint256).max / 1e18);
-        uint256 offsetWhole = offset18 / 1e18;
-        MAX_SHARES = sqrtMax > offsetWhole ? (sqrtMax - offsetWhole) : 0;
+        UD60x18 maxSharesUD = sub(sqrt(wrap(uMAX_UD60x18 / uUNIT)), OFFSET);
+        UD60x18 maxAssetsUD = mul(PCMath.square(add(maxSharesUD, OFFSET)), HALF_SLOPE);
 
-        UD60x18 maxSharesUD = add(wrap(MAX_SHARES), OFFSET);
-        UD60x18 diff = sub(PCMath.square(maxSharesUD), PCMath.square(OFFSET));
-        UD60x18 maxAssetsUD = mul(diff, HALF_SLOPE);
+        MAX_SHARES = unwrap(maxSharesUD);
         MAX_ASSETS = unwrap(maxAssetsUD);
     }
 
