@@ -442,9 +442,7 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         IMultiVault(address(protocol.multiVault)).getUserUtilization(users.alice, futureEpoch);
     }
 
-    function test_getUserUtilization_returnsPreviousGlobalEpochUtilization_whenCalledWithPreviousGlobalEpoch()
-        external
-    {
+    function test_getUserUtilization_returnsPreviousGlobalEpochUtilization_whenCalledWithPreviousGlobalEpoch() external {
         // target epoch = 3  -> prevEpoch = 2
         _advanceToEpoch(3);
 
@@ -490,11 +488,7 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         _setActiveEpoch(users.alice, 1, 4);
 
         int256 utilAfter = IMultiVault(address(protocol.multiVault)).getUserUtilization(users.alice, 5);
-        assertEq(
-            utilAfter,
-            int256(555),
-            "When calling with the epoch that is immediately before current global one, must return utilization for previous global epoch"
-        );
+        assertEq(utilAfter, int256(555), "When calling with the epoch that is immediately before current global one, must return utilization for previous global epoch");
     }
 
     function test_getUserUtilization_sparseActivityFarBehind_usesThatSparseLast() external {

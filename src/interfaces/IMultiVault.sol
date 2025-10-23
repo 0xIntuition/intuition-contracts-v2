@@ -308,16 +308,21 @@ interface IMultiVault {
     function getUserLastActiveEpoch(address user) external view returns (uint256);
 
     /**
-     * @notice Returns a user's utilization value prior to a specified epoch
-     * @dev If the user had no recorded activity in the epoch immediately preceding
-     *      the given one, this function falls back to their last active epoch
-     *      to determine the utilization before the specified epoch
-     * @param user The address of the user to query
+     * @notice Returns a user's personal utilization value from their most recent active epoch strictly before
+     *         the specified epoch.
+     * @dev
+     * - This function walks back through the user's last three tracked active epochs and returns the utilization
+     *   value from the most recent one that occurred strictly before the given `epoch`
+     * - Reverts if no such epoch is tracked (i.e., user has no recorded activity before `epoch`)
+     * - Reverts if called with a future epoch or while the system is in epoch 0 (the genesis epoch), since there is
+     *   no prior epoch in which the user could have been active at that time
+     * - Utilization values are signed integers and may be positive (net deposits) or negative (net redemptions)
+     * @param user The address of the user whose utilization is being queried
      * @param epoch The epoch number to check utilization before
-     * @return utilization The user's utilization value before the specified epoch,
-     *         which may be positive or negative
+     * @return utilization The user's utilization value from their most recent tracked active epoch
+     *         strictly before the specified `epoch`
      */
-    function getUserUtilization(address user, uint256 epoch) external view returns (int256);
+    function getUserUtilizationInEpoch(address user, uint256 epoch) external view returns (int256);
 
     /// @notice Returns the total assets and total shares in a vault for a given term and bonding curve
     /// @param termId The ID of the term (atom or triple)
@@ -348,10 +353,7 @@ interface IMultiVault {
     /// @return assetsAfterFixedFees The net assets that will be added to the vault (after fixed fees, before dynamic
     /// fees)
     /// @return assetsAfterFees The net assets that will be added to the vault (after all fees)
-    function previewAtomCreate(
-        bytes32 termId,
-        uint256 assets
-    )
+    function previewAtomCreate(bytes32 termId, uint256 assets)
         external
         view
         returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees);
@@ -396,10 +398,7 @@ interface IMultiVault {
     /// @return assetsAfterFixedFees The net assets that will be added to the vault (after fixed fees like protocol and
     /// entry fees)
     /// @return assetsAfterFees The net assets that will be added to the vault (after all fees)
-    function previewTripleCreate(
-        bytes32 termId,
-        uint256 assets
-    )
+    function previewTripleCreate(bytes32 termId, uint256 assets)
         external
         view
         returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees);
