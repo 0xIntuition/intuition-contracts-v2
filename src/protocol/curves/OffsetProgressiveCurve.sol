@@ -68,7 +68,7 @@ contract OffsetProgressiveCurve is BaseCurve {
         OFFSET = wrap(offset18);
 
         UD60x18 maxSharesUD = sub(sqrt(wrap(uMAX_UD60x18 / uUNIT)), OFFSET);
-        UD60x18 maxAssetsUD = mul(PCMath.square(add(maxSharesUD, OFFSET)), HALF_SLOPE);
+        UD60x18 maxAssetsUD = mul(sub(PCMath.square(add(maxSharesUD, OFFSET)), PCMath.square(OFFSET)), HALF_SLOPE);
 
         MAX_SHARES = unwrap(maxSharesUD);
         MAX_ASSETS = unwrap(maxAssetsUD);
