@@ -55,6 +55,8 @@ abstract contract SetupScript is Script {
     address internal METALAYER_HUB_OR_SPOKE;
     uint32 internal BASE_METALAYER_RECIPIENT_DOMAIN;
     uint32 internal SATELLITE_METALAYER_RECIPIENT_DOMAIN;
+    
+    uint156 internal PROTOCOL_START_TIMESTAMP;
 
     // General Config
     address internal ADMIN;
@@ -147,6 +149,7 @@ abstract contract SetupScript is Script {
         info("Broadcasting:", broadcaster);
 
         if (block.chainid == NETWORK_INTUITION_SEPOLIA) {
+            PROTOCOL_START_TIMESTAMP = 0;
             TRUST_TOKEN = 0xDE80b6EE63f7D809427CA350e30093F436A0fe35; // Wrapped Trust
             ADMIN = vm.envAddress("INTUITION_SEPOLIA_ADMIN_ADDRESS");
             PROTOCOL_MULTISIG = vm.envOr("INTUITION_SEPOLIA_PROTOCOL_MULTISIG", ADMIN);
@@ -171,21 +174,22 @@ abstract contract SetupScript is Script {
             ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 0.9% (Percentage Cost)
 
             // TrustBonding Config
-            BONDING_START_TIMESTAMP = block.timestamp + 100;
+            BONDING_START_TIMESTAMP = PROTOCOL_START_TIMESTAMP;
             BONDING_EPOCH_LENGTH = TWO_WEEKS;
             BONDING_SYSTEM_UTILIZATION_LOWER_BOUND = 4000; // 50%
             BONDING_PERSONAL_UTILIZATION_LOWER_BOUND = 2500; // 25%
 
             // CoreEmissionsController Config
-            EMISSIONS_START_TIMESTAMP = BONDING_START_TIMESTAMP;
+            EMISSIONS_START_TIMESTAMP = PROTOCOL_START_TIMESTAMP;
             EMISSIONS_LENGTH = ONE_DAY;
             EMISSIONS_REDUCTION_BASIS_POINTS = 1000; // 10%
             EMISSIONS_REDUCTION_CLIFF = 4; // 1 epoch
             EMISSIONS_PER_EPOCH = 1000 ether;
         } else if (block.chainid == NETWORK_INTUITION) {
+            PROTOCOL_START_TIMESTAMP = 1762275600; // Tues November 4, 2025 12:00:00 EST || Wed November 5, 2025 00:00:00 KST
             TRUST_TOKEN = 0x81cFb09cb44f7184Ad934C09F82000701A4bF672;
             ADMIN = 0xbeA18ab4c83a12be25f8AA8A10D8747A07Cdc6eb;
-            PROTOCOL_MULTISIG = address(0);
+            PROTOCOL_MULTISIG = 0x4B44BE80739fb11544Dd835a0f55580Ad19Ce0F3;
 
             // MetaLayer Config
             BASE_METALAYER_RECIPIENT_DOMAIN = 8453;
@@ -208,15 +212,13 @@ abstract contract SetupScript is Script {
             ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 0.9% (Percentage Cost)
 
             // TrustBonding Config
-            BONDING_START_TIMESTAMP = 1_760_544_000; //  Wednesday October 15, 2025 12:00:00 EST || Thursday October 16,
-                // 2025 00:00:00 KST
+            BONDING_START_TIMESTAMP = PROTOCOL_START_TIMESTAMP;
             BONDING_EPOCH_LENGTH = TWO_WEEKS;
             BONDING_SYSTEM_UTILIZATION_LOWER_BOUND = 4000; // 40%
-            BONDING_PERSONAL_UTILIZATION_LOWER_BOUND = 2500; // 25% @dev Relies on fixing the rewards gamification
-                // exploit. Potentially change to 5000
+            BONDING_PERSONAL_UTILIZATION_LOWER_BOUND = 2500; // 25%
 
             // CoreEmissionsController Config
-            EMISSIONS_START_TIMESTAMP = BONDING_START_TIMESTAMP;
+            EMISSIONS_START_TIMESTAMP = PROTOCOL_START_TIMESTAMP;
             EMISSIONS_LENGTH = TWO_WEEKS;
             EMISSIONS_REDUCTION_BASIS_POINTS = 1000; // 10%
             EMISSIONS_REDUCTION_CLIFF = 26; // 26 x two week epochs = 1 year
@@ -231,12 +233,22 @@ abstract contract SetupScript is Script {
             METALAYER_HUB_OR_SPOKE = 0x007700aa28A331B91219Ffa4A444711F0D9E57B5;
             SATELLITE_METALAYER_RECIPIENT_DOMAIN = 13_579;
         } else if (block.chainid == NETWORK_BASE) {
+            // Global Config
+            PROTOCOL_START_TIMESTAMP = 1762275600;
             TRUST_TOKEN = 0x6cd905dF2Ed214b22e0d48FF17CD4200C1C6d8A3;
             ADMIN = 0xBc01aB3839bE8933f6B93163d129a823684f4CDF;
 
-            // MetaLayer Intuition Hub
+            // MetaLayer Config
             METALAYER_HUB_OR_SPOKE = 0xE12aaF1529Ae21899029a9b51cca2F2Bc2cfC421;
             SATELLITE_METALAYER_RECIPIENT_DOMAIN = 1155;
+
+            // Emissions Controller Config
+            EMISSIONS_START_TIMESTAMP = PROTOCOL_START_TIMESTAMP;
+            EMISSIONS_LENGTH = ONE_DAY;
+            EMISSIONS_REDUCTION_BASIS_POINTS = 1000; // 10%
+            EMISSIONS_REDUCTION_CLIFF = 4; // 1 epoch
+            EMISSIONS_PER_EPOCH = 1000 ether;
+
         } else if (block.chainid == NETWORK_ANVIL) {
             ADMIN = vm.envAddress("ANVIL_ADMIN_ADDRESS");
             TRUST_TOKEN = vm.envOr("ANVIL_TRUST_TOKEN", address(0));
