@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { UD60x18, wrap, unwrap } from "@prb/math/src/UD60x18.sol";
+import { UD60x18, wrap, unwrap, add, sub, mul, div, sqrt } from "@prb/math/src/UD60x18.sol";
 import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 
 import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
@@ -15,7 +15,7 @@ import { ProgressiveCurveMathLib as PCMath } from "src/libraries/ProgressiveCurv
  */
 contract OffsetProgressiveCurve is BaseCurve {
     /* =================================================== */
-    /*                     STATE                          */
+    /*                     STATE                           */
     /* =================================================== */
 
     /// @notice The slope of the curve (18 decimal fixed-point multiplier). This is the rate at which the price of
@@ -65,15 +65,16 @@ contract OffsetProgressiveCurve is BaseCurve {
         if (slope18 == 0 || slope18 % 2 != 0) revert OffsetProgressiveCurve_InvalidSlope();
 
         SLOPE = wrap(slope18);
-        HALF_SLOPE = wrap(slope18 / 2);
+        HALF_SLOPE = div(SLOPE, wrap(2e18));
         OFFSET = wrap(offset18);
 
-        uint256 r = FixedPointMathLib.sqrt(type(uint256).max / 1e18);
-        uint256 oUnscaled = offset18 / 1e18;
-        MAX_SHARES = r > oUnscaled ? (r - oUnscaled) : 0;
+        uint256 sqrtMax = FixedPointMathLib.sqrt(type(uint256).max / 1e18);
+        uint256 offsetWhole = offset18 / 1e18;
+        MAX_SHARES = sqrtMax > offsetWhole ? (sqrtMax - offsetWhole) : 0;
 
-        UD60x18 sMax = wrap(MAX_SHARES).add(OFFSET);
-        UD60x18 maxAssetsUD = PCMath.square(sMax).sub(PCMath.square(OFFSET)).mul(HALF_SLOPE);
+        UD60x18 maxSharesUD = add(wrap(MAX_SHARES), OFFSET);
+        UD60x18 diff = sub(PCMath.square(maxSharesUD), PCMath.square(OFFSET));
+        UD60x18 maxAssetsUD = mul(diff, HALF_SLOPE);
         MAX_ASSETS = unwrap(maxAssetsUD);
     }
 
@@ -133,10 +134,10 @@ contract OffsetProgressiveCurve is BaseCurve {
         _checkCurveDomains(totalAssets, totalShares, MAX_ASSETS, MAX_SHARES);
         _checkMintBounds(shares, totalShares, MAX_SHARES);
 
-        UD60x18 s0 = wrap(totalShares).add(OFFSET);
-        UD60x18 s1 = wrap(totalShares + shares).add(OFFSET);
+        UD60x18 s = add(wrap(totalShares), OFFSET);
+        UD60x18 sNext = add(s, wrap(shares));
 
-        UD60x18 area = PCMath.squareUp(s1).sub(PCMath.square(s0));
+        UD60x18 area = sub(PCMath.squareUp(sNext), PCMath.square(s));
         UD60x18 assetsUD = PCMath.mulUp(area, HALF_SLOPE);
         assets = unwrap(assetsUD);
 
@@ -157,11 +158,11 @@ contract OffsetProgressiveCurve is BaseCurve {
         _checkCurveDomains(totalAssets, totalShares, MAX_ASSETS, MAX_SHARES);
         _checkWithdraw(assets, totalAssets);
 
-        UD60x18 s = wrap(totalShares).add(OFFSET);
+        UD60x18 s = add(wrap(totalShares), OFFSET);
         UD60x18 deduct = PCMath.divUp(wrap(assets), HALF_SLOPE);
 
-        UD60x18 inner = PCMath.square(s).sub(deduct);
-        UD60x18 sharesUD = s.sub(inner.sqrt());
+        UD60x18 inner = sub(PCMath.square(s), deduct);
+        UD60x18 sharesUD = sub(s, sqrt(inner));
         shares = unwrap(sharesUD);
     }
 
@@ -205,8 +206,8 @@ contract OffsetProgressiveCurve is BaseCurve {
     {
         _checkCurveDomains(totalAssets, totalShares, MAX_ASSETS, MAX_SHARES);
 
-        UD60x18 supply = wrap(totalShares).add(OFFSET);
-        return unwrap(supply.mul(SLOPE));
+        UD60x18 s = add(wrap(totalShares), (OFFSET));
+        return unwrap(mul(s, SLOPE));
     }
 
     /* =================================================== */
@@ -226,9 +227,9 @@ contract OffsetProgressiveCurve is BaseCurve {
         _checkCurveDomains(totalAssets, totalShares, MAX_ASSETS, MAX_SHARES);
         _checkDepositBounds(assets, totalAssets, MAX_ASSETS);
 
-        UD60x18 s = wrap(totalShares).add(OFFSET);
-        UD60x18 inner = PCMath.square(s).add(wrap(assets).div(HALF_SLOPE));
-        UD60x18 sharesUD = inner.sqrt().sub(s);
+        UD60x18 s = add(wrap(totalShares), OFFSET);
+        UD60x18 inner = add(PCMath.square(s), div(wrap(assets), HALF_SLOPE));
+        UD60x18 sharesUD = sub(sqrt(inner), s);
         shares = unwrap(sharesUD);
 
         _checkDepositOut(shares, totalShares, MAX_SHARES);
@@ -247,11 +248,11 @@ contract OffsetProgressiveCurve is BaseCurve {
         _checkCurveDomains(totalAssets, totalShares, MAX_ASSETS, MAX_SHARES);
         _checkRedeem(shares, totalShares);
 
-        UD60x18 cur = wrap(totalShares).add(OFFSET);
-        UD60x18 newS = cur.sub(wrap(shares));
+        UD60x18 s = add(wrap(totalShares), OFFSET);
+        UD60x18 sNext = sub(s, wrap(shares));
 
-        UD60x18 area = PCMath.square(cur).sub(PCMath.squareUp(newS));
-        UD60x18 assetsUD = area.mul(HALF_SLOPE);
+        UD60x18 area = sub(PCMath.square(s), PCMath.squareUp(sNext));
+        UD60x18 assetsUD = mul(area, HALF_SLOPE);
         assets = unwrap(assetsUD);
     }
 }

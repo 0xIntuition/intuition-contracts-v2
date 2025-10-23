@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { UD60x18, wrap, unwrap } from "@prb/math/src/UD60x18.sol";
+import { UD60x18, wrap, unwrap, add, sub, mul, div, sqrt } from "@prb/math/src/UD60x18.sol";
 import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 
 import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
@@ -15,7 +15,7 @@ import { ProgressiveCurveMathLib as PCMath } from "src/libraries/ProgressiveCurv
  */
 contract ProgressiveCurve is BaseCurve {
     /* =================================================== */
-    /*                     STATE                          */
+    /*                     STATE                           */
     /* =================================================== */
 
     /// @notice The slope of the curve (18 decimal fixed-point multiplier). This is the rate at which the price of
@@ -61,14 +61,14 @@ contract ProgressiveCurve is BaseCurve {
         if (slope18 == 0 || slope18 % 2 != 0) revert ProgressiveCurve_InvalidSlope();
 
         SLOPE = wrap(slope18);
-        HALF_SLOPE = wrap(slope18 / 2);
+        HALF_SLOPE = div(SLOPE, wrap(2e18));
 
-        uint256 r = FixedPointMathLib.sqrt(type(uint256).max / 1e18);
-        MAX_SHARES = r;
+        uint256 sqrtMax = FixedPointMathLib.sqrt(type(uint256).max / 1e18);
+        MAX_SHARES = sqrtMax;
 
-        UD60x18 sMax = wrap(r);
-        UD60x18 aMax = PCMath.square(sMax).mul(HALF_SLOPE);
-        MAX_ASSETS = unwrap(aMax);
+        UD60x18 maxSharesUD = wrap(sqrtMax);
+        UD60x18 maxAssetsUD = mul(PCMath.square(maxSharesUD), HALF_SLOPE);
+        MAX_ASSETS = unwrap(maxAssetsUD);
     }
 
     /* =================================================== */
@@ -127,12 +127,12 @@ contract ProgressiveCurve is BaseCurve {
         _checkCurveDomains(totalAssets, totalShares, MAX_ASSETS, MAX_SHARES);
         _checkMintBounds(shares, totalShares, MAX_SHARES);
 
-        UD60x18 s0 = wrap(totalShares);
-        UD60x18 s1 = wrap(totalShares + shares);
+        UD60x18 s = wrap(totalShares);
+        UD60x18 sNext = add(s, wrap(shares));
 
-        UD60x18 area = PCMath.squareUp(s1).sub(PCMath.square(s0));
-        UD60x18 aUD = PCMath.mulUp(area, HALF_SLOPE);
-        assets = unwrap(aUD);
+        UD60x18 area = sub(PCMath.squareUp(sNext), (PCMath.square(s)));
+        UD60x18 assetsUD = PCMath.mulUp(area, HALF_SLOPE);
+        assets = unwrap(assetsUD);
 
         _checkMintOut(assets, totalAssets, MAX_ASSETS);
     }
@@ -153,10 +153,10 @@ contract ProgressiveCurve is BaseCurve {
 
         UD60x18 s = wrap(totalShares);
         UD60x18 deduct = PCMath.divUp(wrap(assets), HALF_SLOPE);
-        UD60x18 inner = PCMath.square(s).sub(deduct);
-        UD60x18 out = s.sub(inner.sqrt());
 
-        shares = unwrap(out);
+        UD60x18 inner = sub(PCMath.square(s), deduct);
+        UD60x18 sharesUD = sub(s, sqrt(inner));
+        shares = unwrap(sharesUD);
     }
 
     /// @inheritdoc BaseCurve
@@ -198,7 +198,7 @@ contract ProgressiveCurve is BaseCurve {
         returns (uint256 sharePrice)
     {
         _checkCurveDomains(totalAssets, totalShares, MAX_ASSETS, MAX_SHARES);
-        return unwrap(wrap(totalShares).mul(SLOPE));
+        return unwrap(mul(wrap(totalShares), SLOPE));
     }
 
     /* =================================================== */
@@ -219,9 +219,9 @@ contract ProgressiveCurve is BaseCurve {
         _checkDepositBounds(assets, totalAssets, MAX_ASSETS);
 
         UD60x18 s = wrap(totalShares);
-        UD60x18 inner = PCMath.square(s).add(wrap(assets).div(HALF_SLOPE));
-        UD60x18 out = inner.sqrt().sub(s);
-        shares = unwrap(out);
+        UD60x18 inner = add(PCMath.square(s), div(wrap(assets), HALF_SLOPE));
+        UD60x18 sharesUD = sub(sqrt(inner), s);
+        shares = unwrap(sharesUD);
 
         _checkDepositOut(shares, totalShares, MAX_SHARES);
     }
@@ -240,10 +240,10 @@ contract ProgressiveCurve is BaseCurve {
         _checkRedeem(shares, totalShares);
 
         UD60x18 s = wrap(totalShares);
-        UD60x18 ns = s.sub(wrap(shares));
+        UD60x18 sNext = sub(s, wrap(shares));
 
-        UD60x18 area = PCMath.square(s).sub(PCMath.squareUp(ns));
-        UD60x18 assetsUD = area.mul(HALF_SLOPE);
+        UD60x18 area = sub(PCMath.square(s), (PCMath.squareUp(sNext)));
+        UD60x18 assetsUD = mul(area, HALF_SLOPE);
         assets = unwrap(assetsUD);
     }
 }

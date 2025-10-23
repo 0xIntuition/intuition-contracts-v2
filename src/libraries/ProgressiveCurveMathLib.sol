@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { UD60x18, wrap, unwrap, uUNIT } from "@prb/math/src/UD60x18.sol";
+import { UD60x18, wrap, unwrap, uUNIT, mul } from "@prb/math/src/UD60x18.sol";
 import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 
 /**
@@ -23,8 +23,7 @@ library ProgressiveCurveMathLib {
 
     /// @dev Squares a UD60x18 number, rounding down.
     function square(UD60x18 x) internal pure returns (UD60x18) {
-        // UD mul truncates down
-        return x.mul(x);
+        return mul(x, x);
     }
 
     /// @dev Squares a UD60x18 number, rounding up.
