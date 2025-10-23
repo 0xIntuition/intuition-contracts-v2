@@ -206,11 +206,7 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
     }
 
     /// @inheritdoc IMultiVaultCore
-    function calculateTripleId(
-        bytes32 subjectId,
-        bytes32 predicateId,
-        bytes32 objectId
-    )
+    function calculateTripleId(bytes32 subjectId, bytes32 predicateId, bytes32 objectId)
         external
         pure
         returns (bytes32)
@@ -219,11 +215,7 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
     }
 
     /// @inheritdoc IMultiVaultCore
-    function calculateCounterTripleId(
-        bytes32 subjectId,
-        bytes32 predicateId,
-        bytes32 objectId
-    )
+    function calculateCounterTripleId(bytes32 subjectId, bytes32 predicateId, bytes32 objectId)
         external
         pure
         returns (bytes32)
@@ -279,11 +271,7 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
     /// @param predicateId The atom id of the predicate
     /// @param objectId The atom id of the object
     /// @return id The calculated triple id
-    function _calculateTripleId(
-        bytes32 subjectId,
-        bytes32 predicateId,
-        bytes32 objectId
-    )
+    function _calculateTripleId(bytes32 subjectId, bytes32 predicateId, bytes32 objectId)
         internal
         pure
         returns (bytes32)
@@ -340,8 +328,7 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
         }
     }
 
-    /// @dev Internal function to get the vault type for a given term ID
-    /// @param termId The term ID to check
+    /// @dev Internal function to determine the vault type for a given term ID
     function _getVaultType(bytes32 termId) internal view returns (VaultType) {
         bool _isVaultAtom = _isAtom(termId);
         bool _isVaultTriple = _isTriple[termId];
@@ -365,7 +352,6 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
     /// @dev Internal function to get the static costs that go into creating a triple
     /// @return tripleCost the static costs of creating a triple
     function _getTripleCost() internal view returns (uint256) {
-        return tripleConfig.tripleCreationProtocolFee + tripleConfig.totalAtomDepositsOnTripleCreation
-            + generalConfig.minShare * 2;
+        return tripleConfig.tripleCreationProtocolFee + generalConfig.minShare * 2;
     }
 }

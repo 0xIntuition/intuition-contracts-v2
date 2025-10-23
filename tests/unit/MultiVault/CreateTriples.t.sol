@@ -13,11 +13,16 @@ contract CreateTriplesTest is BaseTest {
     //////////////////////////////////////////////////////////////*/
 
     function test_createTriples_SingleTriple_Success() public {
+        uint256 totalTermsCreatedBefore = protocol.multiVault.totalTermsCreated();
         (bytes32 tripleId,) = createTripleWithAtoms(
             "Subject atom", "Predicate atom", "Object atom", ATOM_COST[0], TRIPLE_COST[0], users.alice
         );
 
         assertTrue(protocol.multiVault.isTermCreated(tripleId), "Triple should exist");
+        // 3 underlying atoms + 1 positive triple + 1 counter triple = 5 new terms
+        assertEq(
+            protocol.multiVault.totalTermsCreated(), totalTermsCreatedBefore + 5, "Total terms should increment by 5"
+        );
     }
 
     function test_createTriples_MultipleTriples_Success() public {

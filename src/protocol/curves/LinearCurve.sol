@@ -30,99 +30,90 @@ contract LinearCurve is BaseCurve {
     /// @dev Represents one share in 18 decimal format
     uint256 public constant ONE_SHARE = 1e18;
 
-    /// @notice Constructor for the Linear Curve.
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    /// @notice Initializes the new Linear Curve.
     /// @param _name The name of the curve.
-    constructor(string memory _name) BaseCurve(_name) { }
+    function initialize(string calldata _name) external initializer {
+        __BaseCurve_init(_name);
+    }
 
     /// @inheritdoc BaseCurve
-    function previewDeposit(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function previewDeposit(uint256 assets, uint256 totalAssets, uint256 totalShares)
         external
         pure
         override
         returns (uint256 shares)
     {
-        return convertToShares(assets, totalAssets, totalShares);
+        _checkDepositBounds(assets, totalAssets, MAX_ASSETS);
+        shares = _convertToShares(assets, totalAssets, totalShares);
+        _checkDepositOut(shares, totalShares, MAX_SHARES);
     }
 
     /// @inheritdoc BaseCurve
-    function previewMint(
-        uint256 shares,
-        uint256 totalShares,
-        uint256 totalAssets
-    )
+    function previewMint(uint256 shares, uint256 totalShares, uint256 totalAssets)
         external
         pure
         override
         returns (uint256 assets)
     {
-        assets = convertToAssets(shares, totalShares, totalAssets);
+        _checkMintBounds(shares, totalShares, MAX_SHARES);
+        assets = totalShares == 0 ? shares : shares.mulDivUp(totalAssets, totalShares);
+        _checkMintOut(assets, totalAssets, MAX_ASSETS);
     }
 
     /// @inheritdoc BaseCurve
-    function previewWithdraw(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function previewWithdraw(uint256 assets, uint256 totalAssets, uint256 totalShares)
         external
         pure
         override
         returns (uint256 shares)
     {
-        shares = convertToShares(assets, totalAssets, totalShares);
+        _checkWithdraw(assets, totalAssets);
+        shares = totalShares == 0 ? assets : assets.mulDivUp(totalShares, totalAssets);
     }
 
     /// @inheritdoc BaseCurve
-    function previewRedeem(
-        uint256 shares,
-        uint256 totalShares,
-        uint256 totalAssets
-    )
+    function previewRedeem(uint256 shares, uint256 totalShares, uint256 totalAssets)
         external
         pure
         override
         returns (uint256 assets)
     {
-        assets = convertToAssets(shares, totalShares, totalAssets);
+        _checkRedeem(shares, totalShares);
+        assets = _convertToAssets(shares, totalShares, totalAssets);
     }
 
     /// @inheritdoc BaseCurve
-    function convertToShares(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function convertToShares(uint256 assets, uint256 totalAssets, uint256 totalShares)
         public
         pure
         override
         returns (uint256 shares)
     {
-        uint256 supply = totalShares;
-        shares = supply == 0 ? assets : assets.mulDiv(supply, totalAssets);
+        _checkDepositBounds(assets, totalAssets, MAX_ASSETS);
+        shares = _convertToShares(assets, totalAssets, totalShares);
+        _checkDepositOut(shares, totalShares, MAX_SHARES);
     }
 
     /// @inheritdoc BaseCurve
-    function convertToAssets(
-        uint256 shares,
-        uint256 totalShares,
-        uint256 totalAssets
-    )
+    function convertToAssets(uint256 shares, uint256 totalShares, uint256 totalAssets)
         public
         pure
         override
         returns (uint256 assets)
     {
-        uint256 supply = totalShares;
-        assets = supply == 0 ? shares : shares.mulDiv(totalAssets, supply);
+        _checkRedeem(shares, totalShares);
+        assets = _convertToAssets(shares, totalShares, totalAssets);
     }
 
     /// @inheritdoc BaseCurve
     function currentPrice(uint256 totalShares, uint256 totalAssets) public pure override returns (uint256 sharePrice) {
-        return convertToAssets(ONE_SHARE, totalShares, totalAssets);
+        // Price of 1 whole share (1e18) under the linear curve
+        return _convertToAssets(ONE_SHARE, totalShares, totalAssets);
     }
 
     /// @inheritdoc BaseCurve
@@ -133,5 +124,33 @@ contract LinearCurve is BaseCurve {
     /// @inheritdoc BaseCurve
     function maxAssets() external pure override returns (uint256) {
         return MAX_ASSETS;
+    }
+
+    /// @dev Internal function to convert assets to shares without checks.
+    function _convertToShares(
+        uint256 assets,
+        uint256 totalAssets,
+        uint256 totalShares
+    )
+        internal
+        pure
+        returns (uint256 shares)
+    {
+        uint256 supply = totalShares;
+        shares = supply == 0 ? assets : assets.mulDiv(supply, totalAssets);
+    }
+
+    /// @dev Internal function to convert shares to assets without checks.
+    function _convertToAssets(
+        uint256 shares,
+        uint256 totalShares,
+        uint256 totalAssets
+    )
+        internal
+        pure
+        returns (uint256 assets)
+    {
+        uint256 supply = totalShares;
+        assets = supply == 0 ? shares : shares.mulDiv(totalAssets, supply);
     }
 }

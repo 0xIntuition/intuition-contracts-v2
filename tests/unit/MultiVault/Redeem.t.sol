@@ -37,11 +37,25 @@ contract BondingCurveRegistryMock {
         return shares; // 1:1 for tests
     }
 
-    function currentPrice(uint256, /*supply*/ uint256 /*curveId*/ ) external pure returns (uint256) {
+    function currentPrice(
+        uint256,
+        /*supply*/
+        uint256 /*curveId*/
+    )
+        external
+        pure
+        returns (uint256)
+    {
         return 1;
     }
 
-    function getCurveMaxAssets(uint256 /*curveId*/ ) external pure returns (uint256) {
+    function getCurveMaxAssets(
+        uint256 /*curveId*/
+    )
+        external
+        pure
+        returns (uint256)
+    {
         return type(uint256).max;
     }
 }
@@ -74,13 +88,7 @@ contract MultiVaultHarness is MultiVault {
         return _burn(from, termId, curveId, amount);
     }
 
-    function validateRedeemForTest(
-        bytes32 termId,
-        uint256 curveId,
-        address account,
-        uint256 shares,
-        uint256 minAssets
-    )
+    function validateRedeemForTest(bytes32 termId, uint256 curveId, address account, uint256 shares, uint256 minAssets)
         external
         view
     {
@@ -252,7 +260,10 @@ contract RedeemTest is BaseTest {
         resetPrank(users.alice);
         uint256 preShares = protocol.multiVault.getShares(users.alice, atomId, PROGRESSIVE_CURVE_ID);
 
-        protocol.multiVault.deposit{ value: depositAmount }(
+        protocol.multiVault
+        .deposit{
+            value: depositAmount
+        }(
             users.alice, // receiver
             atomId,
             PROGRESSIVE_CURVE_ID,
@@ -265,13 +276,14 @@ contract RedeemTest is BaseTest {
         // Redeem half
         uint256 sharesToRedeem = shares / 2;
         resetPrank(users.alice);
-        uint256 assets = protocol.multiVault.redeem(
-            users.alice, // receiver
-            atomId,
-            PROGRESSIVE_CURVE_ID,
-            sharesToRedeem,
-            0 // minAssets
-        );
+        uint256 assets = protocol.multiVault
+            .redeem(
+                users.alice, // receiver
+                atomId,
+                PROGRESSIVE_CURVE_ID,
+                sharesToRedeem,
+                0 // minAssets
+            );
 
         assertTrue(assets > 0, "Should receive some assets");
 

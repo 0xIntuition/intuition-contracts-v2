@@ -4,15 +4,12 @@ pragma solidity 0.8.29;
 import { console2 } from "forge-std/src/console2.sol";
 
 import { SetupScript } from "../SetupScript.s.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
 import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 
 import { Trust } from "src/Trust.sol";
-import { TestTrust } from "tests/mocks/TestTrust.sol";
-import { WrappedTrust } from "src/WrappedTrust.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { AtomWarden } from "src/protocol/wallet/AtomWarden.sol";
 import { AtomWallet } from "src/protocol/wallet/AtomWallet.sol";
@@ -21,7 +18,6 @@ import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEm
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
-import { ProgressiveCurve } from "src/protocol/curves/ProgressiveCurve.sol";
 import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCurve.sol";
 import {
     GeneralConfig,
@@ -156,15 +152,39 @@ contract IntuitionDeployAndSetup is SetupScript {
         atomWarden = AtomWarden(address(atomWardenProxy));
         info("AtomWarden Proxy", address(atomWardenProxy));
 
-        // Deploy BondingCurveRegistry
-        bondingCurveRegistry = new BondingCurveRegistry(ADMIN);
-        info("BondingCurveRegistry", address(bondingCurveRegistry));
-
-        // Deploy bonding curves
-        linearCurve = new LinearCurve("Linear Bonding Curve");
-        offsetProgressiveCurve = new OffsetProgressiveCurve(
-            "Offset Progressive Bonding Curve", OFFSET_PROGRESSIVE_CURVE_SLOPE, OFFSET_PROGRESSIVE_CURVE_OFFSET
+        // Deploy BondingCurveRegistry implementation and proxy
+        BondingCurveRegistry bondingCurveRegistryImpl = new BondingCurveRegistry();
+        TransparentUpgradeableProxy bondingCurveRegistryProxy = new TransparentUpgradeableProxy(
+            address(bondingCurveRegistryImpl),
+            ADMIN,
+            abi.encodeWithSelector(BondingCurveRegistry.initialize.selector, ADMIN)
         );
+        bondingCurveRegistry = BondingCurveRegistry(address(bondingCurveRegistryProxy));
+        info("BondingCurveRegistry Proxy", address(bondingCurveRegistry));
+
+        // Deploy bonding curve implementations
+        LinearCurve linearCurveImpl = new LinearCurve();
+        OffsetProgressiveCurve offsetProgressiveCurveImpl = new OffsetProgressiveCurve();
+
+        // Deploy proxies for bonding curves
+        TransparentUpgradeableProxy linearCurveProxy = new TransparentUpgradeableProxy(
+            address(linearCurveImpl), ADMIN, abi.encodeWithSelector(LinearCurve.initialize.selector, "Linear Curve")
+        );
+        linearCurve = LinearCurve(address(linearCurveProxy));
+        info("LinearCurve Proxy", address(linearCurve));
+
+        TransparentUpgradeableProxy offsetProgressiveCurveProxy = new TransparentUpgradeableProxy(
+            address(offsetProgressiveCurveImpl),
+            ADMIN,
+            abi.encodeWithSelector(
+                OffsetProgressiveCurve.initialize.selector,
+                "Offset Progressive Curve",
+                OFFSET_PROGRESSIVE_CURVE_SLOPE,
+                OFFSET_PROGRESSIVE_CURVE_OFFSET
+            )
+        );
+        offsetProgressiveCurve = OffsetProgressiveCurve(address(offsetProgressiveCurveProxy));
+        info("OffsetProgressiveCurve Proxy", address(offsetProgressiveCurveProxy));
 
         // Add curves to registry
         bondingCurveRegistry.addBondingCurve(address(linearCurve));
@@ -232,9 +252,8 @@ contract IntuitionDeployAndSetup is SetupScript {
             satelliteEmissionsController.setTrustBonding(address(trustBonding));
 
             // Grant CONTROLLER_ROLE to TrustBonding in SatelliteEmissionsController
-            IAccessControl(address(satelliteEmissionsController)).grantRole(
-                satelliteEmissionsController.CONTROLLER_ROLE(), address(trustBonding)
-            );
+            IAccessControl(address(satelliteEmissionsController))
+                .grantRole(satelliteEmissionsController.CONTROLLER_ROLE(), address(trustBonding));
             console2.log("CONTROLLER_ROLE in SatelliteEmissionsController granted to TrustBonding");
         }
 
@@ -287,17 +306,15 @@ contract IntuitionDeployAndSetup is SetupScript {
             minDeposit: MIN_DEPOSIT,
             minShare: MIN_SHARES,
             atomDataMaxLength: ATOM_DATA_MAX_LENGTH,
-            decimalPrecision: DECIMAL_PRECISION
+            feeThreshold: FEE_THRESHOLD
         });
 
         atomConfig = AtomConfig({
-            atomCreationProtocolFee: ATOM_CREATION_PROTOCOL_FEE,
-            atomWalletDepositFee: ATOM_WALLET_DEPOSIT_FEE
+            atomCreationProtocolFee: ATOM_CREATION_PROTOCOL_FEE, atomWalletDepositFee: ATOM_WALLET_DEPOSIT_FEE
         });
 
         tripleConfig = TripleConfig({
             tripleCreationProtocolFee: TRIPLE_CREATION_PROTOCOL_FEE,
-            totalAtomDepositsOnTripleCreation: TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION,
             atomDepositFractionForTriple: ATOM_DEPOSIT_FRACTION_FOR_TRIPLE
         });
 
