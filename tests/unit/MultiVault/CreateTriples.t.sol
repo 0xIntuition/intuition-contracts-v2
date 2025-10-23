@@ -13,11 +13,16 @@ contract CreateTriplesTest is BaseTest {
     //////////////////////////////////////////////////////////////*/
 
     function test_createTriples_SingleTriple_Success() public {
+        uint256 totalTermsCreatedBefore = protocol.multiVault.totalTermsCreated();
         (bytes32 tripleId,) = createTripleWithAtoms(
             "Subject atom", "Predicate atom", "Object atom", ATOM_COST[0], TRIPLE_COST[0], users.alice
         );
 
         assertTrue(protocol.multiVault.isTermCreated(tripleId), "Triple should exist");
+        // 3 underlying atoms + 1 positive triple + 1 counter triple = 5 new terms
+        assertEq(
+            protocol.multiVault.totalTermsCreated(), totalTermsCreatedBefore + 5, "Total terms should increment by 5"
+        );
     }
 
     function test_createTriples_MultipleTriples_Success() public {
@@ -65,6 +70,31 @@ contract CreateTriplesTest is BaseTest {
         assertEq(tripleIds.length, 2, "Should return two triple IDs");
         assertTrue(protocol.multiVault.isTermCreated(tripleIds[0]), "First triple should exist");
         assertTrue(protocol.multiVault.isTermCreated(tripleIds[1]), "Second triple should exist");
+    }
+
+    // Nested triple creation test
+    function test_createTriples_UsingNewTriplesAsItsAtoms() public {
+        (bytes32 tripleId1,) = createTripleWithAtoms("S1", "P1", "O1", ATOM_COST[0], TRIPLE_COST[0], users.alice);
+        (bytes32 tripleId2,) = createTripleWithAtoms("S2", "P2", "O2", ATOM_COST[0], TRIPLE_COST[0], users.alice);
+        (bytes32 tripleId3,) = createTripleWithAtoms("S3", "P3", "O3", ATOM_COST[0], TRIPLE_COST[0], users.alice);
+
+        // Attempt to create a new triple using the above triples as atoms
+        bytes32[] memory subjectIds = new bytes32[](1);
+        bytes32[] memory predicateIds = new bytes32[](1);
+        bytes32[] memory objectIds = new bytes32[](1);
+        uint256[] memory assets = new uint256[](1);
+        subjectIds[0] = tripleId1;
+        predicateIds[0] = tripleId2;
+        objectIds[0] = tripleId3;
+        assets[0] = TRIPLE_COST[0];
+        uint256 total = assets[0];
+
+        resetPrank(users.alice);
+        bytes32[] memory tripleIds =
+            protocol.multiVault.createTriples{ value: total }(subjectIds, predicateIds, objectIds, assets);
+
+        assertEq(tripleIds.length, 1, "Should return one triple ID");
+        assertTrue(protocol.multiVault.isTermCreated(tripleIds[0]), "New triple should exist");
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -182,7 +212,7 @@ contract CreateTriplesTest is BaseTest {
         protocol.multiVault.createTriples{ value: assets[0] }(subjectIds, predicateIds, objectIds, assets);
     }
 
-    function test_createTriples_NonExistentAtom_Revert() public {
+    function test_createTriples_NonExistentTerm_Revert() public {
         bytes32[] memory subjectIds = new bytes32[](1);
         bytes32[] memory predicateIds = new bytes32[](1);
         bytes32[] memory objectIds = new bytes32[](1);
@@ -195,7 +225,7 @@ contract CreateTriplesTest is BaseTest {
         uint256 requiredPayment = TRIPLE_COST[0];
 
         resetPrank(users.alice);
-        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_AtomDoesNotExist.selector, subjectIds[0]));
+        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_TermDoesNotExist.selector, subjectIds[0]));
         protocol.multiVault.createTriples{ value: requiredPayment }(subjectIds, predicateIds, objectIds, assets);
     }
 

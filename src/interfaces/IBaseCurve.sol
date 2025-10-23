@@ -8,6 +8,29 @@ pragma solidity 0.8.29;
  *         All curves must implement these functions to be compatible with the protocol.
  */
 interface IBaseCurve {
+    /* =================================================== */
+    /*                      EVENTS                         */
+    /* =================================================== */
+
+    /// @notice Emitted when the curve name is set
+    /// @param name The unique name of the curve
+    event CurveNameSet(string name);
+
+    /* =================================================== */
+    /*                      ERRORS                         */
+    /* =================================================== */
+
+    error BaseCurve_EmptyStringNotAllowed();
+    error BaseCurve_AssetsExceedTotalAssets();
+    error BaseCurve_SharesExceedTotalShares();
+    error BaseCurve_AssetsOverflowMax();
+    error BaseCurve_SharesOverflowMax();
+    error BaseCurve_DomainExceeded();
+
+    /* =================================================== */
+    /*                    FUNCTIONS                       */
+    /* =================================================== */
+
     /// @notice Get the name of the curve
     /// @return name The name of the curve
     function name() external view returns (string memory);
