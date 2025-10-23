@@ -60,7 +60,7 @@ contract ProgressiveCurve is BaseCurve {
         if (slope18 == 0 || slope18 % 2 != 0) revert ProgressiveCurve_InvalidSlope();
 
         SLOPE = wrap(slope18);
-        HALF_SLOPE = div(SLOPE, wrap(2e18));
+        HALF_SLOPE = wrap(slope18 / 2);
 
         UD60x18 maxSharesUD = sqrt(wrap(uMAX_UD60x18 / uUNIT));
         UD60x18 maxAssetsUD = mul(PCMath.square(maxSharesUD), HALF_SLOPE);
