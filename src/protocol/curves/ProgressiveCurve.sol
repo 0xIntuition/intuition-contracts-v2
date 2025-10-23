@@ -73,7 +73,7 @@ contract ProgressiveCurve is BaseCurve {
     /// @dev Computes Slope / 2 as commonly used constant
     function initialize(string calldata _name, uint256 slope18) external initializer {
         if (slope18 == 0 || slope18 % 2 != 0) revert ProgressiveCurve_InvalidSlope();
-        
+
         __BaseCurve_init(_name);
 
         SLOPE = UD60x18.wrap(slope18);
@@ -97,11 +97,7 @@ contract ProgressiveCurve is BaseCurve {
     /// $$\text{shares} = \sqrt{s^2 + \frac{a}{m/2}} - s$$
     /// @dev or to say that another way:
     /// $$\text{shares} = \sqrt{s^2 + \frac{2a}{m}} - s$$
-    function previewDeposit(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function previewDeposit(uint256 assets, uint256 totalAssets, uint256 totalShares)
         external
         view
         override
@@ -151,24 +147,20 @@ contract ProgressiveCurve is BaseCurve {
     /// $$\text{assets} = (s^2 + 2sn + n^2 - s^2) \cdot \frac{m}{2}$$
     /// @dev which simplifies to:
     /// $$\text{assets} = (2sn + n^2) \cdot \frac{m}{2}$$
-    function previewMint(
-        uint256 shares,
-        uint256 totalShares,
-        uint256 totalAssets
-    )
+    function previewMint(uint256 shares, uint256 totalShares, uint256 totalAssets)
         external
         view
         override
         returns (uint256 assets)
     {
         _checkMintBounds(shares, totalShares, MAX_SHARES);
-      
+
         UD60x18 s0 = convert(totalShares);
         UD60x18 s1 = convert(totalShares + shares);
         UD60x18 aUD = _convertToAssets(s0, s1); // precise fixed-point
-        
+
         assets = _ceilUdToUint(aUD);
-      
+
         _checkMintOut(assets, totalAssets, MAX_ASSETS);
     }
 
@@ -180,11 +172,7 @@ contract ProgressiveCurve is BaseCurve {
     /// $$\text{shares} = s - \sqrt{s^2 - \frac{a}{m/2}}$$
     /// @dev or to say that another way:
     /// $$\text{shares} = s - \sqrt{s^2 - \frac{2a}{m}}$$
-    function previewWithdraw(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function previewWithdraw(uint256 assets, uint256 totalAssets, uint256 totalShares)
         external
         view
         override
@@ -226,11 +214,7 @@ contract ProgressiveCurve is BaseCurve {
     /// $$\text{shares} = \frac{a}{s \cdot m/2}$$
     /// @dev Or to say that another way:
     /// $$\text{shares} = \frac{2a}{s \cdot m}$$
-    function convertToShares(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function convertToShares(uint256 assets, uint256 totalAssets, uint256 totalShares)
         external
         view
         override
