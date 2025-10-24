@@ -18,7 +18,8 @@ forge script script/base/TrustDeploy.s.sol:TrustDeploy \
 --optimizer-runs 10000 \
 --rpc-url base_sepolia \
 --broadcast \
---slow
+--slow \
+--verify --verifier etherscan --verifier-url "https://api.etherscan.io/v2/api?chainid=84532"
 */
 
 contract TrustDeploy is SetupScript {

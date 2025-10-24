@@ -20,7 +20,8 @@ forge script script/base/LegacyTrustTokenDeploy.s.sol:LegacyTrustTokenDeploy \
 --optimizer-runs 10000 \
 --rpc-url base_sepolia \
 --broadcast \
---slow
+--slow \
+--verify --verifier etherscan --verifier-url "https://api.etherscan.io/v2/api?chainid=84532"
 */
 
 contract LegacyTrustTokenDeploy is SetupScript {
