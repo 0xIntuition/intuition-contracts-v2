@@ -48,6 +48,10 @@ abstract contract BaseCurve is IBaseCurve, Initializable {
         emit CurveNameSet(_name);
     }
 
+    /* =================================================== */
+    /*                    EXTERNAL FUNCTIONS               */
+    /* =================================================== */
+
     /// @notice The maximum number of shares that this curve can handle without overflowing.
     /// @dev Checked by the MultiVault before transacting
     function maxShares() external view virtual returns (uint256);
@@ -57,83 +61,106 @@ abstract contract BaseCurve is IBaseCurve, Initializable {
     function maxAssets() external view virtual returns (uint256);
 
     /// @notice Preview how many shares would be minted for a deposit of assets
-    ///
+    /// @dev Rounding direction of previewDeposit is always down
     /// @param assets Quantity of assets to deposit
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @return shares The number of shares that would be minted
-    function previewDeposit(uint256 assets, uint256 totalAssets, uint256 totalShares)
+    function previewDeposit(
+        uint256 assets,
+        uint256 totalAssets,
+        uint256 totalShares
+    )
         external
         view
         virtual
         returns (uint256 shares);
 
     /// @notice Preview how many assets would be required to mint a specific amount of shares
-    ///
+    /// @dev Rounding direction of previewMint is always up
     /// @param shares Quantity of shares to mint
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @return assets The number of assets that would be required to mint the shares
-    function previewMint(uint256 shares, uint256 totalShares, uint256 totalAssets)
+    function previewMint(
+        uint256 shares,
+        uint256 totalShares,
+        uint256 totalAssets
+    )
         external
         view
         virtual
         returns (uint256 assets);
 
     /// @notice Preview how many shares would be redeemed for a withdrawal of assets
-    ///
+    /// @dev Rounding direction of previewWithdraw is always up
     /// @param assets Quantity of assets to withdraw
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @return shares The number of shares that would need to be redeemed
-    function previewWithdraw(uint256 assets, uint256 totalAssets, uint256 totalShares)
+    function previewWithdraw(
+        uint256 assets,
+        uint256 totalAssets,
+        uint256 totalShares
+    )
         external
         view
         virtual
         returns (uint256 shares);
 
     /// @notice Preview how many assets would be returned for burning a specific amount of shares
-    ///
+    /// @dev Rounding direction of previewRedeem is always down
     /// @param shares Quantity of shares to burn
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @return assets The number of assets that would be returned
-    function previewRedeem(uint256 shares, uint256 totalShares, uint256 totalAssets)
+    function previewRedeem(
+        uint256 shares,
+        uint256 totalShares,
+        uint256 totalAssets
+    )
         external
         view
         virtual
         returns (uint256 assets);
 
     /// @notice Convert assets to shares at a specific point on the curve
-    ///
+    /// @dev Rounding direction of convertToShares is always down
     /// @param assets Quantity of assets to convert to shares
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @return shares The number of shares equivalent to the given assets
-    function convertToShares(uint256 assets, uint256 totalAssets, uint256 totalShares)
+    function convertToShares(
+        uint256 assets,
+        uint256 totalAssets,
+        uint256 totalShares
+    )
         external
         view
         virtual
         returns (uint256 shares);
 
     /// @notice Convert shares to assets at a specific point on the curve
-    ///
+    /// @dev Rounding direction of convertToAssets is always down
     /// @param shares Quantity of shares to convert to assets
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @return assets The number of assets equivalent to the given shares
-    function convertToAssets(uint256 shares, uint256 totalShares, uint256 totalAssets)
+    function convertToAssets(
+        uint256 shares,
+        uint256 totalShares,
+        uint256 totalAssets
+    )
         external
         view
         virtual
         returns (uint256 assets);
 
     /// @notice Get the current price of a share
-    ///
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @return sharePrice The current price of a share, scaled by 1e18
-    function currentPrice(uint256 totalShares, uint256 totalAssets) public view virtual returns (uint256 sharePrice);
+    function currentPrice(uint256 totalShares, uint256 totalAssets) external view virtual returns (uint256 sharePrice);
 
     /* =================================================== */
     /*                  INTERNAL FUNCTIONS                 */
@@ -149,24 +176,37 @@ abstract contract BaseCurve is IBaseCurve, Initializable {
         if (shares > totalShares) revert BaseCurve_SharesExceedTotalShares();
     }
 
-    // previewDeposit()/convertToShares(): assets + totalAssets <= maxAssets
-    function _checkDepositBounds(uint256 assets, uint256 totalAssets, uint256 maxAssets) internal pure {
+    /// @dev previewDeposit()/convertToShares(): assets + totalAssets <= maxAssets
+    function _checkDepositBounds(uint256 assets, uint256 totalAssets, uint256 maxAssetsCap) internal pure {
         // Use subtraction to avoid potential overflow on (assets + totalAssets)
-        if (assets > maxAssets - totalAssets) revert BaseCurve_AssetsOverflowMax();
+        if (assets > maxAssetsCap - totalAssets) revert BaseCurve_AssetsOverflowMax();
     }
 
-    // previewDeposit()/convertToShares(): (sharesOut) + totalShares <= maxShares
-    function _checkDepositOut(uint256 sharesOut, uint256 totalShares, uint256 maxShares) internal pure {
-        if (sharesOut > maxShares - totalShares) revert BaseCurve_SharesOverflowMax();
+    /// @dev previewDeposit()/convertToShares(): (sharesOut) + totalShares <= maxShares
+    function _checkDepositOut(uint256 sharesOut, uint256 totalShares, uint256 maxSharesCap) internal pure {
+        if (sharesOut > maxSharesCap - totalShares) revert BaseCurve_SharesOverflowMax();
     }
 
-    // previewMint(): shares + totalShares <= maxShares
-    function _checkMintBounds(uint256 shares, uint256 totalShares, uint256 maxShares) internal pure {
-        if (shares > maxShares - totalShares) revert BaseCurve_SharesOverflowMax();
+    /// @dev previewMint(): shares + totalShares <= maxShares
+    function _checkMintBounds(uint256 shares, uint256 totalShares, uint256 maxSharesCap) internal pure {
+        if (shares > maxSharesCap - totalShares) revert BaseCurve_SharesOverflowMax();
     }
 
-    // previewMint(): (assetsOut) + totalAssets <= maxAssets
-    function _checkMintOut(uint256 assetsOut, uint256 totalAssets, uint256 maxAssets) internal pure {
-        if (assetsOut > maxAssets - totalAssets) revert BaseCurve_AssetsOverflowMax();
+    /// @dev previewMint(): (assetsOut) + totalAssets <= maxAssets
+    function _checkMintOut(uint256 assetsOut, uint256 totalAssets, uint256 maxAssetsCap) internal pure {
+        if (assetsOut > maxAssetsCap - totalAssets) revert BaseCurve_AssetsOverflowMax();
+    }
+
+    /// @dev Internal helper used to ensure that totalAssets and totalShares do not exceed curve limits
+    function _checkCurveDomains(
+        uint256 totalAssets,
+        uint256 totalShares,
+        uint256 maxAssetsCap,
+        uint256 maxSharesCap
+    )
+        internal
+        pure
+    {
+        if (totalAssets > maxAssetsCap || totalShares > maxSharesCap) revert BaseCurve_DomainExceeded();
     }
 }

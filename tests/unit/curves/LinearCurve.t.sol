@@ -161,27 +161,51 @@ contract LinearCurveTest is Test {
         assertLe(shares, totalShares);
         assertGt(shares, 0);
     }
-    
+
     function test_previewWithdraw_reverts_whenAssetsExceedTotalAssets() public {
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_AssetsExceedTotalAssets.selector));
-        curve.previewWithdraw(2, /*totalAssets=*/ 1, /*totalShares=*/ 10);
+        curve.previewWithdraw(
+            2,
+            /*totalAssets=*/
+            1,
+            /*totalShares=*/
+            10
+        );
     }
 
     function test_previewRedeem_reverts_whenSharesExceedTotalShares() public {
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_SharesExceedTotalShares.selector));
-        curve.previewRedeem( /*shares=*/ 11, /*totalShares=*/ 10, /*totalAssets=*/ 100);
+        curve.previewRedeem( /*shares=*/
+            11,
+            /*totalShares=*/
+            10,
+            /*totalAssets=*/
+            100
+        );
     }
 
     function test_convertToAssets_reverts_whenSharesExceedTotalShares() public {
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_SharesExceedTotalShares.selector));
-        curve.convertToAssets( /*shares=*/ 11, /*totalShares=*/ 10, /*totalAssets=*/ 100);
+        curve.convertToAssets( /*shares=*/
+            11,
+            /*totalShares=*/
+            10,
+            /*totalAssets=*/
+            100
+        );
     }
 
     // Deposit bounds: assets + totalAssets > MAX_ASSETS
     function test_previewDeposit_reverts_whenAssetsOverflowMaxAssets() public {
         uint256 max = type(uint256).max;
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_AssetsOverflowMax.selector));
-        curve.previewDeposit( /*assets=*/ 1, /*totalAssets=*/ max, /*totalShares=*/ 0);
+        curve.previewDeposit( /*assets=*/
+            1,
+            /*totalAssets=*/
+            max,
+            /*totalShares=*/
+            0
+        );
     }
 
     // Deposit out: sharesOut + totalShares > MAX_SHARES
@@ -203,7 +227,13 @@ contract LinearCurveTest is Test {
     function test_previewMint_reverts_whenSharesOverflowMaxShares() public {
         uint256 max = type(uint256).max;
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_SharesOverflowMax.selector));
-        curve.previewMint( /*shares=*/ 1, /*totalShares=*/ max, /*totalAssets=*/ 0);
+        curve.previewMint( /*shares=*/
+            1,
+            /*totalShares=*/
+            max,
+            /*totalAssets=*/
+            0
+        );
     }
 
     // Mint out: assetsOut + totalAssets > MAX_ASSETS
@@ -211,7 +241,13 @@ contract LinearCurveTest is Test {
         uint256 max = type(uint256).max;
         // With totalShares=1, shares=1, convertToAssets() = totalAssets, so assetsOut = max -> will overflow maxAssets
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_AssetsOverflowMax.selector));
-        curve.previewMint( /*shares=*/ 1, /*totalShares=*/ 1, /*totalAssets=*/ max);
+        curve.previewMint( /*shares=*/
+            1,
+            /*totalShares=*/
+            1,
+            /*totalAssets=*/
+            max
+        );
     }
 
     function test_convertToAssets_zeroSupply_reverts() public {
@@ -220,10 +256,7 @@ contract LinearCurveTest is Test {
     }
 
     // Fuzz negative: convertToAssets must revert when shares > totalShares
-    function testFuzz_convertToAssets_reverts_whenSharesExceedTotalShares(
-        uint256 totalShares,
-        uint256 totalAssets
-    )
+    function testFuzz_convertToAssets_reverts_whenSharesExceedTotalShares(uint256 totalShares, uint256 totalAssets)
         public
     {
         totalShares = bound(totalShares, 0, type(uint128).max);
@@ -232,5 +265,49 @@ contract LinearCurveTest is Test {
         uint256 shares = totalShares + 1; // strictly greater
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_SharesExceedTotalShares.selector));
         curve.convertToAssets(shares, totalShares, totalAssets);
+    }
+
+    // New: domain equality allowed at MAX values
+    function test_currentPrice_domainAllows_MAX_values() public view {
+        uint256 max = type(uint256).max;
+        uint256 price = curve.currentPrice(max, max);
+        assertEq(price, 1e18);
+    }
+
+    function test_convertToAssets_domainAllows_MAX_values() public view {
+        uint256 max = type(uint256).max;
+        uint256 assets = curve.convertToAssets(1e18, max, max);
+        assertEq(assets, 1e18);
+    }
+
+    function test_previewRedeem_domainAllows_MAX_values() public view {
+        uint256 max = type(uint256).max;
+        uint256 assets = curve.previewRedeem(1e18, max, max);
+        assertEq(assets, 1e18);
+    }
+
+    function test_previewDeposit_domainAllows_MAX_values_whenNoDelta() public view {
+        uint256 max = type(uint256).max;
+        uint256 out = curve.previewDeposit(0, max, max);
+        assertEq(out, 0);
+    }
+
+    function test_previewMint_domainAllows_MAX_values_whenNoDelta() public view {
+        uint256 max = type(uint256).max;
+        uint256 out = curve.previewMint(0, max, max);
+        assertEq(out, 0);
+    }
+
+    // New: convertToShares mirrors previewDeposit overflow reverts
+    function test_convertToShares_reverts_whenAssetsOverflowMaxAssets() public {
+        uint256 max = type(uint256).max;
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_AssetsOverflowMax.selector));
+        curve.convertToShares(1, max, 0);
+    }
+
+    function test_convertToShares_reverts_whenSharesOutWouldOverflowMaxShares() public {
+        uint256 max = type(uint256).max;
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_SharesOverflowMax.selector));
+        curve.convertToShares(1, max - 1, max);
     }
 }

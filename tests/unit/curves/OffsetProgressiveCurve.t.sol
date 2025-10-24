@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { Test, console } from "forge-std/src/Test.sol";
-import { UD60x18, ud60x18, convert } from "@prb/math/src/UD60x18.sol";
+import { Test } from "forge-std/src/Test.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCurve.sol";
 import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
 
 contract OffsetProgressiveCurveTest is Test {
     OffsetProgressiveCurve public curve;
-    uint256 public constant SLOPE = 2;
-    uint256 public constant OFFSET = 5e35;
+    uint256 public constant SLOPE = 2e18;
+    uint256 public constant OFFSET = 5e17;
 
     function setUp() public {
         OffsetProgressiveCurve offsetProgressiveCurveImpl = new OffsetProgressiveCurve();
@@ -127,18 +126,94 @@ contract OffsetProgressiveCurveTest is Test {
         assertGt(shares, 0);
     }
 
-    function testFuzz_currentPrice(uint256 totalShares) public view {
+    function testFuzz_currentPrice_linearityProperty(uint256 totalShares, uint256 delta) public view {
+        // Test the fundamental property: price should increase linearly with shares
+        // P(s + Δs) - P(s) = m * Δs, where m is the slope
+
+        totalShares = bound(totalShares, 0, curve.maxShares() - 1e18);
+        delta = bound(delta, 1, 1e18);
+
+        // Ensure we don't exceed max shares
+        if (totalShares + delta > curve.maxShares()) {
+            delta = curve.maxShares() - totalShares;
+        }
+
+        uint256 price1 = curve.currentPrice(totalShares, 0);
+        uint256 price2 = curve.currentPrice(totalShares + delta, 0);
+
+        // Calculate expected increase: SLOPE * delta
+        // Since SLOPE is in 18-decimal fixed point, we need: (SLOPE * delta) / 1e18
+        uint256 expectedIncrease = (SLOPE * delta) / 1e18;
+        uint256 actualIncrease = price2 - price1;
+
+        // Allow for 1 wei rounding error due to fixed-point arithmetic
+        assertApproxEqAbs(actualIncrease, expectedIncrease, 1, "Price should increase linearly by SLOPE * delta");
+    }
+
+    function testFuzz_currentPrice_offsetEffect(uint256 totalShares) public view {
+        // Test that the offset correctly shifts the price curve
+        // At totalShares = 0, price should be OFFSET * SLOPE
         totalShares = bound(totalShares, 0, curve.maxShares());
 
         uint256 price = curve.currentPrice(totalShares, 0);
-        // Looking at the contract: convert(totalShares).add(OFFSET).mul(SLOPE).unwrap()
-        // This means: (totalShares * 1e18 + OFFSET) * SLOPE / 1e18
-        // Since OFFSET is 0.0001e18 = 1e14, and SLOPE is 0.001e18 = 1e15
-        // The formula becomes: (totalShares * 1e18 + 1e14) * 1e15 / 1e18
-        // Which simplifies to: totalShares * 1e15 + 1e14 * 1e15 / 1e18
-        // Which is: totalShares * SLOPE + OFFSET * SLOPE / 1e18
-        uint256 expectedPrice = totalShares * SLOPE + (OFFSET * SLOPE / 1e18);
-        assertEq(price, expectedPrice);
+        uint256 priceAtZero = curve.currentPrice(0, 0);
+
+        // Price formula: P(s) = (s + offset) * slope
+        // So: P(s) - P(0) = s * slope
+        uint256 expectedDifference = (SLOPE * totalShares) / 1e18;
+        uint256 actualDifference = price - priceAtZero;
+
+        assertApproxEqAbs(actualDifference, expectedDifference, 1, "Price difference should equal shares * slope");
+
+        // Also verify the offset is applied correctly at zero
+        uint256 expectedPriceAtZero = (OFFSET * SLOPE) / 1e18;
+        assertEq(priceAtZero, expectedPriceAtZero, "Price at zero should equal offset * slope");
+    }
+
+    function testFuzz_currentPrice_integrationWithMint(uint256 sharesToMint) public view {
+        // Test that the integral of prices matches the mint cost
+        // This verifies the relationship between currentPrice and previewMint
+        sharesToMint = bound(sharesToMint, 1e15, 1e18); // Reasonable range for testing
+
+        uint256 totalShares = 10e18; // Start from non-zero supply
+
+        // The cost to mint should equal the area under the price curve
+        // For a linear curve: Cost = (P(s1) + P(s2)) / 2 * Δs
+        uint256 price1 = curve.currentPrice(totalShares, 0);
+        uint256 price2 = curve.currentPrice(totalShares + sharesToMint, 0);
+        uint256 averagePrice = (price1 + price2) / 2;
+        uint256 expectedCost = (averagePrice * sharesToMint) / 1e18;
+
+        uint256 actualCost = curve.previewMint(sharesToMint, totalShares, 0);
+
+        // Allow 0.1% tolerance for rounding in the integral calculation
+        uint256 tolerance = actualCost / 1000;
+        assertApproxEqAbs(actualCost, expectedCost, tolerance, "Mint cost should match integral of price curve");
+    }
+
+    function testFuzz_currentPrice_monotonicIncrease(uint256 shares1, uint256 shares2) public view {
+        // Test that price is monotonically increasing (or equal due to rounding)
+        shares1 = bound(shares1, 0, curve.maxShares());
+        shares2 = bound(shares2, 0, curve.maxShares());
+
+        uint256 price1 = curve.currentPrice(shares1, 0);
+        uint256 price2 = curve.currentPrice(shares2, 0);
+
+        if (shares1 < shares2) {
+            assertLe(price1, price2, "Price should be less than or equal when supply is lower");
+            // If the share difference is significant, price should strictly increase
+            if (shares2 - shares1 >= 1e18) {
+                assertLt(price1, price2, "Price should strictly increase for significant supply differences");
+            }
+        } else if (shares1 > shares2) {
+            assertGe(price1, price2, "Price should be greater than or equal when supply is higher");
+            // If the share difference is significant, price should strictly decrease
+            if (shares1 - shares2 >= 1e18) {
+                assertGt(price1, price2, "Price should strictly decrease for significant supply differences");
+            }
+        } else {
+            assertEq(price1, price2, "Same supply should have same price");
+        }
     }
 
     function test_offset_previewMint_isCeil_of_previewRedeem_floor() public view {
@@ -177,15 +252,19 @@ contract OffsetProgressiveCurveTest is Test {
         uint256 r = 2e18;
         assertEq(curve.previewRedeem(r, s0, 0), curve.convertToAssets(r, s0, 0));
     }
-    
-    function test_previewMint_mintMaxSharesFromZero_succeeds() public view {
-        uint256 sMax = curve.maxShares();
-        uint256 assets = curve.previewMint(sMax, 0, 0);
-        assertGt(assets, 0);
 
-        UD60x18 rawExpected = _expectedMintCostFromZeroRaw(sMax);
-        uint256 expected = _ceilUdToUint(rawExpected);
-        assertEq(assets, expected);
+    function test_previewMint_mintMaxSharesFromZero_succeeds() public {
+        uint256 sMax = curve.maxShares();
+        uint256 maxA = curve.maxAssets();
+
+        // previewMint should revert due to assets out overflow - this happens because we ceil required assets for mint
+        // internally
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_AssetsOverflowMax.selector));
+        curve.previewMint(sMax, 0, 0);
+
+        // convertToAssets should return expected assets without ceil --> matches maxAssets
+        uint256 expectedWithoutCeil = curve.convertToAssets(sMax, sMax, 0);
+        assertEq(expectedWithoutCeil, maxA);
     }
 
     function test_previewMint_mintPastMaxSharesFromZero_reverts() public {
@@ -212,83 +291,146 @@ contract OffsetProgressiveCurveTest is Test {
 
     function test_previewRedeem_allAtMaxShares_succeeds() public view {
         uint256 sMax = curve.maxShares();
-        uint256 expected = _expectedMintCostFromZero(sMax);
+        uint256 expected = curve.maxAssets(); // redeem path returns floor; equals stored MAX_ASSETS
         uint256 assets = curve.previewRedeem(sMax, sMax, 0);
         assertEq(assets, expected);
     }
 
     function test_previewDeposit_allowsZeroAssets_returnsZero() public view {
-        uint256 shares = curve.previewDeposit(0, /*totalAssets=*/ 0, /*totalShares=*/ 123e18);
+        uint256 shares = curve.previewDeposit(
+            0,
+            /*totalAssets=*/
+            0,
+            /*totalShares=*/
+            123e18
+        );
         assertEq(shares, 0);
     }
 
     function test_convertToShares_allowsZeroAssets_returnsZero() public view {
-        uint256 shares = curve.convertToShares(0, /*totalAssets=*/ 0, /*totalShares=*/ 123e18);
+        uint256 shares = curve.convertToShares(
+            0,
+            /*totalAssets=*/
+            0,
+            /*totalShares=*/
+            123e18
+        );
         assertEq(shares, 0);
     }
 
     // Withdraw bound: assets > totalAssets
     function test_previewWithdraw_reverts_whenAssetsExceedTotalAssets() public {
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_AssetsExceedTotalAssets.selector));
-        curve.previewWithdraw( /*assets=*/ 2, /*totalAssets=*/ 1, /*totalShares=*/ 10e18);
+        curve.previewWithdraw( /*assets=*/
+            2,
+            /*totalAssets=*/
+            1,
+            /*totalShares=*/
+            10e18
+        );
     }
 
     // Redeem bounds: shares > totalShares
     function test_previewRedeem_reverts_whenSharesExceedTotalShares() public {
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_SharesExceedTotalShares.selector));
-        curve.previewRedeem( /*shares=*/ 11e18, /*totalShares=*/ 10e18, /*totalAssets=*/ 0);
+        curve.previewRedeem( /*shares=*/
+            11e18,
+            /*totalShares=*/
+            10e18,
+            /*totalAssets=*/
+            0
+        );
     }
 
     function test_convertToAssets_reverts_whenSharesExceedTotalShares() public {
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_SharesExceedTotalShares.selector));
-        curve.convertToAssets( /*shares=*/ 11e18, /*totalShares=*/ 10e18, /*totalAssets=*/ 0);
+        curve.convertToAssets( /*shares=*/
+            11e18,
+            /*totalShares=*/
+            10e18,
+            /*totalAssets=*/
+            0
+        );
     }
 
     // Deposit bounds: assets + totalAssets > maxAssets
     function test_previewDeposit_reverts_whenAssetsOverflowMaxAssets() public {
         uint256 maxA = curve.maxAssets();
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_AssetsOverflowMax.selector));
-        curve.previewDeposit( /*assets=*/ 1, /*totalAssets=*/ maxA, /*totalShares=*/ 0);
+        curve.previewDeposit( /*assets=*/
+            1,
+            /*totalAssets=*/
+            maxA,
+            /*totalShares=*/
+            0
+        );
     }
 
     // Mint bounds: shares + totalShares > maxShares
     function test_previewMint_reverts_whenSharesOverflowMaxShares() public {
         uint256 maxS = curve.maxShares();
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_SharesOverflowMax.selector));
-        curve.previewMint( /*shares=*/ 1, /*totalShares=*/ maxS, /*totalAssets=*/ 0);
+        curve.previewMint( /*shares=*/
+            1,
+            /*totalShares=*/
+            maxS,
+            /*totalAssets=*/
+            0
+        );
     }
 
     // Mint out: assetsOut + totalAssets > maxAssets
     function test_previewMint_reverts_whenAssetsOutWouldOverflowMaxAssets() public {
         uint256 maxA = curve.maxAssets();
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_AssetsOverflowMax.selector));
-        curve.previewMint( /*shares=*/ 1, /*totalShares=*/ 1, /*totalAssets=*/ maxA);
+        curve.previewMint( /*shares=*/
+            1,
+            /*totalShares=*/
+            1,
+            /*totalAssets=*/
+            maxA
+        );
     }
 
-    /* ===================================================== */
-    /*                  INTERNAL HELPERS                     */
-    /* ===================================================== */
+    /* ── Domain checks (equality allowed, above-max reverts) ── */
 
-    /// @dev Helper to compute expected mint cost from zero supply
-    function _expectedMintCostFromZero(uint256 shares) internal view returns (uint256) {
-        // Cost = ((s+o)^2 - o^2) * (m/2)
-        UD60x18 o = curve.OFFSET();
-        UD60x18 sPlusO = convert(shares).add(o);
-        UD60x18 diff = sPlusO.powu(2).sub(o.powu(2));
-        return convert(diff.mul(curve.HALF_SLOPE()));
+    function test_domainAllows_MAX_values_currentPrice_OPC() public view {
+        uint256 sMax = curve.maxShares();
+        uint256 aMax = curve.maxAssets();
+        // Should not revert
+        uint256 p = curve.currentPrice(sMax, aMax);
+        assertGe(p, 0);
     }
 
-    /// @dev Helper to compute expected mint cost from zero supply, returning raw UD60x18
-    function _expectedMintCostFromZeroRaw(uint256 shares) internal view returns (UD60x18) {
-        UD60x18 o = curve.OFFSET();
-        UD60x18 sPlusO = convert(shares).add(o);
-        UD60x18 diff = sPlusO.powu(2).sub(o.powu(2));
-        return diff.mul(curve.HALF_SLOPE());
+    function test_domainAllows_MAX_values_convertToAssets_OPC() public view {
+        uint256 sMax = curve.maxShares();
+        uint256 aMax = curve.maxAssets();
+        uint256 assets = curve.convertToAssets(1e18, sMax, aMax);
+        assertGt(assets, 0);
     }
 
-    /// @dev Converts a UD60x18 to a uint256 by ceiling the value (i.e. rounding up)
-    function _ceilUdToUint(UD60x18 x) internal pure returns (uint256) {
-        uint256 raw = UD60x18.unwrap(x); // 18-decimal scaled
-        return raw / 1e18 + ((raw % 1e18 == 0) ? 0 : 1); // ceil to uint256
+    function test_domainRejects_totalShares_aboveMax_currentPrice_OPC() public {
+        uint256 sMax = curve.maxShares();
+        uint256 aMax = curve.maxAssets();
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_DomainExceeded.selector));
+        curve.currentPrice(sMax + 1, aMax);
+    }
+
+    function test_domainRejects_totalAssets_aboveMax_currentPrice_OPC() public {
+        uint256 sMax = curve.maxShares();
+        uint256 aMax = curve.maxAssets();
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_DomainExceeded.selector));
+        curve.currentPrice(sMax, aMax + 1);
+    }
+
+    function test_domainRejects_aboveMax_in_previewDeposit_OPC() public {
+        uint256 sMax = curve.maxShares();
+        uint256 aMax = curve.maxAssets();
+
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_DomainExceeded.selector));
+        curve.previewDeposit(0, aMax + 1, sMax);
+
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_DomainExceeded.selector));
+        curve.previewDeposit(0, aMax, sMax + 1);
     }
 }

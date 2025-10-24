@@ -73,12 +73,7 @@ contract FeeFlowsTest is BaseTest {
         }
     }
 
-    function _expectDeposit(
-        address who,
-        bytes32 termId,
-        uint256 curveId,
-        uint256 amount
-    )
+    function _expectDeposit(address who, bytes32 termId, uint256 curveId, uint256 amount)
         internal
         returns (uint256 sharesMinted, uint256 assetsAfterFees)
     {
@@ -89,12 +84,7 @@ contract FeeFlowsTest is BaseTest {
         assetsAfterFees = expNetAssets;
     }
 
-    function _expectRedeem(
-        address who,
-        bytes32 termId,
-        uint256 curveId,
-        uint256 shares
-    )
+    function _expectRedeem(address who, bytes32 termId, uint256 curveId, uint256 shares)
         internal
         returns (uint256 assetsAfterFees, uint256 rawAssetsBeforeFees)
     {
@@ -123,7 +113,15 @@ contract FeeFlowsTest is BaseTest {
     }
 
     /// @dev create one triple with `extra` over the fixed triple cost; arrays scoped inside to avoid stack pressure
-    function _createTripleWithExtra(bytes32 sid, bytes32 pid, bytes32 oid, uint256 extra, address creator) internal {
+    function _createTripleWithExtra(
+        bytes32 sid,
+        bytes32 pid,
+        bytes32 oid,
+        uint256 extra,
+        address creator
+    )
+        internal
+    {
         uint256 sendAmount = protocol.multiVault.getTripleCost() + extra;
         bytes32[] memory S = new bytes32[](1);
         bytes32[] memory P = new bytes32[](1);
@@ -205,14 +203,23 @@ contract FeeFlowsTest is BaseTest {
 
         // Check default vault got exactly the entry fee
         (uint256 atomLinearCurveWithEntryFees,) = _vault(atom, 1);
-        assertApproxEqAbs(atomLinearCurveWithEntryFees - atomLinearCurveWithMinAssets, expectedEntryFee, 1e4, "default vault must receive entry fee");
+        assertApproxEqAbs(
+            atomLinearCurveWithEntryFees - atomLinearCurveWithMinAssets,
+            expectedEntryFee,
+            1e4,
+            "default vault must receive entry fee"
+        );
 
         // Correctly account for the minShare cost in the non-default vault's assets based on the curveId
         uint256 minShareCost = protocol.curveRegistry.previewMint(gc.minShare, 0, 0, 2);
 
         // Non-default total assets increased by assetsAfterFees + minShareCost (creation path mints ghost)
         (uint256 aNon1,) = _vault(atom, 2);
-        assertEq(aNon1 - atomProgressiveCurveWithNoAssets, assetsAfterFees + minShareCost, "non-default vault assets delta mismatch");
+        assertEq(
+            aNon1 - atomProgressiveCurveWithNoAssets,
+            assetsAfterFees + minShareCost,
+            "non-default vault assets delta mismatch"
+        );
     }
 
     function test_atom_nonDefault_deposit_does_not_flow_entry_fee_when_below_threshold() public {

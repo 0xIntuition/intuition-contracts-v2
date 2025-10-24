@@ -53,7 +53,11 @@ contract CoreEmissionsControllerMock is CoreEmissionsController {
         return _emissionsAtEpoch(epochNumber);
     }
 
-    function applyCliffReductions(uint256 baseEmissions, uint256 retentionFactor, uint256 cliffsToApply)
+    function applyCliffReductions(
+        uint256 baseEmissions,
+        uint256 retentionFactor,
+        uint256 cliffsToApply
+    )
         external
         pure
         returns (uint256)

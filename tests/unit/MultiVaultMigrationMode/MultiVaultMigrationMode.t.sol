@@ -99,8 +99,8 @@ contract MultiVaultMigrationModeTest is BaseTest {
         atomWalletFactory = AtomWalletFactory(address(atomWalletFactoryProxy));
 
         // Deploy BondingCurveRegistry implementation and proxy
-        BondingCurveRegistry bondingCurveRegistryImpl = new BondingCurveRegistry();
-        TransparentUpgradeableProxy bondingCurveRegistryProxy = new TransparentUpgradeableProxy(
+        bondingCurveRegistryImpl = new BondingCurveRegistry();
+        bondingCurveRegistryProxy = new TransparentUpgradeableProxy(
             address(bondingCurveRegistryImpl),
             users.admin,
             abi.encodeWithSelector(BondingCurveRegistry.initialize.selector, users.admin)
@@ -112,17 +112,22 @@ contract MultiVaultMigrationModeTest is BaseTest {
         OffsetProgressiveCurve offsetProgressiveCurveImpl = new OffsetProgressiveCurve();
 
         // Deploy proxies for bonding curves
-        TransparentUpgradeableProxy linearCurveProxy = new TransparentUpgradeableProxy(
+        linearCurveProxy = new TransparentUpgradeableProxy(
             address(linearCurveImpl),
             users.admin,
             abi.encodeWithSelector(LinearCurve.initialize.selector, "Linear Curve")
         );
         linearCurve = LinearCurve(address(linearCurveProxy));
 
-        TransparentUpgradeableProxy offsetProgressiveCurveProxy = new TransparentUpgradeableProxy(
+        offsetProgressiveCurveProxy = new TransparentUpgradeableProxy(
             address(offsetProgressiveCurveImpl),
             users.admin,
-            abi.encodeWithSelector(OffsetProgressiveCurve.initialize.selector, "Offset Progressive Curve", 2, 5e35)
+            abi.encodeWithSelector(
+                OffsetProgressiveCurve.initialize.selector,
+                "Offset Progressive Curve",
+                OFFSET_PROGRESSIVE_CURVE_SLOPE,
+                OFFSET_PROGRESSIVE_CURVE_OFFSET
+            )
         );
         offsetProgressiveCurve = OffsetProgressiveCurve(address(offsetProgressiveCurveProxy));
 
@@ -1004,7 +1009,7 @@ contract MultiVaultMigrationModeTest is BaseTest {
 
         // Send native TRUST to the proxy (must succeed if receive() is present in implementation)
         vm.prank(users.alice);
-        (bool success,) = address(multiVaultMigrationMode).call{value: amount}("");
+        (bool success,) = address(multiVaultMigrationMode).call{ value: amount }("");
         assertTrue(success, "native TRUST transfer should succeed");
 
         // The proxy holds the native balance

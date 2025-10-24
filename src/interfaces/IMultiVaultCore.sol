@@ -19,7 +19,8 @@ struct GeneralConfig {
     uint256 minShare;
     /// @dev The maximum length of atom data that can be passed when creating atom vaults
     uint256 atomDataMaxLength;
-    /// @dev Threshold in terms of total shares in a default curve vault at which entry and exit fees start to be charged
+    /// @dev Threshold in terms of total shares in a default curve vault at which entry and exit fees start to be
+    /// charged
     uint256 feeThreshold;
 }
 
@@ -114,10 +115,7 @@ interface IMultiVaultCore {
      * @param tripleCreationProtocolFee The new triple creation protocol fee
      * @param atomDepositFractionForTriple The new atom deposit fraction for triple
      */
-    event TripleConfigUpdated(
-        uint256 tripleCreationProtocolFee,
-        uint256 atomDepositFractionForTriple
-    );
+    event TripleConfigUpdated(uint256 tripleCreationProtocolFee, uint256 atomDepositFractionForTriple);
 
     /**
      * @notice Emitted when the wallet configuration is updated
@@ -191,7 +189,11 @@ interface IMultiVaultCore {
     /// @param predicateId The ID of the predicate atom
     /// @param objectId The ID of the object atom
     /// @return id The calculated counter triple ID
-    function calculateCounterTripleId(bytes32 subjectId, bytes32 predicateId, bytes32 objectId)
+    function calculateCounterTripleId(
+        bytes32 subjectId,
+        bytes32 predicateId,
+        bytes32 objectId
+    )
         external
         pure
         returns (bytes32);
@@ -201,7 +203,14 @@ interface IMultiVaultCore {
     /// @param predicateId The ID of the predicate atom
     /// @param objectId The ID of the object atom
     /// @return id The calculated triple ID
-    function calculateTripleId(bytes32 subjectId, bytes32 predicateId, bytes32 objectId) external pure returns (bytes32);
+    function calculateTripleId(
+        bytes32 subjectId,
+        bytes32 predicateId,
+        bytes32 objectId
+    )
+        external
+        pure
+        returns (bytes32);
 
     /// @notice Returns the atom data for a given atom ID
     /// @dev If the atom does not exist, this function reverts

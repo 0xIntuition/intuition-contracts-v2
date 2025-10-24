@@ -13,7 +13,11 @@ abstract contract Utils is CommonBase, Constants, PRBMathUtils {
     using SafeCastLib for uint256;
 
     /// @dev Bound deposit amount to avoid overflow.
-    function boundDepositAmount(uint128 amount, uint128 balance, uint8 decimals)
+    function boundDepositAmount(
+        uint128 amount,
+        uint128 balance,
+        uint8 decimals
+    )
         internal
         pure
         returns (uint128 depositAmount)
