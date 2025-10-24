@@ -256,7 +256,10 @@ contract LinearCurveTest is Test {
     }
 
     // Fuzz negative: convertToAssets must revert when shares > totalShares
-    function testFuzz_convertToAssets_reverts_whenSharesExceedTotalShares(uint256 totalShares, uint256 totalAssets)
+    function testFuzz_convertToAssets_reverts_whenSharesExceedTotalShares(
+        uint256 totalShares,
+        uint256 totalAssets
+    )
         public
     {
         totalShares = bound(totalShares, 0, type(uint128).max);
