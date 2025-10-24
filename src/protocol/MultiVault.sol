@@ -292,9 +292,8 @@ contract MultiVault is
     /// @inheritdoc IMultiVault
     function currentSharePrice(bytes32 termId, uint256 curveId) external view returns (uint256) {
         VaultState storage vaultState = _vaults[termId][curveId];
-        return IBondingCurveRegistry(bondingCurveConfig.registry).currentPrice(
-            curveId, vaultState.totalShares, vaultState.totalAssets
-        );
+        return IBondingCurveRegistry(bondingCurveConfig.registry)
+            .currentPrice(curveId, vaultState.totalShares, vaultState.totalAssets);
     }
 
     /// @inheritdoc IMultiVault
