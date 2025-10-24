@@ -81,7 +81,10 @@ contract MultiVaultMigrationMode is MultiVault {
      * @param creators The creators of the atoms
      * @param atomDataArray The atom data array
      */
-    function batchSetAtomData(address[] calldata creators, bytes[] calldata atomDataArray)
+    function batchSetAtomData(
+        address[] calldata creators,
+        bytes[] calldata atomDataArray
+    )
         external
         onlyRole(MIGRATOR_ROLE)
     {
@@ -106,7 +109,10 @@ contract MultiVaultMigrationMode is MultiVault {
      * @param creators The creators of the triples
      * @param tripleAtomIds The atom IDs for each triple (array of arrays)
      */
-    function batchSetTripleData(address[] calldata creators, bytes32[3][] calldata tripleAtomIds)
+    function batchSetTripleData(
+        address[] calldata creators,
+        bytes32[3][] calldata tripleAtomIds
+    )
         external
         onlyRole(MIGRATOR_ROLE)
     {
@@ -135,7 +141,11 @@ contract MultiVaultMigrationMode is MultiVault {
      * @param bondingCurveId The bonding curve ID of all of the vaults
      * @param vaultTotals The vault totals for each vault
      */
-    function batchSetVaultTotals(bytes32[] calldata termIds, uint256 bondingCurveId, VaultTotals[] calldata vaultTotals)
+    function batchSetVaultTotals(
+        bytes32[] calldata termIds,
+        uint256 bondingCurveId,
+        VaultTotals[] calldata vaultTotals
+    )
         external
         onlyRole(MIGRATOR_ROLE)
     {
