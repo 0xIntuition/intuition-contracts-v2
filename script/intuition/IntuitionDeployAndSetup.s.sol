@@ -156,7 +156,7 @@ contract IntuitionDeployAndSetup is SetupScript {
         BondingCurveRegistry bondingCurveRegistryImpl = new BondingCurveRegistry();
         TransparentUpgradeableProxy bondingCurveRegistryProxy = new TransparentUpgradeableProxy(
             address(bondingCurveRegistryImpl),
-            ADMIN,
+            address(upgradesTimelockController),
             abi.encodeWithSelector(BondingCurveRegistry.initialize.selector, ADMIN)
         );
         bondingCurveRegistry = BondingCurveRegistry(address(bondingCurveRegistryProxy));
@@ -168,14 +168,16 @@ contract IntuitionDeployAndSetup is SetupScript {
 
         // Deploy proxies for bonding curves
         TransparentUpgradeableProxy linearCurveProxy = new TransparentUpgradeableProxy(
-            address(linearCurveImpl), ADMIN, abi.encodeWithSelector(LinearCurve.initialize.selector, "Linear Curve")
+            address(linearCurveImpl),
+            address(upgradesTimelockController),
+            abi.encodeWithSelector(LinearCurve.initialize.selector, "Linear Curve")
         );
         linearCurve = LinearCurve(address(linearCurveProxy));
         info("LinearCurve Proxy", address(linearCurve));
 
         TransparentUpgradeableProxy offsetProgressiveCurveProxy = new TransparentUpgradeableProxy(
             address(offsetProgressiveCurveImpl),
-            ADMIN,
+            address(upgradesTimelockController),
             abi.encodeWithSelector(
                 OffsetProgressiveCurve.initialize.selector,
                 "Offset Progressive Curve",
