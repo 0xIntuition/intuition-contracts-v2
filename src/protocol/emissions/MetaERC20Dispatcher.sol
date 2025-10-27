@@ -124,8 +124,9 @@ contract MetaERC20Dispatcher {
     )
         internal
     {
-        IMetaERC20HubOrSpoke(_hubOrSpoke)
-        .transferRemote{ value: _gasLimit }(_domain, _recipient, _amount, GAS_CONSTANT, _finality);
+        IMetaERC20HubOrSpoke(_hubOrSpoke).transferRemote{ value: _gasLimit }(
+            _domain, _recipient, _amount, GAS_CONSTANT, _finality
+        );
     }
 
     /**
@@ -150,7 +151,8 @@ contract MetaERC20Dispatcher {
         // sent to the MetaERC20HubOrSpoke smart contract. Only the amount is burned and the `gasLimit` is used to pay
         // for the
         // cross-chain message.
-        IMetaERC20HubOrSpoke(_hubOrSpoke)
-        .transferRemote{ value: _gasLimit + _amount }(_domain, _recipient, _amount, GAS_CONSTANT, _finality);
+        IMetaERC20HubOrSpoke(_hubOrSpoke).transferRemote{ value: _gasLimit + _amount }(
+            _domain, _recipient, _amount, GAS_CONSTANT, _finality
+        );
     }
 }
