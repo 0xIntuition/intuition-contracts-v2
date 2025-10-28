@@ -16,6 +16,7 @@ forge script script/intuition/MultiVaultMigrationModeDeploy.s.sol:MultiVaultMigr
 
 TESTNET
 forge script script/intuition/MultiVaultMigrationModeDeploy.s.sol:MultiVaultMigrationModeDeploy \
+--via-ir \
 --optimizer-runs 200 \
 --rpc-url intuition_sepolia \
 --broadcast

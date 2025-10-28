@@ -76,14 +76,14 @@ abstract contract SetupScript is Script {
     address internal TRUST_TOKEN;
 
     uint256 internal FEE_THRESHOLD = 1e18; // 1 Trust
-    uint256 internal MIN_DEPOSIT = 1e15; // 0.001 Trust
+    uint256 internal MIN_DEPOSIT = 1e16; // 0.01 Trust
 
     // Atom Config
-    uint256 internal ATOM_CREATION_PROTOCOL_FEE = 1e18; // 1 Trust (Fixed Cost)
-    uint256 internal ATOM_WALLET_DEPOSIT_FEE = 100; // 1% of assets after fixed costs (Percentage Cost)
+    uint256 internal ATOM_CREATION_PROTOCOL_FEE = 1e17; // 0.1 Trust (Fixed Cost)
+    uint256 internal ATOM_WALLET_DEPOSIT_FEE = 50; // 0.5% of assets after fixed costs (Percentage Cost)
 
     // Triple Config
-    uint256 internal TRIPLE_CREATION_PROTOCOL_FEE = 1e18; // 1 Trust (Fixed Cost)
+    uint256 internal TRIPLE_CREATION_PROTOCOL_FEE = 1e17; // 0.1 Trust (Fixed Cost)
     uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 0.9% (Percentage Cost)
 
     // TrustBonding Config
@@ -118,9 +118,9 @@ abstract contract SetupScript is Script {
     uint256 internal ATOM_DATA_MAX_LENGTH = 1000;
 
     // Vault Config
-    uint256 internal ENTRY_FEE = 100; // 1% of assets deposited after fixed costs (Percentage Cost)
-    uint256 internal EXIT_FEE = 100; // 1% of assets deposited after fixed costs (Percentage Cost)
-    uint256 internal PROTOCOL_FEE = 100; // 1% of assets deposited after fixed costs (Percentage Cost)
+    uint256 internal ENTRY_FEE = 50; // 0.5% of assets deposited after fixed costs (Percentage Cost)
+    uint256 internal EXIT_FEE = 75; // 0.75% of assets deposited after fixed costs (Percentage Cost)
+    uint256 internal PROTOCOL_FEE = 125; // 1.25% of assets deposited after fixed costs (Percentage Cost)
 
     // Curve Configurations
     uint256 internal OFFSET_PROGRESSIVE_CURVE_SLOPE = 2e18;
@@ -160,7 +160,7 @@ abstract contract SetupScript is Script {
         info("Broadcasting:", broadcaster);
 
         if (block.chainid == NETWORK_BASE_SEPOLIA) {
-            PROTOCOL_START_TIMESTAMP = 0;
+            PROTOCOL_START_TIMESTAMP = 1761591000;
             TRUST_TOKEN = 0xA54b4E6e356b963Ee00d1C947f478d9194a1a210;
             ADMIN = vm.envAddress("BASE_SEPOLIA_ADMIN_ADDRESS");
             PROTOCOL_MULTISIG = vm.envOr("BASE_SEPOLIA_PROTOCOL_MULTISIG", ADMIN);
@@ -176,7 +176,7 @@ abstract contract SetupScript is Script {
             EMISSIONS_REDUCTION_CLIFF = 26;
             EMISSIONS_PER_EPOCH = TRUST_TOKEN_ONE_YEAR_EMISSIONS / EMISSIONS_REDUCTION_CLIFF;
         } else if (block.chainid == NETWORK_INTUITION_SEPOLIA) {
-            PROTOCOL_START_TIMESTAMP = 0;
+            PROTOCOL_START_TIMESTAMP = 1761591000;
             TRUST_TOKEN = 0xDE80b6EE63f7D809427CA350e30093F436A0fe35; // Wrapped Trust
             ADMIN = vm.envAddress("INTUITION_SEPOLIA_ADMIN_ADDRESS");
             PROTOCOL_MULTISIG = vm.envOr("INTUITION_SEPOLIA_PROTOCOL_MULTISIG", ADMIN);
@@ -189,20 +189,20 @@ abstract contract SetupScript is Script {
             METALAYER_HUB_OR_SPOKE = 0x007700aa28A331B91219Ffa4A444711F0D9E57B5;
 
             // General Config
-            MIN_DEPOSIT = 1e18; // 0.001 Trust
+            MIN_DEPOSIT = 1e16; // 1 Trust
 
             // Atom Config
-            ATOM_CREATION_PROTOCOL_FEE = 1e18; // 0.001 Trust (Fixed Cost)
-            ATOM_WALLET_DEPOSIT_FEE = 100; // 1% of assets after fixed costs (Percentage Cost)
+            ATOM_CREATION_PROTOCOL_FEE = 1e17; // 0.1 Trust (Fixed Cost)
+            ATOM_WALLET_DEPOSIT_FEE = 50; // 0.5% of assets after fixed costs (Percentage Cost)
 
             // Triple Config
-            TRIPLE_CREATION_PROTOCOL_FEE = 1e18; // 0.001 Trust (Fixed Cost)
+            TRIPLE_CREATION_PROTOCOL_FEE = 1e17; // 0.1 Trust (Fixed Cost)
             ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 0.9% (Percentage Cost)
 
             // TrustBonding Config
             BONDING_START_TIMESTAMP = PROTOCOL_START_TIMESTAMP;
             BONDING_EPOCH_LENGTH = TWO_WEEKS;
-            BONDING_SYSTEM_UTILIZATION_LOWER_BOUND = 4000; // 50%
+            BONDING_SYSTEM_UTILIZATION_LOWER_BOUND = 5000; // 50%
             BONDING_PERSONAL_UTILIZATION_LOWER_BOUND = 2500; // 25%
 
             // Emissions Controller Config
@@ -239,20 +239,20 @@ abstract contract SetupScript is Script {
             METALAYER_HUB_OR_SPOKE = 0x375135fe908dD62f3C7939FA4e65bf41Da721AB9;
 
             // General Config
-            MIN_DEPOSIT = 1e18; // Trust
+            MIN_DEPOSIT = 1e16; // 0.01 Trust
 
             // Atom Config
-            ATOM_CREATION_PROTOCOL_FEE = 1e18; // 1 Trust (Fixed Cost)
-            ATOM_WALLET_DEPOSIT_FEE = 100; // 1% of assets after fixed costs (Percentage Cost)
+            ATOM_CREATION_PROTOCOL_FEE = 1e17; // 0.1 Trust (Fixed Cost)
+            ATOM_WALLET_DEPOSIT_FEE = 50; // 0.5% of assets after fixed costs (Percentage Cost)
 
             // Triple Config
-            TRIPLE_CREATION_PROTOCOL_FEE = 1e18; // 1 Trust (Fixed Cost)
+            TRIPLE_CREATION_PROTOCOL_FEE = 1e17; // 0.1 Trust (Fixed Cost)
             ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 0.9% (Percentage Cost)
 
             // TrustBonding Config
             BONDING_START_TIMESTAMP = PROTOCOL_START_TIMESTAMP;
             BONDING_EPOCH_LENGTH = TWO_WEEKS;
-            BONDING_SYSTEM_UTILIZATION_LOWER_BOUND = 4000; // 40%
+            BONDING_SYSTEM_UTILIZATION_LOWER_BOUND = 5000; // 50%
             BONDING_PERSONAL_UTILIZATION_LOWER_BOUND = 2500; // 25%
 
             // Emissions Controller Config
