@@ -50,17 +50,14 @@ contract OffsetProgressiveCurve is BaseCurve {
     }
 
     /* =================================================== */
-    /*                    INITIALIZER                      */
+    /*                    REINITIALIZER                    */
     /* =================================================== */
 
-    /// @notice Initializes a new OffsetProgressiveCurve with the given name, slope, and offset
+    /// @notice Reinitializes a new OffsetProgressiveCurve with the given slope, and offset
     /// @dev Computes maximum values given constructor arguments
-    /// @param _name The name of the curve
     /// @param slope18 The slope of the curve, in 18 decimal fixed-point format
     /// @param offset18 The offset of the curve, in 18 decimal fixed-point format
-    function initialize(string calldata _name, uint256 slope18, uint256 offset18) external initializer {
-        __BaseCurve_init(_name);
-
+    function reinitialize(uint256 slope18, uint256 offset18) external reinitializer(2) {
         if (slope18 == 0 || slope18 % 2 != 0) revert OffsetProgressiveCurve_InvalidSlope();
 
         SLOPE = wrap(slope18);
