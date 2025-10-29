@@ -103,6 +103,21 @@ contract OffsetProgressiveCurve is BaseCurve {
         MAX_ASSETS = unwrap(maxAssetsUD);
     }
 
+    /// @dev Test setter for SLOPE and OFFSET - NOT MEANT TO BE USED IN PRODUCTION
+    function setSlopeAndOffset(uint256 slope18, uint256 offset18) external {
+        if (slope18 == 0 || slope18 % 2 != 0) revert OffsetProgressiveCurve_InvalidSlope();
+
+        SLOPE = wrap(slope18);
+        HALF_SLOPE = wrap(slope18 / 2);
+        OFFSET = wrap(offset18);
+
+        UD60x18 maxSharesUD = sub(sqrt(wrap(uMAX_UD60x18 / uUNIT)), OFFSET);
+        UD60x18 maxAssetsUD = mul(sub(PCMath.square(add(maxSharesUD, OFFSET)), PCMath.squareUp(OFFSET)), HALF_SLOPE);
+
+        MAX_SHARES = unwrap(maxSharesUD);
+        MAX_ASSETS = unwrap(maxAssetsUD);
+    }
+
     /* =================================================== */
     /*                   BASECURVE FUNCTIONS               */
     /* =================================================== */
