@@ -1,18 +1,20 @@
 # Commands
 
-BASE_SEPOLIA="https://testnet.rpc.intuition.systems/http" \
+INTUITION_SEPOLIA="https://testnet.rpc.intuition.systems/http" \
 TRUST_TOKEN_ADDRESS="0xDE80b6EE63f7D809427CA350e30093F436A0fe35" \
 TRUST_BONDING_ADDRESS="0xE732aD1c67BcE7512eCc1cA42Db56C764E27c4e7" \
+OFFSET_PROGRESSIVE_CURVE="0x2D2Daa3cE630aD126747E7853ad1969173Db59a2"
+
 ## Wrapped TRUST
 
 ### Check WTRUST balance
 ```bash
-cast call $TRUST_TOKEN_ADDRESS --rpc-url $BASE_SEPOLIA "balanceOf(address)(uint256)" 0x4Ff2D2D253827897210bf1f29713f8389f55C68E
+cast call $TRUST_TOKEN_ADDRESS --rpc-url $INTUITION_SEPOLIA "balanceOf(address)(uint256)" 0x4Ff2D2D253827897210bf1f29713f8389f55C68E
 ```
 
 ### Deposit 1 TRUST to WTRUST
 ```bash
-cast send $TRUST_TOKEN_ADDRESS --value 100ether --interactive --rpc-url $BASE_SEPOLIA
+cast send $TRUST_TOKEN_ADDRESS --value 100ether --interactive --rpc-url $INTUITION_SEPOLIA
 ```
 
 ## TrustBonding
@@ -22,24 +24,34 @@ cast send $TRUST_TOKEN_ADDRESS --value 100ether --interactive --rpc-url $BASE_SE
 ### Deposit TRUST into TrustBonding
 
 ```bash
-cast send $TRUST_TOKEN_ADDRESS "approve(address,uint256)" $TRUST_BONDING_ADDRESS 10ether --interactive --rpc-url $BASE_SEPOLIA
+cast send $TRUST_TOKEN_ADDRESS "approve(address,uint256)" $TRUST_BONDING_ADDRESS 10ether --interactive --rpc-url $INTUITION_SEPOLIA
 ```
 
 # Lock TRUST tokens for 4 weeks (1209600 seconds)
 ```bash
-cast send $TRUST_BONDING_ADDRESS "create_lock(uint256,uint256)" <AMOUNT_IN_WEI> $(cast to-dec $(($(date +%s) + 1209600))) --interactive --rpc-url $BASE_SEPOLIA
+cast send $TRUST_BONDING_ADDRESS "create_lock(uint256,uint256)" <AMOUNT_IN_WEI> $(cast to-dec $(($(date +%s) + 1209600))) --interactive --rpc-url $INTUITION_SEPOLIA
 ```
 
 # Example: Lock 100 TRUST for 12 weeks from now
 
 ```bash
-cast send $TRUST_BONDING_ADDRESS "create_lock(uint256,uint256)" $(cast to-wei 10 ether) $(cast to-dec $(($(date +%s) + 7257600))) --interactive --rpc-url $BASE_SEPOLIA
+cast send $TRUST_BONDING_ADDRESS "create_lock(uint256,uint256)" $(cast to-wei 10 ether) $(cast to-dec $(($(date +%s) + 7257600))) --interactive --rpc-url $INTUITION_SEPOLIA
 ```
 
 ```bash
-cast send $TRUST_BONDING_ADDRESS "increase_unlock_time(uint256)" $(cast to-dec $(($(date +%s) + 7257600))) --interactive --rpc-url $BASE_SEPOLIA
+cast send $TRUST_BONDING_ADDRESS "increase_unlock_time(uint256)" $(cast to-dec $(($(date +%s) + 7257600))) --interactive --rpc-url $INTUITION_SEPOLIA
 
 ```
+
+# Offset Progressive Curve Dynamic Parameter Update
+
+```bash
+cast call $OFFSET_PROGRESSIVE_CURVE "SLOPE()" --rpc-url $INTUITION_SEPOLIA
+cast call $OFFSET_PROGRESSIVE_CURVE "OFFSET()" --rpc-url $INTUITION_SEPOLIA
+cast call $OFFSET_PROGRESSIVE_CURVE "MAX_SHARES()" --rpc-url $INTUITION_SEPOLIA
+cast send $OFFSET_PROGRESSIVE_CURVE "setCurveParameters(uint256, uint256)" 1000000000000000000 5000000000000000000 --interactive --rpc-url $INTUITION_SEPOLIA
+```
+# Contract Upgrades
 
 cast send \
 0x2c3Af9B924674096B61B72f2237B4Dc4239b7e50 \

@@ -49,6 +49,19 @@ export const SatelliteEmissionsControllerAbi = [
   },
   {
     "type": "function",
+    "name": "OPERATOR_ROLE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "bridgeUnclaimedEmissions",
     "inputs": [
       {
@@ -69,25 +82,6 @@ export const SatelliteEmissionsControllerAbi = [
         "name": "",
         "type": "address",
         "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getBridgedEmissions",
-    "inputs": [
-      {
-        "name": "epoch",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -293,6 +287,25 @@ export const SatelliteEmissionsControllerAbi = [
   },
   {
     "type": "function",
+    "name": "getReclaimedEmissions",
+    "inputs": [
+      {
+        "name": "epoch",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getRoleAdmin",
     "inputs": [
       {
@@ -457,6 +470,30 @@ export const SatelliteEmissionsControllerAbi = [
   },
   {
     "type": "function",
+    "name": "quoteGasPayment",
+    "inputs": [
+      {
+        "name": "domain",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "gasLimit",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "renounceRole",
     "inputs": [
       {
@@ -601,6 +638,24 @@ export const SatelliteEmissionsControllerAbi = [
         "name": "amount",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "withdrawUnclaimedEmissions",
+    "inputs": [
+      {
+        "name": "epoch",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "recipient",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "outputs": [],
@@ -830,13 +885,38 @@ export const SatelliteEmissionsControllerAbi = [
   },
   {
     "type": "event",
-    "name": "UnclaimedRewardsBridged",
+    "name": "UnclaimedEmissionsBridged",
     "inputs": [
       {
         "name": "epoch",
         "type": "uint256",
         "indexed": true,
         "internalType": "uint256"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "UnclaimedEmissionsWithdrawn",
+    "inputs": [
+      {
+        "name": "epoch",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "recipient",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
       },
       {
         "name": "amount",
@@ -952,6 +1032,11 @@ export const SatelliteEmissionsControllerAbi = [
   {
     "type": "error",
     "name": "SatelliteEmissionsController_InvalidBridgeAmount",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SatelliteEmissionsController_InvalidWithdrawAmount",
     "inputs": []
   },
   {
