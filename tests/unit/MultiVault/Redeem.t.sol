@@ -274,10 +274,7 @@ contract RedeemTest is BaseTest {
         resetPrank(users.alice);
         uint256 preShares = protocol.multiVault.getShares(users.alice, atomId, PROGRESSIVE_CURVE_ID);
 
-        protocol.multiVault
-        .deposit{
-            value: depositAmount
-        }(
+        protocol.multiVault.deposit{ value: depositAmount }(
             users.alice, // receiver
             atomId,
             PROGRESSIVE_CURVE_ID,
