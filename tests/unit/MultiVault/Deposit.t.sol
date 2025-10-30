@@ -424,6 +424,35 @@ contract DefaultCurveEntryFeeImpactTest is BaseTest {
         }
     }
 
+    function test_laddered_curve_deposits_simulation() public {
+        vm.stopPrank();
+
+        // create atom on default curve
+        bytes32 atomId = createSimpleAtom("atom-stair", ATOM_COST[0], users.alice);
+
+        // make a minimum deposit to initialize the non-default curve vault
+        makeDeposit(
+            users.alice, users.alice, atomId, NON_DEFAULT_CURVE_ID, protocol.multiVault.getGeneralConfig().minDeposit, 0
+        );
+
+        // deposit ladder on non-default
+        uint256[6] memory ladder = [uint256(1 ether), 10 ether, 50 ether, 100 ether, 500 ether, 1000 ether];
+
+        // max share price that we want to see after all ladder deposits are made
+        uint256 maxSharePriceAfterDepositLadder = 100 ether;
+
+        uint256 expectedAdded = 0;
+        for (uint256 i = 0; i < ladder.length; i++) {
+            makeDeposit(users.alice, users.alice, atomId, NON_DEFAULT_CURVE_ID, ladder[i], 0);
+            console.log(protocol.multiVault.currentSharePrice(atomId, NON_DEFAULT_CURVE_ID));
+            assertLt(
+                protocol.multiVault.currentSharePrice(atomId, NON_DEFAULT_CURVE_ID),
+                maxSharePriceAfterDepositLadder,
+                "share price exceeded max threshold"
+            );
+        }
+    }
+
     /// For a sequence of non-default deposits:
     ///  - default curve’s totalAssets must equal minShare + sum(ceil(entryFee * amount)) excluding the first deposit
     ///  - previewed shares on the default curve for a fixed assets amount must be non-increasing
