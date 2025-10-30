@@ -711,8 +711,9 @@ contract AtomWalletTest is BaseTest {
         objectIds[0] = objectId;
         uint256[] memory tripleaAmounts = new uint256[](1);
         tripleaAmounts[0] = tripleCost;
-        bytes32 tripleId = protocol.multiVault
-        .createTriples{ value: tripleCost }(subjectIds, predicateIds, objectIds, tripleaAmounts)[0];
+        bytes32 tripleId = protocol.multiVault.createTriples{ value: tripleCost }(
+            subjectIds, predicateIds, objectIds, tripleaAmounts
+        )[0];
         vm.stopPrank();
 
         vm.expectRevert(abi.encodeWithSelector(AtomWalletFactory.AtomWalletFactory_TermNotAtom.selector));
