@@ -182,19 +182,6 @@ contract IntuitionDeployAndSetup is SetupScript {
         linearCurve = LinearCurve(address(linearCurveProxy));
         info("LinearCurve Proxy", address(linearCurve));
 
-        TransparentUpgradeableProxy offsetProgressiveCurveProxy = new TransparentUpgradeableProxy(
-            address(offsetProgressiveCurveImpl),
-            address(upgradesTimelockController),
-            abi.encodeWithSelector(
-                OffsetProgressiveCurve.initialize.selector,
-                "Offset Progressive Curve",
-                OFFSET_PROGRESSIVE_CURVE_SLOPE,
-                OFFSET_PROGRESSIVE_CURVE_OFFSET
-            )
-        );
-        offsetProgressiveCurve = OffsetProgressiveCurve(address(offsetProgressiveCurveProxy));
-        info("OffsetProgressiveCurve Proxy", address(offsetProgressiveCurveProxy));
-
         if (block.chainid != NETWORK_INTUITION) {
             // Add curves to registry
             bondingCurveRegistry.addBondingCurve(address(linearCurve));
