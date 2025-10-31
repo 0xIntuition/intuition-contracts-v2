@@ -7,7 +7,6 @@ pragma solidity 0.8.29;
 /**
  * @title Voting Escrow
  * @author Curve Finance
- * @license MIT
  * @notice Votes have a weight depending on time, so that users are
  *         committed to the future of (whatever they are voting for)
  * @dev Vote weight decays linearly over time. Lock time cannot be
