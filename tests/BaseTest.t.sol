@@ -308,42 +308,41 @@ abstract contract BaseTest is Modifiers, Test {
         MetalayerRouterMock metaERC20Router = new MetalayerRouterMock(address(IIGP));
         MetaERC20HubOrSpokeMock metaERC20HubOrSpoke = new MetaERC20HubOrSpokeMock(address(metaERC20Router));
 
-        protocol.satelliteEmissionsController
-            .initialize(
-                users.admin,
-                address(1), // BaseEmissionsController placeholder
-                MetaERC20DispatchInit({
-                    hubOrSpoke: address(metaERC20HubOrSpoke),
-                    recipientDomain: 1,
-                    gasLimit: 125_000,
-                    finalityState: FinalityState.INSTANT
-                }),
-                CoreEmissionsControllerInit({
-                    startTimestamp: block.timestamp,
-                    emissionsLength: EMISSIONS_CONTROLLER_EPOCH_LENGTH,
-                    emissionsPerEpoch: EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH,
-                    emissionsReductionCliff: EMISSIONS_CONTROLLER_CLIFF,
-                    emissionsReductionBasisPoints: EMISSIONS_CONTROLLER_REDUCTION_BP
-                })
-            );
+        protocol.satelliteEmissionsController.initialize(
+            users.admin,
+            address(1), // BaseEmissionsController placeholder
+            MetaERC20DispatchInit({
+                hubOrSpoke: address(metaERC20HubOrSpoke),
+                recipientDomain: 1,
+                gasLimit: 125_000,
+                finalityState: FinalityState.INSTANT
+            }),
+            CoreEmissionsControllerInit({
+                startTimestamp: block.timestamp,
+                emissionsLength: EMISSIONS_CONTROLLER_EPOCH_LENGTH,
+                emissionsPerEpoch: EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH,
+                emissionsReductionCliff: EMISSIONS_CONTROLLER_CLIFF,
+                emissionsReductionBasisPoints: EMISSIONS_CONTROLLER_REDUCTION_BP
+            })
+        );
 
         protocol.satelliteEmissionsController.setTrustBonding(address(protocol.trustBonding));
-        protocol.satelliteEmissionsController
-            .grantRole(protocol.satelliteEmissionsController.CONTROLLER_ROLE(), address((trustBondingProxy)));
+        protocol.satelliteEmissionsController.grantRole(
+            protocol.satelliteEmissionsController.CONTROLLER_ROLE(), address((trustBondingProxy))
+        );
 
         // Initialize AtomWalletFactory
         atomWalletFactory.initialize(address(protocol.multiVault));
 
-        protocol.trustBonding
-            .initialize(
-                users.admin, // owner
-                users.timelock, // timelock
-                address(protocol.wrappedTrust), // trustToken
-                TRUST_BONDING_EPOCH_LENGTH, // epochLength (minimum 2 weeks required)
-                address(protocol.satelliteEmissionsController), // satelliteEmissionsController
-                TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound (50%)
-                TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound (30%)
-            );
+        protocol.trustBonding.initialize(
+            users.admin, // owner
+            users.timelock, // timelock
+            address(protocol.wrappedTrust), // trustToken
+            TRUST_BONDING_EPOCH_LENGTH, // epochLength (minimum 2 weeks required)
+            address(protocol.satelliteEmissionsController), // satelliteEmissionsController
+            TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound (50%)
+            TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound (30%)
+        );
 
         // Prepare configuration structs with deployed addresses
         GeneralConfig memory generalConfig = _getDefaultGeneralConfig();
@@ -361,15 +360,14 @@ abstract contract BaseTest is Modifiers, Test {
         bondingCurveConfig.registry = address(protocol.curveRegistry);
 
         // Initialize MultiVault
-        protocol.multiVault
-            .initialize(
-                generalConfig,
-                _getDefaultAtomConfig(),
-                _getDefaultTripleConfig(),
-                walletConfig,
-                _getDefaultVaultFees(),
-                bondingCurveConfig
-            );
+        protocol.multiVault.initialize(
+            generalConfig,
+            _getDefaultAtomConfig(),
+            _getDefaultTripleConfig(),
+            walletConfig,
+            _getDefaultVaultFees(),
+            bondingCurveConfig
+        );
 
         resetPrank(users.timelock);
         protocol.trustBonding.setMultiVault(address(protocol.multiVault));
@@ -410,7 +408,8 @@ abstract contract BaseTest is Modifiers, Test {
 
     function _getDefaultAtomConfig() internal returns (AtomConfig memory) {
         return AtomConfig({
-            atomCreationProtocolFee: ATOM_CREATION_PROTOCOL_FEE, atomWalletDepositFee: ATOM_WALLET_DEPOSIT_FEE
+            atomCreationProtocolFee: ATOM_CREATION_PROTOCOL_FEE,
+            atomWalletDepositFee: ATOM_WALLET_DEPOSIT_FEE
         });
     }
 
@@ -475,27 +474,11 @@ abstract contract BaseTest is Modifiers, Test {
         return protocol.multiVault.getAtomCost();
     }
 
-    function convertToShares(
-        uint256 assets,
-        bytes32 termId,
-        uint256 bondingCurveId
-    )
-        internal
-        view
-        returns (uint256)
-    {
+    function convertToShares(uint256 assets, bytes32 termId, uint256 bondingCurveId) internal view returns (uint256) {
         return protocol.multiVault.convertToShares(termId, bondingCurveId, assets);
     }
 
-    function convertToAssets(
-        uint256 shares,
-        bytes32 termId,
-        uint256 bondingCurveId
-    )
-        internal
-        view
-        returns (uint256)
-    {
+    function convertToAssets(uint256 shares, bytes32 termId, uint256 bondingCurveId) internal view returns (uint256) {
         return protocol.multiVault.convertToAssets(termId, bondingCurveId, shares);
     }
 

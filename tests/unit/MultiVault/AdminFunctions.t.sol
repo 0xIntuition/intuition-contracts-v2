@@ -196,7 +196,8 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
         (uint256 creationFee, uint256 atomDepositFrac) = protocol.multiVault.tripleConfig();
 
         TripleConfig memory tc = TripleConfig({
-            tripleCreationProtocolFee: creationFee + 1, atomDepositFractionForTriple: atomDepositFrac + 3
+            tripleCreationProtocolFee: creationFee + 1,
+            atomDepositFractionForTriple: atomDepositFrac + 3
         });
 
         resetPrank({ msgSender: users.admin });
@@ -314,7 +315,7 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
             atomWarden: address(0xCAFE),
             atomWalletBeacon: address(0xFEED),
             atomWalletFactory: atomWalletFactory // leave same
-        });
+         });
 
         resetPrank({ msgSender: users.admin });
         protocol.multiVault.setWalletConfig(wc);

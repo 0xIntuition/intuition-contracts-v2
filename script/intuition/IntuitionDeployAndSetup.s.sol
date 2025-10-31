@@ -43,14 +43,22 @@ forge script script/intuition/IntuitionDeployAndSetup.s.sol:IntuitionDeployAndSe
 --optimizer-runs 10000 \
 --rpc-url intuition_sepolia \
 --broadcast \
---slow
+--slow \
+--verify \
+--chain 13579 \
+--verifier blockscout \
+--verifier-url 'https://intuition-testnet.explorer.caldera.xyz/api/'
 
 MAINNET
 forge script script/intuition/IntuitionDeployAndSetup.s.sol:IntuitionDeployAndSetup \
 --optimizer-runs 10000 \
 --rpc-url intuition \
 --broadcast \
---slow
+--slow \
+--verify \
+--chain 1155 \
+--verifier blockscout \
+--verifier-url 'https://intuition.calderaexplorer.xyz/api/'
 */
 
 contract IntuitionDeployAndSetup is SetupScript {
@@ -124,6 +132,9 @@ contract IntuitionDeployAndSetup is SetupScript {
         // Deploy TimelockController contract for upgrades (it should become the ProxyAdmin owner for all proxies)
         upgradesTimelockController = _deployTimelockController("Upgrades TimelockController");
 
+        // Deploy TimelockController for parameter updates
+        parametersTimelockController = _deployTimelockController("Parameters TimelockController");
+
         // Deploy AtomWallet implementation contract
         atomWalletImplementation = new AtomWallet();
         info("AtomWallet Implementation", address(atomWalletImplementation));
@@ -140,9 +151,6 @@ contract IntuitionDeployAndSetup is SetupScript {
             new TransparentUpgradeableProxy(address(atomWalletFactoryImpl), address(upgradesTimelockController), "");
         atomWalletFactory = AtomWalletFactory(address(atomWalletFactoryProxy));
         info("AtomWalletFactory Proxy", address(atomWalletFactoryProxy));
-
-        // Deploy TimelockController for parameter updates
-        parametersTimelockController = _deployTimelockController("Parameters TimelockController");
 
         // Deploy AtomWarden implementation and proxy
         AtomWarden atomWardenImpl = new AtomWarden();
@@ -164,7 +172,6 @@ contract IntuitionDeployAndSetup is SetupScript {
 
         // Deploy bonding curve implementations
         LinearCurve linearCurveImpl = new LinearCurve();
-        OffsetProgressiveCurve offsetProgressiveCurveImpl = new OffsetProgressiveCurve();
 
         // Deploy proxies for bonding curves
         TransparentUpgradeableProxy linearCurveProxy = new TransparentUpgradeableProxy(
@@ -175,22 +182,10 @@ contract IntuitionDeployAndSetup is SetupScript {
         linearCurve = LinearCurve(address(linearCurveProxy));
         info("LinearCurve Proxy", address(linearCurve));
 
-        TransparentUpgradeableProxy offsetProgressiveCurveProxy = new TransparentUpgradeableProxy(
-            address(offsetProgressiveCurveImpl),
-            address(upgradesTimelockController),
-            abi.encodeWithSelector(
-                OffsetProgressiveCurve.initialize.selector,
-                "Offset Progressive Curve",
-                OFFSET_PROGRESSIVE_CURVE_SLOPE,
-                OFFSET_PROGRESSIVE_CURVE_OFFSET
-            )
-        );
-        offsetProgressiveCurve = OffsetProgressiveCurve(address(offsetProgressiveCurveProxy));
-        info("OffsetProgressiveCurve Proxy", address(offsetProgressiveCurveProxy));
-
-        // Add curves to registry
-        bondingCurveRegistry.addBondingCurve(address(linearCurve));
-        bondingCurveRegistry.addBondingCurve(address(offsetProgressiveCurve));
+        if (block.chainid != NETWORK_INTUITION) {
+            // Add curves to registry
+            bondingCurveRegistry.addBondingCurve(address(linearCurve));
+        }
 
         // Deploy SatelliteEmissionsController implementation and proxy
         SatelliteEmissionsController satelliteEmissionsControllerImpl = new SatelliteEmissionsController();
@@ -201,7 +196,7 @@ contract IntuitionDeployAndSetup is SetupScript {
             hubOrSpoke: METALAYER_HUB_OR_SPOKE, // placeholder metaERC20Hub
             recipientDomain: BASE_METALAYER_RECIPIENT_DOMAIN,
             gasLimit: METALAYER_GAS_LIMIT,
-            finalityState: FinalityState.FINALIZED
+            finalityState: FinalityState.INSTANT
         });
 
         CoreEmissionsControllerInit memory coreEmissionsInit = CoreEmissionsControllerInit({
@@ -235,7 +230,7 @@ contract IntuitionDeployAndSetup is SetupScript {
             ADMIN, // owner
             address(ADMIN), // temporary assign admin as the timelock address to be able to set initial MultiVault
                 // address without timelock delay
-            address(trust), // WTRUST token if deploying on Intuition Sepolia
+            address(trust), // WTRUST token
             BONDING_EPOCH_LENGTH, // epochLength
             address(satelliteEmissionsController),
             BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound
@@ -254,8 +249,9 @@ contract IntuitionDeployAndSetup is SetupScript {
             satelliteEmissionsController.setTrustBonding(address(trustBonding));
 
             // Grant CONTROLLER_ROLE to TrustBonding in SatelliteEmissionsController
-            IAccessControl(address(satelliteEmissionsController))
-                .grantRole(satelliteEmissionsController.CONTROLLER_ROLE(), address(trustBonding));
+            IAccessControl(address(satelliteEmissionsController)).grantRole(
+                satelliteEmissionsController.CONTROLLER_ROLE(), address(trustBonding)
+            );
             console2.log("CONTROLLER_ROLE in SatelliteEmissionsController granted to TrustBonding");
         }
 
@@ -312,7 +308,8 @@ contract IntuitionDeployAndSetup is SetupScript {
         });
 
         atomConfig = AtomConfig({
-            atomCreationProtocolFee: ATOM_CREATION_PROTOCOL_FEE, atomWalletDepositFee: ATOM_WALLET_DEPOSIT_FEE
+            atomCreationProtocolFee: ATOM_CREATION_PROTOCOL_FEE,
+            atomWalletDepositFee: ATOM_WALLET_DEPOSIT_FEE
         });
 
         tripleConfig = TripleConfig({

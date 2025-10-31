@@ -1063,7 +1063,7 @@ contract OffsetProgressiveCurveConfigurationTest is Test {
             uint256 avgCost1 = m.costToMint1e18Shares / 1e18;
             uint256 avgCost100 = m.costToMint100e18Shares / 100e18;
             uint256 gentlenessVariance = avgCost100 > avgCost1
-                ? ((avgCost100 - avgCost1) * 1e18) / avgCost1  // Percentage variance
+                ? ((avgCost100 - avgCost1) * 1e18) / avgCost1 // Percentage variance
                 : 0;
 
             // Steepness: growth from 500e18 to 2500e18 (higher is better)

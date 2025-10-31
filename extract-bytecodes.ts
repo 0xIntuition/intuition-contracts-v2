@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-// npx tsx extract-abis.ts
-// List of contracts to extract ABIs for
+// npx tsx extract-bytecodes.ts
+// List of contracts to extract bytecode for
 // Add new contract names here to include them in the extraction
 const CONTRACTS_TO_EXTRACT = [
   'MultiVault',
@@ -20,20 +20,23 @@ const CONTRACTS_TO_EXTRACT = [
 ];
 
 interface ContractArtifact {
-  abi: any[];
+  bytecode: {
+    object: string;
+    [key: string]: any;
+  };
   [key: string]: any;
 }
 
-function extractAbis() {
+function extractBytecodes() {
   const outDir = path.join(__dirname, 'out');
-  const abisDir = path.join(__dirname, 'abis');
+  const bytecodesDir = path.join(__dirname, 'bytecodes');
 
-  // Create abis directory if it doesn't exist
-  if (!fs.existsSync(abisDir)) {
-    fs.mkdirSync(abisDir, { recursive: true });
+  // Create bytecodes directory if it doesn't exist
+  if (!fs.existsSync(bytecodesDir)) {
+    fs.mkdirSync(bytecodesDir, { recursive: true });
   }
 
-  console.log('Extracting ABIs from contracts...');
+  console.log('Extracting bytecode from contracts...');
 
   for (const contractName of CONTRACTS_TO_EXTRACT) {
     try {
@@ -49,53 +52,55 @@ function extractAbis() {
       const artifactContent = fs.readFileSync(contractFile, 'utf-8');
       const artifact: ContractArtifact = JSON.parse(artifactContent);
 
-      if (!artifact.abi || !Array.isArray(artifact.abi)) {
-        console.warn(`Warning: No valid ABI found for ${contractName}`);
+      if (!artifact.bytecode || !artifact.bytecode.object) {
+        console.warn(`Warning: No valid bytecode found for ${contractName}`);
         continue;
       }
 
+      const bytecode = artifact.bytecode.object;
+
       // Generate TypeScript content
-      const tsContent = `export const ${contractName}Abi = ${JSON.stringify(artifact.abi, null, 2)} as const;\n`;
+      const tsContent = `import type { Hex } from 'viem'\n\nexport const ${contractName}Bytecode: Hex =\n  '0x${bytecode}'\n`;
 
       // Write to TypeScript file
-      const outputFile = path.join(abisDir, `${contractName}.ts`);
+      const outputFile = path.join(bytecodesDir, `${contractName}.ts`);
       fs.writeFileSync(outputFile, tsContent);
 
-      console.log(`✓ Extracted ABI for ${contractName} (${artifact.abi.length} functions/events)`);
+      console.log(`✓ Extracted bytecode for ${contractName} (${bytecode.length} bytes)`);
     } catch (error) {
-      console.error(`Error extracting ABI for ${contractName}:`, error);
+      console.error(`Error extracting bytecode for ${contractName}:`, error);
     }
   }
 
   // Generate index file
-  generateIndexFile(abisDir);
+  generateIndexFile(bytecodesDir);
 
-  console.log('\nABI extraction completed!');
-  console.log(`ABIs saved to: ${abisDir}`);
+  console.log('\nBytecode extraction completed!');
+  console.log(`Bytecodes saved to: ${bytecodesDir}`);
 }
 
-function generateIndexFile(abisDir: string) {
+function generateIndexFile(bytecodesDir: string) {
   const indexContent = CONTRACTS_TO_EXTRACT
     .map(contractName => {
       const fileName = `${contractName}.ts`;
-      const filePath = path.join(abisDir, fileName);
-      
+      const filePath = path.join(bytecodesDir, fileName);
+
       if (fs.existsSync(filePath)) {
-        return `export { ${contractName}Abi } from './${contractName}';`;
+        return `export { ${contractName}Bytecode } from './${contractName}';`;
       }
       return null;
     })
     .filter(Boolean)
     .join('\n');
 
-  const indexFile = path.join(abisDir, 'index.ts');
+  const indexFile = path.join(bytecodesDir, 'index.ts');
   fs.writeFileSync(indexFile, indexContent + '\n');
   console.log('✓ Generated index.ts file');
 }
 
 // Run the extraction
 if (require.main === module) {
-  extractAbis();
+  extractBytecodes();
 }
 
-export { extractAbis, CONTRACTS_TO_EXTRACT };
+export { extractBytecodes, CONTRACTS_TO_EXTRACT };
