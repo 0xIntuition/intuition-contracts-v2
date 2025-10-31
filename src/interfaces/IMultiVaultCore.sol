@@ -9,7 +9,7 @@ struct GeneralConfig {
     address admin;
     /// @dev The protocol multisig address
     address protocolMultisig;
-    /// @dev The fee denominator used for fee calculations: fees are calculated as amount * (fee / feeDenominator)
+    /// @dev The fee denominator used for fee calculations: fees are calculated as `amount * (fee / feeDenominator)`
     uint256 feeDenominator;
     /// @dev The address of the TrustBonding contract
     address trustBonding;
@@ -19,8 +19,9 @@ struct GeneralConfig {
     uint256 minShare;
     /// @dev The maximum length of atom data that can be passed when creating atom vaults
     uint256 atomDataMaxLength;
-    /// @dev The decimal precision used for calculating share prices
-    uint256 decimalPrecision;
+    /// @dev Threshold in terms of total shares in a default curve vault at which entry and exit fees start to be
+    /// charged
+    uint256 feeThreshold;
 }
 
 /// @notice Atom configuration struct
@@ -35,8 +36,6 @@ struct AtomConfig {
 struct TripleConfig {
     /// @dev The fee paid to the protocol when depositing vault shares for triple vault creation
     uint256 tripleCreationProtocolFee;
-    /// @dev The static fee allocated to increasing the amount of assets in the underlying atom vaults
-    uint256 totalAtomDepositsOnTripleCreation;
     /// @dev The percentage of the triple deposit amount used to purchase equity in the underlying atoms
     uint256 atomDepositFractionForTriple;
 }
@@ -78,6 +77,75 @@ struct BondingCurveConfig {
 /// @author 0xIntuition
 /// @notice Interface for the MultiVaultCore contract
 interface IMultiVaultCore {
+    /* =================================================== */
+    /*                    EVENTS                           */
+    /* =================================================== */
+
+    /**
+     * @notice Emitted when the general configuration is updated
+     * @param admin The new admin address
+     * @param protocolMultisig The new protocol multisig address
+     * @param feeDenominator The new fee denominator
+     * @param trustBonding The new TrustBonding contract address
+     * @param minDeposit The new minimum deposit amount
+     * @param minShare The new minimum share amount
+     * @param atomDataMaxLength The new maximum atom data length
+     * @param feeThreshold The new fee threshold
+     */
+    event GeneralConfigUpdated(
+        address indexed admin,
+        address indexed protocolMultisig,
+        uint256 feeDenominator,
+        address indexed trustBonding,
+        uint256 minDeposit,
+        uint256 minShare,
+        uint256 atomDataMaxLength,
+        uint256 feeThreshold
+    );
+
+    /**
+     * @notice Emitted when the atom configuration is updated
+     * @param atomCreationProtocolFee The new atom creation protocol fee
+     * @param atomWalletDepositFee The new atom wallet deposit fee
+     */
+    event AtomConfigUpdated(uint256 atomCreationProtocolFee, uint256 atomWalletDepositFee);
+
+    /**
+     * @notice Emitted when the triple configuration is updated
+     * @param tripleCreationProtocolFee The new triple creation protocol fee
+     * @param atomDepositFractionForTriple The new atom deposit fraction for triple
+     */
+    event TripleConfigUpdated(uint256 tripleCreationProtocolFee, uint256 atomDepositFractionForTriple);
+
+    /**
+     * @notice Emitted when the wallet configuration is updated
+     * @param entryPoint The new EntryPoint contract address
+     * @param atomWarden The new AtomWarden contract address
+     * @param atomWalletBeacon The new AtomWallet beacon address
+     * @param atomWalletFactory The new AtomWallet factory address
+     */
+    event WalletConfigUpdated(
+        address indexed entryPoint,
+        address indexed atomWarden,
+        address indexed atomWalletBeacon,
+        address atomWalletFactory
+    );
+
+    /**
+     * @notice Emitted when the vault fees configuration is updated
+     * @param entryFee The new entry fee
+     * @param exitFee The new exit fee
+     * @param protocolFee The new protocol fee
+     */
+    event VaultFeesUpdated(uint256 entryFee, uint256 exitFee, uint256 protocolFee);
+
+    /**
+     * @notice Emitted when the bonding curve configuration is updated
+     * @param registry The new BondingCurveRegistry contract address
+     * @param defaultCurveId The new default bonding curve ID
+     */
+    event BondingCurveConfigUpdated(address indexed registry, uint256 defaultCurveId);
+
     /* =================================================== */
     /*                    INITIALIZER                      */
     /* =================================================== */

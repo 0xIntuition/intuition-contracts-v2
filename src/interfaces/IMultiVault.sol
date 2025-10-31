@@ -214,13 +214,6 @@ interface IMultiVault {
     /*                        GETTERS                      */
     /* =================================================== */
 
-    /**
-     * @notice Returns the accumulated protocol fees for a specific epoch
-     * @param epoch The epoch number to query
-     * @return The accumulated protocol fees for the epoch
-     */
-    function accumulatedProtocolFees(uint256 epoch) external view returns (uint256);
-
     /// @notice Returns the amount of assets deposited into underlying atoms when depositing into a triple vault
     function atomDepositFractionAmount(uint256 assets) external view returns (uint256);
 
@@ -307,6 +300,30 @@ interface IMultiVault {
      */
     function getUserUtilizationForEpoch(address user, uint256 epoch) external view returns (int256);
 
+    /**
+     * @notice Returns the last active epoch for a user
+     * @param user The user address to query
+     * @return The last epoch number in which the user had activity
+     */
+    function getUserLastActiveEpoch(address user) external view returns (uint256);
+
+    /**
+     * @notice Returns a user's personal utilization value from their most recent active epoch strictly before
+     *         the specified epoch.
+     * @dev
+     * - This function walks back through the user's last three tracked active epochs and returns the utilization
+     *   value from the most recent one that occurred strictly before the given `epoch`
+     * - Reverts if no such epoch is tracked (i.e., user has no recorded activity before `epoch`)
+     * - Reverts if called with a future epoch or while the system is in epoch 0 (the genesis epoch), since there is
+     *   no prior epoch in which the user could have been active at that time
+     * - Utilization values are signed integers and may be positive (net deposits) or negative (net redemptions)
+     * @param user The address of the user whose utilization is being queried
+     * @param epoch The epoch number to check utilization before
+     * @return utilization The user's utilization value from their most recent tracked active epoch
+     *         strictly before the specified `epoch`
+     */
+    function getUserUtilizationInEpoch(address user, uint256 epoch) external view returns (int256);
+
     /// @notice Returns the total assets and total shares in a vault for a given term and bonding curve
     /// @param termId The ID of the term (atom or triple)
     /// @param curveId The ID of the bonding curve
@@ -331,7 +348,6 @@ interface IMultiVault {
     /// @notice Simulates the creation of an atom with an initial deposit
     /// @dev Returns the expected shares to be minted and the net assets credited after fees
     /// @param termId The ID of the atom
-    /// @param curveId The ID of the bonding curve
     /// @param assets The amount of assets the user would send
     /// @return shares The expected shares to be minted for the user
     /// @return assetsAfterFixedFees The net assets that will be added to the vault (after fixed fees, before dynamic
@@ -339,7 +355,6 @@ interface IMultiVault {
     /// @return assetsAfterFees The net assets that will be added to the vault (after all fees)
     function previewAtomCreate(
         bytes32 termId,
-        uint256 curveId,
         uint256 assets
     )
         external
@@ -381,7 +396,6 @@ interface IMultiVault {
     /// @notice Simulates the creation of a triple with an initial deposit
     /// @dev Returns the expected shares to be minted and the net assets credited after fees
     /// @param termId The ID of the triple
-    /// @param curveId The ID of the bonding curve
     /// @param assets The amount of assets the user would send
     /// @return shares The expected shares to be minted for the user
     /// @return assetsAfterFixedFees The net assets that will be added to the vault (after fixed fees like protocol and
@@ -389,7 +403,6 @@ interface IMultiVault {
     /// @return assetsAfterFees The net assets that will be added to the vault (after all fees)
     function previewTripleCreate(
         bytes32 termId,
-        uint256 curveId,
         uint256 assets
     )
         external
@@ -518,11 +531,18 @@ interface IMultiVault {
         external
         returns (uint256[] memory);
 
-    /// @notice Pauses the contract, preventing deposits and redemptions
-    function pause() external;
+    /**
+     * @notice Returns the accumulated protocol fees for a specific epoch
+     * @param epoch The epoch number to query
+     * @return The accumulated protocol fees for the epoch
+     */
+    function accumulatedProtocolFees(uint256 epoch) external view returns (uint256);
 
     /// @notice Sweeps the accumulated protocol fees for a specified epoch to the protocol multisig
     function sweepAccumulatedProtocolFees(uint256 epoch) external;
+
+    /// @notice Pauses the contract, preventing deposits and redemptions
+    function pause() external;
 
     /// @notice Unpauses the contract, allowing deposits and redemptions
     function unpause() external;

@@ -184,6 +184,10 @@ contract SatelliteEmissionsController is
         nonReentrant
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
+        if (_TRUST_BONDING == address(0)) {
+            revert SatelliteEmissionsController_TrustBondingNotSet();
+        }
+
         // Prevent withdrawing zero amount if no unclaimed emissions are available.
         uint256 amount = ITrustBonding(_TRUST_BONDING).getUnclaimedRewardsForEpoch(epoch);
         if (amount == 0) {
@@ -246,7 +250,7 @@ contract SatelliteEmissionsController is
         );
 
         if (msg.value > gasLimit) {
-            Address.sendValue(payable(_msgSender()), msg.value - gasLimit);
+            Address.sendValue(payable(msg.sender), msg.value - gasLimit);
         }
 
         emit UnclaimedEmissionsBridged(epoch, amount);

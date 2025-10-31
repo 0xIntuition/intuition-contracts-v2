@@ -40,12 +40,22 @@ abstract contract BaseTest is Modifiers, Test {
     /*//////////////////////////////////////////////////////////////////////////
                                      VARIABLES
     //////////////////////////////////////////////////////////////////////////*/
+    LinearCurve internal linearCurve;
+    OffsetProgressiveCurve internal offsetProgressiveCurve;
+    ProgressiveCurve internal progressiveCurve;
+    BondingCurveRegistry internal bondingCurveRegistryImpl;
+
+    TransparentUpgradeableProxy internal linearCurveProxy;
+    TransparentUpgradeableProxy internal offsetProgressiveCurveProxy;
+    TransparentUpgradeableProxy internal progressiveCurveProxy;
+    TransparentUpgradeableProxy internal bondingCurveRegistryProxy;
+
     uint256 internal BASIS_POINTS_DIVISOR = 10_000;
     uint256 internal ONE_SHARE = 1e18;
 
     uint256[] internal ATOM_COST;
     uint256[] internal TRIPLE_COST;
-    uint256 internal DECIMAL_PRECISION = 1e18;
+    uint256 internal FEE_THRESHOLD = 1e18;
     uint256 internal FEE_DENOMINATOR = 10_000;
     uint256 internal MIN_DEPOSIT = 1e17; // 0.1 Trust
     uint256 internal MIN_SHARES = 1e6; // Ghost Shares
@@ -57,8 +67,7 @@ abstract contract BaseTest is Modifiers, Test {
 
     // Triple Config
     uint256 internal TRIPLE_CREATION_PROTOCOL_FEE = 1e15; // 0.001 Trust (Fixed Cost)
-    uint256 internal TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION = 1e15; // 0.001 Trust (Fixed Cost)
-    uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 90; // 0.9% (Percentage Cost)
+    uint256 internal ATOM_DEPOSIT_FRACTION_FOR_TRIPLE = 500; // 5% (Percentage Cost)
 
     // Wallet Config
     address internal ENTRY_POINT = 0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108;
@@ -76,7 +85,9 @@ abstract contract BaseTest is Modifiers, Test {
     uint256 internal TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND = 3000; // 30%
 
     // Curve Configurations
-    uint256 internal PROGRESSIVE_CURVE_SLOPE = 1e15; // 0.001 slope
+    uint256 internal PROGRESSIVE_CURVE_SLOPE = 2e18;
+    uint256 internal OFFSET_PROGRESSIVE_CURVE_SLOPE = 2e18;
+    uint256 internal OFFSET_PROGRESSIVE_CURVE_OFFSET = 5e17;
 
     // CoreEmissions Controller
     uint256 internal constant EMISSIONS_CONTROLLER_EPOCH_LENGTH = TWO_WEEKS;
@@ -221,23 +232,57 @@ abstract contract BaseTest is Modifiers, Test {
         protocol.satelliteEmissionsController = SatelliteEmissionsController(payable(satelliteEmissionsControllerProxy));
         console2.log("SatelliteEmissionsController Proxy", address(satelliteEmissionsControllerProxy));
 
-        // Deploy BondingCurveRegistry
-        BondingCurveRegistry bondingCurveRegistry = new BondingCurveRegistry(users.admin);
-        console2.log("BondingCurveRegistry address: ", address(bondingCurveRegistry));
+        // Deploy BondingCurveRegistry implementation and proxy
+        bondingCurveRegistryImpl = new BondingCurveRegistry();
+        bondingCurveRegistryProxy = new TransparentUpgradeableProxy(
+            address(bondingCurveRegistryImpl),
+            users.admin,
+            abi.encodeWithSelector(BondingCurveRegistry.initialize.selector, users.admin)
+        );
+        protocol.curveRegistry = BondingCurveRegistry(address(bondingCurveRegistryProxy));
+        console2.log("BondingCurveRegistry address: ", address(bondingCurveRegistryProxy));
 
-        // Deploy bonding curves and add them to registry
-        LinearCurve linearCurve = new LinearCurve("Linear Bonding Curve");
-        OffsetProgressiveCurve offsetProgressiveCurve =
-            new OffsetProgressiveCurve("Offset Progressive Bonding Curve", 2, 5e35);
-        ProgressiveCurve progressiveCurve = new ProgressiveCurve("Progressive Bonding Curve", 2);
+        // Deploy bonding curve implementations
+        LinearCurve linearCurveImpl = new LinearCurve();
+        OffsetProgressiveCurve offsetProgressiveCurveImpl = new OffsetProgressiveCurve();
+        ProgressiveCurve progressiveCurveImpl = new ProgressiveCurve();
+
+        // Deploy proxies for bonding curves
+        linearCurveProxy = new TransparentUpgradeableProxy(
+            address(linearCurveImpl),
+            users.admin,
+            abi.encodeWithSelector(LinearCurve.initialize.selector, "Linear Curve")
+        );
+        linearCurve = LinearCurve(address(linearCurveProxy));
+
+        progressiveCurveProxy = new TransparentUpgradeableProxy(
+            address(progressiveCurveImpl),
+            users.admin,
+            abi.encodeWithSelector(ProgressiveCurve.initialize.selector, "Progressive Curve", PROGRESSIVE_CURVE_SLOPE)
+        );
+        progressiveCurve = ProgressiveCurve(address(progressiveCurveProxy));
+
+        offsetProgressiveCurveProxy = new TransparentUpgradeableProxy(
+            address(offsetProgressiveCurveImpl),
+            users.admin,
+            abi.encodeWithSelector(
+                OffsetProgressiveCurve.initialize.selector,
+                "Offset Progressive Curve",
+                OFFSET_PROGRESSIVE_CURVE_SLOPE,
+                OFFSET_PROGRESSIVE_CURVE_OFFSET
+            )
+        );
+        offsetProgressiveCurve = OffsetProgressiveCurve(address(offsetProgressiveCurveProxy));
 
         console2.log("LinearCurve address: ", address(linearCurve));
+        console2.log("OffsetProgressiveCurve address: ", address(offsetProgressiveCurve));
         console2.log("ProgressiveCurve address: ", address(progressiveCurve));
 
+        // Add curves to registry
         resetPrank(users.admin);
-        bondingCurveRegistry.addBondingCurve(address(linearCurve));
-        bondingCurveRegistry.addBondingCurve(address(offsetProgressiveCurve));
-        bondingCurveRegistry.addBondingCurve(address(progressiveCurve));
+        protocol.curveRegistry.addBondingCurve(address(linearCurve));
+        protocol.curveRegistry.addBondingCurve(address(offsetProgressiveCurve));
+        protocol.curveRegistry.addBondingCurve(address(progressiveCurve));
         console2.log("Added LinearCurve to registry with ID: 1");
         console2.log("Added OffsetProgressiveCurve to registry with ID: 2");
         console2.log("Added ProgressiveCurve to registry with ID: 3");
@@ -253,7 +298,7 @@ abstract contract BaseTest is Modifiers, Test {
         vm.label(address(trustBondingImpl), "TrustBondingImpl");
         vm.label(address(trustBondingProxy), "TrustBondingProxy");
         vm.label(address(trustBondingImpl), "TrustBonding");
-        vm.label(address(bondingCurveRegistry), "BondingCurveRegistry");
+        vm.label(address(protocol.curveRegistry), "BondingCurveRegistry");
         vm.label(address(linearCurve), "LinearCurve");
         vm.label(address(offsetProgressiveCurve), "OffsetProgressiveCurve");
         vm.label(address(progressiveCurve), "ProgressiveCurve");
@@ -312,7 +357,7 @@ abstract contract BaseTest is Modifiers, Test {
         walletConfig.atomWalletBeacon = address(atomWalletBeacon);
 
         BondingCurveConfig memory bondingCurveConfig = _getDefaultBondingCurveConfig();
-        bondingCurveConfig.registry = address(bondingCurveRegistry);
+        bondingCurveConfig.registry = address(protocol.curveRegistry);
 
         // Initialize MultiVault
         protocol.multiVault.initialize(
@@ -352,12 +397,12 @@ abstract contract BaseTest is Modifiers, Test {
         return GeneralConfig({
             admin: users.admin,
             protocolMultisig: users.admin,
-            feeDenominator: 10_000,
+            feeDenominator: FEE_DENOMINATOR,
             trustBonding: address(0),
             minDeposit: MIN_DEPOSIT,
             minShare: MIN_SHARES,
-            atomDataMaxLength: 1000,
-            decimalPrecision: 1e18
+            atomDataMaxLength: ATOM_DATA_MAX_LENGTH,
+            feeThreshold: FEE_THRESHOLD
         });
     }
 
@@ -371,8 +416,7 @@ abstract contract BaseTest is Modifiers, Test {
     function _getDefaultTripleConfig() internal returns (TripleConfig memory) {
         return TripleConfig({
             tripleCreationProtocolFee: TRIPLE_CREATION_PROTOCOL_FEE,
-            totalAtomDepositsOnTripleCreation: TOTAL_ATOM_DEPOSITS_ON_TRIPLE_CREATION,
-            atomDepositFractionForTriple: 500
+            atomDepositFractionForTriple: ATOM_DEPOSIT_FRACTION_FOR_TRIPLE
         });
     }
 
@@ -385,8 +429,8 @@ abstract contract BaseTest is Modifiers, Test {
         });
     }
 
-    function _getDefaultVaultFees() internal pure returns (VaultFees memory) {
-        return VaultFees({ entryFee: 50, exitFee: 50, protocolFee: 100 });
+    function _getDefaultVaultFees() internal view returns (VaultFees memory) {
+        return VaultFees({ entryFee: ENTRY_FEE, exitFee: EXIT_FEE, protocolFee: PROTOCOL_FEE });
     }
 
     function _getDefaultBondingCurveConfig() internal pure returns (BondingCurveConfig memory) {

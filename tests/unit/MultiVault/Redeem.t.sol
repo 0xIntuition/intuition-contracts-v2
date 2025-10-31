@@ -37,7 +37,15 @@ contract BondingCurveRegistryMock {
         return shares; // 1:1 for tests
     }
 
-    function currentPrice(uint256, /*supply*/ uint256 /*curveId*/ ) external pure returns (uint256) {
+    function currentPrice(
+        uint256,
+        /*supply*/
+        uint256 /*curveId*/
+    )
+        external
+        pure
+        returns (uint256)
+    {
         return 1;
     }
 
