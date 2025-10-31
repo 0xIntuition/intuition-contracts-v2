@@ -2,7 +2,7 @@
 
 INTUITION_SEPOLIA="https://testnet.rpc.intuition.systems/http" \
 TRUST_TOKEN_ADDRESS="0xDE80b6EE63f7D809427CA350e30093F436A0fe35" \
-TRUST_BONDING_ADDRESS="0xE732aD1c67BcE7512eCc1cA42Db56C764E27c4e7" \
+TRUST_BONDING_ADDRESS="0x75dd32b522c89566265ea32ecb50b4fc4d00adc7" \
 OFFSET_PROGRESSIVE_CURVE="0x2D2Daa3cE630aD126747E7853ad1969173Db59a2"
 
 ## Wrapped TRUST
@@ -14,7 +14,7 @@ cast call $TRUST_TOKEN_ADDRESS --rpc-url $INTUITION_SEPOLIA "balanceOf(address)(
 
 ### Deposit 1 TRUST to WTRUST
 ```bash
-cast send $TRUST_TOKEN_ADDRESS --value 100ether --interactive --rpc-url $INTUITION_SEPOLIA
+cast send $TRUST_TOKEN_ADDRESS --value 500ether --interactive --rpc-url $INTUITION_SEPOLIA
 ```
 
 ## TrustBonding
@@ -24,7 +24,7 @@ cast send $TRUST_TOKEN_ADDRESS --value 100ether --interactive --rpc-url $INTUITI
 ### Deposit TRUST into TrustBonding
 
 ```bash
-cast send $TRUST_TOKEN_ADDRESS "approve(address,uint256)" $TRUST_BONDING_ADDRESS 10ether --interactive --rpc-url $INTUITION_SEPOLIA
+cast send $TRUST_TOKEN_ADDRESS "approve(address,uint256)" $TRUST_BONDING_ADDRESS 500ether --interactive --rpc-url $INTUITION_SEPOLIA
 ```
 
 # Lock TRUST tokens for 4 weeks (1209600 seconds)
@@ -35,12 +35,16 @@ cast send $TRUST_BONDING_ADDRESS "create_lock(uint256,uint256)" <AMOUNT_IN_WEI> 
 # Example: Lock 100 TRUST for 12 weeks from now
 
 ```bash
-cast send $TRUST_BONDING_ADDRESS "create_lock(uint256,uint256)" $(cast to-wei 10 ether) $(cast to-dec $(($(date +%s) + 7257600))) --interactive --rpc-url $INTUITION_SEPOLIA
+cast send $TRUST_BONDING_ADDRESS "create_lock(uint256,uint256)" $(cast to-wei 10 ether) $(cast to-dec $(($(date +%s) + 10886400 + 604800))) --interactive --rpc-url $INTUITION_SEPOLIA
 ```
 
 ```bash
-cast send $TRUST_BONDING_ADDRESS "increase_unlock_time(uint256)" $(cast to-dec $(($(date +%s) + 7257600))) --interactive --rpc-url $INTUITION_SEPOLIA
+cast send $TRUST_BONDING_ADDRESS "increase_amount(uint256)" $(cast to-wei 15 ether) --interactive --rpc-url $INTUITION_SEPOLIA
+```
 
+```bash
+cast send $TRUST_BONDING_ADDRESS "increase_unlock_time(uint256)" $(cast to-dec $(($(date +%s) + 10886400))) --interactive --rpc-url $INTUITION_SEPOLIA
+```
 ```
 
 # Offset Progressive Curve Dynamic Parameter Update

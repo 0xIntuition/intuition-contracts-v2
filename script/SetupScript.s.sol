@@ -57,7 +57,7 @@ abstract contract SetupScript is Script {
     /*                  Critical Configs                   */
     /* =================================================== */
 
-    uint256 internal PROTOCOL_START_TIMESTAMP = 1762275600; // Tues November 4, 2025 12:00:00 EST || Wed November 5, 2025 00:00:00 KST
+    uint256 internal PROTOCOL_START_TIMESTAMP = 1762268400; // Tues November 4, 2025 10:00:00 EST || Wed November 5, 2025 00:00:00 KST
     
     uint256 internal TRUST_TOKEN_ONE_YEAR_EMISSIONS = 75_000_000 ether; // 75 million TRUST
     
@@ -213,7 +213,7 @@ abstract contract SetupScript is Script {
             EMISSIONS_PER_EPOCH = TRUST_TOKEN_ONE_YEAR_EMISSIONS / EMISSIONS_REDUCTION_CLIFF;
         } else if (block.chainid == NETWORK_BASE) {
             // Global Config
-            TRUST_TOKEN = 0x6cd905df2ed214b22e0d48ff17cd4200c1c6d8a3;
+            TRUST_TOKEN = 0x6cd905dF2Ed214b22e0d48FF17CD4200C1C6d8A3;
             ADMIN = 0xBc01aB3839bE8933f6B93163d129a823684f4CDF;
 
             // MetaLayer Config

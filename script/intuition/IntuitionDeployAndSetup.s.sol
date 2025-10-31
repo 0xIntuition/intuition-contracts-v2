@@ -199,7 +199,7 @@ contract IntuitionDeployAndSetup is SetupScript {
             hubOrSpoke: METALAYER_HUB_OR_SPOKE, // placeholder metaERC20Hub
             recipientDomain: BASE_METALAYER_RECIPIENT_DOMAIN,
             gasLimit: METALAYER_GAS_LIMIT,
-            finalityState: FinalityState.FINALIZED
+            finalityState: FinalityState.INSTANT
         });
 
         CoreEmissionsControllerInit memory coreEmissionsInit = CoreEmissionsControllerInit({
