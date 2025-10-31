@@ -30,7 +30,13 @@ forge script script/base/BaseEmissionsControllerDeploy.s.sol:BaseEmissionsContro
 --optimizer-runs 10000 \
 --rpc-url base \
 --broadcast \
---slow
+--slow \
+--verify \
+--verifier etherscan \ 
+--verifier-url "https://api.etherscan.io/v2/api?chainid=8453" \
+--chain 8453 \
+--etherscan-api-key $ETHERSCAN_API_KEY
+
 */
 
 contract BaseEmissionsControllerDeploy is SetupScript {

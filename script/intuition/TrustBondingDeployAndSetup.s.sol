@@ -146,8 +146,9 @@ contract TrustBondingDeployAndSetup is SetupScript {
 
         if (block.chainid != NETWORK_INTUITION) {
             satelliteEmissionsController.setTrustBonding(address(trustBonding));
-            IAccessControl(address(satelliteEmissionsController))
-                .grantRole(satelliteEmissionsController.CONTROLLER_ROLE(), address(trustBonding));
+            IAccessControl(address(satelliteEmissionsController)).grantRole(
+                satelliteEmissionsController.CONTROLLER_ROLE(), address(trustBonding)
+            );
             console2.log("CONTROLLER_ROLE in SatelliteEmissionsController granted to TrustBonding");
             trustBonding.setMultiVault(0x000000000000000000000000000000000000dEaD);
             trustBonding.setTimelock(address(timelockControllerParameters));

@@ -49,13 +49,7 @@ contract BondingCurveRegistryMock {
         return 1;
     }
 
-    function getCurveMaxAssets(
-        uint256 /*curveId*/
-    )
-        external
-        pure
-        returns (uint256)
-    {
+    function getCurveMaxAssets(uint256 /*curveId*/ ) external pure returns (uint256) {
         return type(uint256).max;
     }
 }
@@ -84,15 +78,7 @@ contract MultiVaultHarness is MultiVault {
     }
 
     // Expose the internal functions we want to hit
-    function burnForTest(
-        address from,
-        bytes32 termId,
-        uint256 curveId,
-        uint256 amount
-    )
-        external
-        returns (uint256)
-    {
+    function burnForTest(address from, bytes32 termId, uint256 curveId, uint256 amount) external returns (uint256) {
         return _burn(from, termId, curveId, amount);
     }
 
@@ -287,14 +273,13 @@ contract RedeemTest is BaseTest {
         // Redeem half
         uint256 sharesToRedeem = shares / 2;
         resetPrank(users.alice);
-        uint256 assets = protocol.multiVault
-            .redeem(
-                users.alice, // receiver
-                atomId,
-                PROGRESSIVE_CURVE_ID,
-                sharesToRedeem,
-                0 // minAssets
-            );
+        uint256 assets = protocol.multiVault.redeem(
+            users.alice, // receiver
+            atomId,
+            PROGRESSIVE_CURVE_ID,
+            sharesToRedeem,
+            0 // minAssets
+        );
 
         assertTrue(assets > 0, "Should receive some assets");
 

@@ -57,10 +57,11 @@ abstract contract SetupScript is Script {
     /*                  Critical Configs                   */
     /* =================================================== */
 
-    uint256 internal PROTOCOL_START_TIMESTAMP = 1762268400; // Tues November 4, 2025 10:00:00 EST || Wed November 5, 2025 00:00:00 KST
-    
+    uint256 internal PROTOCOL_START_TIMESTAMP = 1_762_268_400; // Tues November 4, 2025 10:00:00 EST || Wed November 5,
+        // 2025 00:00:00 KST
+
     uint256 internal TRUST_TOKEN_ONE_YEAR_EMISSIONS = 75_000_000 ether; // 75 million TRUST
-    
+
     /* =================================================== */
     /*                  Network Specific                   */
     /* =================================================== */
@@ -69,7 +70,7 @@ abstract contract SetupScript is Script {
     address internal METALAYER_HUB_OR_SPOKE;
     uint32 internal BASE_METALAYER_RECIPIENT_DOMAIN;
     uint32 internal SATELLITE_METALAYER_RECIPIENT_DOMAIN;
-    
+
     // General Config
     address internal ADMIN;
     address internal PROTOCOL_MULTISIG;
@@ -160,7 +161,7 @@ abstract contract SetupScript is Script {
         info("Broadcasting:", broadcaster);
 
         if (block.chainid == NETWORK_BASE_SEPOLIA) {
-            PROTOCOL_START_TIMESTAMP = 1761787000;
+            PROTOCOL_START_TIMESTAMP = 1_761_787_000;
             TRUST_TOKEN = 0xA54b4E6e356b963Ee00d1C947f478d9194a1a210;
             ADMIN = vm.envAddress("BASE_SEPOLIA_ADMIN_ADDRESS");
             PROTOCOL_MULTISIG = vm.envOr("BASE_SEPOLIA_PROTOCOL_MULTISIG", ADMIN);
@@ -176,7 +177,7 @@ abstract contract SetupScript is Script {
             EMISSIONS_REDUCTION_CLIFF = 26;
             EMISSIONS_PER_EPOCH = TRUST_TOKEN_ONE_YEAR_EMISSIONS / EMISSIONS_REDUCTION_CLIFF;
         } else if (block.chainid == NETWORK_INTUITION_SEPOLIA) {
-            PROTOCOL_START_TIMESTAMP = 1761787000;
+            PROTOCOL_START_TIMESTAMP = 1_761_787_000;
             TRUST_TOKEN = 0xDE80b6EE63f7D809427CA350e30093F436A0fe35; // Wrapped Trust
             ADMIN = vm.envAddress("INTUITION_SEPOLIA_ADMIN_ADDRESS");
             PROTOCOL_MULTISIG = vm.envOr("INTUITION_SEPOLIA_PROTOCOL_MULTISIG", ADMIN);
@@ -215,6 +216,9 @@ abstract contract SetupScript is Script {
             // Global Config
             TRUST_TOKEN = 0x6cd905dF2Ed214b22e0d48FF17CD4200C1C6d8A3;
             ADMIN = 0xBc01aB3839bE8933f6B93163d129a823684f4CDF;
+
+            // Timelock Config
+            TIMELOCK_MIN_DELAY = 5 minutes;
 
             // MetaLayer Config
             SATELLITE_METALAYER_RECIPIENT_DOMAIN = 1155;
