@@ -106,28 +106,6 @@ contract DepositTest is BaseTest {
     }
 
     /*//////////////////////////////////////////////////////////////
-            TRIPLE: cannot directly init counter triple (non-default)
-    //////////////////////////////////////////////////////////////*/
-
-    function test_deposit_RevertWhen_CannotInitializeCounterTriple_OnNonDefaultCurve() public {
-        // Create a positive triple on the default curve (counter is auto-initialized only on default)
-        (bytes32 tripleId,) =
-            createTripleWithAtoms("S-ctr", "P-ctr", "O-ctr", ATOM_COST[0], TRIPLE_COST[0], users.alice);
-
-        // Get the counter triple id
-        bytes32 counterId = protocol.multiVault.getCounterIdFromTripleId(tripleId);
-
-        // Choose a non-default curve (brand-new vault for counter side)
-        (, uint256 defaultCurveId) = protocol.multiVault.bondingCurveConfig();
-        uint256 nonDefaultCurve = defaultCurveId == 1 ? 2 : 1;
-
-        // Try to deposit to the counter triple on a non-default curve => forbidden
-        resetPrank(users.alice);
-        vm.expectRevert(MultiVault.MultiVault_CannotDirectlyInitializeCounterTriple.selector);
-        protocol.multiVault.deposit{ value: 1 ether }(users.alice, counterId, nonDefaultCurve, 0);
-    }
-
-    /*//////////////////////////////////////////////////////////////
                         APPROVE() BRANCHES
     //////////////////////////////////////////////////////////////*/
 

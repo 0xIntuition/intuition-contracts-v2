@@ -138,8 +138,6 @@ contract MultiVault is
 
     error MultiVault_DepositTooSmallToCoverMinShares();
 
-    error MultiVault_CannotDirectlyInitializeCounterTriple();
-
     error MultiVault_TermDoesNotExist(bytes32 termId);
 
     error MultiVault_EpochNotTracked();
@@ -615,8 +613,8 @@ contract MultiVault is
             );
         }
 
-        /* --- Initialize the counter vault with min shares --- */
-        _initializeCounterTripleVault(_counterTripleId, curveId);
+        /* --- Initialize the counter triple vault with min shares --- */
+        _initializeInverseTripleVault(_counterTripleId, curveId, VaultType.COUNTER_TRIPLE);
 
         /* --- Emit events --- */
         emit TripleCreated(sender, tripleId, subjectId, predicateId, objectId);
@@ -758,7 +756,6 @@ contract MultiVault is
         // --- triple-only invariants before any state changes ---
         if (_vaultType != VaultType.ATOM) {
             if (_hasCounterStake(termId, curveId, receiver)) revert MultiVault_HasCounterStake();
-            if (isNew && _isCounterTriple(termId)) revert MultiVault_CannotDirectlyInitializeCounterTriple();
         }
 
         // default curve vaults must be created via createAtoms/createTriples
@@ -802,10 +799,16 @@ contract MultiVault is
                 _updateVaultOnCreation(receiver, termId, curveId, assetsAfterFees, sharesForReceiver, _vaultType);
 
             if (_vaultType != VaultType.ATOM) {
-                bytes32 _counterTripleId = _calculateCounterTripleId(termId);
+                // Initialize the opposite (inverse) side of this triple for this curve.
+                // Using _getInverseTripleId lets us support initializing from either side.
+                bytes32 _inverseTripleId = _getInverseTripleId(termId);
 
-                /* --- Initialize the counter vault with min shares --- */
-                _initializeCounterTripleVault(_counterTripleId, curveId);
+                /* --- Initialize the inverse triple vault with min shares --- */
+                _initializeInverseTripleVault(
+                    _inverseTripleId,
+                    curveId,
+                    _vaultType == VaultType.TRIPLE ? VaultType.COUNTER_TRIPLE : VaultType.TRIPLE    
+                );
             }
         } else {
             userBalanceAfter =
@@ -1226,10 +1229,6 @@ contract MultiVault is
         uint256 assetsAfterFees;
         uint256 assetsAfterMinSharesCost = assets;
 
-        if (_isNewVault(termId, curveId) && _isCounterTriple(termId)) {
-            revert MultiVault_CannotDirectlyInitializeCounterTriple();
-        }
-
         // Account for the minShare cost
         if (_isNewVault(termId, curveId)) {
             uint256 minShareCost = _minShareCostFor(VaultType.TRIPLE, curveId);
@@ -1411,23 +1410,25 @@ contract MultiVault is
         );
     }
 
-    /// @dev Initializes the counter triple vault with min shares minted to the burn address
-    /// @param counterTripleId the ID of the counter triple
+    /// @dev Initializes the inverse triple vault with min shares minted to the burn address.
+    ///      For regular triple vaults, the inverse is the counter triple vault, and vice versa
+    /// @param inverseTripleId the ID of the inverse triple (counter or regular)
     /// @param curveId the bonding curve ID
-    function _initializeCounterTripleVault(bytes32 counterTripleId, uint256 curveId) internal {
-        VaultState storage vaultState = _vaults[counterTripleId][curveId];
+    /// @param vaultType the vault type of the inverse triple vault
+    function _initializeInverseTripleVault(bytes32 inverseTripleId, uint256 curveId, VaultType vaultType) internal {
+        VaultState storage vaultState = _vaults[inverseTripleId][curveId];
         uint256 minShare = generalConfig.minShare;
 
         _setVaultTotals(
-            counterTripleId,
+            inverseTripleId,
             curveId,
             vaultState.totalAssets + _minAssetsForCurve(curveId, minShare),
             vaultState.totalShares + minShare,
-            VaultType.COUNTER_TRIPLE
+            vaultType
         );
 
-        // Mint min shares to the burn address for the counter vault
-        _mint(BURN_ADDRESS, counterTripleId, curveId, minShare);
+        // Mint min shares to the burn address for the inverse triple vault
+        _mint(BURN_ADDRESS, inverseTripleId, curveId, minShare);
     }
 
     /// @dev mint vault shares to address `to`
