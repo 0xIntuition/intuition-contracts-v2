@@ -183,9 +183,8 @@ contract DepositTest is BaseTest {
         uint256 newDefault = oldDefault == 1 ? 2 : 1;
 
         resetPrank(users.admin);
-        protocol.multiVault.setBondingCurveConfig(
-            BondingCurveConfig({ registry: registry, defaultCurveId: newDefault })
-        );
+        protocol.multiVault
+            .setBondingCurveConfig(BondingCurveConfig({ registry: registry, defaultCurveId: newDefault }));
 
         // Now try to deposit into the *new* default curve for this atom
         // That new default curve vault is brand-new (no shares), so this should revert
@@ -195,9 +194,8 @@ contract DepositTest is BaseTest {
 
         // Restore default to keep other tests deterministic (optional)
         resetPrank(users.admin);
-        protocol.multiVault.setBondingCurveConfig(
-            BondingCurveConfig({ registry: registry, defaultCurveId: oldDefault })
-        );
+        protocol.multiVault
+            .setBondingCurveConfig(BondingCurveConfig({ registry: registry, defaultCurveId: oldDefault }));
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -344,7 +342,8 @@ contract DepositTest is BaseTest {
         uint256 depositAmount = 3000e18;
         makeDeposit(users.alice, users.alice, tripleId, CURVE_ID, depositAmount, 1e4);
 
-        (uint256 counterAssetsAfter, uint256 counterSharesAfter) = protocol.multiVault.getVault(counterTripleId, CURVE_ID);
+        (uint256 counterAssetsAfter, uint256 counterSharesAfter) =
+            protocol.multiVault.getVault(counterTripleId, CURVE_ID);
 
         uint256 minShare = protocol.multiVault.getGeneralConfig().minShare;
 
@@ -354,7 +353,8 @@ contract DepositTest is BaseTest {
             "Counter triple should have minShare added when regular is deposited to"
         );
         assertTrue(
-            counterAssetsAfter > counterAssetsBefore, "Counter triple assets should increase when regular is deposited to"
+            counterAssetsAfter > counterAssetsBefore,
+            "Counter triple assets should increase when regular is deposited to"
         );
     }
 
@@ -435,8 +435,9 @@ contract DepositTest is BaseTest {
         uint256 minDeposit = protocol.multiVault.getGeneralConfig().minDeposit;
         depositAmount = uint96(bound(uint256(depositAmount), minDeposit + minShare * 2 + 1 ether, 1000 ether));
 
-        (bytes32 tripleId,) =
-            createTripleWithAtoms("Subject-Fuzz", "Predicate-Fuzz", "Object-Fuzz", ATOM_COST[0], TRIPLE_COST[0], users.alice);
+        (bytes32 tripleId,) = createTripleWithAtoms(
+            "Subject-Fuzz", "Predicate-Fuzz", "Object-Fuzz", ATOM_COST[0], TRIPLE_COST[0], users.alice
+        );
 
         bytes32 counterTripleId = _calculateCounterTripleId(tripleId);
 
@@ -471,9 +472,13 @@ contract DepositTest is BaseTest {
         (uint256 regularAssetsAfter, uint256 regularSharesAfter) = protocol.multiVault.getVault(tripleId, CURVE_ID);
 
         assertGt(
-            regularAssetsAfter, regularAssetsBefore, "Regular triple assets should increase after counter initialization"
+            regularAssetsAfter,
+            regularAssetsBefore,
+            "Regular triple assets should increase after counter initialization"
         );
-        assertEq(regularSharesAfter, minShare, "Regular triple should have exactly minShare after counter initialization");
+        assertEq(
+            regularSharesAfter, minShare, "Regular triple should have exactly minShare after counter initialization"
+        );
 
         makeDeposit(users.bob, users.bob, counterTripleId, CURVE_ID, depositAmount2, 0);
 
@@ -503,7 +508,8 @@ contract DepositTest is BaseTest {
 
         resetPrank(users.alice);
         // vm.expectEmit(true, true, true, true);
-        // emit IMultiVault.Deposited(users.alice, users.alice, counterTripleId, CURVE_ID, depositAmount, expectedShares);
+        // emit IMultiVault.Deposited(users.alice, users.alice, counterTripleId, CURVE_ID, depositAmount,
+        // expectedShares);
 
         protocol.multiVault.deposit{ value: depositAmount }(users.alice, counterTripleId, CURVE_ID, 0);
     }

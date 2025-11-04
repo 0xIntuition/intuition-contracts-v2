@@ -131,7 +131,13 @@ contract TrustBondingBase is BaseTest {
         vm.stopPrank();
     }
 
-    function _createLockWithDurationWithBlockTimestamp(address user, uint256 amount, uint256 unlockTime) internal {
+    function _createLockWithDurationWithBlockTimestamp(
+        address user,
+        uint256 amount,
+        uint256 unlockTime
+    )
+        internal
+    {
         vm.startPrank(user);
         unlockTime = block.timestamp + unlockTime;
         protocol.wrappedTrust.approve(address(protocol.trustBonding), amount);

@@ -123,7 +123,15 @@ contract FeeFlowsTest is BaseTest {
     }
 
     /// @dev create one triple with `extra` over the fixed triple cost; arrays scoped inside to avoid stack pressure
-    function _createTripleWithExtra(bytes32 sid, bytes32 pid, bytes32 oid, uint256 extra, address creator) internal {
+    function _createTripleWithExtra(
+        bytes32 sid,
+        bytes32 pid,
+        bytes32 oid,
+        uint256 extra,
+        address creator
+    )
+        internal
+    {
         uint256 sendAmount = protocol.multiVault.getTripleCost() + extra;
         bytes32[] memory S = new bytes32[](1);
         bytes32[] memory P = new bytes32[](1);
