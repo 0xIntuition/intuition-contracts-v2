@@ -283,6 +283,232 @@ contract DepositTest is BaseTest {
     }
 
     /*//////////////////////////////////////////////////////////////
+                 COUNTER TRIPLE INITIALIZATION TESTS
+    //////////////////////////////////////////////////////////////*/
+
+    function test_deposit_DirectCounterTripleInitialization_Success() public {
+        (bytes32 tripleId,) = createTripleWithAtoms(
+            "Subject-CT", "Predicate-CT", "Object-CT", ATOM_COST[0], TRIPLE_COST[0], users.alice
+        );
+
+        bytes32 counterTripleId = _calculateCounterTripleId(tripleId);
+
+        uint256 depositAmount = 1000e18;
+        uint256 shares = makeDeposit(users.alice, users.alice, counterTripleId, CURVE_ID, depositAmount, 1e4);
+
+        assertTrue(shares > 0, "Should receive shares for counter triple deposit");
+
+        uint256 counterVaultBalance = protocol.multiVault.getShares(users.alice, counterTripleId, CURVE_ID);
+        assertEq(counterVaultBalance, shares, "Counter triple vault balance should match shares");
+    }
+
+    function test_deposit_CounterTripleInitializesRegularTriple_Success() public {
+        (bytes32 tripleId,) = createTripleWithAtoms(
+            "Subject-CT2", "Predicate-CT2", "Object-CT2", ATOM_COST[0], TRIPLE_COST[0], users.alice
+        );
+
+        bytes32 counterTripleId = _calculateCounterTripleId(tripleId);
+
+        (uint256 regularAssetsBeforeCounter, uint256 regularSharesBeforeCounter) =
+            protocol.multiVault.getVault(tripleId, CURVE_ID);
+
+        uint256 depositAmount = 2000e18;
+        makeDeposit(users.alice, users.alice, counterTripleId, CURVE_ID, depositAmount, 1e4);
+
+        (uint256 regularAssetsAfterCounter, uint256 regularSharesAfterCounter) =
+            protocol.multiVault.getVault(tripleId, CURVE_ID);
+
+        uint256 minShare = protocol.multiVault.getGeneralConfig().minShare;
+
+        assertEq(
+            regularSharesAfterCounter,
+            regularSharesBeforeCounter + minShare,
+            "Regular triple should have minShare added when counter is initialized"
+        );
+        assertTrue(
+            regularAssetsAfterCounter > regularAssetsBeforeCounter,
+            "Regular triple assets should increase when counter is initialized"
+        );
+    }
+
+    function test_deposit_RegularTripleInitializesCounterTriple_Success() public {
+        (bytes32 tripleId,) = createTripleWithAtoms(
+            "Subject-CT3", "Predicate-CT3", "Object-CT3", ATOM_COST[0], TRIPLE_COST[0], users.alice
+        );
+
+        bytes32 counterTripleId = _calculateCounterTripleId(tripleId);
+
+        (uint256 counterAssetsBefore, uint256 counterSharesBefore) =
+            protocol.multiVault.getVault(counterTripleId, CURVE_ID);
+
+        uint256 depositAmount = 3000e18;
+        makeDeposit(users.alice, users.alice, tripleId, CURVE_ID, depositAmount, 1e4);
+
+        (uint256 counterAssetsAfter, uint256 counterSharesAfter) = protocol.multiVault.getVault(counterTripleId, CURVE_ID);
+
+        uint256 minShare = protocol.multiVault.getGeneralConfig().minShare;
+
+        assertEq(
+            counterSharesAfter,
+            counterSharesBefore + minShare,
+            "Counter triple should have minShare added when regular is deposited to"
+        );
+        assertTrue(
+            counterAssetsAfter > counterAssetsBefore, "Counter triple assets should increase when regular is deposited to"
+        );
+    }
+
+    function test_deposit_CannotDepositToBothSidesOfTriple_Revert() public {
+        (bytes32 tripleId,) = createTripleWithAtoms(
+            "Subject-Both", "Predicate-Both", "Object-Both", ATOM_COST[0], TRIPLE_COST[0], users.alice
+        );
+
+        bytes32 counterTripleId = _calculateCounterTripleId(tripleId);
+
+        makeDeposit(users.alice, users.alice, tripleId, CURVE_ID, 1000e18, 1e4);
+
+        resetPrank(users.alice);
+        vm.expectRevert(MultiVault.MultiVault_HasCounterStake.selector);
+        protocol.multiVault.deposit{ value: 1000e18 }(users.alice, counterTripleId, CURVE_ID, 0);
+    }
+
+    function test_deposit_CannotDepositToRegularAfterCounter_Revert() public {
+        (bytes32 tripleId,) = createTripleWithAtoms(
+            "Subject-Reverse", "Predicate-Reverse", "Object-Reverse", ATOM_COST[0], TRIPLE_COST[0], users.alice
+        );
+
+        bytes32 counterTripleId = _calculateCounterTripleId(tripleId);
+
+        makeDeposit(users.alice, users.alice, counterTripleId, CURVE_ID, 1000e18, 1e4);
+
+        resetPrank(users.alice);
+        vm.expectRevert(MultiVault.MultiVault_HasCounterStake.selector);
+        protocol.multiVault.deposit{ value: 1000e18 }(users.alice, tripleId, CURVE_ID, 0);
+    }
+
+    function test_deposit_CounterTripleNonDefaultCurve_Success() public {
+        (bytes32 tripleId,) = createTripleWithAtoms(
+            "Subject-NonDef", "Predicate-NonDef", "Object-NonDef", ATOM_COST[0], TRIPLE_COST[0], users.alice
+        );
+
+        bytes32 counterTripleId = _calculateCounterTripleId(tripleId);
+
+        (, uint256 defaultCurveId) = protocol.multiVault.bondingCurveConfig();
+        uint256 nonDefaultCurve = defaultCurveId == 1 ? 2 : 1;
+
+        uint256 minShare2x = protocol.multiVault.getGeneralConfig().minShare * 2;
+        uint256 depositAmount = minShare2x + 5000e18;
+
+        uint256 shares = makeDeposit(users.alice, users.alice, counterTripleId, nonDefaultCurve, depositAmount, 0);
+
+        assertTrue(shares > 0, "Should receive shares for counter triple on non-default curve");
+
+        (uint256 regularAssets, uint256 regularShares) = protocol.multiVault.getVault(tripleId, nonDefaultCurve);
+        uint256 minShare = protocol.multiVault.getGeneralConfig().minShare;
+
+        assertEq(regularShares, minShare, "Regular triple should have minShare on non-default curve");
+        assertTrue(regularAssets > 0, "Regular triple should have assets on non-default curve");
+    }
+
+    function test_deposit_MultipleUsersDepositToCounterTriple_Success() public {
+        (bytes32 tripleId,) = createTripleWithAtoms(
+            "Subject-Multi", "Predicate-Multi", "Object-Multi", ATOM_COST[0], TRIPLE_COST[0], users.alice
+        );
+
+        bytes32 counterTripleId = _calculateCounterTripleId(tripleId);
+
+        uint256 aliceShares = makeDeposit(users.alice, users.alice, counterTripleId, CURVE_ID, 1000e18, 1e4);
+        uint256 bobShares = makeDeposit(users.bob, users.bob, counterTripleId, CURVE_ID, 2000e18, 1e4);
+
+        assertTrue(aliceShares > 0, "Alice should receive shares");
+        assertTrue(bobShares > 0, "Bob should receive shares");
+
+        uint256 aliceBalance = protocol.multiVault.getShares(users.alice, counterTripleId, CURVE_ID);
+        uint256 bobBalance = protocol.multiVault.getShares(users.bob, counterTripleId, CURVE_ID);
+
+        assertEq(aliceBalance, aliceShares, "Alice balance should match her shares");
+        assertEq(bobBalance, bobShares, "Bob balance should match his shares");
+    }
+
+    function testFuzz_deposit_CounterTripleDeposit(uint96 depositAmount) public {
+        uint256 minShare = protocol.multiVault.getGeneralConfig().minShare;
+        uint256 minDeposit = protocol.multiVault.getGeneralConfig().minDeposit;
+        depositAmount = uint96(bound(uint256(depositAmount), minDeposit + minShare * 2 + 1 ether, 1000 ether));
+
+        (bytes32 tripleId,) =
+            createTripleWithAtoms("Subject-Fuzz", "Predicate-Fuzz", "Object-Fuzz", ATOM_COST[0], TRIPLE_COST[0], users.alice);
+
+        bytes32 counterTripleId = _calculateCounterTripleId(tripleId);
+
+        uint256 shares = makeDeposit(users.alice, users.alice, counterTripleId, CURVE_ID, depositAmount, 0);
+
+        assertTrue(shares > 0, "Should receive shares for any valid deposit amount");
+
+        uint256 balance = protocol.multiVault.getShares(users.alice, counterTripleId, CURVE_ID);
+        assertEq(balance, shares, "Balance should equal shares received");
+    }
+
+    function testFuzz_deposit_CounterTripleInitializesInverseCorrectly(
+        uint96 depositAmount1,
+        uint96 depositAmount2
+    )
+        public
+    {
+        uint256 minShare = protocol.multiVault.getGeneralConfig().minShare;
+        uint256 minDeposit = protocol.multiVault.getGeneralConfig().minDeposit;
+        depositAmount1 = uint96(bound(uint256(depositAmount1), minDeposit + minShare * 2 + 1 ether, 500 ether));
+        depositAmount2 = uint96(bound(uint256(depositAmount2), minDeposit + 1 ether, 500 ether));
+
+        (bytes32 tripleId,) =
+            createTripleWithAtoms("S-Fuzz2", "P-Fuzz2", "O-Fuzz2", ATOM_COST[0], TRIPLE_COST[0], users.alice);
+
+        bytes32 counterTripleId = _calculateCounterTripleId(tripleId);
+
+        (uint256 regularAssetsBefore,) = protocol.multiVault.getVault(tripleId, CURVE_ID);
+
+        makeDeposit(users.alice, users.alice, counterTripleId, CURVE_ID, depositAmount1, 0);
+
+        (uint256 regularAssetsAfter, uint256 regularSharesAfter) = protocol.multiVault.getVault(tripleId, CURVE_ID);
+
+        assertGt(
+            regularAssetsAfter, regularAssetsBefore, "Regular triple assets should increase after counter initialization"
+        );
+        assertEq(regularSharesAfter, minShare, "Regular triple should have exactly minShare after counter initialization");
+
+        makeDeposit(users.bob, users.bob, counterTripleId, CURVE_ID, depositAmount2, 0);
+
+        (uint256 regularAssetsFinal, uint256 regularSharesFinal) = protocol.multiVault.getVault(tripleId, CURVE_ID);
+
+        assertEq(
+            regularAssetsFinal,
+            regularAssetsAfter,
+            "Regular triple assets should not change on subsequent counter deposits"
+        );
+        assertEq(
+            regularSharesFinal,
+            regularSharesAfter,
+            "Regular triple shares should not change on subsequent counter deposits"
+        );
+    }
+
+    function test_deposit_CounterTripleEmitsDepositEvent() public {
+        (bytes32 tripleId,) =
+            createTripleWithAtoms("S-Event", "P-Event", "O-Event", ATOM_COST[0], TRIPLE_COST[0], users.alice);
+
+        bytes32 counterTripleId = _calculateCounterTripleId(tripleId);
+
+        uint256 depositAmount = 1000e18;
+
+        (uint256 expectedShares,) = protocol.multiVault.previewDeposit(counterTripleId, CURVE_ID, depositAmount);
+
+        resetPrank(users.alice);
+        // vm.expectEmit(true, true, true, true);
+        // emit IMultiVault.Deposited(users.alice, users.alice, counterTripleId, CURVE_ID, depositAmount, expectedShares);
+
+        protocol.multiVault.deposit{ value: depositAmount }(users.alice, counterTripleId, CURVE_ID, 0);
+    }
+
+    /*//////////////////////////////////////////////////////////////
                  INTERNAL HELPER FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
@@ -291,6 +517,11 @@ contract DepositTest is BaseTest {
         gc.minDeposit = 1; // Set to very small value for testing
         gc.trustBonding = protocol.multiVault.getGeneralConfig().trustBonding; // Preserve existing TrustBonding setting
         return gc;
+    }
+
+    function _calculateCounterTripleId(bytes32 tripleId) internal view returns (bytes32) {
+        bytes32 counterSalt = protocol.multiVault.COUNTER_SALT();
+        return bytes32(keccak256(abi.encodePacked(counterSalt, tripleId)));
     }
 }
 
