@@ -41,6 +41,11 @@ interface IBaseEmissionsController {
      */
     event TrustBurned(address indexed from, uint256 amount);
 
+    /**
+     * @notice Event emitted when ETH is withdrawn from the contract
+     * @param to Address that received the withdrawn ETH
+     * @param amount Amount of ETH withdrawn
+     */
     event Transfer(address indexed from, address indexed to, uint256 amount);
 
     /* =================================================== */

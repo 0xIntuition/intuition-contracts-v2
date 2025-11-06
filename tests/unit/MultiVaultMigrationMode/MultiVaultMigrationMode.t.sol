@@ -239,13 +239,10 @@ contract MultiVaultMigrationModeTest is BaseTest {
         address[] memory users_array = new address[](1);
         users_array[0] = users.alice;
 
-        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
-            .BatchSetUserBalancesParams({
-            termIds: termIds,
-            bondingCurveId: 1,
-            users: users_array,
-            userBalances: userBalances
-        });
+        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params =
+            MultiVaultMigrationMode.BatchSetUserBalancesParams({
+                termIds: termIds, bondingCurveId: 1, users: users_array, userBalances: userBalances
+            });
 
         vm.expectRevert();
         vm.prank(users.alice);
@@ -472,13 +469,10 @@ contract MultiVaultMigrationModeTest is BaseTest {
             VaultType.ATOM
         );
 
-        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
-            .BatchSetUserBalancesParams({
-            termIds: termIds,
-            bondingCurveId: 1,
-            users: users_array,
-            userBalances: userBalances
-        });
+        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params =
+            MultiVaultMigrationMode.BatchSetUserBalancesParams({
+                termIds: termIds, bondingCurveId: 1, users: users_array, userBalances: userBalances
+            });
 
         vm.prank(users.admin);
         multiVaultMigrationMode.batchSetUserBalances(params);
@@ -500,13 +494,10 @@ contract MultiVaultMigrationModeTest is BaseTest {
         address[] memory users_array = new address[](1);
         users_array[0] = users.alice;
 
-        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
-            .BatchSetUserBalancesParams({
-            termIds: termIds,
-            bondingCurveId: 0,
-            users: users_array,
-            userBalances: userBalances
-        });
+        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params =
+            MultiVaultMigrationMode.BatchSetUserBalancesParams({
+                termIds: termIds, bondingCurveId: 0, users: users_array, userBalances: userBalances
+            });
 
         vm.expectRevert(abi.encodeWithSelector(MultiVaultMigrationMode.MultiVault_InvalidBondingCurveId.selector));
         vm.prank(users.admin);
@@ -525,13 +516,10 @@ contract MultiVaultMigrationModeTest is BaseTest {
         address[] memory users_array = new address[](1);
         users_array[0] = address(0);
 
-        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
-            .BatchSetUserBalancesParams({
-            termIds: termIds,
-            bondingCurveId: 1,
-            users: users_array,
-            userBalances: userBalances
-        });
+        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params =
+            MultiVaultMigrationMode.BatchSetUserBalancesParams({
+                termIds: termIds, bondingCurveId: 1, users: users_array, userBalances: userBalances
+            });
 
         vm.expectRevert(abi.encodeWithSelector(MultiVaultMigrationMode.MultiVault_ZeroAddress.selector));
         vm.prank(users.admin);
@@ -552,13 +540,10 @@ contract MultiVaultMigrationModeTest is BaseTest {
         address[] memory users_array = new address[](1);
         users_array[0] = users.alice;
 
-        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
-            .BatchSetUserBalancesParams({
-            termIds: termIds,
-            bondingCurveId: 1,
-            users: users_array,
-            userBalances: userBalances
-        });
+        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params =
+            MultiVaultMigrationMode.BatchSetUserBalancesParams({
+                termIds: termIds, bondingCurveId: 1, users: users_array, userBalances: userBalances
+            });
 
         vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_InvalidArrayLength.selector));
         vm.prank(users.admin);
@@ -578,13 +563,10 @@ contract MultiVaultMigrationModeTest is BaseTest {
         address[] memory users_array = new address[](1);
         users_array[0] = users.alice;
 
-        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
-            .BatchSetUserBalancesParams({
-            termIds: termIds,
-            bondingCurveId: 1,
-            users: users_array,
-            userBalances: userBalances
-        });
+        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params =
+            MultiVaultMigrationMode.BatchSetUserBalancesParams({
+                termIds: termIds, bondingCurveId: 1, users: users_array, userBalances: userBalances
+            });
 
         vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_InvalidArrayLength.selector));
         vm.prank(users.admin);
@@ -596,13 +578,10 @@ contract MultiVaultMigrationModeTest is BaseTest {
         uint256[][] memory userBalances = new uint256[][](0);
         address[] memory users_array = new address[](0);
 
-        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
-            .BatchSetUserBalancesParams({
-            termIds: termIds,
-            bondingCurveId: 1,
-            users: users_array,
-            userBalances: userBalances
-        });
+        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params =
+            MultiVaultMigrationMode.BatchSetUserBalancesParams({
+                termIds: termIds, bondingCurveId: 1, users: users_array, userBalances: userBalances
+            });
 
         vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_InvalidArrayLength.selector));
         vm.prank(users.admin);
@@ -622,13 +601,10 @@ contract MultiVaultMigrationModeTest is BaseTest {
         users_array[0] = users.alice;
         users_array[1] = users.bob;
 
-        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
-            .BatchSetUserBalancesParams({
-            termIds: termIds,
-            bondingCurveId: 1,
-            users: users_array,
-            userBalances: userBalances
-        });
+        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params =
+            MultiVaultMigrationMode.BatchSetUserBalancesParams({
+                termIds: termIds, bondingCurveId: 1, users: users_array, userBalances: userBalances
+            });
 
         vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_InvalidArrayLength.selector));
         vm.prank(users.admin);
@@ -666,13 +642,10 @@ contract MultiVaultMigrationModeTest is BaseTest {
         users_array[0] = users.alice;
         users_array[1] = users.bob;
 
-        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
-            .BatchSetUserBalancesParams({
-            termIds: termIds,
-            bondingCurveId: 1,
-            users: users_array,
-            userBalances: userBalances
-        });
+        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params =
+            MultiVaultMigrationMode.BatchSetUserBalancesParams({
+                termIds: termIds, bondingCurveId: 1, users: users_array, userBalances: userBalances
+            });
 
         vm.prank(users.admin);
         multiVaultMigrationMode.batchSetUserBalances(params);
@@ -716,13 +689,10 @@ contract MultiVaultMigrationModeTest is BaseTest {
         address[] memory users_array = new address[](1);
         users_array[0] = users.alice;
 
-        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
-            .BatchSetUserBalancesParams({
-            termIds: termIds,
-            bondingCurveId: 1,
-            users: users_array,
-            userBalances: userBalances
-        });
+        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params =
+            MultiVaultMigrationMode.BatchSetUserBalancesParams({
+                termIds: termIds, bondingCurveId: 1, users: users_array, userBalances: userBalances
+            });
 
         vm.prank(users.admin);
         multiVaultMigrationMode.batchSetUserBalances(params);
@@ -764,13 +734,10 @@ contract MultiVaultMigrationModeTest is BaseTest {
         users_array[0] = users.alice;
         users_array[1] = users.bob;
 
-        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
-            .BatchSetUserBalancesParams({
-            termIds: termIds,
-            bondingCurveId: 1,
-            users: users_array,
-            userBalances: userBalances
-        });
+        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params =
+            MultiVaultMigrationMode.BatchSetUserBalancesParams({
+                termIds: termIds, bondingCurveId: 1, users: users_array, userBalances: userBalances
+            });
 
         vm.prank(users.admin);
         multiVaultMigrationMode.batchSetUserBalances(params);
@@ -1009,13 +976,10 @@ contract MultiVaultMigrationModeTest is BaseTest {
         address[] memory users_array = new address[](1);
         users_array[0] = users.alice;
 
-        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params = MultiVaultMigrationMode
-            .BatchSetUserBalancesParams({
-            termIds: termIds,
-            bondingCurveId: 1,
-            users: users_array,
-            userBalances: userBalances
-        });
+        MultiVaultMigrationMode.BatchSetUserBalancesParams memory params =
+            MultiVaultMigrationMode.BatchSetUserBalancesParams({
+                termIds: termIds, bondingCurveId: 1, users: users_array, userBalances: userBalances
+            });
 
         vm.prank(users.admin);
         multiVaultMigrationMode.batchSetUserBalances(params);

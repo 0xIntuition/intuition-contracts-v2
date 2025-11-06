@@ -292,9 +292,8 @@ contract MultiVault is
     /// @inheritdoc IMultiVault
     function currentSharePrice(bytes32 termId, uint256 curveId) external view returns (uint256) {
         VaultState storage vaultState = _vaults[termId][curveId];
-        return IBondingCurveRegistry(bondingCurveConfig.registry).currentPrice(
-            curveId, vaultState.totalShares, vaultState.totalAssets
-        );
+        return IBondingCurveRegistry(bondingCurveConfig.registry)
+            .currentPrice(curveId, vaultState.totalShares, vaultState.totalAssets);
     }
 
     /// @inheritdoc IMultiVault
@@ -643,13 +642,7 @@ contract MultiVault is
     /// @param tripleId The ID of the triple
     /// @param counterTripleId The ID of the counter triple
     /// @param _atomsArray The array of atom IDs that make up the triple
-    function _initializeTripleState(
-        bytes32 tripleId,
-        bytes32 counterTripleId,
-        bytes32[3] memory _atomsArray
-    )
-        internal
-    {
+    function _initializeTripleState(bytes32 tripleId, bytes32 counterTripleId, bytes32[3] memory _atomsArray) internal {
         _triples[tripleId] = _atomsArray;
         _isTriple[tripleId] = true;
 
@@ -1174,9 +1167,13 @@ contract MultiVault is
         // If it's an initial deposit into a non-default curve vault, we calculate user's shares as if minShare was
         // already minted
         uint256 shares = _isNewVault(termId, curveId)
-            ? IBondingCurveRegistry(bondingCurveConfig.registry).previewDeposit(
-                assetsAfterFees, _minAssetsForCurve(curveId, generalConfig.minShare), generalConfig.minShare, curveId
-            )
+            ? IBondingCurveRegistry(bondingCurveConfig.registry)
+                .previewDeposit(
+                    assetsAfterFees,
+                    _minAssetsForCurve(curveId, generalConfig.minShare),
+                    generalConfig.minShare,
+                    curveId
+                )
             : _convertToShares(termId, curveId, assetsAfterFees);
         return (shares, assetsAfterMinSharesCost, assetsAfterFees);
     }
@@ -1248,9 +1245,13 @@ contract MultiVault is
         // If it's an initial deposit into a non-default curve vault, we calculate user's shares as if minShare was
         // already minted
         uint256 shares = _isNewVault(termId, curveId)
-            ? IBondingCurveRegistry(bondingCurveConfig.registry).previewDeposit(
-                assetsAfterFees, _minAssetsForCurve(curveId, generalConfig.minShare), generalConfig.minShare, curveId
-            )
+            ? IBondingCurveRegistry(bondingCurveConfig.registry)
+                .previewDeposit(
+                    assetsAfterFees,
+                    _minAssetsForCurve(curveId, generalConfig.minShare),
+                    generalConfig.minShare,
+                    curveId
+                )
             : _convertToShares(termId, curveId, assetsAfterFees);
         return (shares, assetsAfterMinSharesCost, assetsAfterFees);
     }

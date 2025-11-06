@@ -430,7 +430,7 @@ contract CoreEmissionsControllerTest is CoreEmissionsControllerBase {
         );
 
         uint256 YEARS = 399; // practical time horizon we care about (test runs show that emissions zero out after ~400
-            // years)
+        // years)
         uint256 EPOCHS_PER_CLIFF = 26; // bi-weekly scenario => 1 year per cliff
 
         uint256 last = type(uint256).max;

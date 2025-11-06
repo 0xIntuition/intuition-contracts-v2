@@ -2,7 +2,7 @@ import { ethers } from "ethers";
 
 async function main() {
   // Constants for the TimelockController and schedule parameters
-  const timelockControllerAddress = "0xE4992f9805D7737b5bDaDBEF5688087CF25D4B89"; // Target TimelockController contract address
+  const timelockControllerAddress = "0x1E442BbB08c98100b18fa830a88E8A57b5dF9157"; // Target TimelockController contract address
   const target = timelockControllerAddress; // TimelockController itself is the target when updating min delay
   const value = 0;
   const predecessor = "0x0000000000000000000000000000000000000000000000000000000000000000";
@@ -11,7 +11,7 @@ async function main() {
   if (!ethers.utils.isAddress(timelockControllerAddress)) {
     throw new Error("Invalid TimelockController address.");
   }
-  
+
   const rpcUrl = process.argv[2];
 
   // Initialize the provider
