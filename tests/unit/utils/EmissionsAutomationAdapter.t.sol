@@ -90,7 +90,7 @@ contract EmissionsAutomationAdapterTest is BaseTest {
     }
 
     /* =================================================== */
-    /*         MINTANDBRIDGECURRENTEPOCHIFNEEDED TESTS     */
+    /*         mintAndBridgeCurrentEpochIfNeeded TESTS     */
     /* =================================================== */
 
     function test_mintAndBridgeCurrentEpochIfNeeded_successful() external {
@@ -187,7 +187,7 @@ contract EmissionsAutomationAdapterTest is BaseTest {
     }
 
     /* =================================================== */
-    /*                 SHOULDMINT TESTS                    */
+    /*                 shouldMint TESTS                    */
     /* =================================================== */
 
     function test_shouldMint_returnsTrueWhenMintingIsNeeded() external {
