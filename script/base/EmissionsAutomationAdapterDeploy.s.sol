@@ -50,9 +50,9 @@ contract EmissionsAutomationAdapterDeploy is SetupScript {
 
         if (block.chainid == NETWORK_ANVIL) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("ANVIL_BASE_EMISSIONS_CONTROLLER");
-        } else if (block.chainid == NETWORK_INTUITION_SEPOLIA) {
+        } else if (block.chainid == NETWORK_BASE_SEPOLIA) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("BASE_SEPOLIA_BASE_EMISSIONS_CONTROLLER");
-        } else if (block.chainid == NETWORK_INTUITION) {
+        } else if (block.chainid == NETWORK_BASE) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("BASE_MAINNET_BASE_EMISSIONS_CONTROLLER");
         } else {
             revert("Unsupported chain for EmissionsAutomationAdapter deployment");
