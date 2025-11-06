@@ -191,10 +191,7 @@ contract OffsetProgressiveCurve is BaseCurve {
     }
 
     /// @inheritdoc BaseCurve
-    function currentPrice(
-        uint256 totalShares,
-        uint256 totalAssets
-    )
+    function currentPrice(uint256 totalShares, uint256 totalAssets)
         external
         view
         override

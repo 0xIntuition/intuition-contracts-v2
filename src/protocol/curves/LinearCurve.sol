@@ -162,10 +162,7 @@ contract LinearCurve is BaseCurve {
     }
 
     /// @inheritdoc BaseCurve
-    function currentPrice(
-        uint256 totalShares,
-        uint256 totalAssets
-    )
+    function currentPrice(uint256 totalShares, uint256 totalAssets)
         external
         pure
         override

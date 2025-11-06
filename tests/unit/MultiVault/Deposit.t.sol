@@ -12,6 +12,7 @@ import { GeneralConfig, BondingCurveConfig, VaultFees } from "src/interfaces/IMu
 
 contract DepositTest is BaseTest {
     uint256 internal CURVE_ID; // Default linear curve ID
+    uint256 internal NON_DEFAULT_CURVE_ID; // Offset progressive curve ID
     /*//////////////////////////////////////////////////////////////
                             HAPPY PATH TESTS
     //////////////////////////////////////////////////////////////*/
@@ -19,7 +20,8 @@ contract DepositTest is BaseTest {
     function setUp() public override {
         super.setUp();
         // Ensure the bonding curve registry is set up
-        CURVE_ID = getDefaultCurveId();
+        CURVE_ID = getDefaultCurveId(); // linear curve
+        NON_DEFAULT_CURVE_ID = CURVE_ID + 1; // offset progressive = 2 in our setup
     }
 
     function test_deposit_SingleAtom_Success() public {
@@ -308,13 +310,13 @@ contract DepositTest is BaseTest {
         bytes32 counterTripleId = _calculateCounterTripleId(tripleId);
 
         (uint256 regularAssetsBeforeCounter, uint256 regularSharesBeforeCounter) =
-            protocol.multiVault.getVault(tripleId, CURVE_ID);
+            protocol.multiVault.getVault(tripleId, NON_DEFAULT_CURVE_ID);
 
         uint256 depositAmount = 2000e18;
-        makeDeposit(users.alice, users.alice, counterTripleId, CURVE_ID, depositAmount, 1e4);
+        makeDeposit(users.alice, users.alice, counterTripleId, NON_DEFAULT_CURVE_ID, depositAmount, 1e4);
 
         (uint256 regularAssetsAfterCounter, uint256 regularSharesAfterCounter) =
-            protocol.multiVault.getVault(tripleId, CURVE_ID);
+            protocol.multiVault.getVault(tripleId, NON_DEFAULT_CURVE_ID);
 
         uint256 minShare = protocol.multiVault.getGeneralConfig().minShare;
 
@@ -337,13 +339,13 @@ contract DepositTest is BaseTest {
         bytes32 counterTripleId = _calculateCounterTripleId(tripleId);
 
         (uint256 counterAssetsBefore, uint256 counterSharesBefore) =
-            protocol.multiVault.getVault(counterTripleId, CURVE_ID);
+            protocol.multiVault.getVault(counterTripleId, NON_DEFAULT_CURVE_ID);
 
         uint256 depositAmount = 3000e18;
-        makeDeposit(users.alice, users.alice, tripleId, CURVE_ID, depositAmount, 1e4);
+        makeDeposit(users.alice, users.alice, tripleId, NON_DEFAULT_CURVE_ID, depositAmount, 1e4);
 
         (uint256 counterAssetsAfter, uint256 counterSharesAfter) =
-            protocol.multiVault.getVault(counterTripleId, CURVE_ID);
+            protocol.multiVault.getVault(counterTripleId, NON_DEFAULT_CURVE_ID);
 
         uint256 minShare = protocol.multiVault.getGeneralConfig().minShare;
 
@@ -465,11 +467,12 @@ contract DepositTest is BaseTest {
 
         bytes32 counterTripleId = _calculateCounterTripleId(tripleId);
 
-        (uint256 regularAssetsBefore,) = protocol.multiVault.getVault(tripleId, CURVE_ID);
+        (uint256 regularAssetsBefore,) = protocol.multiVault.getVault(tripleId, NON_DEFAULT_CURVE_ID);
 
-        makeDeposit(users.alice, users.alice, counterTripleId, CURVE_ID, depositAmount1, 0);
+        makeDeposit(users.alice, users.alice, counterTripleId, NON_DEFAULT_CURVE_ID, depositAmount1, 0);
 
-        (uint256 regularAssetsAfter, uint256 regularSharesAfter) = protocol.multiVault.getVault(tripleId, CURVE_ID);
+        (uint256 regularAssetsAfter, uint256 regularSharesAfter) =
+            protocol.multiVault.getVault(tripleId, NON_DEFAULT_CURVE_ID);
 
         assertGt(
             regularAssetsAfter,
@@ -480,9 +483,10 @@ contract DepositTest is BaseTest {
             regularSharesAfter, minShare, "Regular triple should have exactly minShare after counter initialization"
         );
 
-        makeDeposit(users.bob, users.bob, counterTripleId, CURVE_ID, depositAmount2, 0);
+        makeDeposit(users.bob, users.bob, counterTripleId, NON_DEFAULT_CURVE_ID, depositAmount2, 0);
 
-        (uint256 regularAssetsFinal, uint256 regularSharesFinal) = protocol.multiVault.getVault(tripleId, CURVE_ID);
+        (uint256 regularAssetsFinal, uint256 regularSharesFinal) =
+            protocol.multiVault.getVault(tripleId, NON_DEFAULT_CURVE_ID);
 
         assertEq(
             regularAssetsFinal,
@@ -592,7 +596,7 @@ contract DefaultCurveEntryFeeImpactTest is BaseTest {
 
         // expected fee drip = ceil(secondAmt * entryFeeBps / feeDenominator)
         (uint256 entryFeeBps,, uint256 protocolFeeBps, uint256 feeDen) = _readVaultFees(); // we’ll write helper below
-            // to fetch fees
+        // to fetch fees
 
         uint256 expectedDrip = _mulDivUp(secondAmt, entryFeeBps, feeDen);
 

@@ -475,27 +475,11 @@ abstract contract BaseTest is Modifiers, Test {
         return protocol.multiVault.getAtomCost();
     }
 
-    function convertToShares(
-        uint256 assets,
-        bytes32 termId,
-        uint256 bondingCurveId
-    )
-        internal
-        view
-        returns (uint256)
-    {
+    function convertToShares(uint256 assets, bytes32 termId, uint256 bondingCurveId) internal view returns (uint256) {
         return protocol.multiVault.convertToShares(termId, bondingCurveId, assets);
     }
 
-    function convertToAssets(
-        uint256 shares,
-        bytes32 termId,
-        uint256 bondingCurveId
-    )
-        internal
-        view
-        returns (uint256)
-    {
+    function convertToAssets(uint256 shares, bytes32 termId, uint256 bondingCurveId) internal view returns (uint256) {
         return protocol.multiVault.convertToAssets(termId, bondingCurveId, shares);
     }
 

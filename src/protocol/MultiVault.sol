@@ -640,13 +640,7 @@ contract MultiVault is
     /// @param tripleId The ID of the triple
     /// @param counterTripleId The ID of the counter triple
     /// @param _atomsArray The array of atom IDs that make up the triple
-    function _initializeTripleState(
-        bytes32 tripleId,
-        bytes32 counterTripleId,
-        bytes32[3] memory _atomsArray
-    )
-        internal
-    {
+    function _initializeTripleState(bytes32 tripleId, bytes32 counterTripleId, bytes32[3] memory _atomsArray) internal {
         _triples[tripleId] = _atomsArray;
         _isTriple[tripleId] = true;
 
@@ -1193,14 +1187,7 @@ contract MultiVault is
     /// @return shares the number of shares that would be minted for the deposit
     /// @return assetsAfterFixedFees the assets remaining after fixed fees (atom/triple cost)
     /// @return assetsAfterFees the assets remaining after all fees
-    function _calculateTripleCreate(
-        bytes32 termId,
-        uint256 assets
-    )
-        internal
-        view
-        returns (uint256, uint256, uint256)
-    {
+    function _calculateTripleCreate(bytes32 termId, uint256 assets) internal view returns (uint256, uint256, uint256) {
         uint256 curveId = bondingCurveConfig.defaultCurveId;
         uint256 tripleCost = _getTripleCost();
 
@@ -1370,15 +1357,7 @@ contract MultiVault is
     /// @param predicateId the predicate atom ID
     /// @param objectId the object atom ID
     /// @notice reverts if the triple already exists
-    function _tripleExists(
-        bytes32 termId,
-        bytes32 subjectId,
-        bytes32 predicateId,
-        bytes32 objectId
-    )
-        internal
-        view
-    {
+    function _tripleExists(bytes32 termId, bytes32 subjectId, bytes32 predicateId, bytes32 objectId) internal view {
         if (_triples[termId][0] != bytes32(0)) {
             revert MultiVault_TripleExists(termId, subjectId, predicateId, objectId);
         }
@@ -1437,13 +1416,7 @@ contract MultiVault is
     /// @param inverseTripleId the ID of the inverse triple (counter or regular)
     /// @param curveId the bonding curve ID
     /// @param vaultType the vault type of the inverse triple vault
-    function _initializeInverseTripleVault(
-        bytes32 inverseTripleId,
-        uint256 curveId,
-        VaultType vaultType
-    )
-        internal
-    {
+    function _initializeInverseTripleVault(bytes32 inverseTripleId, uint256 curveId, VaultType vaultType) internal {
         VaultState storage vaultState = _vaults[inverseTripleId][curveId];
         uint256 minShare = generalConfig.minShare;
 
