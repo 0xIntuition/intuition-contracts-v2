@@ -105,10 +105,12 @@ contract EmissionsAutomationAdapter is AccessControl, ReentrancyGuard, Automatio
         external
         view
         override
-        returns (bool upkeepNeeded, bytes memory performData)
+        returns (
+            bool upkeepNeeded,
+            bytes memory /* performData */
+        )
     {
         upkeepNeeded = _shouldMint();
-        performData = bytes("");
     }
 
     /* =================================================== */
