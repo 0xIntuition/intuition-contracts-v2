@@ -229,7 +229,7 @@ contract IntuitionDeployAndSetup is SetupScript {
             TrustBonding.initialize.selector,
             ADMIN, // owner
             address(ADMIN), // temporary assign admin as the timelock address to be able to set initial MultiVault
-                // address without timelock delay
+            // address without timelock delay
             address(trust), // WTRUST token
             BONDING_EPOCH_LENGTH, // epochLength
             address(satelliteEmissionsController),
@@ -249,9 +249,8 @@ contract IntuitionDeployAndSetup is SetupScript {
             satelliteEmissionsController.setTrustBonding(address(trustBonding));
 
             // Grant CONTROLLER_ROLE to TrustBonding in SatelliteEmissionsController
-            IAccessControl(address(satelliteEmissionsController)).grantRole(
-                satelliteEmissionsController.CONTROLLER_ROLE(), address(trustBonding)
-            );
+            IAccessControl(address(satelliteEmissionsController))
+                .grantRole(satelliteEmissionsController.CONTROLLER_ROLE(), address(trustBonding));
             console2.log("CONTROLLER_ROLE in SatelliteEmissionsController granted to TrustBonding");
         }
 
@@ -308,8 +307,7 @@ contract IntuitionDeployAndSetup is SetupScript {
         });
 
         atomConfig = AtomConfig({
-            atomCreationProtocolFee: ATOM_CREATION_PROTOCOL_FEE,
-            atomWalletDepositFee: ATOM_WALLET_DEPOSIT_FEE
+            atomCreationProtocolFee: ATOM_CREATION_PROTOCOL_FEE, atomWalletDepositFee: ATOM_WALLET_DEPOSIT_FEE
         });
 
         tripleConfig = TripleConfig({

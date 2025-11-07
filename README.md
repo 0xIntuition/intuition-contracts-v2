@@ -189,3 +189,41 @@ Example:
 ```bash
 npx tsx script/upgrades/generate-timelock-upgrade-and-call-calldata.ts "https://mainnet.base.org" "0x000000000000000000000000000000000000dEaD" "0x000000000000000000000000000000000000dEaD" "0x"
 ```
+
+# Deployed Contracts
+
+## Mainnet
+
+### Base Mainnet
+
+| Contract Name  | Address                                    | ProxyAdmin                                  |
+|----------------|--------------------------------------------|---------------------------------------------|
+| A              | 0x6cd905dF2Ed214b22e0d48FF17CD4200C1C6d8A3 | 0x                                          |
+| A              | 0x | 0x                                          |
+| A              | 0x | 0x                                          |
+
+### Intuition Mainnet
+
+| Contract Name  | Address                                    | ProxyAdmin                                  |
+|----------------|--------------------------------------------|---------------------------------------------|
+| A              | 0x | 0x                                          |
+| A              | 0x | 0x                                          |
+| A              | 0x | 0x                                          |
+
+## Testnet
+
+### Base Sepolia
+
+| Contract Name  | Address                                    | ProxyAdmin                                  |
+|----------------|--------------------------------------------|---------------------------------------------|
+| A              | 0x | 0x                                          |
+| A              | 0x | 0x                                          |
+| A              | 0x | 0x                                          |
+
+### Intuition Testnet
+
+| Contract Name  | Address                                    | ProxyAdmin                                  |
+|----------------|--------------------------------------------|---------------------------------------------|
+| A              | 0x | 0x                                          |
+| A              | 0x | 0x                                          |
+| A              | 0x | 0x                                          |
