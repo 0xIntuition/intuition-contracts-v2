@@ -449,4 +449,283 @@ contract EmissionsAutomationAdapterTest is BaseTest {
             assertFalse(adapter.shouldMint());
         }
     }
+
+    /* =================================================== */
+    /*                 checkUpkeep TESTS                   */
+    /* =================================================== */
+
+    function test_checkUpkeep_returnsTrueWhenMintingIsNeeded() external {
+        baseEmissionsControllerMock.setCurrentEpoch(5);
+        baseEmissionsControllerMock.setEpochMintedAmount(5, 0);
+
+        (bool upkeepNeeded, bytes memory performData) = adapter.checkUpkeep("");
+
+        assertTrue(upkeepNeeded);
+        assertEq(performData.length, 0);
+    }
+
+    function test_checkUpkeep_returnsFalseWhenMintingIsNotNeeded() external {
+        baseEmissionsControllerMock.setCurrentEpoch(5);
+        baseEmissionsControllerMock.setEpochMintedAmount(5, 1000 ether);
+
+        (bool upkeepNeeded, bytes memory performData) = adapter.checkUpkeep("");
+
+        assertFalse(upkeepNeeded);
+        assertEq(performData.length, 0);
+    }
+
+    function test_checkUpkeep_returnsFalseWhenEpochPartiallyMinted() external {
+        baseEmissionsControllerMock.setCurrentEpoch(5);
+        baseEmissionsControllerMock.setEpochMintedAmount(5, 1);
+
+        (bool upkeepNeeded, bytes memory performData) = adapter.checkUpkeep("");
+
+        assertFalse(upkeepNeeded);
+        assertEq(performData.length, 0);
+    }
+
+    function test_checkUpkeep_withArbitraryCheckData() external {
+        baseEmissionsControllerMock.setCurrentEpoch(5);
+        baseEmissionsControllerMock.setEpochMintedAmount(5, 0);
+
+        bytes memory checkData = abi.encode(uint256(123), address(0x123));
+        (bool upkeepNeeded, bytes memory performData) = adapter.checkUpkeep(checkData);
+
+        assertTrue(upkeepNeeded);
+        assertEq(performData.length, 0);
+    }
+
+    function test_checkUpkeep_consistentWithShouldMint() external {
+        baseEmissionsControllerMock.setCurrentEpoch(7);
+        baseEmissionsControllerMock.setEpochMintedAmount(7, 0);
+
+        bool shouldMintResult = adapter.shouldMint();
+        (bool upkeepNeeded,) = adapter.checkUpkeep("");
+
+        assertEq(upkeepNeeded, shouldMintResult);
+    }
+
+    function testFuzz_checkUpkeep_returnsTrueWhenMintingIsNeeded(uint256 epoch) external {
+        epoch = bound(epoch, 1, type(uint128).max);
+
+        baseEmissionsControllerMock.setCurrentEpoch(epoch);
+        baseEmissionsControllerMock.setEpochMintedAmount(epoch, 0);
+
+        (bool upkeepNeeded, bytes memory performData) = adapter.checkUpkeep("");
+
+        assertTrue(upkeepNeeded);
+        assertEq(performData.length, 0);
+    }
+
+    function testFuzz_checkUpkeep_returnsFalseWhenMintingIsNotNeeded(uint256 epoch, uint256 mintedAmount) external {
+        epoch = bound(epoch, 1, type(uint128).max);
+        mintedAmount = bound(mintedAmount, 1, type(uint128).max);
+
+        baseEmissionsControllerMock.setCurrentEpoch(epoch);
+        baseEmissionsControllerMock.setEpochMintedAmount(epoch, mintedAmount);
+
+        (bool upkeepNeeded, bytes memory performData) = adapter.checkUpkeep("");
+
+        assertFalse(upkeepNeeded);
+        assertEq(performData.length, 0);
+    }
+
+    function testFuzz_checkUpkeep_withVariousCheckData(bytes calldata checkData) external {
+        baseEmissionsControllerMock.setCurrentEpoch(5);
+        baseEmissionsControllerMock.setEpochMintedAmount(5, 0);
+
+        (bool upkeepNeeded, bytes memory performData) = adapter.checkUpkeep(checkData);
+
+        assertTrue(upkeepNeeded);
+        assertEq(performData.length, 0);
+    }
+
+    /* =================================================== */
+    /*                 performUpkeep TESTS                 */
+    /* =================================================== */
+
+    function test_performUpkeep_successful() external {
+        baseEmissionsControllerMock.setCurrentEpoch(5);
+        baseEmissionsControllerMock.setEpochMintedAmount(5, 0);
+
+        vm.expectEmit(true, true, true, true);
+        emit AutomationMintedAndBridged(5, 1000 ether);
+
+        vm.prank(upkeeper);
+        adapter.performUpkeep("");
+
+        assertTrue(baseEmissionsControllerMock.mintAndBridgeCurrentEpochCalled());
+        assertEq(baseEmissionsControllerMock.mintAndBridgeCallCount(), 1);
+    }
+
+    function test_performUpkeep_noOpWhenAlreadyMinted() external {
+        baseEmissionsControllerMock.setCurrentEpoch(5);
+        baseEmissionsControllerMock.setEpochMintedAmount(5, 1000 ether);
+
+        vm.prank(upkeeper);
+        adapter.performUpkeep("");
+
+        assertFalse(baseEmissionsControllerMock.mintAndBridgeCurrentEpochCalled());
+        assertEq(baseEmissionsControllerMock.mintAndBridgeCallCount(), 0);
+    }
+
+    function test_performUpkeep_revertsOnUnauthorizedCaller() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, unauthorized, UPKEEP_ROLE)
+        );
+
+        vm.prank(unauthorized);
+        adapter.performUpkeep("");
+    }
+
+    function test_performUpkeep_emitsEventWithCorrectParameters() external {
+        baseEmissionsControllerMock.setCurrentEpoch(10);
+        baseEmissionsControllerMock.setEpochMintedAmount(10, 0);
+
+        vm.expectEmit(true, true, true, true);
+        emit AutomationMintedAndBridged(10, 1000 ether);
+
+        vm.prank(upkeeper);
+        adapter.performUpkeep("");
+    }
+
+    function test_performUpkeep_withArbitraryPerformData() external {
+        baseEmissionsControllerMock.setCurrentEpoch(5);
+        baseEmissionsControllerMock.setEpochMintedAmount(5, 0);
+
+        bytes memory performData = abi.encode(uint256(123), address(0x123));
+
+        vm.expectEmit(true, true, true, true);
+        emit AutomationMintedAndBridged(5, 1000 ether);
+
+        vm.prank(upkeeper);
+        adapter.performUpkeep(performData);
+
+        assertTrue(baseEmissionsControllerMock.mintAndBridgeCurrentEpochCalled());
+    }
+
+    function test_performUpkeep_multipleCallsInSameEpoch() external {
+        baseEmissionsControllerMock.setCurrentEpoch(1);
+        baseEmissionsControllerMock.setEpochMintedAmount(1, 0);
+
+        vm.prank(upkeeper);
+        adapter.performUpkeep("");
+
+        assertEq(baseEmissionsControllerMock.mintAndBridgeCallCount(), 1);
+
+        vm.prank(upkeeper);
+        adapter.performUpkeep("");
+
+        assertEq(baseEmissionsControllerMock.mintAndBridgeCallCount(), 1);
+    }
+
+    function test_performUpkeep_protectedAgainstReentrancy() external {
+        baseEmissionsControllerMock.setCurrentEpoch(1);
+        baseEmissionsControllerMock.setEpochMintedAmount(1, 0);
+
+        vm.prank(upkeeper);
+        adapter.performUpkeep("");
+
+        assertEq(baseEmissionsControllerMock.mintAndBridgeCallCount(), 1);
+    }
+
+    function testFuzz_performUpkeep_successful(uint256 epoch) external {
+        epoch = bound(epoch, 1, type(uint128).max);
+
+        baseEmissionsControllerMock.setCurrentEpoch(epoch);
+        baseEmissionsControllerMock.setEpochMintedAmount(epoch, 0);
+
+        vm.expectEmit(true, true, true, true);
+        emit AutomationMintedAndBridged(epoch, 1000 ether);
+
+        vm.prank(upkeeper);
+        adapter.performUpkeep("");
+
+        assertTrue(baseEmissionsControllerMock.mintAndBridgeCurrentEpochCalled());
+    }
+
+    function testFuzz_performUpkeep_noOpWhenAlreadyMinted(uint256 epoch, uint256 mintedAmount) external {
+        epoch = bound(epoch, 1, type(uint128).max);
+        mintedAmount = bound(mintedAmount, 1, type(uint128).max);
+
+        baseEmissionsControllerMock.setCurrentEpoch(epoch);
+        baseEmissionsControllerMock.setEpochMintedAmount(epoch, mintedAmount);
+
+        vm.prank(upkeeper);
+        adapter.performUpkeep("");
+
+        assertFalse(baseEmissionsControllerMock.mintAndBridgeCurrentEpochCalled());
+    }
+
+    function testFuzz_performUpkeep_withVariousPerformData(bytes calldata performData) external {
+        baseEmissionsControllerMock.setCurrentEpoch(5);
+        baseEmissionsControllerMock.setEpochMintedAmount(5, 0);
+
+        vm.expectEmit(true, true, true, true);
+        emit AutomationMintedAndBridged(5, 1000 ether);
+
+        vm.prank(upkeeper);
+        adapter.performUpkeep(performData);
+
+        assertTrue(baseEmissionsControllerMock.mintAndBridgeCurrentEpochCalled());
+    }
+
+    /* =================================================== */
+    /*      INTEGRATION TESTS (checkUpkeep + performUpkeep) */
+    /* =================================================== */
+
+    function test_integration_checkUpkeepThenPerformUpkeep() external {
+        baseEmissionsControllerMock.setCurrentEpoch(5);
+        baseEmissionsControllerMock.setEpochMintedAmount(5, 0);
+
+        (bool upkeepNeeded, bytes memory performData) = adapter.checkUpkeep("");
+        assertTrue(upkeepNeeded);
+
+        vm.expectEmit(true, true, true, true);
+        emit AutomationMintedAndBridged(5, 1000 ether);
+
+        vm.prank(upkeeper);
+        adapter.performUpkeep(performData);
+
+        assertTrue(baseEmissionsControllerMock.mintAndBridgeCurrentEpochCalled());
+
+        (bool upkeepNeededAfter,) = adapter.checkUpkeep("");
+        assertFalse(upkeepNeededAfter);
+    }
+
+    function test_integration_bothFunctionsConsistentWithShouldMint() external {
+        baseEmissionsControllerMock.setCurrentEpoch(8);
+        baseEmissionsControllerMock.setEpochMintedAmount(8, 0);
+
+        bool shouldMintResult = adapter.shouldMint();
+        (bool checkUpkeepResult,) = adapter.checkUpkeep("");
+
+        assertEq(shouldMintResult, checkUpkeepResult);
+        assertTrue(shouldMintResult);
+
+        vm.prank(upkeeper);
+        adapter.performUpkeep("");
+
+        bool shouldMintAfter = adapter.shouldMint();
+        (bool checkUpkeepAfter,) = adapter.checkUpkeep("");
+
+        assertEq(shouldMintAfter, checkUpkeepAfter);
+        assertFalse(shouldMintAfter);
+    }
+
+    function testFuzz_integration_checkUpkeepThenPerformUpkeep(uint256 epoch) external {
+        epoch = bound(epoch, 1, type(uint128).max);
+
+        baseEmissionsControllerMock.setCurrentEpoch(epoch);
+        baseEmissionsControllerMock.setEpochMintedAmount(epoch, 0);
+
+        (bool upkeepNeeded, bytes memory performData) = adapter.checkUpkeep("");
+        assertTrue(upkeepNeeded);
+
+        vm.prank(upkeeper);
+        adapter.performUpkeep(performData);
+
+        (bool upkeepNeededAfter,) = adapter.checkUpkeep("");
+        assertFalse(upkeepNeededAfter);
+    }
 }
