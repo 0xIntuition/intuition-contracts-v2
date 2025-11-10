@@ -306,7 +306,7 @@ contract RedeemBatchTest is BaseTest {
         resetPrank(users.alice);
         vm.expectRevert(MultiVault.MultiVault_SenderNotApproved.selector);
         protocol.multiVault.redeemBatch(users.bob, atomIds, curveIds, sharesToRedeem, minAssets); // Alice trying to
-            // redeem for Bob without approval
+        // redeem for Bob without approval
     }
 
     /*//////////////////////////////////////////////////////////////

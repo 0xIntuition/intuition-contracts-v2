@@ -23,7 +23,7 @@ forge script script/base/BaseEmissionsControllerDeploy.s.sol:BaseEmissionsContro
 --optimizer-runs 10000 \
 --rpc-url base_sepolia \
 --broadcast \
---slow
+--slow --verify --verifier etherscan --verifier-url "https://api.etherscan.io/v2/api?chainid=84532" --chain 84532
 
 MAINNET
 forge script script/base/BaseEmissionsControllerDeploy.s.sol:BaseEmissionsControllerDeploy \
@@ -76,12 +76,14 @@ contract BaseEmissionsControllerDeploy is SetupScript {
         });
 
         CoreEmissionsControllerInit memory coreEmissionsInit = CoreEmissionsControllerInit({
-            startTimestamp: EMISSIONS_START_TIMESTAMP,
+            startTimestamp: block.timestamp + 60, // EMISSIONS_START_TIMESTAMP,
             emissionsLength: EMISSIONS_LENGTH,
             emissionsPerEpoch: EMISSIONS_PER_EPOCH,
             emissionsReductionCliff: EMISSIONS_REDUCTION_CLIFF,
             emissionsReductionBasisPoints: EMISSIONS_REDUCTION_BASIS_POINTS
         });
+
+        ADMIN = 0xB8e3452E62B45e654a300a296061597E3Cf3e039;
 
         bytes memory initData = abi.encodeWithSelector(
             BaseEmissionsController.initialize.selector,

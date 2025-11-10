@@ -229,7 +229,7 @@ contract IntuitionDeployAndSetup is SetupScript {
             TrustBonding.initialize.selector,
             ADMIN, // owner
             address(ADMIN), // temporary assign admin as the timelock address to be able to set initial MultiVault
-                // address without timelock delay
+            // address without timelock delay
             address(trust), // WTRUST token
             BONDING_EPOCH_LENGTH, // epochLength
             address(satelliteEmissionsController),

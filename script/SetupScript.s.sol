@@ -58,7 +58,7 @@ abstract contract SetupScript is Script {
     /* =================================================== */
 
     uint256 internal PROTOCOL_START_TIMESTAMP = 1_762_268_400; // Tues November 4, 2025 10:00:00 EST || Wed November 5,
-        // 2025 00:00:00 KST
+    // 2025 00:00:00 KST
 
     uint256 internal TRUST_TOKEN_ONE_YEAR_EMISSIONS = 75_000_000 ether; // 75 million TRUST
 

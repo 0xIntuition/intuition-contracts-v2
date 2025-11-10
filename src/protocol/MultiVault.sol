@@ -642,13 +642,7 @@ contract MultiVault is
     /// @param tripleId The ID of the triple
     /// @param counterTripleId The ID of the counter triple
     /// @param _atomsArray The array of atom IDs that make up the triple
-    function _initializeTripleState(
-        bytes32 tripleId,
-        bytes32 counterTripleId,
-        bytes32[3] memory _atomsArray
-    )
-        internal
-    {
+    function _initializeTripleState(bytes32 tripleId, bytes32 counterTripleId, bytes32[3] memory _atomsArray) internal {
         _triples[tripleId] = _atomsArray;
         _isTriple[tripleId] = true;
 

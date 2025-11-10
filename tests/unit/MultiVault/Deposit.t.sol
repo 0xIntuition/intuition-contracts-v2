@@ -375,7 +375,7 @@ contract DefaultCurveEntryFeeImpactTest is BaseTest {
 
         // expected fee drip = ceil(secondAmt * entryFeeBps / feeDenominator)
         (uint256 entryFeeBps,, uint256 protocolFeeBps, uint256 feeDen) = _readVaultFees(); // we’ll write helper below
-            // to fetch fees
+        // to fetch fees
 
         uint256 expectedDrip = _mulDivUp(secondAmt, entryFeeBps, feeDen);
 

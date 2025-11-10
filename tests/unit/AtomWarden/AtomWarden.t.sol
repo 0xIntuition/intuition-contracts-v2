@@ -306,7 +306,7 @@ contract AtomWardenTest is BaseTest {
     function testFuzz_claimOwnershipOverAddressAtom_validAddress(address addr) external {
         address atomWardenProxyAdminOwner = 0xD478411c1478E645A6bb53209E689080aE5101A1;
         vm.assume(addr != address(0) && addr != address(atomWardenProxyAdminOwner)); // exclude zero address and the
-            // proxy admin owner
+        // proxy admin owner
 
         bytes32 atomId = _createAddressAtom(addr);
         address atomWalletAddress = _deployMockAtomWallet(atomId);
