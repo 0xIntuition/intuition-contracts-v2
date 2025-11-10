@@ -292,9 +292,8 @@ contract MultiVault is
     /// @inheritdoc IMultiVault
     function currentSharePrice(bytes32 termId, uint256 curveId) external view returns (uint256) {
         VaultState storage vaultState = _vaults[termId][curveId];
-        return IBondingCurveRegistry(bondingCurveConfig.registry).currentPrice(
-            curveId, vaultState.totalShares, vaultState.totalAssets
-        );
+        return IBondingCurveRegistry(bondingCurveConfig.registry)
+            .currentPrice(curveId, vaultState.totalShares, vaultState.totalAssets);
     }
 
     /// @inheritdoc IMultiVault
@@ -1174,9 +1173,13 @@ contract MultiVault is
         // If it's an initial deposit into a non-default curve vault, we calculate user's shares as if minShare was
         // already minted
         uint256 shares = _isNewVault(termId, curveId)
-            ? IBondingCurveRegistry(bondingCurveConfig.registry).previewDeposit(
-                assetsAfterFees, _minAssetsForCurve(curveId, generalConfig.minShare), generalConfig.minShare, curveId
-            )
+            ? IBondingCurveRegistry(bondingCurveConfig.registry)
+                .previewDeposit(
+                    assetsAfterFees,
+                    _minAssetsForCurve(curveId, generalConfig.minShare),
+                    generalConfig.minShare,
+                    curveId
+                )
             : _convertToShares(termId, curveId, assetsAfterFees);
         return (shares, assetsAfterMinSharesCost, assetsAfterFees);
     }
@@ -1187,7 +1190,14 @@ contract MultiVault is
     /// @return shares the number of shares that would be minted for the deposit
     /// @return assetsAfterFixedFees the assets remaining after fixed fees (atom/triple cost)
     /// @return assetsAfterFees the assets remaining after all fees
-    function _calculateTripleCreate(bytes32 termId, uint256 assets) internal view returns (uint256, uint256, uint256) {
+    function _calculateTripleCreate(
+        bytes32 termId,
+        uint256 assets
+    )
+        internal
+        view
+        returns (uint256, uint256, uint256)
+    {
         uint256 curveId = bondingCurveConfig.defaultCurveId;
         uint256 tripleCost = _getTripleCost();
 
@@ -1248,9 +1258,13 @@ contract MultiVault is
         // If it's an initial deposit into a non-default curve vault, we calculate user's shares as if minShare was
         // already minted
         uint256 shares = _isNewVault(termId, curveId)
-            ? IBondingCurveRegistry(bondingCurveConfig.registry).previewDeposit(
-                assetsAfterFees, _minAssetsForCurve(curveId, generalConfig.minShare), generalConfig.minShare, curveId
-            )
+            ? IBondingCurveRegistry(bondingCurveConfig.registry)
+                .previewDeposit(
+                    assetsAfterFees,
+                    _minAssetsForCurve(curveId, generalConfig.minShare),
+                    generalConfig.minShare,
+                    curveId
+                )
             : _convertToShares(termId, curveId, assetsAfterFees);
         return (shares, assetsAfterMinSharesCost, assetsAfterFees);
     }
@@ -1357,7 +1371,15 @@ contract MultiVault is
     /// @param predicateId the predicate atom ID
     /// @param objectId the object atom ID
     /// @notice reverts if the triple already exists
-    function _tripleExists(bytes32 termId, bytes32 subjectId, bytes32 predicateId, bytes32 objectId) internal view {
+    function _tripleExists(
+        bytes32 termId,
+        bytes32 subjectId,
+        bytes32 predicateId,
+        bytes32 objectId
+    )
+        internal
+        view
+    {
         if (_triples[termId][0] != bytes32(0)) {
             revert MultiVault_TripleExists(termId, subjectId, predicateId, objectId);
         }

@@ -18,6 +18,17 @@ forge script script/intuition/MultiVaultDeploy.s.sol:MultiVaultDeploy \
 --optimizer-runs 4500 \
 --rpc-url intuition_sepolia \
 --broadcast
+
+MAINNET
+forge script script/intuition/MultiVaultDeploy.s.sol:MultiVaultDeploy \
+--optimizer-runs 4500 \
+--rpc-url intuition \
+--broadcast \
+--slow \
+--verify \
+--chain 1155 \
+--verifier blockscout \
+--verifier-url 'https://intuition.calderaexplorer.xyz/api/'
 */
 
 contract MultiVaultDeploy is SetupScript {

@@ -205,9 +205,8 @@ contract DepositTest is BaseTest {
         uint256 newDefault = oldDefault == 1 ? 2 : 1;
 
         resetPrank(users.admin);
-        protocol.multiVault.setBondingCurveConfig(
-            BondingCurveConfig({ registry: registry, defaultCurveId: newDefault })
-        );
+        protocol.multiVault
+            .setBondingCurveConfig(BondingCurveConfig({ registry: registry, defaultCurveId: newDefault }));
 
         // Now try to deposit into the *new* default curve for this atom
         // That new default curve vault is brand-new (no shares), so this should revert
@@ -217,9 +216,8 @@ contract DepositTest is BaseTest {
 
         // Restore default to keep other tests deterministic (optional)
         resetPrank(users.admin);
-        protocol.multiVault.setBondingCurveConfig(
-            BondingCurveConfig({ registry: registry, defaultCurveId: oldDefault })
-        );
+        protocol.multiVault
+            .setBondingCurveConfig(BondingCurveConfig({ registry: registry, defaultCurveId: oldDefault }));
     }
 
     /*//////////////////////////////////////////////////////////////
