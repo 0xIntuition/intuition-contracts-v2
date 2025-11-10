@@ -29,17 +29,6 @@ contract EmissionsAutomationAdapter is AccessControl, ReentrancyGuard, Automatio
     IBaseEmissionsController public immutable baseEmissionsController;
 
     /* =================================================== */
-    /*                     EVENTS                          */
-    /* =================================================== */
-
-    /**
-     * @notice Event emitted when emissions are minted and bridged via automation
-     * @param epoch The epoch for which emissions were minted
-     * @param amount The amount of emissions minted and bridged
-     */
-    event AutomationMintedAndBridged(uint256 epoch, uint256 amount);
-
-    /* =================================================== */
     /*                      ERRORS                         */
     /* =================================================== */
 
@@ -107,7 +96,6 @@ contract EmissionsAutomationAdapter is AccessControl, ReentrancyGuard, Automatio
         baseEmissionsController.mintAndBridgeCurrentEpoch();
 
         uint256 currentEpoch = ICoreEmissionsController(address(baseEmissionsController)).getCurrentEpoch();
-        emit AutomationMintedAndBridged(currentEpoch, baseEmissionsController.getEpochMintedAmount(currentEpoch));
     }
 
     /// @notice Internal function to determine if minting is needed for the current epoch

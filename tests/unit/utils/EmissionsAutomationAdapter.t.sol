@@ -22,12 +22,6 @@ contract EmissionsAutomationAdapterTest is BaseTest {
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
 
     /* =================================================== */
-    /*                      EVENTS                         */
-    /* =================================================== */
-
-    event AutomationMintedAndBridged(uint256 epoch, uint256 amount);
-
-    /* =================================================== */
     /*                      ERRORS                         */
     /* =================================================== */
 
@@ -402,9 +396,6 @@ contract EmissionsAutomationAdapterTest is BaseTest {
         baseEmissionsControllerMock.setCurrentEpoch(5);
         baseEmissionsControllerMock.setEpochMintedAmount(5, 0);
 
-        vm.expectEmit(true, true, true, true);
-        emit AutomationMintedAndBridged(5, 1000 ether);
-
         vm.prank(upkeeper);
         adapter.performUpkeep("");
 
@@ -436,9 +427,6 @@ contract EmissionsAutomationAdapterTest is BaseTest {
         baseEmissionsControllerMock.setCurrentEpoch(10);
         baseEmissionsControllerMock.setEpochMintedAmount(10, 0);
 
-        vm.expectEmit(true, true, true, true);
-        emit AutomationMintedAndBridged(10, 1000 ether);
-
         vm.prank(upkeeper);
         adapter.performUpkeep("");
     }
@@ -448,9 +436,6 @@ contract EmissionsAutomationAdapterTest is BaseTest {
         baseEmissionsControllerMock.setEpochMintedAmount(5, 0);
 
         bytes memory performData = abi.encode(uint256(123), address(0x123));
-
-        vm.expectEmit(true, true, true, true);
-        emit AutomationMintedAndBridged(5, 1000 ether);
 
         vm.prank(upkeeper);
         adapter.performUpkeep(performData);
@@ -489,9 +474,6 @@ contract EmissionsAutomationAdapterTest is BaseTest {
         baseEmissionsControllerMock.setCurrentEpoch(epoch);
         baseEmissionsControllerMock.setEpochMintedAmount(epoch, 0);
 
-        vm.expectEmit(true, true, true, true);
-        emit AutomationMintedAndBridged(epoch, 1000 ether);
-
         vm.prank(upkeeper);
         adapter.performUpkeep("");
 
@@ -515,9 +497,6 @@ contract EmissionsAutomationAdapterTest is BaseTest {
         baseEmissionsControllerMock.setCurrentEpoch(5);
         baseEmissionsControllerMock.setEpochMintedAmount(5, 0);
 
-        vm.expectEmit(true, true, true, true);
-        emit AutomationMintedAndBridged(5, 1000 ether);
-
         vm.prank(upkeeper);
         adapter.performUpkeep(performData);
 
@@ -534,9 +513,6 @@ contract EmissionsAutomationAdapterTest is BaseTest {
 
         (bool upkeepNeeded, bytes memory performData) = adapter.checkUpkeep("");
         assertTrue(upkeepNeeded);
-
-        vm.expectEmit(true, true, true, true);
-        emit AutomationMintedAndBridged(5, 1000 ether);
 
         vm.prank(upkeeper);
         adapter.performUpkeep(performData);

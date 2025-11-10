@@ -51,7 +51,7 @@ contract EmissionsAutomationAdapterDeploy is SetupScript {
         if (block.chainid == NETWORK_ANVIL) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("ANVIL_BASE_EMISSIONS_CONTROLLER");
         } else if (block.chainid == NETWORK_BASE_SEPOLIA) {
-            BASE_EMISSIONS_CONTROLLER = vm.envAddress("BASE_SEPOLIA_BASE_EMISSIONS_CONTROLLER");
+            BASE_EMISSIONS_CONTROLLER = 0x030820F512b0e877b4DD5A1Cd2CE753bc1023586; // vm.envAddress("BASE_SEPOLIA_BASE_EMISSIONS_CONTROLLER");
         } else if (block.chainid == NETWORK_BASE) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("BASE_MAINNET_BASE_EMISSIONS_CONTROLLER");
         } else {
@@ -67,6 +67,8 @@ contract EmissionsAutomationAdapterDeploy is SetupScript {
     }
 
     function _deploy() internal {
+        ADMIN = 0xB8e3452E62B45e654a300a296061597E3Cf3e039;
+
         // 1. Deploy EmissionsAutomationAdapter contract
         emissionsAutomationAdapterImpl = new EmissionsAutomationAdapter(ADMIN, BASE_EMISSIONS_CONTROLLER);
     }
