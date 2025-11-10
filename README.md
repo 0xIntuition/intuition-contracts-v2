@@ -198,7 +198,7 @@ npx tsx script/upgrades/generate-timelock-upgrade-and-call-calldata.ts "https://
 
 | Contract Name               | Address                                    | ProxyAdmin                                 |
 |-----------------------------|--------------------------------------------|--------------------------------------------|
-| TRUST token                 | 0x6cd905dF2Ed214b22e0d48FF17CD4200C1C6d8A3 | 0x857552ab95E6cC389b977d5fEf971DEde8683e8e |
+| Trust                       | 0x6cd905dF2Ed214b22e0d48FF17CD4200C1C6d8A3 | 0x857552ab95E6cC389b977d5fEf971DEde8683e8e |
 | Upgrades TimelockController | 0x1E442BbB08c98100b18fa830a88E8A57b5dF9157 | /                                          |
 | BaseEmissionsController     | 0x7745bDEe668501E5eeF7e9605C746f9cDfb60667 | 0x58dCdf3b6F5D03835CF6556EdC798bfd690B251a |
 | EmissionsAutomationAdapter  | 0xECC3574611Febf38EF6F6ae4E109410DaB73CdA3 | /                                          |
@@ -209,7 +209,6 @@ npx tsx script/upgrades/generate-timelock-upgrade-and-call-calldata.ts "https://
 | Contract Name                 | Address                                    | ProxyAdmin                                  |
 |-------------------------------|--------------------------------------------|---------------------------------------------|
 | WrappedTrust                  | 0x81cFb09cb44f7184Ad934C09F82000701A4bF672 | /                                           |
-| Airdrop Distributor           | 0x589E7eb47d38e69bD511A9f07f6A3E1C9D060c54 | /                                           |
 | Upgrades TimelockController   | 0x321e5d4b20158648dFd1f360A79CAFc97190bAd1 | /                                           |
 | Parameters TimelockController | 0x71b0F1ABebC2DaA0b7B5C3f9b72FAa1cd9F35FEA | /                                           |
 | MultiVault                    | 0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e | 0x1999faD6477e4fa9aA0FF20DaafC32F7B90005C8  |
@@ -224,9 +223,6 @@ npx tsx script/upgrades/generate-timelock-upgrade-and-call-calldata.ts "https://
 | Multicall3                    | 0xcA11bde05977b3631167028862bE2a173976CA11 | /                                           |
 | EntryPoint                    | 0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108 | /                                           |
 | SafeSingletonFactory          | 0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7 | /                                           |
-| Admin Safe                    | 0xbeA18ab4c83a12be25f8AA8A10D8747A07Cdc6eb | /                                           |
-| Foundation Safe               | 0x4B44BE80739fb11544Dd835a0f55580Ad19Ce0F3 | /                                           |
-| Airdrop Vault Safe            | 0x1edeC665ab682A6411ffBAd403FdCb5fE112b867 | /                                           |
 
 ## Testnet
 
@@ -234,7 +230,7 @@ npx tsx script/upgrades/generate-timelock-upgrade-and-call-calldata.ts "https://
 
 | Contract Name               | Address                                    | ProxyAdmin                                 |
 |-----------------------------|--------------------------------------------|--------------------------------------------|
-| tTRUST token                | 0xA54b4E6e356b963Ee00d1C947f478d9194a1a210 | /                                          |
+| TestTrust                   | 0xA54b4E6e356b963Ee00d1C947f478d9194a1a210 | /                                          |
 | Upgrades TimelockController | 0x9099BC9fd63B01F94528B60CEEB336C679eb6d52 | /                                          |
 | BaseEmissionsController     | 0xC14773Aae24aA60CB8F261995405C28f6D742DCf | 0x0b954b1CbAAf8972845BC5D31a8B748f0F8849fc |
 
