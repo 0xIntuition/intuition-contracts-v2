@@ -66,14 +66,6 @@ contract EmissionsAutomationAdapter is AccessControl, ReentrancyGuard, Automatio
     /*                 EXTERNAL FUNCTIONS                  */
     /* =================================================== */
 
-    /**
-     * @notice A function for designated keepers to call to mint and bridge emissions for the current epoch if needed
-     * @dev If minting is not needed, the function exits early (no-op)
-     */
-    function mintAndBridgeCurrentEpochIfNeeded() external nonReentrant onlyRole(UPKEEP_ROLE) {
-        _mintAndBridgeCurrentEpochIfNeeded();
-    }
-
     /// @inheritdoc AutomationCompatibleInterface
     function performUpkeep(
         bytes calldata /* performData */
@@ -89,14 +81,6 @@ contract EmissionsAutomationAdapter is AccessControl, ReentrancyGuard, Automatio
     /* =================================================== */
     /*                 VIEW FUNCTIONS                  */
     /* =================================================== */
-
-    /**
-     * @notice Function to check if minting is needed for the current epoch
-     * @return bool True if minting is needed, false otherwise
-     */
-    function shouldMint() external view returns (bool) {
-        return _shouldMint();
-    }
 
     /// @inheritdoc AutomationCompatibleInterface
     function checkUpkeep(

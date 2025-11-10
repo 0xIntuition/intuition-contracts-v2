@@ -90,147 +90,6 @@ contract EmissionsAutomationAdapterTest is BaseTest {
     }
 
     /* =================================================== */
-    /*         mintAndBridgeCurrentEpochIfNeeded TESTS     */
-    /* =================================================== */
-
-    function test_mintAndBridgeCurrentEpochIfNeeded_successful() external {
-        baseEmissionsControllerMock.setCurrentEpoch(5);
-        baseEmissionsControllerMock.setEpochMintedAmount(5, 0);
-
-        vm.expectEmit(true, true, true, true);
-        emit AutomationMintedAndBridged(5, 1000 ether);
-
-        vm.prank(upkeeper);
-        adapter.mintAndBridgeCurrentEpochIfNeeded();
-
-        assertTrue(baseEmissionsControllerMock.mintAndBridgeCurrentEpochCalled());
-        assertEq(baseEmissionsControllerMock.mintAndBridgeCallCount(), 1);
-    }
-
-    function test_mintAndBridgeCurrentEpochIfNeeded_noOpWhenAlreadyMinted() external {
-        baseEmissionsControllerMock.setCurrentEpoch(5);
-        baseEmissionsControllerMock.setEpochMintedAmount(5, 1000 ether);
-
-        vm.prank(upkeeper);
-        adapter.mintAndBridgeCurrentEpochIfNeeded();
-
-        assertFalse(baseEmissionsControllerMock.mintAndBridgeCurrentEpochCalled());
-        assertEq(baseEmissionsControllerMock.mintAndBridgeCallCount(), 0);
-    }
-
-    function test_mintAndBridgeCurrentEpochIfNeeded_revertsOnUnauthorizedCaller() external {
-        vm.expectRevert(
-            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, unauthorized, UPKEEP_ROLE)
-        );
-
-        vm.prank(unauthorized);
-        adapter.mintAndBridgeCurrentEpochIfNeeded();
-    }
-
-    function test_mintAndBridgeCurrentEpochIfNeeded_emitsEventWithCorrectParameters() external {
-        baseEmissionsControllerMock.setCurrentEpoch(10);
-        baseEmissionsControllerMock.setEpochMintedAmount(10, 0);
-
-        vm.expectEmit(true, true, true, true);
-        emit AutomationMintedAndBridged(10, 1000 ether);
-
-        vm.prank(upkeeper);
-        adapter.mintAndBridgeCurrentEpochIfNeeded();
-    }
-
-    function test_mintAndBridgeCurrentEpochIfNeeded_multipleCallsInSameEpoch() external {
-        baseEmissionsControllerMock.setCurrentEpoch(1);
-        baseEmissionsControllerMock.setEpochMintedAmount(1, 0);
-
-        vm.prank(upkeeper);
-        adapter.mintAndBridgeCurrentEpochIfNeeded();
-
-        assertEq(baseEmissionsControllerMock.mintAndBridgeCallCount(), 1);
-
-        vm.prank(upkeeper);
-        adapter.mintAndBridgeCurrentEpochIfNeeded();
-
-        assertEq(baseEmissionsControllerMock.mintAndBridgeCallCount(), 1);
-    }
-
-    function testFuzz_mintAndBridgeCurrentEpochIfNeeded_successful(uint256 epoch) external {
-        epoch = bound(epoch, 1, type(uint128).max);
-
-        baseEmissionsControllerMock.setCurrentEpoch(epoch);
-        baseEmissionsControllerMock.setEpochMintedAmount(epoch, 0);
-
-        vm.expectEmit(true, true, true, true);
-        emit AutomationMintedAndBridged(epoch, 1000 ether);
-
-        vm.prank(upkeeper);
-        adapter.mintAndBridgeCurrentEpochIfNeeded();
-
-        assertTrue(baseEmissionsControllerMock.mintAndBridgeCurrentEpochCalled());
-    }
-
-    function testFuzz_mintAndBridgeCurrentEpochIfNeeded_noOpWhenAlreadyMinted(
-        uint256 epoch,
-        uint256 mintedAmount
-    )
-        external
-    {
-        epoch = bound(epoch, 1, type(uint128).max);
-        mintedAmount = bound(mintedAmount, 1, type(uint128).max);
-
-        baseEmissionsControllerMock.setCurrentEpoch(epoch);
-        baseEmissionsControllerMock.setEpochMintedAmount(epoch, mintedAmount);
-
-        vm.prank(upkeeper);
-        adapter.mintAndBridgeCurrentEpochIfNeeded();
-
-        assertFalse(baseEmissionsControllerMock.mintAndBridgeCurrentEpochCalled());
-    }
-
-    /* =================================================== */
-    /*                 shouldMint TESTS                    */
-    /* =================================================== */
-
-    function test_shouldMint_returnsTrueWhenMintingIsNeeded() external {
-        baseEmissionsControllerMock.setCurrentEpoch(5);
-        baseEmissionsControllerMock.setEpochMintedAmount(5, 0);
-
-        assertTrue(adapter.shouldMint());
-    }
-
-    function test_shouldMint_returnsFalseWhenMintingIsNotNeeded() external {
-        baseEmissionsControllerMock.setCurrentEpoch(5);
-        baseEmissionsControllerMock.setEpochMintedAmount(5, 1000 ether);
-
-        assertFalse(adapter.shouldMint());
-    }
-
-    function test_shouldMint_returnsFalseWhenEpochPartiallyMinted() external {
-        baseEmissionsControllerMock.setCurrentEpoch(5);
-        baseEmissionsControllerMock.setEpochMintedAmount(5, 1);
-
-        assertFalse(adapter.shouldMint());
-    }
-
-    function testFuzz_shouldMint_returnsTrueWhenMintingIsNeeded(uint256 epoch) external {
-        epoch = bound(epoch, 1, type(uint128).max);
-
-        baseEmissionsControllerMock.setCurrentEpoch(epoch);
-        baseEmissionsControllerMock.setEpochMintedAmount(epoch, 0);
-
-        assertTrue(adapter.shouldMint());
-    }
-
-    function testFuzz_shouldMint_returnsFalseWhenMintingIsNotNeeded(uint256 epoch, uint256 mintedAmount) external {
-        epoch = bound(epoch, 1, type(uint128).max);
-        mintedAmount = bound(mintedAmount, 1, type(uint128).max);
-
-        baseEmissionsControllerMock.setCurrentEpoch(epoch);
-        baseEmissionsControllerMock.setEpochMintedAmount(epoch, mintedAmount);
-
-        assertFalse(adapter.shouldMint());
-    }
-
-    /* =================================================== */
     /*              ACCESS CONTROL TESTS                   */
     /* =================================================== */
 
@@ -254,7 +113,7 @@ contract EmissionsAutomationAdapterTest is BaseTest {
         baseEmissionsControllerMock.resetMintAndBridgeCalled();
 
         vm.prank(newUpkeeper);
-        adapter.mintAndBridgeCurrentEpochIfNeeded();
+        adapter.performUpkeep("");
 
         assertTrue(baseEmissionsControllerMock.mintAndBridgeCurrentEpochCalled());
     }
@@ -275,7 +134,7 @@ contract EmissionsAutomationAdapterTest is BaseTest {
         );
 
         vm.prank(upkeeper);
-        adapter.mintAndBridgeCurrentEpochIfNeeded();
+        adapter.performUpkeep("");
     }
 
     function test_hasRole_returnsCorrectRoleStatus() external {
@@ -307,10 +166,11 @@ contract EmissionsAutomationAdapterTest is BaseTest {
         baseEmissionsControllerMock.setCurrentEpoch(0);
         baseEmissionsControllerMock.setEpochMintedAmount(0, 0);
 
-        assertTrue(adapter.shouldMint());
+        (bool shouldMint,) = adapter.checkUpkeep("");
+        assertTrue(shouldMint);
 
         vm.prank(upkeeper);
-        adapter.mintAndBridgeCurrentEpochIfNeeded();
+        adapter.performUpkeep("");
 
         assertTrue(baseEmissionsControllerMock.mintAndBridgeCurrentEpochCalled());
     }
@@ -320,7 +180,8 @@ contract EmissionsAutomationAdapterTest is BaseTest {
         baseEmissionsControllerMock.setCurrentEpoch(maxEpoch);
         baseEmissionsControllerMock.setEpochMintedAmount(maxEpoch, 0);
 
-        assertTrue(adapter.shouldMint());
+        (bool shouldMint,) = adapter.checkUpkeep("");
+        assertTrue(shouldMint);
     }
 
     function test_edgeCase_maxMintedAmount() external {
@@ -328,7 +189,8 @@ contract EmissionsAutomationAdapterTest is BaseTest {
         baseEmissionsControllerMock.setCurrentEpoch(1);
         baseEmissionsControllerMock.setEpochMintedAmount(1, maxAmount);
 
-        assertFalse(adapter.shouldMint());
+        (bool shouldMint,) = adapter.checkUpkeep("");
+        assertFalse(shouldMint);
     }
 
     function test_edgeCase_multipleUpkeepersCanCallFunction() external {
@@ -344,7 +206,7 @@ contract EmissionsAutomationAdapterTest is BaseTest {
         baseEmissionsControllerMock.setEpochMintedAmount(1, 0);
 
         vm.prank(upkeeper1);
-        adapter.mintAndBridgeCurrentEpochIfNeeded();
+        adapter.performUpkeep("");
 
         assertEq(baseEmissionsControllerMock.mintAndBridgeCallCount(), 1);
 
@@ -353,7 +215,7 @@ contract EmissionsAutomationAdapterTest is BaseTest {
         baseEmissionsControllerMock.resetMintAndBridgeCalled();
 
         vm.prank(upkeeper2);
-        adapter.mintAndBridgeCurrentEpochIfNeeded();
+        adapter.performUpkeep("");
 
         assertEq(baseEmissionsControllerMock.mintAndBridgeCallCount(), 2);
     }
@@ -364,7 +226,7 @@ contract EmissionsAutomationAdapterTest is BaseTest {
         );
 
         vm.prank(admin);
-        adapter.mintAndBridgeCurrentEpochIfNeeded();
+        adapter.performUpkeep("");
     }
 
     function test_edgeCase_adminCanGrantSelfUpkeepRole() external {
@@ -377,7 +239,7 @@ contract EmissionsAutomationAdapterTest is BaseTest {
         baseEmissionsControllerMock.setEpochMintedAmount(1, 0);
 
         vm.prank(admin);
-        adapter.mintAndBridgeCurrentEpochIfNeeded();
+        adapter.performUpkeep("");
 
         assertTrue(baseEmissionsControllerMock.mintAndBridgeCurrentEpochCalled());
     }
@@ -404,7 +266,7 @@ contract EmissionsAutomationAdapterTest is BaseTest {
         baseEmissionsControllerMock.setEpochMintedAmount(1, 0);
 
         vm.prank(upkeeper);
-        adapter.mintAndBridgeCurrentEpochIfNeeded();
+        adapter.performUpkeep("");
 
         assertEq(baseEmissionsControllerMock.mintAndBridgeCallCount(), 1);
     }
@@ -425,13 +287,13 @@ contract EmissionsAutomationAdapterTest is BaseTest {
         baseEmissionsControllerMock.setCurrentEpoch(5);
         baseEmissionsControllerMock.setEpochMintedAmount(5, 0);
 
-        bool shouldMintBefore = adapter.shouldMint();
+        (bool shouldMintBefore,) = adapter.checkUpkeep("");
         assertTrue(shouldMintBefore);
 
         vm.prank(upkeeper);
-        adapter.mintAndBridgeCurrentEpochIfNeeded();
+        adapter.performUpkeep("");
 
-        bool shouldMintAfter = adapter.shouldMint();
+        (bool shouldMintAfter,) = adapter.checkUpkeep("");
         assertFalse(shouldMintAfter);
     }
 
@@ -441,12 +303,14 @@ contract EmissionsAutomationAdapterTest is BaseTest {
             baseEmissionsControllerMock.setEpochMintedAmount(i, 0);
             baseEmissionsControllerMock.resetMintAndBridgeCalled();
 
-            assertTrue(adapter.shouldMint());
+            (bool shouldMintBefore,) = adapter.checkUpkeep("");
+            assertTrue(shouldMintBefore);
 
             vm.prank(upkeeper);
-            adapter.mintAndBridgeCurrentEpochIfNeeded();
+            adapter.performUpkeep("");
 
-            assertFalse(adapter.shouldMint());
+            (bool shouldMintAfter,) = adapter.checkUpkeep("");
+            assertFalse(shouldMintAfter);
         }
     }
 
@@ -493,16 +357,6 @@ contract EmissionsAutomationAdapterTest is BaseTest {
 
         assertTrue(upkeepNeeded);
         assertEq(performData.length, 0);
-    }
-
-    function test_checkUpkeep_consistentWithShouldMint() external {
-        baseEmissionsControllerMock.setCurrentEpoch(7);
-        baseEmissionsControllerMock.setEpochMintedAmount(7, 0);
-
-        bool shouldMintResult = adapter.shouldMint();
-        (bool upkeepNeeded,) = adapter.checkUpkeep("");
-
-        assertEq(upkeepNeeded, shouldMintResult);
     }
 
     function testFuzz_checkUpkeep_returnsTrueWhenMintingIsNeeded(uint256 epoch) external {
@@ -691,26 +545,6 @@ contract EmissionsAutomationAdapterTest is BaseTest {
 
         (bool upkeepNeededAfter,) = adapter.checkUpkeep("");
         assertFalse(upkeepNeededAfter);
-    }
-
-    function test_integration_bothFunctionsConsistentWithShouldMint() external {
-        baseEmissionsControllerMock.setCurrentEpoch(8);
-        baseEmissionsControllerMock.setEpochMintedAmount(8, 0);
-
-        bool shouldMintResult = adapter.shouldMint();
-        (bool checkUpkeepResult,) = adapter.checkUpkeep("");
-
-        assertEq(shouldMintResult, checkUpkeepResult);
-        assertTrue(shouldMintResult);
-
-        vm.prank(upkeeper);
-        adapter.performUpkeep("");
-
-        bool shouldMintAfter = adapter.shouldMint();
-        (bool checkUpkeepAfter,) = adapter.checkUpkeep("");
-
-        assertEq(shouldMintAfter, checkUpkeepAfter);
-        assertFalse(shouldMintAfter);
     }
 
     function testFuzz_integration_checkUpkeepThenPerformUpkeep(uint256 epoch) external {
