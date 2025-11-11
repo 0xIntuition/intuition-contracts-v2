@@ -76,14 +76,12 @@ contract BaseEmissionsControllerDeploy is SetupScript {
         });
 
         CoreEmissionsControllerInit memory coreEmissionsInit = CoreEmissionsControllerInit({
-            startTimestamp: block.timestamp + 60, // EMISSIONS_START_TIMESTAMP,
+            startTimestamp: EMISSIONS_START_TIMESTAMP,
             emissionsLength: EMISSIONS_LENGTH,
             emissionsPerEpoch: EMISSIONS_PER_EPOCH,
             emissionsReductionCliff: EMISSIONS_REDUCTION_CLIFF,
             emissionsReductionBasisPoints: EMISSIONS_REDUCTION_BASIS_POINTS
         });
-
-        ADMIN = 0xB8e3452E62B45e654a300a296061597E3Cf3e039;
 
         bytes memory initData = abi.encodeWithSelector(
             BaseEmissionsController.initialize.selector,
