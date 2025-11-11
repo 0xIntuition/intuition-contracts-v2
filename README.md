@@ -201,7 +201,7 @@ npx tsx script/upgrades/generate-timelock-upgrade-and-call-calldata.ts "https://
 | Trust                       | 0x6cd905dF2Ed214b22e0d48FF17CD4200C1C6d8A3 | 0x857552ab95E6cC389b977d5fEf971DEde8683e8e |
 | Upgrades TimelockController | 0x1E442BbB08c98100b18fa830a88E8A57b5dF9157 | /                                          |
 | BaseEmissionsController     | 0x7745bDEe668501E5eeF7e9605C746f9cDfb60667 | 0x58dCdf3b6F5D03835CF6556EdC798bfd690B251a |
-| EmissionsAutomationAdapter  | 0xECC3574611Febf38EF6F6ae4E109410DaB73CdA3 | /                                          |
+| EmissionsAutomationAdapter  | 0xb1ce9Ac324B5C3928736Ec33b5Fd741cb04a2F2d | /                                          |
 
 ### Intuition Mainnet
 
