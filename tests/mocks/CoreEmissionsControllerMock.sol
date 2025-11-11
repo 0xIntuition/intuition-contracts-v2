@@ -24,7 +24,7 @@ contract CoreEmissionsControllerMock is CoreEmissionsController {
     uint256 internal constant TWO_YEARS = 2 * ONE_YEAR;
 
     /* =================================================== */
-    /*            EXPOSED INTERNAL FUNCTIONS              */
+    /*            EXPOSED INTERNAL FUNCTIONS               */
     /* =================================================== */
 
     function initCoreEmissionsController(
