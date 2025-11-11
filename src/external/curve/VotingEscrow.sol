@@ -105,14 +105,7 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     uint256[50] private __gap;
 
     /// @dev Initialize the VotingEscrow contract and its dependencies
-    function __VotingEscrow_init(
-        address _admin,
-        address token_addr,
-        uint256 min_time
-    )
-        internal
-        onlyInitializing
-    {
+    function __VotingEscrow_init(address _admin, address token_addr, uint256 min_time) internal onlyInitializing {
         require(token_addr != address(0), "Token address cannot be 0");
         require(min_time >= 2 * WEEK, "Min lock time must be at least 2 weeks");
 
@@ -188,13 +181,7 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     /// @param _addr User's wallet address. No user checkpoint if 0x0
     /// @param old_locked Pevious locked amount / end lock time for the user
     /// @param new_locked New locked amount / end lock time for the user
-    function _checkpoint(
-        address _addr,
-        LockedBalance memory old_locked,
-        LockedBalance memory new_locked
-    )
-        internal
-    {
+    function _checkpoint(address _addr, LockedBalance memory old_locked, LockedBalance memory new_locked) internal {
         Point memory u_old;
         Point memory u_new;
         int128 old_dslope = 0;
@@ -410,15 +397,7 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     /// @notice External function for _create_lock
     /// @param _value Amount to deposit
     /// @param _unlock_time Epoch time when tokens unlock, rounded down to whole weeks
-    function create_lock(
-        uint256 _value,
-        uint256 _unlock_time
-    )
-        external
-        nonReentrant
-        onlyUserOrWhitelist
-        notUnlocked
-    {
+    function create_lock(uint256 _value, uint256 _unlock_time) external nonReentrant onlyUserOrWhitelist notUnlocked {
         _create_lock(_value, _unlock_time);
     }
 

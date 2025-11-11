@@ -94,8 +94,6 @@ contract EmissionsAutomationAdapter is AccessControl, ReentrancyGuard, Automatio
     function _mintAndBridgeCurrentEpochIfNeeded() internal {
         if (!_shouldMint()) return;
         baseEmissionsController.mintAndBridgeCurrentEpoch();
-
-        uint256 currentEpoch = ICoreEmissionsController(address(baseEmissionsController)).getCurrentEpoch();
     }
 
     /// @notice Internal function to determine if minting is needed for the current epoch
