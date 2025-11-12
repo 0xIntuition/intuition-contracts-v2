@@ -241,13 +241,13 @@ npx tsx script/upgrades/generate-timelock-upgrade-and-call-calldata.ts "https://
 | Upgrades TimelockController   | 0x59B7EaB1cFA47F8E61606aDf79a6b7B5bBF1aF26 | /                                           |
 | Parameters TimelockController | 0xcCB113bfFf493d80F32Fb799Dca23686a04302A7 | /                                           |
 | MultiVault                    | 0x2Ece8D4dEdcB9918A398528f3fa4688b1d2CAB91 | 0x840d79645824C43227573305BBFCd162504BBB6e  |
-| AtomWalletFactory             | 0x70f2227ae95E574898b5D78C30D1145A2289Fc81 | 0x83e13aD14714236b5d9eca851FE6561Cfc9220c9  |
-| AtomWalletBeacon              | 0x575aA51cd6709fe81546E84A77B873bDE00Ce62C | /                                           |
-| AtomWarden                    | 0xd52645aa134318a152817947B33655D93cb30703 | 0xabBf8147d33e76251383A81c81189077C505B51A  |
-| SatelliteEmissionsController  | 0x850b461acbACf86e5253288a4B8Dcd1D4864De6b | 0x5ec513714f57f7b984875719Bd8Ef00d05487524  |
+| AtomWalletFactory             | 0xa4e96c6dB8Dd3314c64bF9d0E845A4905a8705d4 | 0x83e13aD14714236b5d9eca851FE6561Cfc9220c9  |
+| AtomWalletBeacon              | 0x4B0aC884843576dBA0B0fda925f202aB8b546E33 | /                                           |
+| AtomWarden                    | 0x040B7760EFDEd7e933CFf419224b57DFB9Eb4488 | 0xabBf8147d33e76251383A81c81189077C505B51A  |
+| SatelliteEmissionsController  | 0xD3be4d1E56866b98f30Ae6C326F14EF9c6ffBBDF | 0x5ec513714f57f7b984875719Bd8Ef00d05487524  |
 | TrustBonding                  | 0x75dD32b522c89566265eA32ecb50b4Fc4d00ADc7 | 0x214D3833114e25262bb8e4E9B5A99F062bFb93D4  |
-| BondingCurveRegistry          | 0x419fdC0D56c3Fc27592Bf887B5Be3184EffdFA73 | 0x0C5AeAba37b1E92064f0af684D65476d24F52a9A  |
-| LinearCurve                   | 0x006C022b854022C1646dA5094F1D77A17D3897AB | 0x34D65193EE2e1449FE6CB8eca1EE046FcC21669e  |
-| OffsetProgressiveCurve        | 0x778f87476f266817f1D715fC172E51C4B85FBb16 | 0x6A65336598d4783d0673DD238418248909C71F26  |
+| BondingCurveRegistry          | 0x2AFC4949Dd3664219AA2c20133771658E93892A1 | 0x0C5AeAba37b1E92064f0af684D65476d24F52a9A  |
+| LinearCurve                   | 0x6df5eecd9B14E31C98A027b8634876E4805F71B0 | 0x34D65193EE2e1449FE6CB8eca1EE046FcC21669e  |
+| OffsetProgressiveCurve        | 0xE65EcaAF5964aC0d94459A66A59A8B9eBCE42CbB | 0x6A65336598d4783d0673DD238418248909C71F26  |
 | Multicall3                    | 0xcA11bde05977b3631167028862bE2a173976CA11 | /                                           |
 | EntryPoint                    | 0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108 | /                                           |
