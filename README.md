@@ -240,7 +240,7 @@ npx tsx script/upgrades/generate-timelock-upgrade-and-call-calldata.ts "https://
 | WrappedTrust                  | 0xDE80b6EE63f7D809427CA350e30093F436A0fe35 | /                                           |
 | Upgrades TimelockController   | 0x59B7EaB1cFA47F8E61606aDf79a6b7B5bBF1aF26 | /                                           |
 | Parameters TimelockController | 0xcCB113bfFf493d80F32Fb799Dca23686a04302A7 | /                                           |
-| MultiVault                    | 0xeC6BdEb8BCc083ceCc1E73efDd463Be4443AbD9d | 0x840d79645824C43227573305BBFCd162504BBB6e  |
+| MultiVault                    | 0x2Ece8D4dEdcB9918A398528f3fa4688b1d2CAB91 | 0x840d79645824C43227573305BBFCd162504BBB6e  |
 | AtomWalletFactory             | 0x70f2227ae95E574898b5D78C30D1145A2289Fc81 | 0x83e13aD14714236b5d9eca851FE6561Cfc9220c9  |
 | AtomWalletBeacon              | 0x575aA51cd6709fe81546E84A77B873bDE00Ce62C | /                                           |
 | AtomWarden                    | 0xd52645aa134318a152817947B33655D93cb30703 | 0xabBf8147d33e76251383A81c81189077C505B51A  |
