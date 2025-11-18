@@ -529,6 +529,29 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         return _min;
     }
 
+    /// @notice Binary search to estimate epoch for timestamp
+    /// @param _ts Timestamp to base search on
+    /// @param max_epoch Don't go beyond this epoch
+    /// @return Approximate timestamp for block
+    function _find_timestamp_epoch(uint256 _ts, uint256 max_epoch) internal view returns (uint256) {
+        // Binary search
+        uint256 _min = 0;
+        uint256 _max = max_epoch;
+        for (uint256 i = 0; i < 128; ++i) {
+            // Will be always enough for 128-bit numbers
+            if (_min >= _max) {
+                break;
+            }
+            uint256 _mid = (_min + _max + 1) / 2;
+            if (point_history[_mid].ts <= _ts) {
+                _min = _mid;
+            } else {
+                _max = _mid - 1;
+            }
+        }
+        return _min;
+    }
+
     /// @notice Get the current voting power for `msg.sender`
     /// @dev Adheres to the ERC20 `balanceOf` interface for Aragon compatibility
     /// @param addr User wallet address
@@ -643,7 +666,7 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     /// @dev Adheres to the ERC20 `totalSupply` interface for Aragon compatibility
     /// @return Total voting power
     function _totalSupply(uint256 t) internal view returns (uint256) {
-        uint256 _epoch = epoch;
+        uint256 _epoch = _find_timestamp_epoch(t, epoch);
         Point memory last_point = point_history[_epoch];
         return _supply_at(last_point, t);
     }
