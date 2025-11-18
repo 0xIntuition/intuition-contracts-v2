@@ -630,9 +630,17 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     /// @param _block Block to calculate the voting power at
     /// @return Voting power
     function balanceOfAt(address addr, uint256 _block) external view returns (uint256) {
-        // Copying and pasting totalSupply code because Vyper cannot pass by
-        // reference yet
-        require(_block <= block.number);
+        require(_block <= block.number, "block in the future");
+
+        if (epoch == 0) {
+            // No checkpoints at all means no supply
+            return 0;
+        }
+
+        // If asking for a block before the first checkpoint, supply is zero
+        if (_block < point_history[0].blk) {
+            return 0;
+        }
 
         // Binary search
         uint256 _min = 0;
@@ -739,8 +747,19 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     /// @param _block Block to calculate the total voting power at
     /// @return Total voting power at `_block`
     function totalSupplyAt(uint256 _block) external view returns (uint256) {
-        require(_block <= block.number);
+        require(_block <= block.number, "block in the future");
+
         uint256 _epoch = epoch;
+        if (_epoch == 0) {
+            // No checkpoints at all means no supply
+            return 0;
+        }
+
+        // If asking for a block before the first checkpoint, supply is zero
+        if (_block < point_history[0].blk) {
+            return 0;
+        }
+
         uint256 target_epoch = _find_block_epoch(_block, _epoch);
 
         Point memory point = point_history[target_epoch];
