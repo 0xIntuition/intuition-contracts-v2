@@ -529,10 +529,18 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         return _min;
     }
 
-    /// @notice Binary search to estimate epoch for timestamp
-    /// @param _ts Timestamp to base search on
-    /// @param max_epoch Don't go beyond this epoch
-    /// @return Approximate timestamp for block
+    /**
+     * @notice Find the latest global epoch whose checkpoint timestamp is <= `_ts`.
+     * @dev Performs a binary search over `point_history` in the range
+     *      [0, max_epoch]. The returned index is the greatest `epoch`
+     *      such that `point_history[epoch].ts <= _ts`. If no such epoch
+     *      exists (i.e. all checkpoints are strictly after `_ts`), this
+     *      function returns 0.
+     * @param _ts Timestamp to search for.
+     * @param max_epoch Upper bound (inclusive) for the epoch search.
+     * @return epoch Index of the global epoch with the largest timestamp
+     *                   less than or equal to `_ts`.
+     */
     function _find_timestamp_epoch(uint256 _ts, uint256 max_epoch) internal view returns (uint256) {
         // Binary search
         uint256 _min = 0;
@@ -552,6 +560,18 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         return _min;
     }
 
+    /**
+     * @notice Find the latest user epoch whose checkpoint timestamp is <= `_ts`.
+     * @dev Performs a binary search over `user_point_history[addr]` in the
+     *      range [0, user_point_epoch[addr]]. The returned index is the greatest
+     *      `epoch` such that `user_point_history[addr][epoch].ts <= _ts`.
+     *      If the user has no checkpoint at or before `_ts`, this function
+     *      returns 0.
+     * @param addr Address of the user.
+     * @param _ts Timestamp to search for.
+     * @return epoch Index of the user epoch with the largest timestamp less
+     *         than or equal to `_ts`.
+     */
     function _find_user_timestamp_epoch(address addr, uint256 _ts) internal view returns (uint256) {
         // Binary search
         uint256 _min = 0;
