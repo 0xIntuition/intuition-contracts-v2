@@ -266,7 +266,8 @@ contract VotingEscrowTest is Test {
 
     function test_create_lock_successfulLockCreation() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        // add one more week because of the rounding down behavior present in VotingEscrow's logic
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -277,7 +278,7 @@ contract VotingEscrowTest is Test {
     }
 
     function test_create_lock_revertsOnZeroValue() external {
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.prank(alice, alice);
         vm.expectRevert();
@@ -286,7 +287,7 @@ contract VotingEscrowTest is Test {
 
     function test_create_lock_revertsOnExistingLock() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.startPrank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -319,7 +320,7 @@ contract VotingEscrowTest is Test {
         votingEscrow.unlock();
 
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.prank(alice, alice);
         vm.expectRevert("unlocked globally");
@@ -328,7 +329,7 @@ contract VotingEscrowTest is Test {
 
     function test_create_lock_revertsForNonWhitelistedSmartContract() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         token.mint(smartContract, lockAmount);
 
@@ -341,7 +342,7 @@ contract VotingEscrowTest is Test {
 
     function test_create_lock_successForWhitelistedSmartContract() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         token.mint(smartContract, lockAmount);
 
@@ -359,7 +360,7 @@ contract VotingEscrowTest is Test {
 
     function test_create_lock_roundsUnlockTimeToWeek() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + 3 days;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + 9 days;
         uint256 expectedUnlockTime = (unlockTime / WEEK) * WEEK;
 
         vm.prank(alice, alice);
@@ -371,7 +372,7 @@ contract VotingEscrowTest is Test {
 
     function test_create_lock_updatesSupply() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         uint256 supplyBefore = votingEscrow.supply();
 
@@ -383,7 +384,7 @@ contract VotingEscrowTest is Test {
 
     function test_create_lock_emitsDepositEvent() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
         uint256 roundedUnlockTime = (unlockTime / WEEK) * WEEK;
 
         vm.expectEmit(true, true, true, true);
@@ -395,7 +396,7 @@ contract VotingEscrowTest is Test {
 
     function test_create_lock_emitsSupplyEvent() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.expectEmit(true, true, true, true);
         emit Supply(0, lockAmount);
@@ -411,7 +412,7 @@ contract VotingEscrowTest is Test {
     function test_deposit_for_successfulDeposit() external {
         uint256 lockAmount = 100e18;
         uint256 depositAmount = 50e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -428,7 +429,7 @@ contract VotingEscrowTest is Test {
 
     function test_deposit_for_revertsOnZeroValue() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -448,7 +449,7 @@ contract VotingEscrowTest is Test {
 
     function test_deposit_for_revertsOnExpiredLock() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -462,7 +463,7 @@ contract VotingEscrowTest is Test {
 
     function test_deposit_for_revertsWhenUnlockedGlobally() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -478,7 +479,7 @@ contract VotingEscrowTest is Test {
     function test_deposit_for_emitsDepositEvent() external {
         uint256 lockAmount = 100e18;
         uint256 depositAmount = 50e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
         uint256 roundedUnlockTime = (unlockTime / WEEK) * WEEK;
 
         vm.prank(alice, alice);
@@ -486,13 +487,13 @@ contract VotingEscrowTest is Test {
 
         token.mint(bob, depositAmount);
 
+        vm.startPrank(bob, bob);
+        token.approve(address(votingEscrow), depositAmount);
+
         vm.expectEmit(true, true, true, true);
         emit Deposit(
             alice, depositAmount, roundedUnlockTime, VotingEscrow.DepositType.DEPOSIT_FOR_TYPE, block.timestamp
         );
-
-        vm.startPrank(bob, bob);
-        token.approve(address(votingEscrow), depositAmount);
         votingEscrow.deposit_for(alice, depositAmount);
         vm.stopPrank();
     }
@@ -504,7 +505,7 @@ contract VotingEscrowTest is Test {
     function test_increase_amount_successfulIncrease() external {
         uint256 lockAmount = 100e18;
         uint256 increaseAmount = 50e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.startPrank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -517,7 +518,7 @@ contract VotingEscrowTest is Test {
 
     function test_increase_amount_revertsOnZeroValue() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.startPrank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -534,7 +535,7 @@ contract VotingEscrowTest is Test {
 
     function test_increase_amount_revertsOnExpiredLock() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -549,7 +550,7 @@ contract VotingEscrowTest is Test {
     function test_increase_amount_emitsDepositEvent() external {
         uint256 lockAmount = 100e18;
         uint256 increaseAmount = 50e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
         uint256 roundedUnlockTime = (unlockTime / WEEK) * WEEK;
 
         vm.prank(alice, alice);
@@ -570,7 +571,7 @@ contract VotingEscrowTest is Test {
 
     function test_increase_unlock_time_successfulIncrease() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
         uint256 newUnlockTime = block.timestamp + 4 weeks;
 
         vm.startPrank(alice, alice);
@@ -584,7 +585,7 @@ contract VotingEscrowTest is Test {
 
     function test_increase_unlock_time_revertsOnExpiredLock() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -598,7 +599,7 @@ contract VotingEscrowTest is Test {
 
     function test_increase_unlock_time_revertsOnNoLock() external {
         vm.startPrank(alice, alice);
-        vm.expectRevert("Nothing is locked");
+        vm.expectRevert("Lock expired");
         votingEscrow.increase_unlock_time(block.timestamp + 4 weeks);
         vm.stopPrank();
     }
@@ -618,7 +619,7 @@ contract VotingEscrowTest is Test {
 
     function test_increase_unlock_time_revertsOnTooLongDuration() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + 10;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.startPrank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -631,7 +632,7 @@ contract VotingEscrowTest is Test {
 
     function test_increase_unlock_time_emitsDepositEvent() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
         uint256 newUnlockTime = block.timestamp + 4 weeks;
         uint256 roundedNewUnlockTime = (newUnlockTime / WEEK) * WEEK;
 
@@ -652,7 +653,7 @@ contract VotingEscrowTest is Test {
     function test_increase_amount_and_time_successfulBoth() external {
         uint256 lockAmount = 100e18;
         uint256 increaseAmount = 50e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
         uint256 newUnlockTime = block.timestamp + 4 weeks;
 
         vm.startPrank(alice, alice);
@@ -668,7 +669,7 @@ contract VotingEscrowTest is Test {
     function test_increase_amount_and_time_onlyAmount() external {
         uint256 lockAmount = 100e18;
         uint256 increaseAmount = 50e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
         uint256 roundedUnlockTime = (unlockTime / WEEK) * WEEK;
 
         vm.startPrank(alice, alice);
@@ -683,7 +684,7 @@ contract VotingEscrowTest is Test {
 
     function test_increase_amount_and_time_onlyTime() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
         uint256 newUnlockTime = block.timestamp + 4 weeks;
 
         vm.startPrank(alice, alice);
@@ -698,7 +699,7 @@ contract VotingEscrowTest is Test {
 
     function test_increase_amount_and_time_revertsOnBothZero() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.startPrank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -714,7 +715,7 @@ contract VotingEscrowTest is Test {
 
     function test_withdraw_successfulWithdrawAfterExpiry() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -735,7 +736,7 @@ contract VotingEscrowTest is Test {
 
     function test_withdraw_revertsBeforeExpiry() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -747,7 +748,7 @@ contract VotingEscrowTest is Test {
 
     function test_withdraw_successWhenUnlockedGlobally() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -765,7 +766,7 @@ contract VotingEscrowTest is Test {
 
     function test_withdraw_updatesSupply() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -782,7 +783,7 @@ contract VotingEscrowTest is Test {
 
     function test_withdraw_emitsWithdrawEvent() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -798,7 +799,7 @@ contract VotingEscrowTest is Test {
 
     function test_withdraw_emitsSupplyEvent() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -820,7 +821,7 @@ contract VotingEscrowTest is Test {
 
     function test_withdraw_and_create_lock_successful() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -828,7 +829,7 @@ contract VotingEscrowTest is Test {
         vm.warp(unlockTime + 1);
 
         uint256 newLockAmount = 200e18;
-        uint256 newUnlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 newUnlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.prank(alice, alice);
         votingEscrow.withdraw_and_create_lock(newLockAmount, newUnlockTime);
@@ -840,7 +841,7 @@ contract VotingEscrowTest is Test {
 
     function test_withdraw_and_create_lock_revertsWhenUnlockedGlobally() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -913,7 +914,7 @@ contract VotingEscrowTest is Test {
 
     function test_balanceOf_returnsZeroAfterExpiry() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -927,7 +928,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
 
         vm.prank(alice, alice);
-        votingEscrow.create_lock(lockAmount, block.timestamp + DEFAULT_MINTIME);
+        votingEscrow.create_lock(lockAmount, block.timestamp + DEFAULT_MINTIME + WEEK);
 
         vm.prank(bob, bob);
         votingEscrow.create_lock(lockAmount, block.timestamp + MAXTIME);
@@ -966,8 +967,7 @@ contract VotingEscrowTest is Test {
         vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
-        uint256 futureTime = block.timestamp + 1000;
-        uint256 balance = votingEscrow.balanceOfAtT(alice, futureTime);
+        uint256 balance = votingEscrow.balanceOfAtT(alice, unlockTime);
         assertEq(balance, 0);
     }
 
@@ -1135,7 +1135,7 @@ contract VotingEscrowTest is Test {
 
     function test_totalSupply_equalsZeroAfterAllLocksExpire() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -1323,7 +1323,7 @@ contract VotingEscrowTest is Test {
 
     function test_locked__end_returnsCorrectEndTime() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
         uint256 roundedUnlockTime = (unlockTime / WEEK) * WEEK;
 
         vm.prank(alice, alice);
@@ -1341,7 +1341,7 @@ contract VotingEscrowTest is Test {
     /* =================================================== */
 
     function testFuzz_create_lock_variousAmounts(uint256 lockAmount) external {
-        lockAmount = bound(lockAmount, 1, INITIAL_BALANCE);
+        lockAmount = bound(lockAmount, 1e18, INITIAL_BALANCE);
         uint256 unlockTime = block.timestamp + MAXTIME;
 
         vm.prank(alice, alice);
@@ -1353,9 +1353,11 @@ contract VotingEscrowTest is Test {
     }
 
     function testFuzz_create_lock_variousUnlockTimes(uint256 unlockDuration) external {
-        unlockDuration = bound(unlockDuration, DEFAULT_MINTIME, MAXTIME);
+        // Max unlock time is MAXTIME - WEEK to ensure that when rounded down to the nearest week,
+        // it does not exceed MAXTIME.
+        unlockDuration = bound(unlockDuration, DEFAULT_MINTIME, MAXTIME - WEEK);
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + unlockDuration;
+        uint256 unlockTime = block.timestamp + unlockDuration + WEEK;
 
         vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -1460,7 +1462,7 @@ contract VotingEscrowTest is Test {
     function testFuzz_withdraw_after_expiry(uint256 lockAmount, uint256 extraTime) external {
         lockAmount = bound(lockAmount, 1e18, INITIAL_BALANCE);
         extraTime = bound(extraTime, 1, 365 days);
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -1517,7 +1519,7 @@ contract VotingEscrowTest is Test {
 
     function test_create_lock_atWeekBoundary() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = ((block.timestamp + DEFAULT_MINTIME) / WEEK) * WEEK;
+        uint256 unlockTime = ((block.timestamp + DEFAULT_MINTIME) / WEEK) * WEEK + WEEK;
 
         vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -1550,7 +1552,7 @@ contract VotingEscrowTest is Test {
 
     function test_create_lock_exactMinTime() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -1591,7 +1593,7 @@ contract VotingEscrowTest is Test {
 
     function test_voting_power_approaches_zero_near_expiry() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + WEEK;
 
         vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
@@ -1608,7 +1610,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
 
         vm.prank(alice, alice);
-        votingEscrow.create_lock(lockAmount, block.timestamp + DEFAULT_MINTIME);
+        votingEscrow.create_lock(lockAmount, block.timestamp + DEFAULT_MINTIME + WEEK);
 
         vm.prank(bob, bob);
         votingEscrow.create_lock(lockAmount, block.timestamp + 6 * 4 weeks);
