@@ -960,15 +960,19 @@ contract VotingEscrowTest is Test {
     /*            BALANCE OF AT T TESTS                    */
     /* =================================================== */
 
-    function test_balanceOfAtT_returnsZeroForFutureTimeWithNoCheckpoint() external {
+    function test_balanceOfAtT_returnsCorrectBalanceDecayOverTime() external {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
         vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
+        uint256 balanceNow = votingEscrow.balanceOf(alice);
 
-        uint256 balance = votingEscrow.balanceOfAtT(alice, unlockTime);
-        assertEq(balance, 0);
+        uint256 balanceHalfTime = votingEscrow.balanceOfAtT(alice, unlockTime / 2);
+        uint256 endBalance = votingEscrow.balanceOfAtT(alice, unlockTime);
+        assertGt(balanceNow, balanceHalfTime);
+        assertGt(balanceHalfTime, endBalance);
+        assertEq(endBalance, 0);
     }
 
     function test_balanceOfAtT_returnsCorrectBalanceForPastTime() external {
