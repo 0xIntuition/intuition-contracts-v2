@@ -88,15 +88,15 @@ contract VotingEscrowTest is Test {
 
         _deployVotingEscrow();
 
-        vm.startPrank(alice);
+        vm.startPrank(alice, alice);
         token.approve(address(votingEscrow), type(uint256).max);
         vm.stopPrank();
 
-        vm.startPrank(bob);
+        vm.startPrank(bob, bob);
         token.approve(address(votingEscrow), type(uint256).max);
         vm.stopPrank();
 
-        vm.startPrank(charlie);
+        vm.startPrank(charlie, charlie);
         token.approve(address(votingEscrow), type(uint256).max);
         vm.stopPrank();
     }
@@ -199,13 +199,14 @@ contract VotingEscrowTest is Test {
     }
 
     function test_add_to_whitelist_revertsForNonAdmin() external {
-        vm.prank(alice);
+        vm.startPrank(alice, alice);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IAccessControl.AccessControlUnauthorizedAccount.selector, alice, votingEscrow.DEFAULT_ADMIN_ROLE()
             )
         );
         votingEscrow.add_to_whitelist(smartContract);
+        vm.stopPrank();
     }
 
     function test_remove_from_whitelist_successByAdmin() external {
@@ -220,13 +221,14 @@ contract VotingEscrowTest is Test {
         vm.prank(admin);
         votingEscrow.add_to_whitelist(smartContract);
 
-        vm.prank(alice);
+        vm.startPrank(alice, alice);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IAccessControl.AccessControlUnauthorizedAccount.selector, alice, votingEscrow.DEFAULT_ADMIN_ROLE()
             )
         );
         votingEscrow.remove_from_whitelist(smartContract);
+        vm.stopPrank();
     }
 
     function test_unlock_successByAdmin() external {
@@ -236,13 +238,14 @@ contract VotingEscrowTest is Test {
     }
 
     function test_unlock_revertsForNonAdmin() external {
-        vm.prank(alice);
+        vm.startPrank(alice, alice);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IAccessControl.AccessControlUnauthorizedAccount.selector, alice, votingEscrow.DEFAULT_ADMIN_ROLE()
             )
         );
         votingEscrow.unlock();
+        vm.stopPrank();
     }
 
     function test_changeController_successByCurrentController() external {
@@ -252,7 +255,7 @@ contract VotingEscrowTest is Test {
     }
 
     function test_changeController_revertsForNonController() external {
-        vm.prank(alice);
+        vm.prank(alice, alice);
         vm.expectRevert();
         votingEscrow.changeController(bob);
     }
@@ -265,7 +268,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         (int128 lockedAmount, uint256 lockedEnd) = votingEscrow.locked(alice);
@@ -276,7 +279,7 @@ contract VotingEscrowTest is Test {
     function test_create_lock_revertsOnZeroValue() external {
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         vm.expectRevert();
         votingEscrow.create_lock(0, unlockTime);
     }
@@ -285,7 +288,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.startPrank(alice);
+        vm.startPrank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         vm.expectRevert("Withdraw old tokens first");
@@ -297,7 +300,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + 1 weeks;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         vm.expectRevert("Voting lock must be at least MINTIME");
         votingEscrow.create_lock(lockAmount, unlockTime);
     }
@@ -306,7 +309,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + MAXTIME + 1 weeks;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         vm.expectRevert("Voting lock can be 2 years max");
         votingEscrow.create_lock(lockAmount, unlockTime);
     }
@@ -318,7 +321,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         vm.expectRevert("unlocked globally");
         votingEscrow.create_lock(lockAmount, unlockTime);
     }
@@ -359,7 +362,7 @@ contract VotingEscrowTest is Test {
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + 3 days;
         uint256 expectedUnlockTime = (unlockTime / WEEK) * WEEK;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         (, uint256 lockedEnd) = votingEscrow.locked(alice);
@@ -372,7 +375,7 @@ contract VotingEscrowTest is Test {
 
         uint256 supplyBefore = votingEscrow.supply();
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         assertEq(votingEscrow.supply(), supplyBefore + lockAmount);
@@ -386,7 +389,7 @@ contract VotingEscrowTest is Test {
         vm.expectEmit(true, true, true, true);
         emit Deposit(alice, lockAmount, roundedUnlockTime, VotingEscrow.DepositType.CREATE_LOCK_TYPE, block.timestamp);
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
     }
 
@@ -397,7 +400,7 @@ contract VotingEscrowTest is Test {
         vm.expectEmit(true, true, true, true);
         emit Supply(0, lockAmount);
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
     }
 
@@ -410,11 +413,11 @@ contract VotingEscrowTest is Test {
         uint256 depositAmount = 50e18;
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         token.mint(bob, depositAmount);
-        vm.startPrank(bob);
+        vm.startPrank(bob, bob);
         token.approve(address(votingEscrow), depositAmount);
         votingEscrow.deposit_for(alice, depositAmount);
         vm.stopPrank();
@@ -427,10 +430,10 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
-        vm.prank(bob);
+        vm.prank(bob, bob);
         vm.expectRevert();
         votingEscrow.deposit_for(alice, 0);
     }
@@ -438,7 +441,7 @@ contract VotingEscrowTest is Test {
     function test_deposit_for_revertsOnNoExistingLock() external {
         uint256 depositAmount = 50e18;
 
-        vm.prank(bob);
+        vm.prank(bob, bob);
         vm.expectRevert("No existing lock found");
         votingEscrow.deposit_for(alice, depositAmount);
     }
@@ -447,12 +450,12 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         vm.warp(unlockTime + 1);
 
-        vm.prank(bob);
+        vm.prank(bob, bob);
         vm.expectRevert("Cannot add to expired lock. Withdraw");
         votingEscrow.deposit_for(alice, 50e18);
     }
@@ -461,13 +464,13 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         vm.prank(admin);
         votingEscrow.unlock();
 
-        vm.prank(bob);
+        vm.prank(bob, bob);
         vm.expectRevert("unlocked globally");
         votingEscrow.deposit_for(alice, 50e18);
     }
@@ -478,7 +481,7 @@ contract VotingEscrowTest is Test {
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
         uint256 roundedUnlockTime = (unlockTime / WEEK) * WEEK;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         token.mint(bob, depositAmount);
@@ -488,7 +491,7 @@ contract VotingEscrowTest is Test {
             alice, depositAmount, roundedUnlockTime, VotingEscrow.DepositType.DEPOSIT_FOR_TYPE, block.timestamp
         );
 
-        vm.startPrank(bob);
+        vm.startPrank(bob, bob);
         token.approve(address(votingEscrow), depositAmount);
         votingEscrow.deposit_for(alice, depositAmount);
         vm.stopPrank();
@@ -503,7 +506,7 @@ contract VotingEscrowTest is Test {
         uint256 increaseAmount = 50e18;
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.startPrank(alice);
+        vm.startPrank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
         votingEscrow.increase_amount(increaseAmount);
         vm.stopPrank();
@@ -516,7 +519,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.startPrank(alice);
+        vm.startPrank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
         vm.expectRevert();
         votingEscrow.increase_amount(0);
@@ -524,7 +527,7 @@ contract VotingEscrowTest is Test {
     }
 
     function test_increase_amount_revertsOnNoExistingLock() external {
-        vm.prank(alice);
+        vm.prank(alice, alice);
         vm.expectRevert("No existing lock found");
         votingEscrow.increase_amount(50e18);
     }
@@ -533,12 +536,12 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         vm.warp(unlockTime + 1);
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         vm.expectRevert("Cannot add to expired lock. Withdraw");
         votingEscrow.increase_amount(50e18);
     }
@@ -549,7 +552,7 @@ contract VotingEscrowTest is Test {
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
         uint256 roundedUnlockTime = (unlockTime / WEEK) * WEEK;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         vm.expectEmit(true, true, true, true);
@@ -557,7 +560,7 @@ contract VotingEscrowTest is Test {
             alice, increaseAmount, roundedUnlockTime, VotingEscrow.DepositType.INCREASE_LOCK_AMOUNT, block.timestamp
         );
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.increase_amount(increaseAmount);
     }
 
@@ -570,7 +573,7 @@ contract VotingEscrowTest is Test {
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
         uint256 newUnlockTime = block.timestamp + 4 weeks;
 
-        vm.startPrank(alice);
+        vm.startPrank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
         votingEscrow.increase_unlock_time(newUnlockTime);
         vm.stopPrank();
@@ -583,27 +586,28 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         vm.warp(unlockTime + 1);
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         vm.expectRevert("Lock expired");
         votingEscrow.increase_unlock_time(block.timestamp + 4 weeks);
     }
 
     function test_increase_unlock_time_revertsOnNoLock() external {
-        vm.prank(alice);
+        vm.startPrank(alice, alice);
         vm.expectRevert("Nothing is locked");
         votingEscrow.increase_unlock_time(block.timestamp + 4 weeks);
+        vm.stopPrank();
     }
 
     function test_increase_unlock_time_revertsOnShorterDuration() external {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + 4 weeks;
 
-        vm.startPrank(alice);
+        vm.startPrank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 shorterUnlockTime = block.timestamp + 3 weeks;
@@ -614,9 +618,9 @@ contract VotingEscrowTest is Test {
 
     function test_increase_unlock_time_revertsOnTooLongDuration() external {
         uint256 lockAmount = 100e18;
-        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
+        uint256 unlockTime = block.timestamp + DEFAULT_MINTIME + 10;
 
-        vm.startPrank(alice);
+        vm.startPrank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 tooLongUnlockTime = block.timestamp + MAXTIME + 1 weeks;
@@ -631,13 +635,13 @@ contract VotingEscrowTest is Test {
         uint256 newUnlockTime = block.timestamp + 4 weeks;
         uint256 roundedNewUnlockTime = (newUnlockTime / WEEK) * WEEK;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         vm.expectEmit(true, true, true, true);
         emit Deposit(alice, 0, roundedNewUnlockTime, VotingEscrow.DepositType.INCREASE_UNLOCK_TIME, block.timestamp);
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.increase_unlock_time(newUnlockTime);
     }
 
@@ -651,7 +655,7 @@ contract VotingEscrowTest is Test {
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
         uint256 newUnlockTime = block.timestamp + 4 weeks;
 
-        vm.startPrank(alice);
+        vm.startPrank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
         votingEscrow.increase_amount_and_time(increaseAmount, newUnlockTime);
         vm.stopPrank();
@@ -667,7 +671,7 @@ contract VotingEscrowTest is Test {
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
         uint256 roundedUnlockTime = (unlockTime / WEEK) * WEEK;
 
-        vm.startPrank(alice);
+        vm.startPrank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
         votingEscrow.increase_amount_and_time(increaseAmount, 0);
         vm.stopPrank();
@@ -682,7 +686,7 @@ contract VotingEscrowTest is Test {
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
         uint256 newUnlockTime = block.timestamp + 4 weeks;
 
-        vm.startPrank(alice);
+        vm.startPrank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
         votingEscrow.increase_amount_and_time(0, newUnlockTime);
         vm.stopPrank();
@@ -696,7 +700,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.startPrank(alice);
+        vm.startPrank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         vm.expectRevert("Value and Unlock cannot both be 0");
@@ -712,14 +716,14 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 balanceBefore = token.balanceOf(alice);
 
         vm.warp(unlockTime + 1);
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.withdraw();
 
         assertEq(token.balanceOf(alice), balanceBefore + lockAmount);
@@ -733,10 +737,10 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         vm.expectRevert("The lock didn't expire");
         votingEscrow.withdraw();
     }
@@ -745,7 +749,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         vm.prank(admin);
@@ -753,7 +757,7 @@ contract VotingEscrowTest is Test {
 
         uint256 balanceBefore = token.balanceOf(alice);
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.withdraw();
 
         assertEq(token.balanceOf(alice), balanceBefore + lockAmount);
@@ -763,14 +767,14 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         vm.warp(unlockTime + 1);
 
         uint256 supplyBefore = votingEscrow.supply();
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.withdraw();
 
         assertEq(votingEscrow.supply(), supplyBefore - lockAmount);
@@ -780,7 +784,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         vm.warp(unlockTime + 1);
@@ -788,7 +792,7 @@ contract VotingEscrowTest is Test {
         vm.expectEmit(true, true, true, true);
         emit Withdraw(alice, lockAmount, block.timestamp);
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.withdraw();
     }
 
@@ -796,7 +800,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 supplyBefore = votingEscrow.supply();
@@ -806,7 +810,7 @@ contract VotingEscrowTest is Test {
         vm.expectEmit(true, true, true, true);
         emit Supply(supplyBefore, 0);
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.withdraw();
     }
 
@@ -818,7 +822,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         vm.warp(unlockTime + 1);
@@ -826,7 +830,7 @@ contract VotingEscrowTest is Test {
         uint256 newLockAmount = 200e18;
         uint256 newUnlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.withdraw_and_create_lock(newLockAmount, newUnlockTime);
 
         (int128 lockedAmount, uint256 lockedEnd) = votingEscrow.locked(alice);
@@ -838,7 +842,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         vm.warp(unlockTime + 1);
@@ -846,7 +850,7 @@ contract VotingEscrowTest is Test {
         vm.prank(admin);
         votingEscrow.unlock();
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         vm.expectRevert("unlocked globally");
         votingEscrow.withdraw_and_create_lock(lockAmount, block.timestamp + DEFAULT_MINTIME);
     }
@@ -858,7 +862,7 @@ contract VotingEscrowTest is Test {
     function test_checkpoint_updatesGlobalState() external {
         uint256 epochBefore = votingEscrow.epoch();
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.checkpoint();
 
         assertGe(votingEscrow.epoch(), epochBefore);
@@ -868,7 +872,7 @@ contract VotingEscrowTest is Test {
         vm.prank(admin);
         votingEscrow.unlock();
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         vm.expectRevert("unlocked globally");
         votingEscrow.checkpoint();
     }
@@ -885,7 +889,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 balance = votingEscrow.balanceOf(alice);
@@ -896,7 +900,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 balanceNow = votingEscrow.balanceOf(alice);
@@ -911,7 +915,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         vm.warp(unlockTime + 1);
@@ -922,10 +926,10 @@ contract VotingEscrowTest is Test {
     function test_balanceOf_higherForLongerLockTime() external {
         uint256 lockAmount = 100e18;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, block.timestamp + DEFAULT_MINTIME);
 
-        vm.prank(bob);
+        vm.prank(bob, bob);
         votingEscrow.create_lock(lockAmount, block.timestamp + MAXTIME);
 
         uint256 aliceBalance = votingEscrow.balanceOf(alice);
@@ -939,10 +943,10 @@ contract VotingEscrowTest is Test {
         uint256 bobLockAmount = 200e18;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(aliceLockAmount, unlockTime);
 
-        vm.prank(bob);
+        vm.prank(bob, bob);
         votingEscrow.create_lock(bobLockAmount, unlockTime);
 
         uint256 aliceBalance = votingEscrow.balanceOf(alice);
@@ -959,10 +963,10 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
-        uint256 futureTime = block.timestamp - 1000;
+        uint256 futureTime = block.timestamp + 1000;
         uint256 balance = votingEscrow.balanceOfAtT(alice, futureTime);
         assertEq(balance, 0);
     }
@@ -971,7 +975,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 lockTime = block.timestamp;
@@ -988,7 +992,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 balance = votingEscrow.balanceOfAtT(alice, block.timestamp - 1);
@@ -999,7 +1003,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 balanceAtT = votingEscrow.balanceOfAtT(alice, block.timestamp);
@@ -1025,7 +1029,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 lockBlock = block.number;
@@ -1048,7 +1052,7 @@ contract VotingEscrowTest is Test {
         vm.roll(block.number + 1);
         vm.warp(block.timestamp + 1);
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 balance = votingEscrow.balanceOfAt(alice, blockBeforeLock);
@@ -1069,7 +1073,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         (,,, uint256 firstBlock) = votingEscrow.point_history(0);
@@ -1092,7 +1096,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         assertGt(votingEscrow.totalSupply(), 0);
@@ -1102,7 +1106,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 supplyNow = votingEscrow.totalSupply();
@@ -1117,12 +1121,12 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 supplyWithOneLock = votingEscrow.totalSupply();
 
-        vm.prank(bob);
+        vm.prank(bob, bob);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 supplyWithTwoLocks = votingEscrow.totalSupply();
@@ -1133,7 +1137,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         vm.warp(unlockTime + 1);
@@ -1146,10 +1150,10 @@ contract VotingEscrowTest is Test {
         uint256 bobLockAmount = 150e18;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(aliceLockAmount, unlockTime);
 
-        vm.prank(bob);
+        vm.prank(bob, bob);
         votingEscrow.create_lock(bobLockAmount, unlockTime);
 
         uint256 totalSupply = votingEscrow.totalSupply();
@@ -1166,7 +1170,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 supply = votingEscrow.totalSupplyAtT(block.timestamp - 1);
@@ -1177,7 +1181,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 lockTime = block.timestamp;
@@ -1194,7 +1198,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 supplyAtT = votingEscrow.totalSupplyAtT(block.timestamp);
@@ -1230,7 +1234,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 lockBlock = block.number;
@@ -1253,7 +1257,7 @@ contract VotingEscrowTest is Test {
         vm.roll(block.number + 1);
         vm.warp(block.timestamp + 1);
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 supply = votingEscrow.totalSupplyAt(blockBeforeLock);
@@ -1274,7 +1278,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         (,,, uint256 firstBlock) = votingEscrow.point_history(0);
@@ -1297,7 +1301,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         int128 slope = votingEscrow.get_last_user_slope(alice);
@@ -1308,7 +1312,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 userEpoch = votingEscrow.user_point_epoch(alice);
@@ -1322,7 +1326,7 @@ contract VotingEscrowTest is Test {
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
         uint256 roundedUnlockTime = (unlockTime / WEEK) * WEEK;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         assertEq(votingEscrow.locked__end(alice), roundedUnlockTime);
@@ -1340,7 +1344,7 @@ contract VotingEscrowTest is Test {
         lockAmount = bound(lockAmount, 1, INITIAL_BALANCE);
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         (int128 lockedAmount,) = votingEscrow.locked(alice);
@@ -1353,7 +1357,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + unlockDuration;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         (, uint256 lockedEnd) = votingEscrow.locked(alice);
@@ -1366,7 +1370,7 @@ contract VotingEscrowTest is Test {
         increaseAmount = bound(increaseAmount, 1, INITIAL_BALANCE / 2);
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.startPrank(alice);
+        vm.startPrank(alice, alice);
         votingEscrow.create_lock(initialAmount, unlockTime);
         votingEscrow.increase_amount(increaseAmount);
         vm.stopPrank();
@@ -1379,7 +1383,7 @@ contract VotingEscrowTest is Test {
         lockAmount = bound(lockAmount, 1e18, INITIAL_BALANCE);
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 balanceBefore = votingEscrow.balanceOf(alice);
@@ -1395,7 +1399,7 @@ contract VotingEscrowTest is Test {
         lockAmount = bound(lockAmount, 1e18, INITIAL_BALANCE);
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 supplyBefore = votingEscrow.totalSupply();
@@ -1412,11 +1416,11 @@ contract VotingEscrowTest is Test {
         depositAmount = bound(depositAmount, 1, INITIAL_BALANCE / 2);
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(initialAmount, unlockTime);
 
         token.mint(bob, depositAmount);
-        vm.startPrank(bob);
+        vm.startPrank(bob, bob);
         token.approve(address(votingEscrow), depositAmount);
         votingEscrow.deposit_for(alice, depositAmount);
         vm.stopPrank();
@@ -1437,13 +1441,13 @@ contract VotingEscrowTest is Test {
         charlieAmount = bound(charlieAmount, 1e18, INITIAL_BALANCE / 3);
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(aliceAmount, unlockTime);
 
-        vm.prank(bob);
+        vm.prank(bob, bob);
         votingEscrow.create_lock(bobAmount, unlockTime);
 
-        vm.prank(charlie);
+        vm.prank(charlie, charlie);
         votingEscrow.create_lock(charlieAmount, unlockTime);
 
         uint256 totalSupply = votingEscrow.totalSupply();
@@ -1458,14 +1462,14 @@ contract VotingEscrowTest is Test {
         extraTime = bound(extraTime, 1, 365 days);
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 balanceBefore = token.balanceOf(alice);
 
         vm.warp(unlockTime + extraTime);
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.withdraw();
 
         assertEq(token.balanceOf(alice), balanceBefore + lockAmount);
@@ -1475,7 +1479,7 @@ contract VotingEscrowTest is Test {
         lockAmount = bound(lockAmount, 1e18, INITIAL_BALANCE);
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 lockTime = block.timestamp;
@@ -1493,7 +1497,7 @@ contract VotingEscrowTest is Test {
         lockAmount = bound(lockAmount, 1e18, INITIAL_BALANCE);
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 lockTime = block.timestamp;
@@ -1515,7 +1519,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = ((block.timestamp + DEFAULT_MINTIME) / WEEK) * WEEK;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         (, uint256 lockedEnd) = votingEscrow.locked(alice);
@@ -1526,7 +1530,7 @@ contract VotingEscrowTest is Test {
         uint256 maxLockAmount = INITIAL_BALANCE;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(maxLockAmount, unlockTime);
 
         (int128 lockedAmount,) = votingEscrow.locked(alice);
@@ -1537,7 +1541,7 @@ contract VotingEscrowTest is Test {
         uint256 minLockAmount = 1;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(minLockAmount, unlockTime);
 
         (int128 lockedAmount,) = votingEscrow.locked(alice);
@@ -1548,7 +1552,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         (int128 lockedAmount,) = votingEscrow.locked(alice);
@@ -1559,7 +1563,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         (int128 lockedAmount,) = votingEscrow.locked(alice);
@@ -1570,14 +1574,14 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 epochAfterCreate = votingEscrow.epoch();
 
         for (uint256 i = 0; i < 5; i++) {
             vm.warp(block.timestamp + 1 weeks);
-            vm.prank(alice);
+            vm.prank(alice, alice);
             votingEscrow.checkpoint();
         }
 
@@ -1589,7 +1593,7 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + DEFAULT_MINTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         (, uint256 lockedEnd) = votingEscrow.locked(alice);
@@ -1603,13 +1607,13 @@ contract VotingEscrowTest is Test {
     function test_multiple_users_different_lock_times() external {
         uint256 lockAmount = 100e18;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, block.timestamp + DEFAULT_MINTIME);
 
-        vm.prank(bob);
+        vm.prank(bob, bob);
         votingEscrow.create_lock(lockAmount, block.timestamp + 6 * 4 weeks);
 
-        vm.prank(charlie);
+        vm.prank(charlie, charlie);
         votingEscrow.create_lock(lockAmount, block.timestamp + MAXTIME);
 
         uint256 aliceBalance = votingEscrow.balanceOf(alice);
@@ -1624,13 +1628,13 @@ contract VotingEscrowTest is Test {
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         for (uint256 i = 0; i < 50; i++) {
             vm.warp(block.timestamp + 1 weeks);
             vm.roll(block.number + 1);
-            vm.prank(alice);
+            vm.prank(alice, alice);
             votingEscrow.checkpoint();
         }
 
@@ -1646,16 +1650,16 @@ contract VotingEscrowTest is Test {
         uint256 bobLockAmount = 200e18;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(aliceLockAmount, unlockTime);
 
-        vm.prank(bob);
+        vm.prank(bob, bob);
         votingEscrow.create_lock(bobLockAmount, unlockTime);
 
         uint256 supply1 = votingEscrow.supply();
         assertEq(supply1, aliceLockAmount + bobLockAmount);
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.increase_amount(50e18);
 
         uint256 supply2 = votingEscrow.supply();
@@ -1663,13 +1667,13 @@ contract VotingEscrowTest is Test {
 
         vm.warp(unlockTime + 1);
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.withdraw();
 
         uint256 supply3 = votingEscrow.supply();
         assertEq(supply3, bobLockAmount);
 
-        vm.prank(bob);
+        vm.prank(bob, bob);
         votingEscrow.withdraw();
 
         uint256 supply4 = votingEscrow.supply();
@@ -1686,7 +1690,7 @@ contract VotingEscrowTest is Test {
         vm.roll(block.number + 10);
         vm.warp(block.timestamp + 10);
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 blockAtLock = block.number;
@@ -1715,13 +1719,13 @@ contract VotingEscrowTest is Test {
         uint256 epochBefore = votingEscrow.user_point_epoch(alice);
         assertEq(epochBefore, 0);
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         uint256 epochAfterCreate = votingEscrow.user_point_epoch(alice);
         assertEq(epochAfterCreate, 1);
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.increase_amount(50e18);
 
         uint256 epochAfterIncrease = votingEscrow.user_point_epoch(alice);
@@ -1733,7 +1737,7 @@ contract VotingEscrowTest is Test {
         uint256 unlockTime = block.timestamp + MAXTIME;
         uint256 roundedUnlockTime = (unlockTime / WEEK) * WEEK;
 
-        vm.prank(alice);
+        vm.prank(alice, alice);
         votingEscrow.create_lock(lockAmount, unlockTime);
 
         int128 slopeChange = votingEscrow.slope_changes(roundedUnlockTime);
