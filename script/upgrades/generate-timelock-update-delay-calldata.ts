@@ -27,7 +27,7 @@ async function main() {
 
   const newDelayInSeconds = parseInt(process.argv[3]);
 
-  if (isNaN(newDelayInSeconds) || newDelayInSeconds <= Number(currentDelay)) {
+  if (isNaN(newDelayInSeconds)) {
     throw new Error("A valid delay in seconds must be provided.");
   }
 

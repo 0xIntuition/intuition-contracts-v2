@@ -4,58 +4,11 @@ pragma solidity 0.8.29;
 import { Test } from "forge-std/src/Test.sol";
 import { console2 } from "forge-std/src/console2.sol";
 
-import { VotingEscrow, Point, LockedBalance } from "src/external/curve/VotingEscrow.sol";
+import { VotingEscrowHarness } from "tests/mocks/VotingEscrowHarness.sol";
 import { ERC20Mock } from "tests/mocks/ERC20Mock.sol";
 
-/// @dev Harness exposing internal functions + some test-only setters.
-contract VotingEscrowViewHarness is VotingEscrow {
-    function initialize(address admin, address tokenAddress, uint256 minTime) external initializer {
-        __VotingEscrow_init(admin, tokenAddress, minTime);
-    }
-
-    // --------- Exposed internal helpers ---------
-
-    function exposed_find_timestamp_epoch(uint256 ts, uint256 maxEpoch) external view returns (uint256) {
-        return _find_timestamp_epoch(ts, maxEpoch);
-    }
-
-    function exposed_find_user_timestamp_epoch(address addr, uint256 ts) external view returns (uint256) {
-        return _find_user_timestamp_epoch(addr, ts);
-    }
-
-    function exposed_balanceOf(address addr, uint256 t) external view returns (uint256) {
-        return _balanceOf(addr, t);
-    }
-
-    function exposed_totalSupplyAtT(uint256 t) external view returns (uint256) {
-        return _totalSupply(t);
-    }
-
-    // --------- Test-only mutation helpers (not used in prod) ---------
-
-    function h_setPointHistory(uint256 idx, int128 bias, int128 slope, uint256 ts, uint256 blk) external {
-        point_history[idx] = Point({ bias: bias, slope: slope, ts: ts, blk: blk });
-    }
-
-    function h_setUserPoint(address addr, uint256 idx, int128 bias, int128 slope, uint256 ts, uint256 blk) external {
-        user_point_history[addr][idx] = Point({ bias: bias, slope: slope, ts: ts, blk: blk });
-    }
-
-    function h_setEpoch(uint256 e) external {
-        epoch = e;
-    }
-
-    function h_setUserEpoch(address addr, uint256 e) external {
-        user_point_epoch[addr] = e;
-    }
-
-    function h_getEpoch() external view returns (uint256) {
-        return epoch;
-    }
-}
-
-contract VotingEscrowViewHelpersTest is Test {
-    VotingEscrowViewHarness internal votingEscrow;
+contract VotingEscrowViewHelpersIntegrationTest is Test {
+    VotingEscrowHarness internal votingEscrow;
     ERC20Mock internal token;
 
     address internal admin;
@@ -76,7 +29,7 @@ contract VotingEscrowViewHelpersTest is Test {
         vm.roll(100);
 
         token = new ERC20Mock("Test Token", "TEST", 18);
-        votingEscrow = new VotingEscrowViewHarness();
+        votingEscrow = new VotingEscrowHarness();
         votingEscrow.initialize(admin, address(token), DEFAULT_MINTIME);
 
         token.mint(alice, INITIAL_BALANCE);
@@ -109,161 +62,6 @@ contract VotingEscrowViewHelpersTest is Test {
         lockStart = block.timestamp;
 
         (, lockEnd) = votingEscrow.locked(user);
-    }
-
-    // ------------------------------------------------------------
-    // _find_timestamp_epoch tests
-    // ------------------------------------------------------------
-
-    function test_find_timestamp_epoch_basic_cases() external {
-        uint256 baseTs = 10_000;
-        uint256 baseBlk = 500;
-
-        // 5 global checkpoints at 10s intervals
-        for (uint256 i = 0; i < 5; ++i) {
-            votingEscrow.h_setPointHistory(
-                i, int128(int256(i + 1)), int128(int256(0)), baseTs + i * 10, baseBlk + i * 5
-            );
-        }
-        // epochs indexed [0..4]
-        votingEscrow.h_setEpoch(4);
-
-        // Before first checkpoint -> 0
-        assertEq(votingEscrow.exposed_find_timestamp_epoch(baseTs - 1, 4), 0);
-
-        // Exactly at first
-        assertEq(votingEscrow.exposed_find_timestamp_epoch(baseTs, 4), 0);
-
-        // Between first and second
-        assertEq(votingEscrow.exposed_find_timestamp_epoch(baseTs + 5, 4), 0);
-
-        // Exactly at second
-        assertEq(votingEscrow.exposed_find_timestamp_epoch(baseTs + 10, 4), 1);
-
-        // In middle (between 3rd and 4th)
-        assertEq(votingEscrow.exposed_find_timestamp_epoch(baseTs + 25, 4), 2);
-
-        // Exactly at last
-        assertEq(votingEscrow.exposed_find_timestamp_epoch(baseTs + 40, 4), 4);
-
-        // After last
-        assertEq(votingEscrow.exposed_find_timestamp_epoch(baseTs + 100, 4), 4);
-    }
-
-    function test_find_timestamp_epoch_single_epoch() external {
-        uint256 baseTs = 20_000;
-        uint256 baseBlk = 1000;
-
-        votingEscrow.h_setPointHistory(0, int128(int256(1)), int128(int256(0)), baseTs, baseBlk);
-        votingEscrow.h_setEpoch(0);
-
-        // Any ts < baseTs -> 0 (no earlier checkpoint than index 0)
-        assertEq(votingEscrow.exposed_find_timestamp_epoch(baseTs - 1, 0), 0);
-
-        // Exactly at baseTs -> 0
-        assertEq(votingEscrow.exposed_find_timestamp_epoch(baseTs, 0), 0);
-
-        // After baseTs -> 0 (only checkpoint)
-        assertEq(votingEscrow.exposed_find_timestamp_epoch(baseTs + 1000, 0), 0);
-    }
-
-    function testFuzz_find_timestamp_epoch_matches_linear_scan(uint256 tRaw) external {
-        uint256 baseTs = 30_000;
-        uint256 baseBlk = 2000;
-        uint256 numEpochs = 6; // indices [0..5]
-
-        for (uint256 i = 0; i < numEpochs; ++i) {
-            votingEscrow.h_setPointHistory(
-                i,
-                int128(int256(i + 1)),
-                int128(int256(0)),
-                baseTs + i * 123, // non-uniform spacing is fine
-                baseBlk + i * 13
-            );
-        }
-        votingEscrow.h_setEpoch(numEpochs - 1);
-
-        // Search over a range that covers before first and after last
-        uint256 minT = baseTs - 500;
-        uint256 maxT = baseTs + numEpochs * 123 + 500;
-        uint256 t = bound(tRaw, minT, maxT);
-
-        uint256 expected = 0;
-        for (uint256 i = 0; i < numEpochs; ++i) {
-            (,, uint256 ts,) = votingEscrow.point_history(i);
-            if (ts <= t) {
-                expected = i;
-            }
-        }
-
-        uint256 actual = votingEscrow.exposed_find_timestamp_epoch(t, numEpochs - 1);
-        assertEq(actual, expected, "find_timestamp_epoch must match linear scan");
-    }
-
-    // ------------------------------------------------------------
-    // _find_user_timestamp_epoch tests
-    // ------------------------------------------------------------
-
-    function test_find_user_timestamp_epoch_returnsZeroWhenNoHistory() external view {
-        // No checkpoints for alice
-        assertEq(votingEscrow.exposed_find_user_timestamp_epoch(alice, 12_345), 0);
-    }
-
-    function test_find_user_timestamp_epoch_basic_cases() external {
-        uint256 baseTs = 40_000;
-        uint256 baseBlk = 3000;
-
-        // Mimic real pattern: user epochs start at 1, index 0 is "empty"
-        for (uint256 i = 1; i <= 4; ++i) {
-            votingEscrow.h_setUserPoint(
-                alice, i, int128(int256(i)), int128(int256(0)), baseTs + (i - 1) * 10, baseBlk + (i - 1) * 7
-            );
-        }
-        votingEscrow.h_setUserEpoch(alice, 4);
-
-        // Before first checkpoint -> 0
-        assertEq(votingEscrow.exposed_find_user_timestamp_epoch(alice, baseTs - 1), 0);
-
-        // Exactly at first real checkpoint
-        assertEq(votingEscrow.exposed_find_user_timestamp_epoch(alice, baseTs), 1);
-
-        // Between first and second
-        assertEq(votingEscrow.exposed_find_user_timestamp_epoch(alice, baseTs + 5), 1);
-
-        // Exactly at third
-        assertEq(votingEscrow.exposed_find_user_timestamp_epoch(alice, baseTs + 20), 3);
-
-        // After last
-        assertEq(votingEscrow.exposed_find_user_timestamp_epoch(alice, baseTs + 100), 4);
-    }
-
-    function testFuzz_find_user_timestamp_epoch_matches_linear_scan(uint256 tRaw) external {
-        uint256 baseTs = 50_000;
-        uint256 baseBlk = 4000;
-        uint256 numUserEpochs = 5; // real epochs at indices [1..5]
-
-        for (uint256 i = 1; i <= numUserEpochs; ++i) {
-            votingEscrow.h_setUserPoint(
-                alice, i, int128(int256(i)), int128(int256(0)), baseTs + (i - 1) * 111, baseBlk + (i - 1) * 9
-            );
-        }
-        votingEscrow.h_setUserEpoch(alice, numUserEpochs);
-
-        // Range covering before first and after last
-        uint256 minT = baseTs - 300;
-        uint256 maxT = baseTs + numUserEpochs * 111 + 300;
-        uint256 t = bound(tRaw, minT, maxT);
-
-        uint256 expected = 0;
-        for (uint256 i = 1; i <= numUserEpochs; ++i) {
-            (,, uint256 ts,) = votingEscrow.user_point_history(alice, i);
-            if (ts <= t) {
-                expected = i;
-            }
-        }
-
-        uint256 actual = votingEscrow.exposed_find_user_timestamp_epoch(alice, t);
-        assertEq(actual, expected, "find_user_timestamp_epoch must match linear scan");
     }
 
     // ------------------------------------------------------------
