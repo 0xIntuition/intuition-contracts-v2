@@ -683,18 +683,25 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow, IVote
         return account;
     }
 
-    /// @inheritdoc IVotes
-    /// @dev Delegation is not supported: voting power is always equal to user's veTRUST balance and cannot be
-    /// reassigned to another address
+    /**
+     * @inheritdoc IVotes
+     * @dev Delegation is not supported: voting power is always equal to user's veTRUST balance and cannot be
+     *       reassigned to another address
+     * @dev DelegateChanged event is still emitted for compatibility and only when the delegatee is the same as the
+     *      sender
+     */
     function delegate(address delegatee) external {
         if (delegatee != msg.sender) {
             revert TrustBonding_DelegationNotSupported();
         }
+        emit DelegateChanged(msg.sender, msg.sender, msg.sender);
     }
 
-    /// @inheritdoc IVotes
-    /// @dev Delegation is not supported: voting power is always equal to user's veTRUST balance and cannot be
-    /// reassigned to another address
+    /**
+     * @inheritdoc IVotes
+     * @dev Delegation is not supported: voting power is always equal to user's veTRUST balance and cannot be
+     *      reassigned to another address
+     */
     function delegateBySig(
         address,
         /* delegatee */

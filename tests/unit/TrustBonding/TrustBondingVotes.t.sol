@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { console, Vm } from "forge-std/src/Test.sol";
 import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import { IERC6372 } from "@openzeppelin/contracts/interfaces/IERC6372.sol";
 
@@ -11,6 +10,8 @@ import { TrustBondingBase } from "tests/unit/TrustBonding/TrustBondingBase.t.sol
 
 contract TrustBondingVotesTest is TrustBondingBase {
     TrustBonding internal trustBonding;
+
+    event DelegateChanged(address indexed delegator, address indexed fromDelegate, address indexed toDelegate);
 
     function setUp() public virtual override {
         super.setUp();
@@ -140,10 +141,12 @@ contract TrustBondingVotesTest is TrustBondingBase {
         );
     }
 
-    function test_delegate_allowsSelfDelegationWithoutRevert() public {
+    function test_delegate_allowsSelfDelegationWithoutRevert_andEmitsAnEvent() public {
         address userAddress = users.alice;
 
         vm.startPrank(userAddress);
+        vm.expectEmit(true, true, true, true);
+        emit DelegateChanged(userAddress, userAddress, userAddress);
         trustBonding.delegate(userAddress);
         vm.stopPrank();
     }
@@ -162,34 +165,6 @@ contract TrustBondingVotesTest is TrustBondingBase {
         // Parameters are irrelevant; function always reverts
         vm.expectRevert(ITrustBonding.TrustBonding_DelegationNotSupported.selector);
         trustBonding.delegateBySig(users.bob, 0, block.timestamp + 1 days, 0, bytes32(0), bytes32(0));
-    }
-
-    function test_delegate_selfDelegationDoesNotEmitDelegateEvents() public {
-        address userAddress = users.alice;
-
-        vm.startPrank(userAddress);
-        vm.recordLogs();
-        trustBonding.delegate(userAddress);
-        Vm.Log[] memory logs = vm.getRecordedLogs();
-        vm.stopPrank();
-
-        bytes32 delegateChangedTopic = keccak256("DelegateChanged(address,address,address)");
-        bytes32 delegateVotesChangedTopic = keccak256("DelegateVotesChanged(address,uint256,uint256)");
-
-        for (uint256 index = 0; index < logs.length; index++) {
-            Vm.Log memory logEntry = logs[index];
-
-            if (logEntry.topics.length == 0) {
-                continue;
-            }
-
-            bytes32 topic0 = logEntry.topics[0];
-
-            assertTrue(
-                topic0 != delegateChangedTopic && topic0 != delegateVotesChangedTopic,
-                "Delegate events must not be emitted by TrustBonding.delegate"
-            );
-        }
     }
 
     /*//////////////////////////////////////////////////////////////
