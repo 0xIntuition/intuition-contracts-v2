@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
+import { IERC6372 } from "@openzeppelin/contracts/interfaces/IERC6372.sol";
+import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
 import { ICoreEmissionsController } from "src/interfaces/ICoreEmissionsController.sol";
@@ -39,7 +41,7 @@ import { VotingEscrow, LockedBalance } from "src/external/curve/VotingEscrow.sol
  *         contract (originally written in Vyper), as used by the Stargate Finance protocol:
  *         https://github.com/stargate-protocol/stargate-dao/blob/main/contracts/VotingEscrow.sol
  */
-contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
+contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow, IVotes, IERC6372 {
     /*//////////////////////////////////////////////////////////////
                                  CONSTANTS
     //////////////////////////////////////////////////////////////*/
@@ -648,5 +650,80 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     function _previousEpoch() internal view returns (uint256) {
         uint256 curr = _currentEpoch();
         return curr == 0 ? 0 : curr - 1;
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            IVotes IMPLEMENTATION
+    //////////////////////////////////////////////////////////////*/
+
+    /// @inheritdoc IVotes
+    function getVotes(address account) external view returns (uint256) {
+        return _balanceOf(account, block.timestamp);
+    }
+
+    /// @inheritdoc IVotes
+    function getPastVotes(address account, uint256 timepoint) external view returns (uint256) {
+        if (timepoint >= block.timestamp) {
+            revert TrustBonding_TimepointMustBeInPast();
+        }
+        return _balanceOf(account, timepoint);
+    }
+
+    /// @inheritdoc IVotes
+    function getPastTotalSupply(uint256 timepoint) external view returns (uint256) {
+        if (timepoint >= block.timestamp) {
+            revert TrustBonding_TimepointMustBeInPast();
+        }
+        return _totalSupply(timepoint);
+    }
+
+    /// @inheritdoc IVotes
+    /// @dev In this implementation, each account is its own delegate
+    function delegates(address account) external view returns (address) {
+        return account;
+    }
+
+    /// @inheritdoc IVotes
+    /// @dev Delegation is not supported: voting power is always equal to user's veTRUST balance and cannot be
+    /// reassigned to another address
+    function delegate(address delegatee) external {
+        if (delegatee != msg.sender) {
+            revert TrustBonding_DelegationNotSupported();
+        }
+    }
+
+    /// @inheritdoc IVotes
+    /// @dev Delegation is not supported: voting power is always equal to user's veTRUST balance and cannot be
+    /// reassigned to another address
+    function delegateBySig(
+        address,
+        /* delegatee */
+        uint256,
+        /* nonce */
+        uint256,
+        /* expiry */
+        uint8,
+        /* v */
+        bytes32,
+        /* r */
+        bytes32 /* s */
+    )
+        external
+    {
+        revert TrustBonding_DelegationNotSupported();
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                        IERC6372 IMPLEMENTATION
+    //////////////////////////////////////////////////////////////*/
+
+    /// @inheritdoc IERC6372
+    function clock() public view returns (uint48) {
+        return uint48(block.timestamp);
+    }
+
+    /// @inheritdoc IERC6372
+    function CLOCK_MODE() public pure returns (string memory) {
+        return "mode=timestamp";
     }
 }

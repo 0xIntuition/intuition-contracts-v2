@@ -89,6 +89,12 @@ interface ITrustBonding {
     /// @dev Thrown when a zero address is provided where a valid address is required
     error TrustBonding_ZeroAddress();
 
+    /// @dev Thrown when delegation functionality is attempted but not supported
+    error TrustBonding_DelegationNotSupported();
+
+    /// @dev Thrown when a provided timepoint is not in the past
+    error TrustBonding_TimepointMustBeInPast();
+
     /* =================================================== */
     /*                      FUNCTIONS                      */
     /* =================================================== */
