@@ -725,12 +725,12 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow, IVote
     //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc IERC6372
-    function clock() public view returns (uint48) {
+    function clock() external view returns (uint48) {
         return uint48(block.timestamp);
     }
 
     /// @inheritdoc IERC6372
-    function CLOCK_MODE() public pure returns (string memory) {
+    function CLOCK_MODE() external pure returns (string memory) {
         return "mode=timestamp";
     }
 }
