@@ -542,6 +542,21 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
      *                   less than or equal to `_ts`.
      */
     function _find_timestamp_epoch(uint256 _ts, uint256 max_epoch) internal view returns (uint256) {
+        // No checkpoints at all means no supply
+        if (max_epoch == 0) {
+            return 0;
+        }
+
+        // If asking before the first checkpoint, supply is zero
+        if (_ts < point_history[0].ts) {
+            return 0;
+        }
+
+        // If asking after the last checkpoint, return last epoch
+        if (_ts >= point_history[max_epoch].ts) {
+            return max_epoch;
+        }
+
         // Binary search
         uint256 _min = 0;
         uint256 _max = max_epoch;
@@ -572,10 +587,26 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
      * @return epoch Index of the user epoch with the largest timestamp less
      *         than or equal to `_ts`.
      */
-    function _find_user_timestamp_epoch(address addr, uint256 _ts) internal view returns (uint256) {
+    function _find_user_timestamp_epoch(address addr, uint256 _ts, uint256 max_epoch) internal view returns (uint256) {
+        // No checkpoints at all means no balance
+        if (max_epoch == 0) {
+            return 0;
+        }
+
+        // If asking before the first checkpoint, balance is zero
+        if (_ts < user_point_history[addr][0].ts) {
+            return 0;
+        }
+
+        // If asking after the last checkpoint, return last epoch
+        if (_ts >= user_point_history[addr][max_epoch].ts) {
+            return max_epoch;
+        }
+
         // Binary search
         uint256 _min = 0;
-        uint256 _max = user_point_epoch[addr];
+        uint256 _max = max_epoch;
+
         for (uint256 i = 0; i < 128; ++i) {
             // Will be always enough for 128-bit numbers
             if (_min >= _max) {
@@ -597,17 +628,7 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     /// @param _t Epoch time to return voting power at
     /// @return User voting power
     function _balanceOf(address addr, uint256 _t) internal view returns (uint256) {
-        uint256 user_epoch = user_point_epoch[addr];
-        if (user_epoch == 0) {
-            return 0;
-        }
-
-        uint256 target_epoch = _find_user_timestamp_epoch(addr, _t);
-        if (target_epoch == 0) {
-            // No user checkpoint at or before _t, hence supply is zero
-            return 0;
-        }
-
+        uint256 target_epoch = _find_user_timestamp_epoch(addr, _t, user_point_epoch[addr]);
         Point memory point = user_point_history[addr][target_epoch];
         point.bias -= point.slope * int128(int256(_t) - int256(point.ts));
         if (point.bias < 0) {
@@ -719,18 +740,7 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     /// @dev Adheres to the ERC20 `totalSupply` interface for Aragon compatibility
     /// @return Total voting power
     function _totalSupply(uint256 t) internal view returns (uint256) {
-        uint256 _epoch = epoch;
-        if (_epoch == 0) {
-            // No checkpoints at all means no supply
-            return 0;
-        }
-
-        // If asking before the first checkpoint, supply is zero
-        if (t < point_history[0].ts) {
-            return 0;
-        }
-
-        uint256 target_epoch = _find_timestamp_epoch(t, _epoch);
+        uint256 target_epoch = _find_timestamp_epoch(t, epoch);
         Point memory point = point_history[target_epoch];
         return _supply_at(point, t);
     }

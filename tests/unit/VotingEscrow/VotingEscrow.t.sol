@@ -1171,6 +1171,8 @@ contract VotingEscrowTest is Test {
     /* =================================================== */
 
     function test_totalSupplyAtT_returnsZeroForTimeBeforeFirstCheckpoint() external {
+        vm.warp(60);
+
         uint256 lockAmount = 100e18;
         uint256 unlockTime = block.timestamp + MAXTIME;
 
