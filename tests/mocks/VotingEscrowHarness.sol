@@ -16,7 +16,7 @@ contract VotingEscrowHarness is VotingEscrow {
     }
 
     function exposed_find_user_timestamp_epoch(address addr, uint256 ts) external view returns (uint256) {
-        return _find_user_timestamp_epoch(addr, ts);
+        return _find_user_timestamp_epoch(addr, ts, user_point_epoch[addr]);
     }
 
     function exposed_balanceOf(address addr, uint256 t) external view returns (uint256) {
