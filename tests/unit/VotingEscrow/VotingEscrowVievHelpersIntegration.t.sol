@@ -167,7 +167,7 @@ contract VotingEscrowViewHelpersIntegrationTest is Test {
         assertEq(votingEscrow.balanceOfAt(alice, block.number), 0);
     }
 
-    function test_balanceOfAt_returnsZeroForBlockBeforeFirstCheckpoint() external {
+    function test_balanceOfAt_revertsForBlockBeforeFirstCheckpoint() external {
         // Manually seed a first global checkpoint at some later block
         uint256 firstBlk = block.number + 100;
         uint256 firstTs = block.timestamp + 1000;
@@ -178,9 +178,9 @@ contract VotingEscrowViewHelpersIntegrationTest is Test {
         // Make sure our query block is not "in the future" relative to chain
         vm.roll(firstBlk + 10);
 
-        // Any block < firstBlk must return 0
         uint256 queryBlock = firstBlk - 1;
-        assertEq(votingEscrow.balanceOfAt(alice, queryBlock), 0);
+        vm.expectRevert();
+        votingEscrow.balanceOfAt(alice, queryBlock);
     }
 
     function test_balanceOfAt_matchesBalanceOfForCurrentBlock() external {
@@ -409,7 +409,7 @@ contract VotingEscrowViewHelpersIntegrationTest is Test {
         assertEq(supplyByBlock, supplyByTime, "totalSupplyAt must match totalSupplyAtT at interpolated timestamp");
     }
 
-    function test_totalSupplyAt_returnsZeroForBlockBeforeFirstCheckpoint() external {
+    function test_totalSupplyAt_revertsForBlockBeforeFirstCheckpoint() external {
         uint256 firstBlk = block.number + 50;
         uint256 firstTs = block.timestamp + 500;
 
@@ -420,7 +420,8 @@ contract VotingEscrowViewHelpersIntegrationTest is Test {
         vm.roll(firstBlk + 10);
 
         uint256 queryBlock = firstBlk - 1;
-        assertEq(votingEscrow.totalSupplyAt(queryBlock), 0);
+        vm.expectRevert();
+        votingEscrow.totalSupplyAt(queryBlock);
     }
 
     function test_totalSupplyAt_revertsForFutureBlock() external {

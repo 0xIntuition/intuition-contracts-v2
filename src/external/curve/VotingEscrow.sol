@@ -653,16 +653,6 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     function balanceOfAt(address addr, uint256 _block) external view returns (uint256) {
         require(_block <= block.number, "block in the future");
 
-        if (epoch == 0) {
-            // No checkpoints at all means no supply
-            return 0;
-        }
-
-        // If asking for a block before the first checkpoint, supply is zero
-        if (_block < point_history[0].blk) {
-            return 0;
-        }
-
         // Binary search
         uint256 _min = 0;
         uint256 _max = user_point_epoch[addr];
@@ -760,16 +750,6 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         require(_block <= block.number, "block in the future");
 
         uint256 _epoch = epoch;
-        if (_epoch == 0) {
-            // No checkpoints at all means no supply
-            return 0;
-        }
-
-        // If asking for a block before the first checkpoint, supply is zero
-        if (_block < point_history[0].blk) {
-            return 0;
-        }
-
         uint256 target_epoch = _find_block_epoch(_block, _epoch);
 
         Point memory point = point_history[target_epoch];
