@@ -622,7 +622,7 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         return _min;
     }
 
-    /// @notice Get the current voting power for `msg.sender`
+    /// @notice Calculate voting power of `addr` at time `_t`
     /// @dev Adheres to the ERC20 `balanceOf` interface for Aragon compatibility
     /// @param addr User wallet address
     /// @param _t Epoch time to return voting power at
