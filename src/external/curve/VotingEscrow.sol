@@ -539,7 +539,7 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
      * @param _ts Timestamp to search for.
      * @param max_epoch Upper bound (inclusive) for the epoch search.
      * @return epoch Index of the global epoch with the largest timestamp
-     *                   less than or equal to `_ts`.
+     *               less than or equal to `_ts`.
      */
     function _find_timestamp_epoch(uint256 _ts, uint256 max_epoch) internal view returns (uint256) {
         // No checkpoints at all means no supply
@@ -585,7 +585,7 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
      * @param addr Address of the user.
      * @param _ts Timestamp to search for.
      * @return epoch Index of the user epoch with the largest timestamp less
-     *         than or equal to `_ts`.
+     *               than or equal to `_ts`.
      */
     function _find_user_timestamp_epoch(address addr, uint256 _ts, uint256 max_epoch) internal view returns (uint256) {
         // No checkpoints at all means no balance

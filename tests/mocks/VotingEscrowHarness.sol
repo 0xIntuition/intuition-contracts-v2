@@ -27,6 +27,36 @@ contract VotingEscrowHarness is VotingEscrow {
         return _totalSupply(t);
     }
 
+    function exposed_blockTimeForBlock(uint256 _block) external view returns (uint256) {
+        require(_block <= block.number, "block in the future");
+
+        uint256 _epoch = epoch;
+        if (_epoch == 0) {
+            return 0;
+        }
+
+        if (_block < point_history[0].blk) {
+            return 0;
+        }
+
+        uint256 target_epoch = _find_block_epoch(_block, _epoch);
+        Point memory point = point_history[target_epoch];
+
+        uint256 dt = 0;
+        if (target_epoch < _epoch) {
+            Point memory point_next = point_history[target_epoch + 1];
+            if (point.blk != point_next.blk) {
+                dt = ((_block - point.blk) * (point_next.ts - point.ts)) / (point_next.blk - point.blk);
+            }
+        } else {
+            if (point.blk != block.number) {
+                dt = ((_block - point.blk) * (block.timestamp - point.ts)) / (block.number - point.blk);
+            }
+        }
+
+        return point.ts + dt;
+    }
+
     // --------- Test-only mutation helpers (not used in prod) ---------
 
     function h_setPointHistory(uint256 idx, int128 bias, int128 slope, uint256 ts, uint256 blk) external {

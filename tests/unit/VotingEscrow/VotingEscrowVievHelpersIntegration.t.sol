@@ -194,6 +194,78 @@ contract VotingEscrowViewHelpersIntegrationTest is Test {
         uint256 balAt = votingEscrow.balanceOfAt(alice, currentBlock);
 
         assertEq(balAt, balNow);
+
+        vm.warp(200_000);
+        vm.roll(2400);
+
+        balNow = votingEscrow.balanceOfAtT(alice, 200_000);
+        balAt = votingEscrow.balanceOfAt(alice, 2400);
+
+        assertEq(balAt, balNow, "balanceOfAt must reflect balance at the queried block");
+    }
+
+    function test_balanceOfAt_roughlyMatchesBalanceOfAtNearbyTimestamp() external {
+        vm.warp(200_000);
+        vm.roll(2000);
+
+        _createLock(alice, 1000e18, 20 weeks);
+
+        vm.warp(201_000);
+        vm.roll(2010);
+        vm.prank(alice, alice);
+        votingEscrow.increase_amount(500e18);
+
+        uint256 queryBlock = 2005;
+
+        uint256 balanceByBlock = votingEscrow.balanceOfAt(alice, queryBlock);
+        uint256 balanceByTs = votingEscrow.balanceOfAtT(alice, 200_500); // example timestamp between ts of blocks 2000
+        // and
+        // 2005
+
+        // Allow small relative drift due to interpolation + integer division
+        assertApproxEqRel(balanceByBlock, balanceByTs, 2e13); // 2e13 => 0.002% tolerance
+    }
+
+    function test_balanceOfAt_matchesBalanceOfAtInterpolatedTimestamp() external {
+        vm.warp(200_000);
+        vm.roll(2000);
+
+        _createLock(alice, 1000e18, 20 weeks);
+
+        vm.warp(201_000);
+        vm.roll(2010);
+        vm.prank(alice, alice);
+        votingEscrow.increase_amount(500e18);
+
+        uint256 queryBlock = 2005;
+
+        uint256 interpolatedTs = votingEscrow.exposed_blockTimeForBlock(queryBlock);
+
+        uint256 balanceByBlock = votingEscrow.balanceOfAt(alice, queryBlock);
+        uint256 balanceByTime = votingEscrow.balanceOfAtT(alice, interpolatedTs);
+
+        assertEq(balanceByBlock, balanceByTime);
+    }
+
+    function testFuzz_balanceOfAt_consistentWithInterpolatedTimestamp(uint256 blockOffset) external {
+        vm.warp(300_000);
+        vm.roll(3000);
+        _createLock(alice, 1500e18, 24 weeks);
+
+        vm.warp(301_000);
+        vm.roll(3010);
+        vm.prank(alice, alice);
+        votingEscrow.increase_amount(500e18);
+
+        // Pick a block in [3000, 3010]
+        uint256 queryBlock = 3000 + bound(blockOffset, 0, 10);
+
+        uint256 interpolatedTs = votingEscrow.exposed_blockTimeForBlock(queryBlock);
+
+        uint256 balanceByBlock = votingEscrow.balanceOfAt(alice, queryBlock);
+        uint256 balanceByTime = votingEscrow.balanceOfAtT(alice, interpolatedTs);
+
+        assertEq(balanceByBlock, balanceByTime, "balanceOfAt must match balanceOfAtT at interpolated timestamp");
     }
 
     // ------------------------------------------------------------
@@ -265,6 +337,76 @@ contract VotingEscrowViewHelpersIntegrationTest is Test {
         uint256 supplyAt = votingEscrow.totalSupplyAt(block.number);
 
         assertEq(supplyAt, supplyNow);
+    }
+
+    function test_totalSupplyAt_roughlyMatchesTotalSupplyAtNearbyTimestamp() external {
+        vm.warp(140_000);
+        vm.roll(1400);
+        _createLock(alice, 800e18, 16 weeks);
+
+        vm.warp(141_000);
+        vm.roll(1410);
+        _createLock(bob, 200e18, 16 weeks);
+
+        vm.warp(142_000);
+        vm.roll(1420);
+        vm.prank(alice, alice);
+        votingEscrow.increase_amount(200e18);
+
+        uint256 queryBlock = 1411;
+
+        uint256 supplyByBlock = votingEscrow.totalSupplyAt(queryBlock);
+        uint256 supplyByTs = votingEscrow.totalSupplyAtT(141_003); // example timestamp between ts of blocks 1410 and
+        // 1411
+
+        // Allow small relative drift due to interpolation + integer division
+        assertApproxEqRel(supplyByBlock, supplyByTs, 2e13); // 2e13 => 0.002% tolerance
+    }
+
+    function test_totalSupplyAt_matchesTotalSupplyAtInterpolatedTimestamp() external {
+        vm.warp(140_000);
+        vm.roll(1400);
+        _createLock(alice, 800e18, 16 weeks);
+
+        vm.warp(141_000);
+        vm.roll(1410);
+        _createLock(bob, 200e18, 16 weeks);
+
+        vm.warp(142_000);
+        vm.roll(1420);
+        vm.prank(alice, alice);
+        votingEscrow.increase_amount(200e18);
+
+        uint256 queryBlock = 1411;
+
+        // This is the exact t that totalSupplyAt(queryBlock) will use internally
+        uint256 interpolatedTs = votingEscrow.exposed_blockTimeForBlock(queryBlock);
+
+        uint256 supplyByBlock = votingEscrow.totalSupplyAt(queryBlock);
+        uint256 supplyByTs = votingEscrow.totalSupplyAtT(interpolatedTs);
+
+        // Now both paths are using the same (point, t) pair, so equality is expected.
+        assertEq(supplyByBlock, supplyByTs);
+    }
+
+    function testFuzz_totalSupplyAt_consistentWithInterpolatedTimestamp(uint256 blockOffset) external {
+        vm.warp(300_000);
+        vm.roll(3000);
+        _createLock(alice, 1500e18, 24 weeks);
+
+        vm.warp(301_000);
+        vm.roll(3010);
+        _createLock(bob, 500e18, 24 weeks);
+
+        // Pick a block in [3000, 3010]
+        uint256 queryBlock = 3000 + bound(blockOffset, 0, 10);
+
+        uint256 interpolatedTs = votingEscrow.exposed_blockTimeForBlock(queryBlock);
+
+        uint256 supplyByBlock = votingEscrow.totalSupplyAt(queryBlock);
+        uint256 supplyByTime = votingEscrow.totalSupplyAtT(interpolatedTs);
+
+        assertEq(supplyByBlock, supplyByTime, "totalSupplyAt must match totalSupplyAtT at interpolated timestamp");
     }
 
     function test_totalSupplyAt_returnsZeroForBlockBeforeFirstCheckpoint() external {
