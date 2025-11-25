@@ -11,6 +11,30 @@ import {
     ITransparentUpgradeableProxy
 } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
+interface IVotingEscrowView {
+    // Global checkpoints
+    function epoch() external view returns (uint256);
+    function point_history(uint256 idx)
+        external
+        view
+        returns (int128 bias, int128 slope, uint256 ts, uint256 blk);
+
+    // Per-user checkpoints
+    function user_point_epoch(address addr) external view returns (uint256);
+    function user_point_history(address addr, uint256 idx)
+        external
+        view
+        returns (int128 bias, int128 slope, uint256 ts, uint256 blk);
+
+    // Supply views
+    function totalSupplyAt(uint256 _block) external view returns (uint256);
+    function totalSupplyAtT(uint256 t) external view returns (uint256);
+
+    // Per-user views
+    function balanceOfAt(address addr, uint256 _block) external view returns (uint256);
+    function balanceOfAtT(address addr, uint256 t) external view returns (uint256);
+}
+
 contract TrustBondingUpgradeRegressionTest is Test {
     // --- Chain & contract constants ---
     uint256 internal constant PRE_BUG_FORK_BLOCK = 115_255;
@@ -93,21 +117,7 @@ contract TrustBondingUpgradeRegressionTest is Test {
         // 2. UPGRADE: deploy new implementation & upgrade proxy
         // ----------------------------------------------------------
 
-        // Deploy the new TrustBonding implementation that includes the fixed VotingEscrow logic (this uses the local
-        // code under test).
-        TrustBonding newImpl = new TrustBonding();
-
-        vm.startPrank(TIMELOCK);
-        ProxyAdmin(PROXY_ADMIN)
-            .upgradeAndCall(
-                ITransparentUpgradeableProxy(payable(TRUST_BONDING_PROXY)),
-                address(newImpl),
-                bytes("") // no initializer call necessary
-            );
-        vm.stopPrank();
-
-        // Re-bind after upgrade (same address, new code)
-        trustBonding = TrustBonding(TRUST_BONDING_PROXY);
+        (trustBonding, ) = _upgradeTrustBonding();
 
         // ----------------------------------------------------------
         // 3. POST-UPGRADE: the same calls must no longer revert
@@ -196,5 +206,98 @@ contract TrustBondingUpgradeRegressionTest is Test {
             "User 2 claimed rewards must match eligible rewards"
         );
         vm.stopPrank();
+    }
+
+    function test_votingEscrow_totalSupplyAt_equalsTotalSupplyAtT_forGlobalCheckpoint() external {
+        // Start from the block where the bug was observable
+        vm.createSelectFork("intuition", POST_BUG_FORK_BLOCK);
+
+        // ----------------------------------------------------------
+        // 1. Upgrade TrustBonding to the fixed implementation
+        // ----------------------------------------------------------
+
+        (, IVotingEscrowView votingEscrow) = _upgradeTrustBonding();
+
+        // ----------------------------------------------------------
+        // 2. Use the real latest global checkpoint from veTRUST
+        // ----------------------------------------------------------
+
+        uint256 lastEpoch = votingEscrow.epoch();
+        (, , uint256 ts, uint256 blk) = votingEscrow.point_history(lastEpoch);
+
+        // Sanity: checkpoint must be non-zero
+        assertGt(ts, 0, "checkpoint ts must be > 0");
+        assertGt(blk, 0, "checkpoint blk must be > 0");
+
+        // IMPORTANT: veTRUST stores Base L2 block numbers in `blk`,
+        // while our fork is on Intuition L3. We must lift block.number
+        // so that `require(_block <= block.number)` in totalSupplyAt()
+        // does not incorrectly revert on "block in the future".
+        vm.roll(blk);
+
+        // ----------------------------------------------------------
+        // 3. Assert exact equality at the checkpoint
+        // ----------------------------------------------------------
+        uint256 supplyByBlock = votingEscrow.totalSupplyAt(blk);
+        uint256 supplyByTime = votingEscrow.totalSupplyAtT(ts);
+
+        assertEq(
+            supplyByBlock,
+            supplyByTime,
+            "totalSupplyAt(block) must equal totalSupplyAtT(ts) at the global checkpoint"
+        );
+    }
+
+    function test_votingEscrow_balanceOfAt_equalsBalanceOfAtT_forUser0Checkpoint() external {
+        // Start from the block where the bug was observable
+        vm.createSelectFork("intuition", POST_BUG_FORK_BLOCK);
+
+        // ----------------------------------------------------------
+        // 1. Upgrade TrustBonding to the fixed implementation
+        // ----------------------------------------------------------
+
+        (, IVotingEscrowView votingEscrow) = _upgradeTrustBonding();
+
+        // ----------------------------------------------------------
+        // 2. Grab USER0's latest veTRUST checkpoint from mainnet state
+        // ----------------------------------------------------------
+
+        uint256 userEpoch = votingEscrow.user_point_epoch(USER0);
+        assertGt(userEpoch, 0, "USER0 must have at least one veTRUST checkpoint");
+
+        (, , uint256 ts, uint256 blk) = votingEscrow.user_point_history(USER0, userEpoch);
+
+        assertGt(ts, 0, "USER0 checkpoint ts must be > 0");
+        assertGt(blk, 0, "USER0 checkpoint blk must be > 0");
+
+        // Again: `blk` is a Base L2 block number, so we lift block.number accordingly
+        vm.roll(blk);
+
+        // ----------------------------------------------------------
+        // 3. Assert exact equality at USER0's checkpoint
+        // ----------------------------------------------------------
+        uint256 balanceByBlock = votingEscrow.balanceOfAt(USER0, blk);
+        uint256 balanceByTime = votingEscrow.balanceOfAtT(USER0, ts);
+
+        assertEq(
+            balanceByBlock,
+            balanceByTime,
+            "balanceOfAt(block) must equal balanceOfAtT(ts) at USER0's checkpoint"
+        );
+    }
+
+    /// @dev Internal helper to upgrade TrustBonding proxy to the new implementation
+    function _upgradeTrustBonding() internal returns (TrustBonding, IVotingEscrowView) {
+        TrustBonding newImpl = new TrustBonding();
+
+        vm.startPrank(TIMELOCK);
+        ProxyAdmin(PROXY_ADMIN).upgradeAndCall(
+            ITransparentUpgradeableProxy(payable(TRUST_BONDING_PROXY)),
+            address(newImpl),
+            bytes("")
+        );
+        vm.stopPrank();
+
+        return (TrustBonding(TRUST_BONDING_PROXY),  IVotingEscrowView(TRUST_BONDING_PROXY));
     }
 }
