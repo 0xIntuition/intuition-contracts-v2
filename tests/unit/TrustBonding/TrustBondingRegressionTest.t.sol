@@ -14,14 +14,14 @@ import {
 interface IVotingEscrowView {
     // Global checkpoints
     function epoch() external view returns (uint256);
-    function point_history(uint256 idx)
-        external
-        view
-        returns (int128 bias, int128 slope, uint256 ts, uint256 blk);
+    function point_history(uint256 idx) external view returns (int128 bias, int128 slope, uint256 ts, uint256 blk);
 
     // Per-user checkpoints
     function user_point_epoch(address addr) external view returns (uint256);
-    function user_point_history(address addr, uint256 idx)
+    function user_point_history(
+        address addr,
+        uint256 idx
+    )
         external
         view
         returns (int128 bias, int128 slope, uint256 ts, uint256 blk);
@@ -117,7 +117,7 @@ contract TrustBondingUpgradeRegressionTest is Test {
         // 2. UPGRADE: deploy new implementation & upgrade proxy
         // ----------------------------------------------------------
 
-        (trustBonding, ) = _upgradeTrustBonding();
+        (trustBonding,) = _upgradeTrustBonding();
 
         // ----------------------------------------------------------
         // 3. POST-UPGRADE: the same calls must no longer revert
@@ -208,22 +208,19 @@ contract TrustBondingUpgradeRegressionTest is Test {
         vm.stopPrank();
     }
 
+    // ----------------------------------------------------------------
+    // VotingEscrow: exact equality at a real global checkpoint
+    // ----------------------------------------------------------------
     function test_votingEscrow_totalSupplyAt_equalsTotalSupplyAtT_forGlobalCheckpoint() external {
         // Start from the block where the bug was observable
         vm.createSelectFork("intuition", POST_BUG_FORK_BLOCK);
 
-        // ----------------------------------------------------------
         // 1. Upgrade TrustBonding to the fixed implementation
-        // ----------------------------------------------------------
-
         (, IVotingEscrowView votingEscrow) = _upgradeTrustBonding();
 
-        // ----------------------------------------------------------
         // 2. Use the real latest global checkpoint from veTRUST
-        // ----------------------------------------------------------
-
         uint256 lastEpoch = votingEscrow.epoch();
-        (, , uint256 ts, uint256 blk) = votingEscrow.point_history(lastEpoch);
+        (,, uint256 ts, uint256 blk) = votingEscrow.point_history(lastEpoch);
 
         // Sanity: checkpoint must be non-zero
         assertGt(ts, 0, "checkpoint ts must be > 0");
@@ -235,69 +232,146 @@ contract TrustBondingUpgradeRegressionTest is Test {
         // does not incorrectly revert on "block in the future".
         vm.roll(blk);
 
-        // ----------------------------------------------------------
         // 3. Assert exact equality at the checkpoint
-        // ----------------------------------------------------------
         uint256 supplyByBlock = votingEscrow.totalSupplyAt(blk);
         uint256 supplyByTime = votingEscrow.totalSupplyAtT(ts);
 
         assertEq(
-            supplyByBlock,
-            supplyByTime,
-            "totalSupplyAt(block) must equal totalSupplyAtT(ts) at the global checkpoint"
+            supplyByBlock, supplyByTime, "totalSupplyAt(block) must equal totalSupplyAtT(ts) at the global checkpoint"
         );
     }
 
+    // ----------------------------------------------------------------
+    // VotingEscrow: approx equality at a mid-block between two checkpoints
+    // ----------------------------------------------------------------
+    function test_votingEscrow_totalSupplyAt_approxEqualsTotalSupplyAtT_forMidBlock() external {
+        vm.createSelectFork("intuition", POST_BUG_FORK_BLOCK);
+
+        (, IVotingEscrowView votingEscrow) = _upgradeTrustBonding();
+
+        uint256 lastEpoch = votingEscrow.epoch();
+        assertGt(lastEpoch, 0, "need at least one global checkpoint");
+
+        // Take the last two global checkpoints
+        (,, uint256 ts0, uint256 blk0) = votingEscrow.point_history(lastEpoch - 1);
+        (,, uint256 ts1, uint256 blk1) = votingEscrow.point_history(lastEpoch);
+
+        assertGt(blk1, blk0, "need distinct global blocks");
+        assertGt(ts1, ts0, "timestamps must be increasing");
+
+        // Pick a mid-block between the two checkpoints
+        uint256 midBlock = blk0 + (blk1 - blk0) / 2;
+
+        // Ensure we don't hit "block in the future"
+        vm.roll(blk1);
+
+        uint256 supplyByBlock = votingEscrow.totalSupplyAt(midBlock);
+
+        // Recompute the internal interpolated timestamp that VotingEscrow uses
+        uint256 dt = ((midBlock - blk0) * (ts1 - ts0)) / (blk1 - blk0);
+        uint256 interpolatedTs = ts0 + dt;
+
+        // Nudge timestamp by +1 second to model "near but not exact" time
+        uint256 nearbyTs = interpolatedTs + 1;
+
+        uint256 supplyByTimeNearby = votingEscrow.totalSupplyAtT(nearbyTs);
+
+        // If both are zero, nothing to approximate
+        if (supplyByBlock == 0 && supplyByTimeNearby == 0) {
+            return;
+        }
+
+        // Tiny relative drift is expected due to 1-second delta + integer math
+        assertApproxEqRel(
+            supplyByBlock,
+            supplyByTimeNearby,
+            1e13 // 0.001% tolerance
+        );
+    }
+
+    // ----------------------------------------------------------------
+    // VotingEscrow: exact equality at USER0's real checkpoint
+    // ----------------------------------------------------------------
     function test_votingEscrow_balanceOfAt_equalsBalanceOfAtT_forUser0Checkpoint() external {
         // Start from the block where the bug was observable
         vm.createSelectFork("intuition", POST_BUG_FORK_BLOCK);
 
-        // ----------------------------------------------------------
         // 1. Upgrade TrustBonding to the fixed implementation
-        // ----------------------------------------------------------
-
         (, IVotingEscrowView votingEscrow) = _upgradeTrustBonding();
 
-        // ----------------------------------------------------------
         // 2. Grab USER0's latest veTRUST checkpoint from mainnet state
-        // ----------------------------------------------------------
-
         uint256 userEpoch = votingEscrow.user_point_epoch(USER0);
         assertGt(userEpoch, 0, "USER0 must have at least one veTRUST checkpoint");
 
-        (, , uint256 ts, uint256 blk) = votingEscrow.user_point_history(USER0, userEpoch);
+        (,, uint256 ts, uint256 blk) = votingEscrow.user_point_history(USER0, userEpoch);
 
         assertGt(ts, 0, "USER0 checkpoint ts must be > 0");
         assertGt(blk, 0, "USER0 checkpoint blk must be > 0");
 
-        // Again: `blk` is a Base L2 block number, so we lift block.number accordingly
+        // Again: `blk` is a Base L2 block number, so lift block.number accordingly
         vm.roll(blk);
 
-        // ----------------------------------------------------------
         // 3. Assert exact equality at USER0's checkpoint
-        // ----------------------------------------------------------
         uint256 balanceByBlock = votingEscrow.balanceOfAt(USER0, blk);
         uint256 balanceByTime = votingEscrow.balanceOfAtT(USER0, ts);
 
-        assertEq(
+        assertEq(balanceByBlock, balanceByTime, "balanceOfAt(block) must equal balanceOfAtT(ts) at USER0's checkpoint");
+    }
+
+    // ----------------------------------------------------------------
+    // VotingEscrow: approx equality for USER0 at a mid-block
+    // ----------------------------------------------------------------
+    function test_votingEscrow_balanceOfAt_approxEqualsBalanceOfAtT_forUser0MidBlock() external {
+        vm.createSelectFork("intuition", POST_BUG_FORK_BLOCK);
+
+        (, IVotingEscrowView votingEscrow) = _upgradeTrustBonding();
+
+        uint256 lastEpoch = votingEscrow.epoch();
+        assertGt(lastEpoch, 0, "need at least one global checkpoint");
+
+        // Use the last two *global* checkpoints to compute block time interpolation
+        (,, uint256 ts0, uint256 blk0) = votingEscrow.point_history(lastEpoch - 1);
+        (,, uint256 ts1, uint256 blk1) = votingEscrow.point_history(lastEpoch);
+
+        assertGt(blk1, blk0, "need distinct global blocks");
+        assertGt(ts1, ts0, "timestamps must be increasing");
+
+        uint256 midBlock = blk0 + (blk1 - blk0) / 2;
+
+        // Make sure totalSupplyAt/balanceOfAt don't revert on "future block"
+        vm.roll(blk1);
+
+        // Compute the same blockTime VotingEscrow would derive
+        uint256 dt = ((midBlock - blk0) * (ts1 - ts0)) / (blk1 - blk0);
+        uint256 blockTime = ts0 + dt;
+
+        uint256 balanceByBlock = votingEscrow.balanceOfAt(USER0, midBlock);
+        uint256 balanceByTimeNearby = votingEscrow.balanceOfAtT(USER0, blockTime + 1);
+
+        if (balanceByBlock == 0 && balanceByTimeNearby == 0) {
+            // If USER0 has no voting power here, skip approximate check
+            return;
+        }
+
+        // Tiny relative drift is expected due to 1-second delta + integer math
+        assertApproxEqRel(
             balanceByBlock,
-            balanceByTime,
-            "balanceOfAt(block) must equal balanceOfAtT(ts) at USER0's checkpoint"
+            balanceByTimeNearby,
+            1e13 // 0.001% tolerance
         );
     }
 
-    /// @dev Internal helper to upgrade TrustBonding proxy to the new implementation
+    /// @dev Internal helper to upgrade TrustBonding proxy to the fixed implementation
     function _upgradeTrustBonding() internal returns (TrustBonding, IVotingEscrowView) {
         TrustBonding newImpl = new TrustBonding();
 
         vm.startPrank(TIMELOCK);
-        ProxyAdmin(PROXY_ADMIN).upgradeAndCall(
-            ITransparentUpgradeableProxy(payable(TRUST_BONDING_PROXY)),
-            address(newImpl),
-            bytes("")
-        );
+        ProxyAdmin(PROXY_ADMIN)
+            .upgradeAndCall(ITransparentUpgradeableProxy(payable(TRUST_BONDING_PROXY)), address(newImpl), bytes(""));
         vm.stopPrank();
 
-        return (TrustBonding(TRUST_BONDING_PROXY),  IVotingEscrowView(TRUST_BONDING_PROXY));
+        // TrustBonding proxy implements both the ITrustBonding surface
+        // and the VotingEscrow view surface.
+        return (TrustBonding(TRUST_BONDING_PROXY), IVotingEscrowView(TRUST_BONDING_PROXY));
     }
 }
