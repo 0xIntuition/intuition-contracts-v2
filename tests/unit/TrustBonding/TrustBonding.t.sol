@@ -316,7 +316,9 @@ contract TrustBondingTest is TrustBondingBase {
 
     function test_claimRewards_shouldRevertIfContractIsPaused() external {
         _createLock(users.alice);
+        _createLock(users.charlie, 1e18);
         _advanceEpochs(1);
+        _bondOneMoreToken(users.charlie); // Charlie bonds one more token to make sure new checkpoints are created
 
         vm.prank(users.admin);
         protocol.trustBonding.pause();
@@ -331,7 +333,9 @@ contract TrustBondingTest is TrustBondingBase {
 
     function test_claimRewards_shouldRevertIfRecipientIsAddressZero() external {
         _createLock(users.alice);
+        _createLock(users.charlie, 1e18);
         _advanceEpochs(1);
+        _bondOneMoreToken(users.charlie); // Charlie bonds one more token to make sure new checkpoints are created
 
         resetPrank(users.alice);
 
@@ -354,6 +358,7 @@ contract TrustBondingTest is TrustBondingBase {
 
     function test_claimRewards_shouldRevertIfThereAreNoRewardsToClaim() external {
         _advanceEpochs(1);
+        protocol.trustBonding.checkpoint(); // Create a checkpoint to move the point_history forward
 
         resetPrank(users.alice);
 
@@ -365,7 +370,9 @@ contract TrustBondingTest is TrustBondingBase {
 
     function test_claimRewards_shouldRevertIfAlreadyClaimedRewardsForEpoch() external {
         _createLock(users.alice);
+        _createLock(users.charlie, 1e18);
         _advanceEpochs(1);
+        _bondOneMoreToken(users.charlie); // Charlie bonds one more token to make sure new checkpoints are created
 
         vm.prank(users.alice);
         protocol.trustBonding.claimRewards(users.alice);
@@ -378,9 +385,18 @@ contract TrustBondingTest is TrustBondingBase {
         vm.stopPrank();
     }
 
+    function _bondOneMoreToken(address user) internal {
+        vm.startPrank(user);
+        protocol.wrappedTrust.approve(address(protocol.trustBonding), 1e18);
+        protocol.trustBonding.deposit_for(user, 1e18);
+        vm.stopPrank();
+    }
+
     function test_claimRewards_differentScenarios() external {
         _createLock(users.alice);
+        _createLock(users.charlie, 1e18);
         _advanceEpochs(1);
+        _bondOneMoreToken(users.charlie); // Charlie bonds one more token to make sure new checkpoints are created
 
         // Case 1: Regular rewards claim
         resetPrank(users.alice);
@@ -404,8 +420,10 @@ contract TrustBondingTest is TrustBondingBase {
         vm.stopPrank();
 
         // Case 2: Claimed amount for alice goes down if more people bonded in the meantime
+
         _createLock(users.bob);
         _advanceEpochs(1);
+        _bondOneMoreToken(users.charlie); // Charlie bonds one more token to make sure new checkpoints are created
 
         vm.startPrank(users.alice, users.alice);
 
@@ -424,6 +442,7 @@ contract TrustBondingTest is TrustBondingBase {
         _setupUserForTrustBonding(users.alice);
         protocol.trustBonding.increase_amount(additionalTokens);
         _advanceEpochs(1);
+        _bondOneMoreToken(users.charlie); // Charlie bonds one more token to make sure new checkpoints are created
 
         aliceInitialBalance = users.alice.balance;
 
@@ -449,6 +468,7 @@ contract TrustBondingTest is TrustBondingBase {
         // Alice's share should have increased (from ~50% to ~66.7%)
         assertGt(aliceShareBasisPoints, 5000); // Alice has more than 50% share
 
+        vm.prank(users.alice);
         protocol.trustBonding.claimRewards(users.alice);
         aliceFinalBalance = users.alice.balance;
 
@@ -469,6 +489,7 @@ contract TrustBondingTest is TrustBondingBase {
     // Helper function for Case 4
     function _testCase4() internal {
         _advanceEpochs(1);
+        _bondOneMoreToken(users.charlie); // Charlie bonds one more token to make sure new checkpoints are created
 
         vm.startPrank(users.alice, users.alice);
 
