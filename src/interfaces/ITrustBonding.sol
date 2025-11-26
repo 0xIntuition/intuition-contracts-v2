@@ -11,9 +11,9 @@ struct UserInfo {
 }
 
 /**
- * @title  ITrustBonding
+ * @title ITrustBonding
  * @author 0xIntuition
- * @notice Interface for the Intuition's TrustBondingV2 contract
+ * @notice Interface for the Intuition's TrustBonding contract
  */
 interface ITrustBonding {
     /* =================================================== */
