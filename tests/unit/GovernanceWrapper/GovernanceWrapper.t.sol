@@ -42,27 +42,37 @@ contract GovernanceWrapperTest is BaseTest {
 
     function test_initialize_successful() external {
         vm.prank(owner);
-        governanceWrapper.initialize(owner);
+        governanceWrapper.initialize(owner, address(protocol.trustBonding));
 
         assertEq(governanceWrapper.owner(), owner);
+        assertEq(address(governanceWrapper.trustBonding()), address(protocol.trustBonding));
     }
 
-    function test_initialize_revertsOnZeroAddress() external {
+    function test_initialize_revertsOnZeroTrustBondingAddress() external {
         vm.expectRevert(IGovernanceWrapper.GovernanceWrapper_InvalidAddress.selector);
-        governanceWrapper.initialize(address(0));
+        governanceWrapper.initialize(owner, address(0));
     }
 
     function test_initialize_revertsWhenCalledTwice() external {
         vm.prank(owner);
-        governanceWrapper.initialize(owner);
+        governanceWrapper.initialize(owner, address(protocol.trustBonding));
 
         vm.expectRevert();
         vm.prank(owner);
-        governanceWrapper.initialize(owner);
+        governanceWrapper.initialize(owner, address(protocol.trustBonding));
     }
 
-    function testFuzz_initialize(address _owner) external {
+    function test_initialize_emitsTrustBondingSetEvent() external {
+        vm.expectEmit(true, true, true, true);
+        emit IGovernanceWrapper.TrustBondingSet(address(protocol.trustBonding));
+
+        vm.prank(owner);
+        governanceWrapper.initialize(owner, address(protocol.trustBonding));
+    }
+
+    function testFuzz_initialize(address _owner, address _trustBonding) external {
         vm.assume(_owner != address(0));
+        vm.assume(_trustBonding != address(0));
 
         GovernanceWrapper newGovernanceWrapperImpl = new GovernanceWrapper();
         TransparentUpgradeableProxy newGovernanceWrapperProxy =
@@ -70,9 +80,10 @@ contract GovernanceWrapperTest is BaseTest {
         GovernanceWrapper newGovernanceWrapper = GovernanceWrapper(address(newGovernanceWrapperProxy));
 
         vm.prank(_owner);
-        newGovernanceWrapper.initialize(_owner);
+        newGovernanceWrapper.initialize(_owner, _trustBonding);
 
         assertEq(newGovernanceWrapper.owner(), _owner);
+        assertEq(address(newGovernanceWrapper.trustBonding()), _trustBonding);
     }
 
     /* =================================================== */
@@ -80,20 +91,21 @@ contract GovernanceWrapperTest is BaseTest {
     /* =================================================== */
 
     function test_setTrustBonding_successful() external {
+        address firstTrustBonding = address(0x123);
         vm.prank(owner);
-        governanceWrapper.initialize(owner);
+        governanceWrapper.initialize(owner, firstTrustBonding);
 
-        address trustBondingAddress = address(protocol.trustBonding);
+        address newTrustBondingAddress = address(protocol.trustBonding);
 
         vm.prank(owner);
-        governanceWrapper.setTrustBonding(trustBondingAddress);
+        governanceWrapper.setTrustBonding(newTrustBondingAddress);
 
-        assertEq(address(governanceWrapper.trustBonding()), trustBondingAddress);
+        assertEq(address(governanceWrapper.trustBonding()), newTrustBondingAddress);
     }
 
     function test_setTrustBonding_revertsOnZeroAddress() external {
         vm.prank(owner);
-        governanceWrapper.initialize(owner);
+        governanceWrapper.initialize(owner, address(protocol.trustBonding));
 
         vm.expectRevert(IGovernanceWrapper.GovernanceWrapper_InvalidAddress.selector);
         vm.prank(owner);
@@ -102,18 +114,32 @@ contract GovernanceWrapperTest is BaseTest {
 
     function test_setTrustBonding_revertsWhenCalledByNonOwner() external {
         vm.prank(owner);
-        governanceWrapper.initialize(owner);
+        governanceWrapper.initialize(owner, address(protocol.trustBonding));
 
         vm.expectRevert();
         vm.prank(nonOwner);
         governanceWrapper.setTrustBonding(address(protocol.trustBonding));
     }
 
+    function test_setTrustBonding_emitsTrustBondingSetEvent() external {
+        address firstTrustBonding = address(0x123);
+        vm.prank(owner);
+        governanceWrapper.initialize(owner, firstTrustBonding);
+
+        address newTrustBondingAddress = address(protocol.trustBonding);
+
+        vm.expectEmit(true, true, true, true);
+        emit IGovernanceWrapper.TrustBondingSet(newTrustBondingAddress);
+
+        vm.prank(owner);
+        governanceWrapper.setTrustBonding(newTrustBondingAddress);
+    }
+
     function testFuzz_setTrustBonding(address _trustBonding) external {
         vm.assume(_trustBonding != address(0));
 
         vm.prank(owner);
-        governanceWrapper.initialize(owner);
+        governanceWrapper.initialize(owner, address(protocol.trustBonding));
 
         vm.prank(owner);
         governanceWrapper.setTrustBonding(_trustBonding);
@@ -127,7 +153,7 @@ contract GovernanceWrapperTest is BaseTest {
 
     function test_initializeVotesERC20V1_revertsAlways() external {
         vm.prank(owner);
-        governanceWrapper.initialize(owner);
+        governanceWrapper.initialize(owner, address(protocol.trustBonding));
 
         IVotesERC20V1.Metadata memory metadata = IVotesERC20V1.Metadata({ name: "Test Token", symbol: "TEST" });
 
@@ -199,12 +225,14 @@ contract GovernanceWrapperTest is BaseTest {
     /*              MAX TOTAL SUPPLY TESTS                 */
     /* =================================================== */
 
+    function test_maxTotalSupply_returnsZeroWhenTrustBondingNotSet() external view {
+        uint256 maxSupply = governanceWrapper.maxTotalSupply();
+        assertEq(maxSupply, 0);
+    }
+
     function test_maxTotalSupply_returnsCorrectValue() external {
         vm.prank(owner);
-        governanceWrapper.initialize(owner);
-
-        vm.prank(owner);
-        governanceWrapper.setTrustBonding(address(protocol.trustBonding));
+        governanceWrapper.initialize(owner, address(protocol.trustBonding));
 
         uint256 expectedSupply = protocol.trustBonding.totalSupply();
         uint256 actualSupply = governanceWrapper.maxTotalSupply();
@@ -214,10 +242,7 @@ contract GovernanceWrapperTest is BaseTest {
 
     function test_maxTotalSupply_updatesWithTrustBondingSupply() external {
         vm.prank(owner);
-        governanceWrapper.initialize(owner);
-
-        vm.prank(owner);
-        governanceWrapper.setTrustBonding(address(protocol.trustBonding));
+        governanceWrapper.initialize(owner, address(protocol.trustBonding));
 
         uint256 initialSupply = governanceWrapper.maxTotalSupply();
 
@@ -248,7 +273,7 @@ contract GovernanceWrapperTest is BaseTest {
 
     function test_lock_revertsAlways() external {
         vm.prank(owner);
-        governanceWrapper.initialize(owner);
+        governanceWrapper.initialize(owner, address(protocol.trustBonding));
 
         vm.expectRevert(IGovernanceWrapper.GovernanceWrapper_CannotChangeLockStatus.selector);
         governanceWrapper.lock(true);
@@ -256,7 +281,7 @@ contract GovernanceWrapperTest is BaseTest {
 
     function test_lock_revertsWithFalse() external {
         vm.prank(owner);
-        governanceWrapper.initialize(owner);
+        governanceWrapper.initialize(owner, address(protocol.trustBonding));
 
         vm.expectRevert(IGovernanceWrapper.GovernanceWrapper_CannotChangeLockStatus.selector);
         governanceWrapper.lock(false);
@@ -264,7 +289,7 @@ contract GovernanceWrapperTest is BaseTest {
 
     function testFuzz_lock(bool lockStatus) external {
         vm.prank(owner);
-        governanceWrapper.initialize(owner);
+        governanceWrapper.initialize(owner, address(protocol.trustBonding));
 
         vm.expectRevert(IGovernanceWrapper.GovernanceWrapper_CannotChangeLockStatus.selector);
         governanceWrapper.lock(lockStatus);
@@ -276,7 +301,7 @@ contract GovernanceWrapperTest is BaseTest {
 
     function test_renounceMinting_revertsAlways() external {
         vm.prank(owner);
-        governanceWrapper.initialize(owner);
+        governanceWrapper.initialize(owner, address(protocol.trustBonding));
 
         vm.expectRevert(IGovernanceWrapper.GovernanceWrapper_CannotRenounceMinting.selector);
         governanceWrapper.renounceMinting();
@@ -288,7 +313,7 @@ contract GovernanceWrapperTest is BaseTest {
 
     function test_setMaxTotalSupply_revertsAlways() external {
         vm.prank(owner);
-        governanceWrapper.initialize(owner);
+        governanceWrapper.initialize(owner, address(protocol.trustBonding));
 
         vm.expectRevert(IGovernanceWrapper.GovernanceWrapper_CannotOverrideMaxTotalSupply.selector);
         governanceWrapper.setMaxTotalSupply(1000 ether);
@@ -296,7 +321,7 @@ contract GovernanceWrapperTest is BaseTest {
 
     function testFuzz_setMaxTotalSupply(uint256 newMaxSupply) external {
         vm.prank(owner);
-        governanceWrapper.initialize(owner);
+        governanceWrapper.initialize(owner, address(protocol.trustBonding));
 
         vm.expectRevert(IGovernanceWrapper.GovernanceWrapper_CannotOverrideMaxTotalSupply.selector);
         governanceWrapper.setMaxTotalSupply(newMaxSupply);
@@ -308,7 +333,7 @@ contract GovernanceWrapperTest is BaseTest {
 
     function test_mint_revertsAlways() external {
         vm.prank(owner);
-        governanceWrapper.initialize(owner);
+        governanceWrapper.initialize(owner, address(protocol.trustBonding));
 
         vm.expectRevert(IGovernanceWrapper.GovernanceWrapper_MintingIsNotAllowed.selector);
         governanceWrapper.mint(users.alice, 100 ether);
@@ -316,7 +341,7 @@ contract GovernanceWrapperTest is BaseTest {
 
     function testFuzz_mint(address to, uint256 amount) external {
         vm.prank(owner);
-        governanceWrapper.initialize(owner);
+        governanceWrapper.initialize(owner, address(protocol.trustBonding));
 
         vm.expectRevert(IGovernanceWrapper.GovernanceWrapper_MintingIsNotAllowed.selector);
         governanceWrapper.mint(to, amount);
@@ -328,7 +353,7 @@ contract GovernanceWrapperTest is BaseTest {
 
     function test_burn_revertsAlways() external {
         vm.prank(owner);
-        governanceWrapper.initialize(owner);
+        governanceWrapper.initialize(owner, address(protocol.trustBonding));
 
         vm.expectRevert(IGovernanceWrapper.GovernanceWrapper_BurningIsNotAllowed.selector);
         governanceWrapper.burn(100 ether);
@@ -336,7 +361,7 @@ contract GovernanceWrapperTest is BaseTest {
 
     function testFuzz_burn(uint256 amount) external {
         vm.prank(owner);
-        governanceWrapper.initialize(owner);
+        governanceWrapper.initialize(owner, address(protocol.trustBonding));
 
         vm.expectRevert(IGovernanceWrapper.GovernanceWrapper_BurningIsNotAllowed.selector);
         governanceWrapper.burn(amount);
@@ -348,10 +373,7 @@ contract GovernanceWrapperTest is BaseTest {
 
     function test_integration_fullSetupAndQueries() external {
         vm.prank(owner);
-        governanceWrapper.initialize(owner);
-
-        vm.prank(owner);
-        governanceWrapper.setTrustBonding(address(protocol.trustBonding));
+        governanceWrapper.initialize(owner, address(protocol.trustBonding));
 
         assertEq(governanceWrapper.owner(), owner);
         assertEq(address(governanceWrapper.trustBonding()), address(protocol.trustBonding));
@@ -365,7 +387,7 @@ contract GovernanceWrapperTest is BaseTest {
 
     function test_integration_ownershipTransfer() external {
         vm.prank(owner);
-        governanceWrapper.initialize(owner);
+        governanceWrapper.initialize(owner, address(protocol.trustBonding));
 
         address newOwner = users.bob;
 
@@ -374,19 +396,17 @@ contract GovernanceWrapperTest is BaseTest {
 
         assertEq(governanceWrapper.owner(), newOwner);
 
+        address newTrustBonding = address(0x456);
         vm.prank(newOwner);
-        governanceWrapper.setTrustBonding(address(protocol.trustBonding));
+        governanceWrapper.setTrustBonding(newTrustBonding);
 
-        assertEq(address(governanceWrapper.trustBonding()), address(protocol.trustBonding));
+        assertEq(address(governanceWrapper.trustBonding()), newTrustBonding);
     }
 
     function test_integration_multipleSetTrustBondingCalls() external {
-        vm.prank(owner);
-        governanceWrapper.initialize(owner);
-
         address firstTrustBonding = address(protocol.trustBonding);
         vm.prank(owner);
-        governanceWrapper.setTrustBonding(firstTrustBonding);
+        governanceWrapper.initialize(owner, firstTrustBonding);
         assertEq(address(governanceWrapper.trustBonding()), firstTrustBonding);
 
         address secondTrustBonding = address(0x123);

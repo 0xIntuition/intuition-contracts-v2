@@ -15,7 +15,7 @@ import { VotingEscrow } from "src/external/curve/VotingEscrow.sol";
  */
 contract GovernanceWrapper is Initializable, OwnableUpgradeable, IVotesERC20V1, IGovernanceWrapper {
     /*//////////////////////////////////////////////////////////////
-                                 STATE
+                                STATE
     //////////////////////////////////////////////////////////////*/
 
     /// @notice The TrustBonding contract that this GovernanceWrapper interacts with
@@ -25,7 +25,7 @@ contract GovernanceWrapper is Initializable, OwnableUpgradeable, IVotesERC20V1, 
     uint256[50] private __gap;
 
     /*//////////////////////////////////////////////////////////////
-                                 CONSTRUCTOR
+                                CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -34,31 +34,42 @@ contract GovernanceWrapper is Initializable, OwnableUpgradeable, IVotesERC20V1, 
     }
 
     /*//////////////////////////////////////////////////////////////
-                             INITIALIZER
+                                INITIALIZER
     //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc IGovernanceWrapper
-    function initialize(address _owner) external initializer {
-        if (_owner == address(0)) {
-            revert GovernanceWrapper_InvalidAddress();
-        }
+    function initialize(address _owner, address _trustBonding) external initializer {
         __Ownable_init(_owner);
+        _setTrustBonding(_trustBonding);
     }
 
     /*//////////////////////////////////////////////////////////////
-                           ADMIN FUNCTIONS
+                            ADMIN FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc IGovernanceWrapper
     function setTrustBonding(address _trustBonding) external onlyOwner {
+        _setTrustBonding(_trustBonding);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                           INTERNAL FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @notice Internal function to set the TrustBonding contract address
+     * @param _trustBonding The address of the TrustBonding contract
+     */
+    function _setTrustBonding(address _trustBonding) internal {
         if (_trustBonding == address(0)) {
             revert GovernanceWrapper_InvalidAddress();
         }
         trustBonding = VotingEscrow(_trustBonding);
+        emit TrustBondingSet(_trustBonding);
     }
 
     /*//////////////////////////////////////////////////////////////
-                           IERC20VotesV1 IMPLEMENTATION
+                        IVotesERC20V1 IMPLEMENTATION
     //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc IVotesERC20V1
@@ -96,6 +107,9 @@ contract GovernanceWrapper is Initializable, OwnableUpgradeable, IVotesERC20V1, 
 
     /// @inheritdoc IVotesERC20V1
     function maxTotalSupply() external view returns (uint256 maxTotalSupply) {
+        if (address(trustBonding) == address(0)) {
+            return 0;
+        }
         return trustBonding.totalSupply();
     }
 

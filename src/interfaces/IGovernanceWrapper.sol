@@ -11,6 +11,12 @@ interface IGovernanceWrapper {
     /*                       EVENTS                        */
     /* =================================================== */
 
+    /**
+     * @notice Emitted when the TrustBonding contract address is set
+     * @param trustBonding The address of the new TrustBonding contract
+     */
+    event TrustBondingSet(address indexed trustBonding);
+
     /* =================================================== */
     /*                       ERRORS                        */
     /* =================================================== */
@@ -36,8 +42,9 @@ interface IGovernanceWrapper {
     /**
      * @notice Initializes the GovernanceWrapper contract
      * @param _owner The initial owner of the GovernanceWrapper contract
+     * @param _trustBonding The address of the TrustBonding contract
      */
-    function initialize(address _owner) external;
+    function initialize(address _owner, address _trustBonding) external;
 
     /**
      * @notice Sets the TrustBonding contract address
