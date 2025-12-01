@@ -44,6 +44,7 @@ contract DeployGovernanceWrapper is SetupScript {
     TransparentUpgradeableProxy public governanceWrapperProxy;
 
     address public UPGRADES_TIMELOCK_CONTROLLER;
+    address public TRUST_BONDING = 0x5FbDB2315678afecb367f032d93F642f64180aa3; // Placeholder, set in setUp()
 
     function setUp() public override {
         super.setUp();
@@ -52,10 +53,16 @@ contract DeployGovernanceWrapper is SetupScript {
             UPGRADES_TIMELOCK_CONTROLLER = ADMIN;
         } else if (block.chainid == NETWORK_INTUITION_SEPOLIA) {
             UPGRADES_TIMELOCK_CONTROLLER = ADMIN;
+            TRUST_BONDING = 0x75dD32b522c89566265eA32ecb50b4Fc4d00ADc7;
         } else if (block.chainid == NETWORK_INTUITION) {
             UPGRADES_TIMELOCK_CONTROLLER = 0x321e5d4b20158648dFd1f360A79CAFc97190bAd1;
+            TRUST_BONDING = 0x635bBD1367B66E7B16a21D6E5A63C812fFC00617;
         } else {
             revert("Unsupported chain for DeployGovernanceWrapper script");
+        }
+
+        if (TRUST_BONDING == address(0)) {
+            revert("TRUST_BONDING address not set for this network");
         }
     }
 
@@ -72,8 +79,7 @@ contract DeployGovernanceWrapper is SetupScript {
         governanceWrapperImpl = new GovernanceWrapper();
 
         // 2. Prepare init data for the GovernanceWrapper
-        bytes memory initData =
-            abi.encodeWithSelector(IGovernanceWrapper.initialize.selector, UPGRADES_TIMELOCK_CONTROLLER);
+        bytes memory initData = abi.encodeWithSelector(IGovernanceWrapper.initialize.selector, ADMIN, TRUST_BONDING);
 
         governanceWrapperProxy = new TransparentUpgradeableProxy(
             address(governanceWrapperImpl), address(UPGRADES_TIMELOCK_CONTROLLER), initData
