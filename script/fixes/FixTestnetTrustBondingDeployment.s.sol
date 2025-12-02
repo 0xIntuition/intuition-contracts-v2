@@ -51,15 +51,8 @@ contract FixTestnetTrustBondingDeployment is SetupScript {
         TrustBonding trustBondingImpl = new TrustBonding();
         console2.log("Deployed new TrustBonding implementation at:", address(trustBondingImpl));
 
-        bytes memory reinitializerCalldata = abi.encodeWithSelector(
-            TrustBonding.reinitialize.selector, TESTNET_PARAMETERS_TIMELOCK_ADDRESS, TESTNET_MULTI_VAULT_ADDRESS
-        );
-
         bytes memory upgradeAndCallData = abi.encodeWithSelector(
-            ProxyAdmin.upgradeAndCall.selector,
-            address(trustBondingProxy),
-            address(trustBondingImpl),
-            reinitializerCalldata
+            ProxyAdmin.upgradeAndCall.selector, address(trustBondingProxy), address(trustBondingImpl), bytes("")
         );
 
         console2.log("Preparing to queue upgrade transaction in Timelock...");

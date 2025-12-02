@@ -70,7 +70,7 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     event Withdraw(address indexed provider, uint256 value, uint256 ts);
     event Supply(uint256 prevSupply, uint256 supply);
 
-    uint256 internal constant WEEK = 1 weeks;
+    uint256 internal constant WEEK = 43_200; // 12 hours
     uint256 public constant MAXTIME = 2 * 365 * 86_400;
     int128 internal constant iMAXTIME = 2 * 365 * 86_400;
     uint256 internal constant MULTIPLIER = 1 ether;
