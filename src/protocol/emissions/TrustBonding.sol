@@ -142,6 +142,16 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /*//////////////////////////////////////////////////////////////
+                             REINITIALIZER
+    //////////////////////////////////////////////////////////////*/
+
+    /// @dev Testnet-only reinitializer to set timelock and multiVault after deployment
+    function reinitialize(address _timelock, address _multiVault) external reinitializer(2) {
+        _setTimelock(_timelock);
+        _setMultiVault(_multiVault);
+    }
+
+    /*//////////////////////////////////////////////////////////////
                                  VIEW FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
