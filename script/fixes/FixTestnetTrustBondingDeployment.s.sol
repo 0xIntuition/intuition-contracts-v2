@@ -52,9 +52,7 @@ contract FixTestnetTrustBondingDeployment is SetupScript {
         console2.log("Deployed new TrustBonding implementation at:", address(trustBondingImpl));
 
         bytes memory reinitializerCalldata = abi.encodeWithSelector(
-            TrustBonding.reinitialize.selector,
-            TESTNET_PARAMETERS_TIMELOCK_ADDRESS,
-            TESTNET_MULTI_VAULT_ADDRESS
+            TrustBonding.reinitialize.selector, TESTNET_PARAMETERS_TIMELOCK_ADDRESS, TESTNET_MULTI_VAULT_ADDRESS
         );
 
         bytes memory upgradeAndCallData = abi.encodeWithSelector(
