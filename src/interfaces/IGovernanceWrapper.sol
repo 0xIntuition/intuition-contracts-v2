@@ -23,28 +23,11 @@ interface IGovernanceWrapper {
 
     error GovernanceWrapper_InvalidAddress();
 
-    error GovernanceWrapper_CannotInitializeVotesERC20V1();
-
-    error GovernanceWrapper_CannotChangeLockStatus();
-
-    error GovernanceWrapper_CannotRenounceMinting();
-
-    error GovernanceWrapper_CannotOverrideMaxTotalSupply();
-
-    error GovernanceWrapper_MintingIsNotAllowed();
-
-    error GovernanceWrapper_BurningIsNotAllowed();
+    error GovernanceWrapper_BurningDisabled();
 
     /* =================================================== */
     /*                     FUNCTIONS                       */
     /* =================================================== */
-
-    /**
-     * @notice Initializes the GovernanceWrapper contract
-     * @param _owner The initial owner of the GovernanceWrapper contract
-     * @param _trustBonding The address of the TrustBonding contract
-     */
-    function initialize(address _owner, address _trustBonding) external;
 
     /**
      * @notice Sets the TrustBonding contract address

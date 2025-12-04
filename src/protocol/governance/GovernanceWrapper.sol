@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-
 import { IGovernanceWrapper } from "src/interfaces/IGovernanceWrapper.sol";
-import { IVotesERC20V1 } from "src/interfaces/external/decent/IVotesERC20V1.sol";
+import { ITrustBonding } from "src/interfaces/ITrustBonding.sol";
+import { VotesERC20V1 } from "src/external/decent/VotesERC20V1.sol";
 import { VotingEscrow } from "src/external/curve/VotingEscrow.sol";
 
 /**
@@ -13,7 +11,7 @@ import { VotingEscrow } from "src/external/curve/VotingEscrow.sol";
  * @author 0xIntuition
  * @notice A wrapper contract around TrustBonding to conform to the IVotesERC20V1 interface
  */
-contract GovernanceWrapper is Initializable, OwnableUpgradeable, IVotesERC20V1, IGovernanceWrapper {
+contract GovernanceWrapper is IGovernanceWrapper, VotesERC20V1 {
     /*//////////////////////////////////////////////////////////////
                                 STATE
     //////////////////////////////////////////////////////////////*/
@@ -25,30 +23,11 @@ contract GovernanceWrapper is Initializable, OwnableUpgradeable, IVotesERC20V1, 
     uint256[50] private __gap;
 
     /*//////////////////////////////////////////////////////////////
-                                CONSTRUCTOR
-    //////////////////////////////////////////////////////////////*/
-
-    /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() {
-        _disableInitializers();
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                                INITIALIZER
-    //////////////////////////////////////////////////////////////*/
-
-    /// @inheritdoc IGovernanceWrapper
-    function initialize(address _owner, address _trustBonding) external initializer {
-        __Ownable_init(_owner);
-        _setTrustBonding(_trustBonding);
-    }
-
-    /*//////////////////////////////////////////////////////////////
                             ADMIN FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc IGovernanceWrapper
-    function setTrustBonding(address _trustBonding) external onlyOwner {
+    function setTrustBonding(address _trustBonding) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setTrustBonding(_trustBonding);
     }
 
@@ -69,77 +48,55 @@ contract GovernanceWrapper is Initializable, OwnableUpgradeable, IVotesERC20V1, 
     }
 
     /*//////////////////////////////////////////////////////////////
-                        IVotesERC20V1 IMPLEMENTATION
+                        VotesERC20V1 OVERRIDES
     //////////////////////////////////////////////////////////////*/
 
-    /// @inheritdoc IVotesERC20V1
-    function initialize(
-        Metadata calldata metadata_,
-        Allocation[] calldata allocations_,
-        address owner_,
-        bool locked_,
-        uint256 maxTotalSupply_
-    )
-        external
-    {
-        revert GovernanceWrapper_CannotInitializeVotesERC20V1();
-    }
-
-    /// @inheritdoc IVotesERC20V1
-    function CLOCK_MODE() external pure returns (string memory clockMode) {
-        return "mode=timestamp";
-    }
-
-    /// @inheritdoc IVotesERC20V1
-    function clock() external view returns (uint48 clock) {
-        return uint48(block.timestamp);
-    }
-
-    /// @inheritdoc IVotesERC20V1
-    function locked() external view returns (bool isLocked) {
-        return true;
-    }
-
-    /// @inheritdoc IVotesERC20V1
-    function mintingRenounced() external view returns (bool isMintingRenounced) {
-        return true;
-    }
-
-    /// @inheritdoc IVotesERC20V1
-    function maxTotalSupply() external view returns (uint256 maxTotalSupply) {
-        if (address(trustBonding) == address(0)) {
-            return 0;
-        }
+    function totalSupply() public view override returns (uint256) {
+        // veTRUST total voting power
         return trustBonding.totalSupply();
     }
 
-    /// @inheritdoc IVotesERC20V1
-    function getUnlockTime() external view returns (uint48 unlockTime) {
-        return 0;
+    function balanceOf(address account) public view override returns (uint256) {
+        // current veTRUST voting power
+        return trustBonding.balanceOf(account);
     }
 
-    /// @inheritdoc IVotesERC20V1
-    function lock(bool locked_) external {
-        revert GovernanceWrapper_CannotChangeLockStatus();
+    /* --------- IVotes views => delegate to TrustBonding / VotingEscrow --------- */
+
+    function getVotes(address account) public view override returns (uint256) {
+        return trustBonding.balanceOf(account);
     }
 
-    /// @inheritdoc IVotesERC20V1
-    function renounceMinting() external {
-        revert GovernanceWrapper_CannotRenounceMinting();
+    function getPastVotes(address account, uint256 timepoint) public view override returns (uint256) {
+        // timepoint is timestamp because CLOCK_MODE() = "mode=timestamp"
+        return trustBonding.balanceOfAtT(account, timepoint);
     }
 
-    /// @inheritdoc IVotesERC20V1
-    function setMaxTotalSupply(uint256 newMaxTotalSupply_) external {
-        revert GovernanceWrapper_CannotOverrideMaxTotalSupply();
+    function getPastTotalSupply(uint256 timepoint) public view override returns (uint256) {
+        return trustBonding.totalSupplyAtT(timepoint);
     }
 
-    /// @inheritdoc IVotesERC20V1
-    function mint(address to_, uint256 amount_) external {
-        revert GovernanceWrapper_MintingIsNotAllowed();
+    function mint(address, uint256) public override {
+        revert MintingDisabled();
     }
 
-    /// @inheritdoc IVotesERC20V1
-    function burn(uint256 amount_) external {
-        revert GovernanceWrapper_BurningIsNotAllowed();
+    function burn(uint256) public override {
+        revert GovernanceWrapper_BurningDisabled();
+    }
+
+    // optional but recommended: nuke real transfers/minting
+    function _update(
+        address from,
+        address to,
+        uint256 value
+    )
+        internal
+        override
+        // override(ERC20Upgradeable, ERC20VotesUpgradeable)
+    {
+        // you can be stricter if you want, but this keeps the token effectively “shadow-only”
+        if (from != address(0) || to != address(0) || value != 0) {
+            revert IsLocked(); // already defined in the interface
+        }
     }
 }
