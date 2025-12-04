@@ -124,7 +124,7 @@ contract DeployGovernanceSetupToSepolia is Script {
         governanceWrapperImplementation = new GovernanceWrapper();
 
         // 2. Prepare initializer calldata
-        IVotesERC20V1.Metadata memory metadata = IVotesERC20V1.Metadata({name: "veTRUST Votes", symbol: "veTRUST"});
+        IVotesERC20V1.Metadata memory metadata = IVotesERC20V1.Metadata({ name: "veTRUST Votes", symbol: "veTRUST" });
         IVotesERC20V1.Allocation[] memory allocations; // length 0
         bytes memory initData = abi.encodeWithSelector(
             IVotesERC20V1.initialize.selector,
@@ -136,8 +136,7 @@ contract DeployGovernanceSetupToSepolia is Script {
         );
 
         // 3. Deploy proxy with deployer as proxy admin owner
-        governanceWrapperProxy =
-            new ERC1967Proxy(address(governanceWrapperImplementation), initData);
+        governanceWrapperProxy = new ERC1967Proxy(address(governanceWrapperImplementation), initData);
 
         governanceWrapper = GovernanceWrapper(address(governanceWrapperProxy));
 

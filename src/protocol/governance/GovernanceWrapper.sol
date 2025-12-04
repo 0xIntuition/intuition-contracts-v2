@@ -85,18 +85,25 @@ contract GovernanceWrapper is IGovernanceWrapper, VotesERC20V1 {
     }
 
     // optional but recommended: nuke real transfers/minting
-    function _update(
-        address from,
-        address to,
-        uint256 value
-    )
+    function _update(address from, address to, uint256 value)
         internal
         override
         // override(ERC20Upgradeable, ERC20VotesUpgradeable)
+
     {
         // you can be stricter if you want, but this keeps the token effectively “shadow-only”
         if (from != address(0) || to != address(0) || value != 0) {
             revert IsLocked(); // already defined in the interface
         }
+    }
+
+    /// Debugging trials
+
+    function governanceToken() external view returns (address) {
+        return address(this);
+    }
+
+    function token() external view returns (address) {
+        return address(this);
     }
 }
