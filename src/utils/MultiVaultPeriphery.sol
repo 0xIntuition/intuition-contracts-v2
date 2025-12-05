@@ -160,14 +160,10 @@ contract MultiVaultPeriphery is
         bytes32 predicateId = multiVaultCore.calculateAtomId(predicateData);
         bytes32 objectId = multiVaultCore.calculateAtomId(objectData);
 
-        bool subjectExists = multiVaultCore.isAtom(subjectId);
-        bool predicateExists = multiVaultCore.isAtom(predicateId);
-        bool objectExists = multiVaultCore.isAtom(objectId);
-
         uint256 newAtomsCount;
-        if (!subjectExists) ++newAtomsCount;
-        if (!predicateExists) ++newAtomsCount;
-        if (!objectExists) ++newAtomsCount;
+        if (!multiVaultCore.isAtom(subjectId)) ++newAtomsCount;
+        if (!multiVaultCore.isAtom(predicateId)) ++newAtomsCount;
+        if (!multiVaultCore.isAtom(objectId)) ++newAtomsCount;
 
         uint256 expectedValue = newAtomsCount * atomCost + tripleCost;
 
@@ -180,15 +176,15 @@ contract MultiVaultPeriphery is
         _refundExcessValue(msg.value - expectedValue);
 
         // 2) Create missing atoms, each with exactly atomCost (no extra deposit)
-        if (!subjectExists) {
+        if (!multiVaultCore.isAtom(subjectId)) {
             _createSingleAtom(subjectData, subjectId, creator, atomCost);
         }
 
-        if (!predicateExists) {
+        if (!multiVaultCore.isAtom(predicateId)) {
             _createSingleAtom(predicateData, predicateId, creator, atomCost);
         }
 
-        if (!objectExists) {
+        if (!multiVaultCore.isAtom(objectId)) {
             _createSingleAtom(objectData, objectId, creator, atomCost);
         }
 
