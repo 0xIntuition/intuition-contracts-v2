@@ -326,7 +326,8 @@ contract MultiVaultPeripheryTest is BaseTest {
     //     bytes32 expectedTripleId = protocol.multiVault.calculateTripleId(subjectId, predicateId, objectId);
 
     //     resetPrank(users.alice);
-    //     bytes32 tripleId = periphery.createTripleWithAtoms{ value: totalCost }(subjectData, predicateData, objectData);
+    //     bytes32 tripleId = periphery.createTripleWithAtoms{ value: totalCost }(subjectData, predicateData,
+    // objectData);
 
     //     assertEq(tripleId, expectedTripleId);
     //     assertTrue(protocol.multiVault.isAtom(subjectId));
@@ -558,7 +559,7 @@ contract MultiVaultPeripheryTest is BaseTest {
         bytes memory atomData = abi.encodePacked("identical");
 
         uint256 atomCost = protocol.multiVault.getAtomCost();
-        uint256 tripleCost = protocol.multiVault.getTripleCost();T
+        uint256 tripleCost = protocol.multiVault.getTripleCost();
         uint256 totalCost = atomCost + tripleCost;
 
         bytes32 atomId = protocol.multiVault.calculateAtomId(atomData);

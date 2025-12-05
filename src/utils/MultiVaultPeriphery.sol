@@ -134,9 +134,23 @@ contract MultiVaultPeriphery is
         bytes32 objectId = multiVaultCore.calculateAtomId(objectData);
 
         uint256 newAtomsCount;
-        if (!multiVaultCore.isAtom(subjectId)) ++newAtomsCount;
-        if (!multiVaultCore.isAtom(predicateId)) ++newAtomsCount;
-        if (!multiVaultCore.isAtom(objectId)) ++newAtomsCount;
+
+        // Count only the distinct new atoms
+        if (!multiVaultCore.isAtom(subjectId)) {
+            ++newAtomsCount;
+        }
+
+        if (predicateId != subjectId) {
+            if (!multiVaultCore.isAtom(predicateId)) {
+                ++newAtomsCount;
+            }
+        }
+
+        if (objectId != subjectId && objectId != predicateId) {
+            if (!multiVaultCore.isAtom(objectId)) {
+                ++newAtomsCount;
+            }
+        }
 
         uint256 expectedValue = newAtomsCount * atomCost + tripleCost;
 
@@ -153,11 +167,11 @@ contract MultiVaultPeriphery is
             _createSingleAtom(subjectData, subjectId, creator, atomCost);
         }
 
-        if (!multiVaultCore.isAtom(predicateId)) {
+        if (predicateId != subjectId && !multiVaultCore.isAtom(predicateId)) {
             _createSingleAtom(predicateData, predicateId, creator, atomCost);
         }
 
-        if (!multiVaultCore.isAtom(objectId)) {
+        if (objectId != subjectId && objectId != predicateId && !multiVaultCore.isAtom(objectId)) {
             _createSingleAtom(objectData, objectId, creator, atomCost);
         }
 
