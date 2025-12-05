@@ -1,64 +1,89 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
+import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 import { IMultiVaultCore } from "src/interfaces/IMultiVaultCore.sol";
+import { IMultiVaultPeriphery } from "src/interfaces/IMultiVaultPeriphery.sol";
 
-/// -----------------------------------------------------------------------
-/// MultiVault periphery / multicall PoC
-/// -----------------------------------------------------------------------
+/**
+ * @title MultiVaultPeriphery
+ * @author 0xIntuition
+ * @notice A periphery contract to facilitate and batch common MultiVault operations with proper attribution.
+ */
+contract MultiVaultPeriphery is
+    IMultiVaultPeriphery,
+    Initializable,
+    AccessControlUpgradeable,
+    ReentrancyGuardUpgradeable
+{
+    /* =================================================== */
+    /*                       STATE                         */
+    /* =================================================== */
 
-contract MultiVaultPeriphery {
-    IMultiVault public immutable multiVault;
-    IMultiVaultCore public immutable multiVaultCore;
+    /// @notice The MultiVault contract this periphery contract interacts with
+    IMultiVault public multiVault;
 
-    /// @notice Emitted whenever this periphery creates an atom on behalf of a user.
-    /// @param payer  msg.sender that funded this call (could be a relayer)
-    /// @param creator logical/attributed creator (off-chain identity you care about)
-    /// @param atomId id of the atom in MultiVault
-    /// @param data   raw atom data
-    event AtomCreatedFor(address indexed payer, address indexed creator, bytes32 indexed atomId, bytes data);
+    /// @notice The MultiVaultCore interface for helper functions (references to the same underlying MultiVault
+    /// contract)
+    IMultiVaultCore public multiVaultCore;
 
-    /// @notice Emitted whenever this periphery creates a triple on behalf of a user.
-    /// @param payer     msg.sender that funded this call (could be a relayer)
-    /// @param creator   logical/attributed creator
-    /// @param tripleId  id of the triple in MultiVault
-    /// @param subjectId subject atom id
-    /// @param predicateId predicate atom id
-    /// @param objectId  object atom id
-    event TripleCreatedFor(
-        address indexed payer,
-        address indexed creator,
-        bytes32 indexed tripleId,
-        bytes32 subjectId,
-        bytes32 predicateId,
-        bytes32 objectId
-    );
+    /// @dev Gap for upgrade safety
+    uint256[50] private __gap;
 
-    /// @notice Emitted when the MultiVault address is updated.
-    /// @param multiVault new MultiVault address
-    event MultiVaultSet(address indexed multiVault);
+    /* =================================================== */
+    /*                    CONSTRUCTOR                      */
+    /* =================================================== */
 
-    error MultiVaultPeriphery_InvalidAddress();
-    error MultiVaultPeriphery_InvalidCreator();
-    error MultiVaultPeriphery_InvalidMsgValue(uint256 expected, uint256 provided);
-    error MultiVaultPeriphery_InvalidArrayLength();
-    error MultiVaultPeriphery_InvalidPredicateOrObject();
-
-    constructor(address multiVault_) {
-        if (multiVault_ == address(0)) {
-            revert MultiVaultPeriphery_InvalidAddress();
-        }
-        multiVault = IMultiVault(multiVault_);
-        multiVaultCore = IMultiVaultCore(multiVault_);
-        emit MultiVaultSet(multiVault_);
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
     }
 
-    // --------------------------------------------------------------------
-    // Helper: use msg.sender as creator
-    // --------------------------------------------------------------------
+    /* =================================================== */
+    /*                    INITIALIZER                      */
+    /* =================================================== */
 
-    /// @notice Convenience wrapper: creator == msg.sender
+    /**
+     * @notice Initializer for MultiVaultPeriphery
+     * @param _admin Admin address for AccessControl
+     * @param _multiVault MultiVault contract address
+     */
+    function initialize(address _admin, address _multiVault) external initializer {
+        __AccessControl_init();
+        __ReentrancyGuard_init();
+
+        _setMultiVault(_multiVault);
+
+        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
+    }
+
+    /* =================================================== */
+    /*                  ADMIN FUNCTIONS                    */
+    /* =================================================== */
+
+    /**
+     * @notice Sets the MultiVault contract address
+     * @param _multiVault New MultiVault contract address
+     */
+    function setMultiVault(address _multiVault) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _setMultiVault(_multiVault);
+    }
+
+    /* =================================================== */
+    /*                 EXTERNAL FUNCTIONS                  */
+    /* =================================================== */
+
+    /**
+     * @notice Convenience wrapper for createTripleWithAtomsFor, using msg.sender as the creator
+     * @param subjectData Raw subject atom data
+     * @param predicateData Raw predicate atom data
+     * @param objectData Raw object atom data
+     * @return tripleId Created triple id
+     */
     function createTripleWithAtoms(
         bytes calldata subjectData,
         bytes calldata predicateData,
@@ -68,35 +93,26 @@ contract MultiVaultPeriphery {
         payable
         returns (bytes32 tripleId)
     {
-        return createTripleWithAtomsFor(subjectData, predicateData, objectData, msg.sender);
+        return _createTripleWithAtomsFor(subjectData, predicateData, objectData, msg.sender);
     }
 
-    /// @notice Convenience wrapper for list pattern; creator == msg.sender
-    function batchCreateListTriples(
-        bytes[] calldata subjectData,
-        bytes32 predicateId,
-        bytes32 objectId
-    )
-        external
-        payable
-        returns (bytes32[] memory subjectIds, bytes32[] memory tripleIds)
-    {
-        return batchCreateListTriplesFor(subjectData, predicateId, objectId, msg.sender);
-    }
-
-    // --------------------------------------------------------------------
-    // Core example: 3 atoms (s, p, o) -> 1 triple
-    // --------------------------------------------------------------------
-
-    /// @notice Creates up to 3 atoms (subject / predicate / object) and then a triple between them,
-    ///         charging only `atomCost` per new atom and `tripleCost` for the triple.
-    ///
-    /// msg.value **must be exactly**:
-    ///     (#newAtoms * atomCost) + tripleCost
-    ///
-    /// This guarantees:
-    /// - No extra ETH is left sitting on this periphery.
-    /// - No extra shares are minted to this contract (we always pass exactly atomCost / tripleCost).
+    /**
+     * @notice Creates up to 3 atoms (subject / predicate / object) and then a triple with them,
+     *         charging only `atomCost` per new atom and `tripleCost` for the triple.
+     *
+     * msg.value must be at least:
+     *     (newAtomsCount * atomCost) + tripleCost --> Any excess msg.value is refunded to msg.sender
+     *
+     * This guarantees:
+     * - No extra ETH is left sitting on this periphery contract.
+     * - No extra shares are minted to this contract (we always pass exactly atomCost / tripleCost).
+     *
+     * @param subjectData Raw subject atom data
+     * @param predicateData Raw predicate atom data
+     * @param objectData Raw object atom data
+     * @param creator Logical/attributed creator address
+     * @return tripleId Created triple id
+     */
     function createTripleWithAtomsFor(
         bytes calldata subjectData,
         bytes calldata predicateData,
@@ -105,6 +121,33 @@ contract MultiVaultPeriphery {
     )
         public
         payable
+        returns (bytes32 tripleId)
+    {
+        return _createTripleWithAtomsFor(subjectData, predicateData, objectData, creator);
+    }
+
+    /* =================================================== */
+    /*                 INTERNAL FUNCTIONS                  */
+    /* =================================================== */
+
+    /// @dev Internal function to set the MultiVault contract address
+    function _setMultiVault(address _multiVault) internal {
+        if (_multiVault == address(0)) {
+            revert MultiVaultPeriphery_InvalidAddress();
+        }
+        multiVault = IMultiVault(_multiVault);
+        multiVaultCore = IMultiVaultCore(_multiVault);
+        emit MultiVaultSet(_multiVault);
+    }
+
+    /// @dev Internal function to create triple with atoms for a specified creator
+    function _createTripleWithAtomsFor(
+        bytes calldata subjectData,
+        bytes calldata predicateData,
+        bytes calldata objectData,
+        address creator
+    )
+        internal
         returns (bytes32 tripleId)
     {
         if (creator == address(0)) revert MultiVaultPeriphery_InvalidCreator();
@@ -122,14 +165,19 @@ contract MultiVaultPeriphery {
         bool objectExists = multiVaultCore.isAtom(objectId);
 
         uint256 newAtomsCount;
-        if (!subjectExists) newAtomsCount++;
-        if (!predicateExists) newAtomsCount++;
-        if (!objectExists) newAtomsCount++;
+        if (!subjectExists) ++newAtomsCount;
+        if (!predicateExists) ++newAtomsCount;
+        if (!objectExists) ++newAtomsCount;
 
         uint256 expectedValue = newAtomsCount * atomCost + tripleCost;
-        if (msg.value != expectedValue) {
-            revert MultiVaultPeriphery_InvalidMsgValue(expectedValue, msg.value);
+
+        // Check if the provided msg.value is enough to cover the costs
+        if (msg.value < expectedValue) {
+            revert MultiVaultPeriphery_InsufficientMsgValue(expectedValue, msg.value);
         }
+
+        // Refund any excess value sent
+        _refundExcessValue(msg.value - expectedValue);
 
         // 2) Create missing atoms, each with exactly atomCost (no extra deposit)
         if (!subjectExists) {
@@ -163,137 +211,9 @@ contract MultiVaultPeriphery {
         emit TripleCreatedFor(msg.sender, creator, tripleId, subjectId, predicateId, objectId);
     }
 
-    // --------------------------------------------------------------------
-    // List example: [X/Y/Z] [has tag] [bullish]
-    //   - Array of subjects
-    //   - Single fixed predicateId + objectId (atoms already existing)
-    //   - Only subjects may need to be created
-    // --------------------------------------------------------------------
-
-    /// @notice Creates (if needed) subject atoms for each `subjectData[i]` and then creates a triple:
-    ///         (subject[i], predicateId, objectId) for each i.
-    ///
-    /// Assumes `predicateId` and `objectId` are already existing atoms.
-    ///
-    /// msg.value **must be exactly**:
-    ///     (#newSubjects * atomCost) + (subjectData.length * tripleCost)
-    ///
-    /// This matches the “list of [X/Y/Z] [has tag] [bullish]” use case.
-    function batchCreateListTriplesFor(
-        bytes[] calldata subjectData,
-        bytes32 predicateId,
-        bytes32 objectId,
-        address creator
-    )
-        public
-        payable
-        returns (bytes32[] memory subjectIds, bytes32[] memory tripleIds)
-    {
-        if (creator == address(0)) revert MultiVaultPeriphery_InvalidCreator();
-        uint256 length = subjectData.length;
-        if (length == 0) revert MultiVaultPeriphery_InvalidArrayLength();
-
-        // Make sure predicate and object atoms exist
-        if (!multiVaultCore.isAtom(predicateId) || !multiVaultCore.isAtom(objectId)) {
-            revert MultiVaultPeriphery_InvalidPredicateOrObject();
-        }
-
-        uint256 atomCost = multiVaultCore.getAtomCost();
-        uint256 tripleCost = multiVaultCore.getTripleCost();
-
-        subjectIds = new bytes32[](length);
-        bool[] memory needsCreation = new bool[](length);
-        uint256 newSubjectCount;
-
-        // 1) Precompute subject ids and track which ones need creation
-        for (uint256 i = 0; i < length;) {
-            bytes32 id = multiVaultCore.calculateAtomId(subjectData[i]);
-            subjectIds[i] = id;
-
-            bool exists = multiVaultCore.isAtom(id);
-            if (!exists) {
-                needsCreation[i] = true;
-                newSubjectCount++;
-            }
-
-            unchecked {
-                ++i;
-            }
-        }
-
-        uint256 expectedValue = newSubjectCount * atomCost + length * tripleCost;
-        if (msg.value != expectedValue) {
-            revert MultiVaultPeriphery_InvalidMsgValue(expectedValue, msg.value);
-        }
-
-        // 2) Create all missing subject atoms in a single MultiVault.createAtoms call
-        if (newSubjectCount > 0) {
-            bytes[] memory newSubjectData = new bytes[](newSubjectCount);
-            uint256[] memory atomAssets = new uint256[](newSubjectCount);
-
-            uint256 cursor;
-            for (uint256 i = 0; i < length;) {
-                if (needsCreation[i]) {
-                    newSubjectData[cursor] = subjectData[i];
-                    atomAssets[cursor] = atomCost;
-                    cursor++;
-                }
-                unchecked {
-                    ++i;
-                }
-            }
-
-            multiVault.createAtoms{ value: newSubjectCount * atomCost }(newSubjectData, atomAssets);
-
-            // Emit attribution events for each new subject atom
-            cursor = 0;
-            for (uint256 i = 0; i < length;) {
-                if (needsCreation[i]) {
-                    emit AtomCreatedFor(msg.sender, creator, subjectIds[i], subjectData[i]);
-                    cursor++;
-                }
-                unchecked {
-                    ++i;
-                }
-            }
-        }
-
-        // 3) Create triples for all subjects using the same predicateId and objectId
-        bytes32[] memory subjectIdsForTriple = new bytes32[](length);
-        bytes32[] memory predicateIds = new bytes32[](length);
-        bytes32[] memory objectIds = new bytes32[](length);
-        uint256[] memory tripleAssets = new uint256[](length);
-
-        for (uint256 i = 0; i < length;) {
-            subjectIdsForTriple[i] = subjectIds[i];
-            predicateIds[i] = predicateId;
-            objectIds[i] = objectId;
-            tripleAssets[i] = tripleCost;
-            unchecked {
-                ++i;
-            }
-        }
-
-        tripleIds = multiVault.createTriples{ value: length * tripleCost }(
-            subjectIdsForTriple, predicateIds, objectIds, tripleAssets
-        );
-
-        // Emit attribution events for each triple created
-        for (uint256 i = 0; i < length;) {
-            emit TripleCreatedFor(msg.sender, creator, tripleIds[i], subjectIds[i], predicateId, objectId);
-            unchecked {
-                ++i;
-            }
-        }
-    }
-
-    // --------------------------------------------------------------------
-    // Internal helpers
-    // --------------------------------------------------------------------
-
-    /// @dev Create a single new atom with exactly `atomCost` and emit attribution event.
+    /// @dev Creates a single new atom with exactly `atomCost` and emits an appropriate attribution event
     function _createSingleAtom(bytes calldata atomData, bytes32 atomId, address creator, uint256 atomCost) internal {
-        // Single-element arrays as MultiVault expects
+        // Create single-element arrays as MultiVault expects
         bytes[] memory dataArr = new bytes[](1);
         uint256[] memory assetArr = new uint256[](1);
 
@@ -303,5 +223,13 @@ contract MultiVaultPeriphery {
         multiVault.createAtoms{ value: atomCost }(dataArr, assetArr);
 
         emit AtomCreatedFor(msg.sender, creator, atomId, atomData);
+    }
+
+    //// @dev Internal function to refund excess ETH value to msg.sender
+    function _refundExcessValue(uint256 value) internal {
+        if (value > 0) {
+            (bool success,) = msg.sender.call{ value: value }("");
+            require(success, "MultiVaultPeriphery: Refund failed");
+        }
     }
 }
