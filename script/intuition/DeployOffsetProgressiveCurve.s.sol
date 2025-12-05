@@ -48,11 +48,11 @@ contract DeployOffsetProgressiveCurve is SetupScript {
         super.setUp();
 
         if (block.chainid == NETWORK_ANVIL) {
-            UPGRADES_TIMELOCK_CONTROLLER = msg.sender;
+            UPGRADES_TIMELOCK_CONTROLLER = vm.envAddress("ANVIL_UPGRADES_TIMELOCK_CONTROLLER");
         } else if (block.chainid == NETWORK_INTUITION_SEPOLIA) {
-            UPGRADES_TIMELOCK_CONTROLLER = msg.sender;
+            UPGRADES_TIMELOCK_CONTROLLER = vm.envAddress("INTUITION_SEPOLIA_UPGRADES_TIMELOCK_CONTROLLER");
         } else if (block.chainid == NETWORK_INTUITION) {
-            UPGRADES_TIMELOCK_CONTROLLER = 0x321e5d4b20158648dFd1f360A79CAFc97190bAd1;
+            UPGRADES_TIMELOCK_CONTROLLER = vm.envAddress("INTUITION_MAINNET_UPGRADES_TIMELOCK_CONTROLLER");
         } else {
             revert("Unsupported chain for DeployOffsetProgressiveCurve script");
         }
@@ -78,6 +78,7 @@ contract DeployOffsetProgressiveCurve is SetupScript {
             OFFSET_PROGRESSIVE_CURVE_OFFSET
         );
 
+        // 3. Deploy the OffsetProgressiveCurve proxy contract
         offsetProgressiveCurveProxy = new TransparentUpgradeableProxy(
             address(offsetProgressiveCurveImpl), address(UPGRADES_TIMELOCK_CONTROLLER), initData
         );

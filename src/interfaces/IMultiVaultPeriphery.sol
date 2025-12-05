@@ -64,4 +64,60 @@ interface IMultiVaultPeriphery {
     /* =================================================== */
     /*                    FUNCTIONS                        */
     /* =================================================== */
+
+    /**
+     * @notice Initializer for MultiVaultPeriphery
+     * @param _admin Admin address for AccessControl
+     * @param _multiVault MultiVault contract address
+     */
+    function initialize(address _admin, address _multiVault) external;
+
+    /**
+     * @notice Sets the MultiVault contract address
+     * @param _multiVault New MultiVault contract address
+     */
+    function setMultiVault(address _multiVault) external;
+
+    /**
+     * @notice Convenience wrapper for createTripleWithAtomsFor, using msg.sender as the creator
+     * @param subjectData Raw subject atom data
+     * @param predicateData Raw predicate atom data
+     * @param objectData Raw object atom data
+     * @return tripleId Created triple id
+     */
+    function createTripleWithAtoms(
+        bytes calldata subjectData,
+        bytes calldata predicateData,
+        bytes calldata objectData
+    )
+        external
+        payable
+        returns (bytes32 tripleId);
+
+    /**
+     * @notice Creates up to 3 atoms (subject / predicate / object) and then a triple with them,
+     *         charging only `atomCost` per new atom and `tripleCost` for the triple.
+     *
+     * msg.value must be at least:
+     *     (newAtomsCount * atomCost) + tripleCost --> Any excess msg.value is refunded to msg.sender
+     *
+     * This guarantees:
+     * - No extra ETH is left sitting on this periphery contract.
+     * - No extra shares are minted to this contract (we always pass exactly atomCost / tripleCost).
+     *
+     * @param subjectData Raw subject atom data
+     * @param predicateData Raw predicate atom data
+     * @param objectData Raw object atom data
+     * @param creator Logical/attributed creator address
+     * @return tripleId Created triple id
+     */
+    function createTripleWithAtomsFor(
+        bytes calldata subjectData,
+        bytes calldata predicateData,
+        bytes calldata objectData,
+        address creator
+    )
+        external
+        payable
+        returns (bytes32 tripleId);
 }
