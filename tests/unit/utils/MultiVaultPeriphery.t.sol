@@ -300,41 +300,38 @@ contract MultiVaultPeripheryTest is BaseTest {
         periphery.createTripleWithAtoms{ value: insufficientAmount }(subjectData, predicateData, objectData);
     }
 
-    // function testFuzz_createTripleWithAtoms_allNewAtoms(
-    //     bytes calldata subjectData,
-    //     bytes calldata predicateData,
-    //     bytes calldata objectData
-    // )
-    //     external
-    // {
-    //     vm.assume(subjectData.length > 0 && subjectData.length <= ATOM_DATA_MAX_LENGTH);
-    //     vm.assume(predicateData.length > 0 && predicateData.length <= ATOM_DATA_MAX_LENGTH);
-    //     vm.assume(objectData.length > 0 && objectData.length <= ATOM_DATA_MAX_LENGTH);
+    function testFuzz_createTripleWithAtoms_allNewAtoms(
+        bytes calldata subjectData,
+        bytes calldata predicateData,
+        bytes calldata objectData
+    )
+        external
+    {
+        vm.assume(subjectData.length > 0 && subjectData.length <= ATOM_DATA_MAX_LENGTH);
+        vm.assume(predicateData.length > 0 && predicateData.length <= ATOM_DATA_MAX_LENGTH);
+        vm.assume(objectData.length > 0 && objectData.length <= ATOM_DATA_MAX_LENGTH);
 
-    //     bytes32 subjectId = protocol.multiVault.calculateAtomId(subjectData);
-    //     bytes32 predicateId = protocol.multiVault.calculateAtomId(predicateData);
-    //     bytes32 objectId = protocol.multiVault.calculateAtomId(objectData);
+        bytes32 subjectId = protocol.multiVault.calculateAtomId(subjectData);
+        bytes32 predicateId = protocol.multiVault.calculateAtomId(predicateData);
+        bytes32 objectId = protocol.multiVault.calculateAtomId(objectData);
 
-    //     vm.assume(!protocol.multiVault.isAtom(subjectId));
-    //     vm.assume(!protocol.multiVault.isAtom(predicateId));
-    //     vm.assume(!protocol.multiVault.isAtom(objectId));
+        vm.assume(!protocol.multiVault.isAtom(subjectId));
+        vm.assume(!protocol.multiVault.isAtom(predicateId));
+        vm.assume(!protocol.multiVault.isAtom(objectId));
 
-    //     uint256 atomCost = protocol.multiVault.getAtomCost();
-    //     uint256 tripleCost = protocol.multiVault.getTripleCost();
-    //     uint256 totalCost = (atomCost * 3) + tripleCost;
+        uint256 atomCost = protocol.multiVault.getAtomCost();
+        uint256 tripleCost = protocol.multiVault.getTripleCost();
+        uint256 totalCost = (atomCost * 3) + tripleCost;
 
-    //     bytes32 expectedTripleId = protocol.multiVault.calculateTripleId(subjectId, predicateId, objectId);
+        resetPrank(users.alice);
+        bytes32 tripleId = periphery.createTripleWithAtoms{ value: totalCost }(subjectData, predicateData, objectData);
 
-    //     resetPrank(users.alice);
-    //     bytes32 tripleId = periphery.createTripleWithAtoms{ value: totalCost }(subjectData, predicateData,
-    // objectData);
-
-    //     assertEq(tripleId, expectedTripleId);
-    //     assertTrue(protocol.multiVault.isAtom(subjectId));
-    //     assertTrue(protocol.multiVault.isAtom(predicateId));
-    //     assertTrue(protocol.multiVault.isAtom(objectId));
-    //     assertTrue(protocol.multiVault.isTriple(tripleId));
-    // }
+        assertEq(tripleId, protocol.multiVault.calculateTripleId(subjectId, predicateId, objectId));
+        assertTrue(protocol.multiVault.isAtom(subjectId));
+        assertTrue(protocol.multiVault.isAtom(predicateId));
+        assertTrue(protocol.multiVault.isAtom(objectId));
+        assertTrue(protocol.multiVault.isTriple(tripleId));
+    }
 
     function testFuzz_createTripleWithAtoms_refundsExcessValue(uint256 excessAmount) external {
         excessAmount = bound(excessAmount, 0, 100 ether);
@@ -455,31 +452,32 @@ contract MultiVaultPeripheryTest is BaseTest {
         assertEq(balanceBefore - balanceAfter, totalCost);
     }
 
-    // function testFuzz_createTripleWithAtomsFor_successful(address creator) external {
-    //     vm.assume(creator != address(0));
-    //     _excludeReservedAddresses(creator);
+    function testFuzz_createTripleWithAtomsFor_successful(address creator) external {
+        vm.assume(creator != address(0));
+        _excludeReservedAddresses(creator);
 
-    //     bytes memory subjectData = abi.encodePacked("subject");
-    //     bytes memory predicateData = abi.encodePacked("predicate");
-    //     bytes memory objectData = abi.encodePacked("object");
+        bytes memory subjectData = abi.encodePacked("subject");
+        bytes memory predicateData = abi.encodePacked("predicate");
+        bytes memory objectData = abi.encodePacked("object");
 
-    //     uint256 atomCost = protocol.multiVault.getAtomCost();
-    //     uint256 tripleCost = protocol.multiVault.getTripleCost();
-    //     uint256 totalCost = (atomCost * 3) + tripleCost;
+        uint256 atomCost = protocol.multiVault.getAtomCost();
+        uint256 tripleCost = protocol.multiVault.getTripleCost();
+        uint256 totalCost = (atomCost * 3) + tripleCost;
 
-    //     bytes32 expectedSubjectId = protocol.multiVault.calculateAtomId(subjectData);
-    //     bytes32 expectedPredicateId = protocol.multiVault.calculateAtomId(predicateData);
-    //     bytes32 expectedObjectId = protocol.multiVault.calculateAtomId(objectData);
-    //     bytes32 expectedTripleId =
-    //         protocol.multiVault.calculateTripleId(expectedSubjectId, expectedPredicateId, expectedObjectId);
+        bytes32 expectedTripleId = protocol.multiVault
+            .calculateTripleId(
+                protocol.multiVault.calculateAtomId(subjectData), // expectedSubjectId
+                protocol.multiVault.calculateAtomId(predicateData), // expectedPredicateId
+                protocol.multiVault.calculateAtomId(objectData) // expectedObjectId
+            );
 
-    //     resetPrank(users.alice);
-    //     bytes32 tripleId =
-    //         periphery.createTripleWithAtomsFor{ value: totalCost }(subjectData, predicateData, objectData, creator);
+        resetPrank(users.alice);
+        bytes32 tripleId =
+            periphery.createTripleWithAtomsFor{ value: totalCost }(subjectData, predicateData, objectData, creator);
 
-    //     assertEq(tripleId, expectedTripleId);
-    //     assertTrue(protocol.multiVault.isTriple(tripleId));
-    // }
+        assertEq(tripleId, expectedTripleId);
+        assertTrue(protocol.multiVault.isTriple(tripleId));
+    }
 
     /* =================================================== */
     /*              REFUND MECHANISM TESTS                 */
