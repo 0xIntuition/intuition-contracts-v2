@@ -1,7 +1,7 @@
 /**
  * @title Create Triple Example
  * @notice Demonstrates how to create a triple vault (Subject-Predicate-Object) with an initial deposit
- * @dev This example uses ethers.js v6 to interact with the MultiVault contract
+ * @dev This example uses viem to interact with the MultiVault contract
  *
  * What this example does:
  * 1. Connects to the Intuition network
@@ -12,12 +12,14 @@
  *
  * Prerequisites:
  * - Node.js v18+
- * - ethers.js v6 installed: `npm install ethers@6`
+ * - viem installed: `npm install viem`
  * - Three existing atoms (or use the create-atom.ts example first)
  * - Private key with ETH for gas and WTRUST tokens for deposit
  */
 
-import { ethers } from 'ethers';
+import { createPublicClient, createWalletClient, http, parseEther, formatEther, getContract } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { base } from 'viem/chains';
 
 // ============================================================================
 // Configuration
@@ -27,40 +29,150 @@ const RPC_URL = 'YOUR_INTUITION_RPC_URL';
 const CHAIN_ID = 0; // Replace with actual Intuition chain ID
 
 // Contract addresses (Intuition Mainnet)
-const MULTIVAULT_ADDRESS = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e';
-const WTRUST_ADDRESS = '0x81cFb09cb44f7184Ad934C09F82000701A4bF672';
+const MULTIVAULT_ADDRESS = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e' as `0x${string}`;
+const WTRUST_ADDRESS = '0x81cFb09cb44f7184Ad934C09F82000701A4bF672' as `0x${string}`;
 
-const PRIVATE_KEY = process.env.PRIVATE_KEY || '';
+const PRIVATE_KEY = (process.env.PRIVATE_KEY || '') as `0x${string}`;
 
 // Triple configuration
 // Replace these with actual atom IDs from your created atoms
-const SUBJECT_ID = '0x0000000000000000000000000000000000000000000000000000000000000001';
-const PREDICATE_ID = '0x0000000000000000000000000000000000000000000000000000000000000002';
-const OBJECT_ID = '0x0000000000000000000000000000000000000000000000000000000000000003';
+const SUBJECT_ID = '0x0000000000000000000000000000000000000000000000000000000000000001' as `0x${string}`;
+const PREDICATE_ID = '0x0000000000000000000000000000000000000000000000000000000000000002' as `0x${string}`;
+const OBJECT_ID = '0x0000000000000000000000000000000000000000000000000000000000000003' as `0x${string}`;
 
-const DEPOSIT_AMOUNT = ethers.parseEther('20'); // 20 WTRUST tokens
+const DEPOSIT_AMOUNT = parseEther('20'); // 20 WTRUST tokens
 
 // ============================================================================
 // Contract ABIs
 // ============================================================================
 
 const MULTIVAULT_ABI = [
-  'function createTriples(bytes32[] calldata subjectIds, bytes32[] calldata predicateIds, bytes32[] calldata objectIds, uint256[] calldata assets) external payable returns (bytes32[] memory)',
-  'function calculateTripleId(bytes32 subjectId, bytes32 predicateId, bytes32 objectId) external pure returns (bytes32)',
-  'function isTermCreated(bytes32 id) external view returns (bool)',
-  'function getTripleCost() external view returns (uint256)',
-  'function atomDepositFractionAmount(uint256 assets) external view returns (uint256)',
-  'function previewTripleCreate(bytes32 termId, uint256 assets) external view returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees)',
-  'function getTriple(bytes32 tripleId) external view returns (bytes32, bytes32, bytes32)',
-  'event TripleCreated(address indexed creator, bytes32 indexed termId, bytes32 subjectId, bytes32 predicateId, bytes32 objectId)',
-  'event Deposited(address indexed sender, address indexed receiver, bytes32 indexed termId, uint256 curveId, uint256 assets, uint256 assetsAfterFees, uint256 shares, uint256 totalShares, uint8 vaultType)',
-];
+  {
+    name: 'createTriples',
+    type: 'function',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'subjectIds', type: 'bytes32[]' },
+      { name: 'predicateIds', type: 'bytes32[]' },
+      { name: 'objectIds', type: 'bytes32[]' },
+      { name: 'assets', type: 'uint256[]' }
+    ],
+    outputs: [{ name: '', type: 'bytes32[]' }]
+  },
+  {
+    name: 'calculateTripleId',
+    type: 'function',
+    stateMutability: 'pure',
+    inputs: [
+      { name: 'subjectId', type: 'bytes32' },
+      { name: 'predicateId', type: 'bytes32' },
+      { name: 'objectId', type: 'bytes32' }
+    ],
+    outputs: [{ name: '', type: 'bytes32' }]
+  },
+  {
+    name: 'isTermCreated',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'id', type: 'bytes32' }],
+    outputs: [{ name: '', type: 'bool' }]
+  },
+  {
+    name: 'getTripleCost',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    name: 'atomDepositFractionAmount',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'assets', type: 'uint256' }],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    name: 'previewTripleCreate',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'termId', type: 'bytes32' },
+      { name: 'assets', type: 'uint256' }
+    ],
+    outputs: [
+      { name: 'shares', type: 'uint256' },
+      { name: 'assetsAfterFixedFees', type: 'uint256' },
+      { name: 'assetsAfterFees', type: 'uint256' }
+    ]
+  },
+  {
+    name: 'getTriple',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'tripleId', type: 'bytes32' }],
+    outputs: [
+      { name: '', type: 'bytes32' },
+      { name: '', type: 'bytes32' },
+      { name: '', type: 'bytes32' }
+    ]
+  },
+  {
+    name: 'TripleCreated',
+    type: 'event',
+    inputs: [
+      { name: 'creator', type: 'address', indexed: true },
+      { name: 'termId', type: 'bytes32', indexed: true },
+      { name: 'subjectId', type: 'bytes32', indexed: false },
+      { name: 'predicateId', type: 'bytes32', indexed: false },
+      { name: 'objectId', type: 'bytes32', indexed: false }
+    ]
+  },
+  {
+    name: 'Deposited',
+    type: 'event',
+    inputs: [
+      { name: 'sender', type: 'address', indexed: true },
+      { name: 'receiver', type: 'address', indexed: true },
+      { name: 'termId', type: 'bytes32', indexed: true },
+      { name: 'curveId', type: 'uint256', indexed: false },
+      { name: 'assets', type: 'uint256', indexed: false },
+      { name: 'assetsAfterFees', type: 'uint256', indexed: false },
+      { name: 'shares', type: 'uint256', indexed: false },
+      { name: 'totalShares', type: 'uint256', indexed: false },
+      { name: 'vaultType', type: 'uint8', indexed: false }
+    ]
+  }
+] as const;
 
 const ERC20_ABI = [
-  'function approve(address spender, uint256 amount) external returns (bool)',
-  'function allowance(address owner, address spender) external view returns (uint256)',
-  'function balanceOf(address account) external view returns (uint256)',
-];
+  {
+    name: 'approve',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint256' }
+    ],
+    outputs: [{ name: '', type: 'bool' }]
+  },
+  {
+    name: 'allowance',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' }
+    ],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    name: 'balanceOf',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }]
+  }
+] as const;
 
 // ============================================================================
 // Main Function
@@ -74,35 +186,45 @@ async function main() {
     console.log();
 
     // ------------------------------------------------------------------------
-    // Step 1: Setup Provider and Signer
+    // Step 1: Setup Clients
     // ------------------------------------------------------------------------
     console.log('Step 1: Connecting to Intuition network...');
 
-    const provider = new ethers.JsonRpcProvider(RPC_URL, {
-      chainId: CHAIN_ID,
-      name: 'intuition',
+    // Create public client for reading blockchain data
+    const publicClient = createPublicClient({
+      chain: base, // Replace with actual Intuition chain
+      transport: http(RPC_URL)
     });
 
-    const signer = new ethers.Wallet(PRIVATE_KEY, provider);
-    console.log(`✓ Connected with address: ${signer.address}`);
+    // Create account from private key
+    const account = privateKeyToAccount(PRIVATE_KEY);
+
+    // Create wallet client for transactions
+    const walletClient = createWalletClient({
+      account,
+      chain: base, // Replace with actual Intuition chain
+      transport: http(RPC_URL)
+    });
+
+    console.log(`✓ Connected with address: ${account.address}`);
     console.log();
 
     // ------------------------------------------------------------------------
-    // Step 2: Initialize Contracts
+    // Step 2: Initialize Contract Instances
     // ------------------------------------------------------------------------
     console.log('Step 2: Initializing contract instances...');
 
-    const multiVault = new ethers.Contract(
-      MULTIVAULT_ADDRESS,
-      MULTIVAULT_ABI,
-      signer
-    );
+    const multiVault = getContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: MULTIVAULT_ABI,
+      client: { public: publicClient, wallet: walletClient }
+    });
 
-    const wTrust = new ethers.Contract(
-      WTRUST_ADDRESS,
-      ERC20_ABI,
-      signer
-    );
+    const wTrust = getContract({
+      address: WTRUST_ADDRESS,
+      abi: ERC20_ABI,
+      client: { public: publicClient, wallet: walletClient }
+    });
 
     console.log(`✓ MultiVault: ${MULTIVAULT_ADDRESS}`);
     console.log(`✓ WTRUST: ${WTRUST_ADDRESS}`);
@@ -118,21 +240,21 @@ async function main() {
     console.log();
 
     // Check if subject exists
-    const subjectExists = await multiVault.isTermCreated(SUBJECT_ID);
+    const subjectExists = await multiVault.read.isTermCreated([SUBJECT_ID]);
     if (!subjectExists) {
       throw new Error(`Subject atom ${SUBJECT_ID} does not exist. Create it first.`);
     }
     console.log('✓ Subject atom exists');
 
     // Check if predicate exists
-    const predicateExists = await multiVault.isTermCreated(PREDICATE_ID);
+    const predicateExists = await multiVault.read.isTermCreated([PREDICATE_ID]);
     if (!predicateExists) {
       throw new Error(`Predicate atom ${PREDICATE_ID} does not exist. Create it first.`);
     }
     console.log('✓ Predicate atom exists');
 
     // Check if object exists
-    const objectExists = await multiVault.isTermCreated(OBJECT_ID);
+    const objectExists = await multiVault.read.isTermCreated([OBJECT_ID]);
     if (!objectExists) {
       throw new Error(`Object atom ${OBJECT_ID} does not exist. Create it first.`);
     }
@@ -144,15 +266,15 @@ async function main() {
     // ------------------------------------------------------------------------
     console.log('Step 4: Calculating triple ID...');
 
-    const tripleId = await multiVault.calculateTripleId(
+    const tripleId = await multiVault.read.calculateTripleId([
       SUBJECT_ID,
       PREDICATE_ID,
       OBJECT_ID
-    );
+    ]);
     console.log(`Triple ID: ${tripleId}`);
 
     // Check if this triple already exists
-    const tripleExists = await multiVault.isTermCreated(tripleId);
+    const tripleExists = await multiVault.read.isTermCreated([tripleId]);
     if (tripleExists) {
       console.log('⚠ Warning: This triple already exists!');
       console.log('You can deposit into the existing vault, but creation will fail.');
@@ -166,24 +288,24 @@ async function main() {
     // ------------------------------------------------------------------------
     console.log('Step 5: Checking costs and balance...');
 
-    const wtrustBalance = await wTrust.balanceOf(signer.address);
-    console.log(`WTRUST Balance: ${ethers.formatEther(wtrustBalance)} WTRUST`);
+    const wtrustBalance = await wTrust.read.balanceOf([account.address]);
+    console.log(`WTRUST Balance: ${formatEther(wtrustBalance)} WTRUST`);
 
     // Get triple creation cost
-    const tripleCost = await multiVault.getTripleCost();
-    console.log(`Triple Creation Cost: ${ethers.formatEther(tripleCost)} WTRUST`);
+    const tripleCost = await multiVault.read.getTripleCost();
+    console.log(`Triple Creation Cost: ${formatEther(tripleCost)} WTRUST`);
 
     // Get atom deposit fraction (portion that goes to underlying atoms)
-    const atomDepositFraction = await multiVault.atomDepositFractionAmount(DEPOSIT_AMOUNT);
-    console.log(`Atom Deposit Fraction: ${ethers.formatEther(atomDepositFraction)} WTRUST`);
+    const atomDepositFraction = await multiVault.read.atomDepositFractionAmount([DEPOSIT_AMOUNT]);
+    console.log(`Atom Deposit Fraction: ${formatEther(atomDepositFraction)} WTRUST`);
     console.log(`  (This will be split among the 3 underlying atoms)`);
 
     const totalRequired = DEPOSIT_AMOUNT + tripleCost;
-    console.log(`Total Required: ${ethers.formatEther(totalRequired)} WTRUST`);
+    console.log(`Total Required: ${formatEther(totalRequired)} WTRUST`);
 
-    if (wtrustBalance &lt; totalRequired) {
+    if (wtrustBalance < totalRequired) {
       throw new Error(
-        `Insufficient WTRUST balance. Need ${ethers.formatEther(totalRequired)} but have ${ethers.formatEther(wtrustBalance)}`
+        `Insufficient WTRUST balance. Need ${formatEther(totalRequired)} but have ${formatEther(wtrustBalance)}`
       );
     }
     console.log('✓ Sufficient balance confirmed');
@@ -196,22 +318,22 @@ async function main() {
 
     try {
       const [shares, assetsAfterFixedFees, assetsAfterFees] =
-        await multiVault.previewTripleCreate(tripleId, DEPOSIT_AMOUNT);
+        await multiVault.read.previewTripleCreate([tripleId, DEPOSIT_AMOUNT]);
 
-      console.log(`Expected shares to receive: ${ethers.formatEther(shares)}`);
-      console.log(`Assets after fixed fees: ${ethers.formatEther(assetsAfterFixedFees)} WTRUST`);
-      console.log(`Assets after all fees: ${ethers.formatEther(assetsAfterFees)} WTRUST`);
+      console.log(`Expected shares to receive: ${formatEther(shares)}`);
+      console.log(`Assets after fixed fees: ${formatEther(assetsAfterFixedFees)} WTRUST`);
+      console.log(`Assets after all fees: ${formatEther(assetsAfterFees)} WTRUST`);
 
       const totalFees = DEPOSIT_AMOUNT - assetsAfterFees;
-      console.log(`Total fees: ${ethers.formatEther(totalFees)} WTRUST`);
+      console.log(`Total fees: ${formatEther(totalFees)} WTRUST`);
 
       // Note: The atomDepositFraction is taken from the deposit amount
       // before it enters the triple vault
       const tripleVaultDeposit = DEPOSIT_AMOUNT - atomDepositFraction;
       console.log();
       console.log('Deposit breakdown:');
-      console.log(`  To underlying atoms: ${ethers.formatEther(atomDepositFraction)} WTRUST`);
-      console.log(`  To triple vault: ${ethers.formatEther(tripleVaultDeposit)} WTRUST`);
+      console.log(`  To underlying atoms: ${formatEther(atomDepositFraction)} WTRUST`);
+      console.log(`  To triple vault: ${formatEther(tripleVaultDeposit)} WTRUST`);
     } catch (error) {
       console.log('⚠ Preview unavailable (normal for new triples)');
     }
@@ -222,17 +344,17 @@ async function main() {
     // ------------------------------------------------------------------------
     console.log('Step 7: Approving WTRUST spending...');
 
-    const currentAllowance = await wTrust.allowance(signer.address, MULTIVAULT_ADDRESS);
-    console.log(`Current allowance: ${ethers.formatEther(currentAllowance)} WTRUST`);
+    const currentAllowance = await wTrust.read.allowance([account.address, MULTIVAULT_ADDRESS]);
+    console.log(`Current allowance: ${formatEther(currentAllowance)} WTRUST`);
 
-    if (currentAllowance &lt; totalRequired) {
+    if (currentAllowance < totalRequired) {
       console.log('Approving WTRUST tokens...');
 
-      const approveTx = await wTrust.approve(MULTIVAULT_ADDRESS, totalRequired);
-      console.log(`Approval tx submitted: ${approveTx.hash}`);
+      const approveTx = await wTrust.write.approve([MULTIVAULT_ADDRESS, totalRequired]);
+      console.log(`Approval tx submitted: ${approveTx}`);
 
-      const approveReceipt = await approveTx.wait();
-      console.log(`✓ Approval confirmed in block ${approveReceipt?.blockNumber}`);
+      const approveReceipt = await publicClient.waitForTransactionReceipt({ hash: approveTx });
+      console.log(`✓ Approval confirmed in block ${approveReceipt.blockNumber}`);
     } else {
       console.log('✓ Sufficient allowance already exists');
     }
@@ -246,7 +368,7 @@ async function main() {
     console.log(`  Subject: ${SUBJECT_ID}`);
     console.log(`  Predicate: ${PREDICATE_ID}`);
     console.log(`  Object: ${OBJECT_ID}`);
-    console.log(`Initial deposit: ${ethers.formatEther(DEPOSIT_AMOUNT)} WTRUST`);
+    console.log(`Initial deposit: ${formatEther(DEPOSIT_AMOUNT)} WTRUST`);
     console.log();
 
     // Prepare arrays for batch creation (even though creating just one)
@@ -256,31 +378,30 @@ async function main() {
     const assets = [DEPOSIT_AMOUNT];
 
     // Estimate gas
-    const gasEstimate = await multiVault.createTriples.estimateGas(
+    const gasEstimate = await multiVault.estimateGas.createTriples([
       subjectIds,
       predicateIds,
       objectIds,
       assets
-    );
+    ]);
     console.log(`Estimated gas: ${gasEstimate.toString()}`);
 
     // Create the triple
-    const createTx = await multiVault.createTriples(
+    const createTx = await multiVault.write.createTriples([
       subjectIds,
       predicateIds,
       objectIds,
-      assets,
-      {
-        gasLimit: gasEstimate * 120n / 100n, // Add 20% buffer
-      }
-    );
+      assets
+    ], {
+      gas: gasEstimate * 120n / 100n, // Add 20% buffer
+    });
 
-    console.log(`Transaction submitted: ${createTx.hash}`);
+    console.log(`Transaction submitted: ${createTx}`);
     console.log('Waiting for confirmation...');
 
-    const receipt = await createTx.wait();
-    console.log(`✓ Transaction confirmed in block ${receipt?.blockNumber}`);
-    console.log(`Gas used: ${receipt?.gasUsed.toString()}`);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: createTx });
+    console.log(`✓ Transaction confirmed in block ${receipt.blockNumber}`);
+    console.log(`Gas used: ${receipt.gasUsed.toString()}`);
     console.log();
 
     // ------------------------------------------------------------------------
@@ -288,67 +409,81 @@ async function main() {
     // ------------------------------------------------------------------------
     console.log('Step 9: Parsing transaction events...');
 
-    if (receipt) {
-      // Find TripleCreated event
-      const tripleCreatedEvent = receipt.logs
-        .map(log =&gt; {
-          try {
-            return multiVault.interface.parseLog({
-              topics: log.topics as string[],
-              data: log.data,
-            });
-          } catch {
-            return null;
-          }
-        })
-        .find(event =&gt; event?.name === 'TripleCreated');
+    // Find TripleCreated event
+    const tripleCreatedLog = receipt.logs.find(log => {
+      try {
+        const event = publicClient.parseEventLogs({
+          abi: MULTIVAULT_ABI,
+          logs: [log],
+          eventName: 'TripleCreated'
+        });
+        return event.length > 0;
+      } catch {
+        return false;
+      }
+    });
 
-      if (tripleCreatedEvent) {
+    if (tripleCreatedLog) {
+      const tripleCreatedEvent = publicClient.parseEventLogs({
+        abi: MULTIVAULT_ABI,
+        logs: [tripleCreatedLog],
+        eventName: 'TripleCreated'
+      })[0];
+
+      if (tripleCreatedEvent && tripleCreatedEvent.args) {
         console.log('TripleCreated Event:');
-        console.log(`  Creator: ${tripleCreatedEvent.args[0]}`);
-        console.log(`  Triple ID: ${tripleCreatedEvent.args[1]}`);
-        console.log(`  Subject ID: ${tripleCreatedEvent.args[2]}`);
-        console.log(`  Predicate ID: ${tripleCreatedEvent.args[3]}`);
-        console.log(`  Object ID: ${tripleCreatedEvent.args[4]}`);
+        console.log(`  Creator: ${tripleCreatedEvent.args.creator}`);
+        console.log(`  Triple ID: ${tripleCreatedEvent.args.termId}`);
+        console.log(`  Subject ID: ${tripleCreatedEvent.args.subjectId}`);
+        console.log(`  Predicate ID: ${tripleCreatedEvent.args.predicateId}`);
+        console.log(`  Object ID: ${tripleCreatedEvent.args.objectId}`);
         console.log();
       }
-
-      // Find all Deposited events (there will be multiple - one for triple + three for atoms)
-      const depositedEvents = receipt.logs
-        .map(log =&gt; {
-          try {
-            return multiVault.interface.parseLog({
-              topics: log.topics as string[],
-              data: log.data,
-            });
-          } catch {
-            return null;
-          }
-        })
-        .filter(event =&gt; event?.name === 'Deposited');
-
-      console.log(`Found ${depositedEvents.length} Deposited events:`);
-      depositedEvents.forEach((event, index) =&gt; {
-        if (event) {
-          const vaultType = event.args[8];
-          const vaultTypeName = vaultType === 0 ? 'ATOM' : vaultType === 1 ? 'TRIPLE' : 'COUNTER_TRIPLE';
-
-          console.log(`\nDeposit ${index + 1} (${vaultTypeName}):`);
-          console.log(`  Term ID: ${event.args[2]}`);
-          console.log(`  Curve ID: ${event.args[3]}`);
-          console.log(`  Assets: ${ethers.formatEther(event.args[4])} WTRUST`);
-          console.log(`  Shares Minted: ${ethers.formatEther(event.args[6])}`);
-        }
-      });
-      console.log();
     }
+
+    // Find all Deposited events (there will be multiple - one for triple + three for atoms)
+    const depositedLogs = receipt.logs.filter(log => {
+      try {
+        const event = publicClient.parseEventLogs({
+          abi: MULTIVAULT_ABI,
+          logs: [log],
+          eventName: 'Deposited'
+        });
+        return event.length > 0;
+      } catch {
+        return false;
+      }
+    });
+
+    const depositedEvents = depositedLogs.map(log =>
+      publicClient.parseEventLogs({
+        abi: MULTIVAULT_ABI,
+        logs: [log],
+        eventName: 'Deposited'
+      })[0]
+    );
+
+    console.log(`Found ${depositedEvents.length} Deposited events:`);
+    depositedEvents.forEach((event, index) => {
+      if (event && event.args) {
+        const vaultType = event.args.vaultType;
+        const vaultTypeName = vaultType === 0 ? 'ATOM' : vaultType === 1 ? 'TRIPLE' : 'COUNTER_TRIPLE';
+
+        console.log(`\nDeposit ${index + 1} (${vaultTypeName}):`);
+        console.log(`  Term ID: ${event.args.termId}`);
+        console.log(`  Curve ID: ${event.args.curveId}`);
+        console.log(`  Assets: ${formatEther(event.args.assets)} WTRUST`);
+        console.log(`  Shares Minted: ${formatEther(event.args.shares)}`);
+      }
+    });
+    console.log();
 
     // ------------------------------------------------------------------------
     // Step 10: Verify Triple Structure
     // ------------------------------------------------------------------------
     console.log('Step 10: Verifying triple structure...');
 
-    const [subject, predicate, object] = await multiVault.getTriple(tripleId);
+    const [subject, predicate, object] = await multiVault.read.getTriple([tripleId]);
     console.log('Triple structure from contract:');
     console.log(`  Subject: ${subject}`);
     console.log(`  Predicate: ${predicate}`);
@@ -369,7 +504,7 @@ async function main() {
     console.log('='.repeat(80));
     console.log('✓ Triple creation successful!');
     console.log(`Triple ID: ${tripleId}`);
-    console.log(`View on explorer: https://explorer.intuit.network/tx/${receipt?.hash}`);
+    console.log(`View on explorer: https://explorer.intuit.network/tx/${receipt.transactionHash}`);
     console.log('='.repeat(80));
 
   } catch (error) {
@@ -404,8 +539,8 @@ async function main() {
 // ============================================================================
 
 main()
-  .then(() =&gt; process.exit(0))
-  .catch((error) =&gt; {
+  .then(() => process.exit(0))
+  .catch((error) => {
     console.error(error);
     process.exit(1);
   });

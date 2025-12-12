@@ -4,7 +4,7 @@
 
 Depositing assets into existing vaults is the primary way to take positions in atoms and triples. Unlike creating new terms, depositing into existing vaults doesn't require minimum deposits and works with any vault that has already been created.
 
-This guide covers how to deposit WTRUST tokens into atom, triple, and counter-triple vaults using TypeScript and Python.
+This guide covers how to deposit native TRUST into atom, triple, and counter-triple vaults using TypeScript and Python.
 
 **When to use this operation**:
 - Taking a position in an existing atom or triple
@@ -17,20 +17,16 @@ This guide covers how to deposit WTRUST tokens into atom, triple, and counter-tr
 ### Required Knowledge
 - Understanding of [vaults and shares](../concepts/multi-vault-pattern.md)
 - Basic knowledge of [bonding curves](../concepts/bonding-curves.md)
-- Familiarity with ERC20 token approvals
+- Familiarity with sending native tokens via payable functions
 
 ### Contracts Needed
 - **MultiVault**: Main contract for deposits
   - Mainnet: `0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e`
   - Testnet: `0x2Ece8D4dEdcB9918A398528f3fa4688b1d2CAB91`
-- **WrappedTrust (WTRUST)**: Asset token
-  - Mainnet: `0x81cFb09cb44f7184Ad934C09F82000701A4bF672`
-  - Testnet: `0xDE80b6EE63f7D809427CA350e30093F436A0fe35`
 
 ### Tokens Required
-- WTRUST tokens for deposit
+- Native TRUST for deposit (sent as msg.value)
 - Native ETH for gas fees
-- Approval for MultiVault to spend WTRUST
 
 ### Key Parameters
 - `receiver`: Address to receive the minted shares
@@ -93,19 +89,7 @@ const slippageBps = 50; // 0.5% slippage tolerance
 const minShares = expectedShares * (10000n - BigInt(slippageBps)) / 10000n;
 ```
 
-### Step 5: Approve WTRUST
-
-Approve the MultiVault contract:
-
-```typescript
-const approveTx = await wtrustContract.approve(
-  multiVaultAddress,
-  depositAmount
-);
-await approveTx.wait();
-```
-
-### Step 6: Execute Deposit
+### Step 5: Execute Deposit
 
 Call the `deposit` function:
 
@@ -115,12 +99,12 @@ const tx = await multiVault.deposit(
   termId,
   curveId,
   minShares,
-  { value: depositAmount } // If using native token, otherwise omit
+  { value: depositAmount } // Send native TRUST with transaction
 );
 const receipt = await tx.wait();
 ```
 
-### Step 7: Verify Shares Received
+### Step 6: Verify Shares Received
 
 Parse the `Deposited` event to confirm:
 
@@ -148,7 +132,6 @@ import ERC20ABI from './abis/ERC20.json';
 
 // Configuration
 const MULTIVAULT_ADDRESS = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e';
-const WTRUST_ADDRESS = '0x81cFb09cb44f7184Ad934C09F82000701A4bF672';
 const RPC_URL = 'YOUR_INTUITION_RPC_URL';
 
 /**
@@ -173,11 +156,6 @@ async function depositToVault(
   const multiVault = new ethers.Contract(
     MULTIVAULT_ADDRESS,
     MultiVaultABI,
-    wallet
-  );
-  const wtrust = new ethers.Contract(
-    WTRUST_ADDRESS,
-    ERC20ABI,
     wallet
   );
 
@@ -210,16 +188,7 @@ async function depositToVault(
     console.log('  Total assets:', ethers.formatEther(totalAssets));
     console.log('  Total shares:', ethers.formatEther(totalShares));
 
-    // Step 4: Check WTRUST balance
-    const balance = await wtrust.balanceOf(wallet.address);
-    if (balance < depositAmount) {
-      throw new Error(
-        `Insufficient WTRUST balance. Have: ${ethers.formatEther(balance)}, ` +
-        `Need: ${ethers.formatEther(depositAmount)}`
-      );
-    }
-
-    // Step 5: Preview the deposit
+    // Step 4: Preview the deposit
     const [expectedShares, assetsAfterFees] = await multiVault.previewDeposit(
       termId,
       curveId,
@@ -227,32 +196,20 @@ async function depositToVault(
     );
 
     console.log('Deposit preview:');
-    console.log('  Depositing:', ethers.formatEther(depositAmount), 'WTRUST');
+    console.log('  Depositing:', ethers.formatEther(depositAmount), 'TRUST');
     console.log('  Expected shares:', ethers.formatEther(expectedShares));
     console.log('  Assets after fees:', ethers.formatEther(assetsAfterFees));
 
     // Calculate fees
     const totalFees = depositAmount - assetsAfterFees;
-    console.log('  Total fees:', ethers.formatEther(totalFees), 'WTRUST');
+    console.log('  Total fees:', ethers.formatEther(totalFees), 'TRUST');
 
-    // Step 6: Calculate minimum shares with slippage protection
+    // Step 5: Calculate minimum shares with slippage protection
     const minShares = expectedShares * (10000n - BigInt(slippageBps)) / 10000n;
     console.log('  Minimum shares:', ethers.formatEther(minShares));
     console.log('  Slippage tolerance:', slippageBps / 100, '%');
 
-    // Step 7: Check and approve WTRUST
-    const currentAllowance = await wtrust.allowance(wallet.address, MULTIVAULT_ADDRESS);
-
-    if (currentAllowance < depositAmount) {
-      console.log('Approving WTRUST spending...');
-      const approveTx = await wtrust.approve(MULTIVAULT_ADDRESS, depositAmount);
-      await approveTx.wait();
-      console.log('Approval confirmed');
-    } else {
-      console.log('Sufficient allowance already exists');
-    }
-
-    // Step 8: Execute deposit
+    // Step 6: Execute deposit
     console.log('Executing deposit...');
 
     const depositTx = await multiVault.deposit(
@@ -261,6 +218,7 @@ async function depositToVault(
       curveId,
       minShares,
       {
+        value: depositAmount,
         gasLimit: 400000n
       }
     );
@@ -269,7 +227,7 @@ async function depositToVault(
     const receipt = await depositTx.wait();
     console.log('Transaction confirmed in block:', receipt.blockNumber);
 
-    // Step 9: Parse events
+    // Step 7: Parse events
     let sharesMinted = 0n;
     let actualAssetsDeposited = 0n;
 
@@ -353,11 +311,6 @@ async function depositBatch(
   // Calculate total amount needed
   const totalAmount = amounts.reduce((sum, amt) => sum + amt, 0n);
 
-  // Approve total amount
-  const wtrust = new ethers.Contract(WTRUST_ADDRESS, ERC20ABI, wallet);
-  const approveTx = await wtrust.approve(MULTIVAULT_ADDRESS, totalAmount);
-  await approveTx.wait();
-
   // Execute batch deposit
   const tx = await multiVault.depositBatch(
     receiver,
@@ -366,6 +319,7 @@ async function depositBatch(
     amounts,
     minSharesArray,
     {
+      value: totalAmount,
       gasLimit: 1000000n // Higher limit for batch
     }
   );
@@ -401,7 +355,7 @@ async function main() {
     const result = await depositToVault(
       '0x...', // term ID
       1,       // curve ID (linear)
-      ethers.parseEther("25"), // 25 WTRUST
+      ethers.parseEther("25"), // 25 TRUST
       50,      // 0.5% slippage tolerance
       'YOUR_PRIVATE_KEY'
     );
@@ -446,15 +400,11 @@ import json
 
 # Configuration
 MULTIVAULT_ADDRESS = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e'
-WTRUST_ADDRESS = '0x81cFb09cb44f7184Ad934C09F82000701A4bF672'
 RPC_URL = 'YOUR_INTUITION_RPC_URL'
 
 # Load ABIs
 with open('abis/IMultiVault.json') as f:
     MULTIVAULT_ABI = json.load(f)
-
-with open('abis/ERC20.json') as f:
-    ERC20_ABI = json.load(f)
 
 
 def deposit_to_vault(
@@ -496,10 +446,6 @@ def deposit_to_vault(
         address=Web3.to_checksum_address(MULTIVAULT_ADDRESS),
         abi=MULTIVAULT_ABI
     )
-    wtrust = w3.eth.contract(
-        address=Web3.to_checksum_address(WTRUST_ADDRESS),
-        abi=ERC20_ABI
-    )
 
     try:
         # Step 1: Validate inputs
@@ -531,15 +477,7 @@ def deposit_to_vault(
         print(f'  Total assets: {Web3.from_wei(total_assets, "ether")}')
         print(f'  Total shares: {Web3.from_wei(total_shares, "ether")}')
 
-        # Step 4: Check WTRUST balance
-        balance = wtrust.functions.balanceOf(account.address).call()
-        if balance < deposit_amount:
-            raise ValueError(
-                f'Insufficient WTRUST balance. Have: {Web3.from_wei(balance, "ether")}, '
-                f'Need: {Web3.from_wei(deposit_amount, "ether")}'
-            )
-
-        # Step 5: Preview the deposit
+        # Step 4: Preview the deposit
         expected_shares, assets_after_fees = multivault.functions.previewDeposit(
             term_bytes,
             curve_id,
@@ -547,48 +485,20 @@ def deposit_to_vault(
         ).call()
 
         print('Deposit preview:')
-        print(f'  Depositing: {Web3.from_wei(deposit_amount, "ether")} WTRUST')
+        print(f'  Depositing: {Web3.from_wei(deposit_amount, "ether")} TRUST')
         print(f'  Expected shares: {Web3.from_wei(expected_shares, "ether")}')
         print(f'  Assets after fees: {Web3.from_wei(assets_after_fees, "ether")}')
 
         total_fees = deposit_amount - assets_after_fees
-        print(f'  Total fees: {Web3.from_wei(total_fees, "ether")} WTRUST')
+        print(f'  Total fees: {Web3.from_wei(total_fees, "ether")} TRUST')
 
-        # Step 6: Calculate minimum shares
+        # Step 5: Calculate minimum shares
         min_shares = (expected_shares * (10000 - slippage_bps)) // 10000
 
         print(f'  Minimum shares: {Web3.from_wei(min_shares, "ether")}')
         print(f'  Slippage tolerance: {slippage_bps / 100}%')
 
-        # Step 7: Check and approve WTRUST
-        current_allowance = wtrust.functions.allowance(
-            account.address,
-            MULTIVAULT_ADDRESS
-        ).call()
-
-        if current_allowance < deposit_amount:
-            print('Approving WTRUST spending...')
-            approve_tx = wtrust.functions.approve(
-                MULTIVAULT_ADDRESS,
-                deposit_amount
-            ).build_transaction({
-                'from': account.address,
-                'nonce': w3.eth.get_transaction_count(account.address),
-                'gas': 100000,
-                'gasPrice': w3.eth.gas_price
-            })
-
-            signed_approve = account.sign_transaction(approve_tx)
-            approve_hash = w3.eth.send_raw_transaction(signed_approve.raw_transaction)
-            approve_receipt = w3.eth.wait_for_transaction_receipt(approve_hash)
-
-            if approve_receipt['status'] != 1:
-                raise Exception('Approval transaction failed')
-            print('Approval confirmed')
-        else:
-            print('Sufficient allowance already exists')
-
-        # Step 8: Execute deposit
+        # Step 6: Execute deposit
         print('Executing deposit...')
 
         deposit_tx = multivault.functions.deposit(
@@ -598,6 +508,7 @@ def deposit_to_vault(
             min_shares
         ).build_transaction({
             'from': account.address,
+            'value': deposit_amount,
             'nonce': w3.eth.get_transaction_count(account.address),
             'gas': 400000,
             'gasPrice': w3.eth.gas_price
@@ -613,7 +524,7 @@ def deposit_to_vault(
         if receipt['status'] != 1:
             raise Exception('Deposit transaction failed')
 
-        # Step 9: Parse events
+        # Step 7: Parse events
         shares_minted = 0
         actual_assets_deposited = 0
 
@@ -662,7 +573,7 @@ if __name__ == '__main__':
         result = deposit_to_vault(
             term_id='0x...',
             curve_id=1,
-            deposit_amount=Web3.to_wei(25, 'ether'),  # 25 WTRUST
+            deposit_amount=Web3.to_wei(25, 'ether'),  # 25 TRUST
             slippage_bps=50,  # 0.5% slippage
             private_key='YOUR_PRIVATE_KEY'
         )
@@ -767,7 +678,7 @@ try {
 ## Common Pitfalls
 
 1. Not checking if vault exists before depositing
-2. Forgetting to approve WTRUST spending
+2. Not sending correct msg.value with deposit transaction
 3. Not accounting for fees in expected shares
 4. Using zero for minShares (no slippage protection)
 5. Depositing to wrong curve ID

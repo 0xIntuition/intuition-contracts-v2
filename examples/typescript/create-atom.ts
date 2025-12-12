@@ -1,7 +1,7 @@
 /**
  * @title Create Atom Example
  * @notice Demonstrates how to create an atom vault with an initial deposit
- * @dev This example uses ethers.js v6 to interact with the MultiVault contract
+ * @dev This example uses viem to interact with the MultiVault contract
  *
  * What this example does:
  * 1. Connects to the Intuition network
@@ -11,12 +11,14 @@
  *
  * Prerequisites:
  * - Node.js v18+
- * - ethers.js v6 installed: `npm install ethers@6`
+ * - viem installed: `npm install viem`
  * - Private key with ETH for gas and WTRUST tokens for deposit
  * - Access to Intuition RPC endpoint
  */
 
-import { ethers } from 'ethers';
+import { createPublicClient, createWalletClient, http, parseEther, formatEther, toHex, getContract, parseAbiItem, hexToString, stringToHex } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { base } from 'viem/chains';
 
 // ============================================================================
 // Configuration
@@ -27,15 +29,15 @@ const RPC_URL = 'YOUR_INTUITION_RPC_URL'; // Replace with actual Intuition RPC
 const CHAIN_ID = 0; // Replace with actual Intuition chain ID
 
 // Contract addresses (Intuition Mainnet)
-const MULTIVAULT_ADDRESS = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e';
-const WTRUST_ADDRESS = '0x81cFb09cb44f7184Ad934C09F82000701A4bF672';
+const MULTIVAULT_ADDRESS = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e' as `0x${string}`;
+const WTRUST_ADDRESS = '0x81cFb09cb44f7184Ad934C09F82000701A4bF672' as `0x${string}`;
 
 // Your wallet private key (NEVER commit this to git!)
-const PRIVATE_KEY = process.env.PRIVATE_KEY || '';
+const PRIVATE_KEY = (process.env.PRIVATE_KEY || '') as `0x${string}`;
 
 // Atom configuration
-const ATOM_DATA = ethers.toUtf8Bytes('My First Atom'); // Atom metadata
-const DEPOSIT_AMOUNT = ethers.parseEther('10'); // 10 WTRUST tokens
+const ATOM_DATA = stringToHex('My First Atom'); // Atom metadata
+const DEPOSIT_AMOUNT = parseEther('10'); // 10 WTRUST tokens
 
 // ============================================================================
 // Contract ABIs (minimal required functions)
@@ -43,31 +45,119 @@ const DEPOSIT_AMOUNT = ethers.parseEther('10'); // 10 WTRUST tokens
 
 const MULTIVAULT_ABI = [
   // Create atoms function
-  'function createAtoms(bytes[] calldata atomDatas, uint256[] calldata assets) external payable returns (bytes32[] memory)',
-
+  {
+    name: 'createAtoms',
+    type: 'function',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'atomDatas', type: 'bytes[]' },
+      { name: 'assets', type: 'uint256[]' }
+    ],
+    outputs: [{ name: '', type: 'bytes32[]' }]
+  },
   // Preview atom creation to estimate shares
-  'function previewAtomCreate(bytes32 termId, uint256 assets) external view returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees)',
-
+  {
+    name: 'previewAtomCreate',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'termId', type: 'bytes32' },
+      { name: 'assets', type: 'uint256' }
+    ],
+    outputs: [
+      { name: 'shares', type: 'uint256' },
+      { name: 'assetsAfterFixedFees', type: 'uint256' },
+      { name: 'assetsAfterFees', type: 'uint256' }
+    ]
+  },
   // Calculate atom ID from data
-  'function calculateAtomId(bytes memory data) external pure returns (bytes32 id)',
-
+  {
+    name: 'calculateAtomId',
+    type: 'function',
+    stateMutability: 'pure',
+    inputs: [{ name: 'data', type: 'bytes' }],
+    outputs: [{ name: 'id', type: 'bytes32' }]
+  },
   // Check if term exists
-  'function isTermCreated(bytes32 id) external view returns (bool)',
-
+  {
+    name: 'isTermCreated',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'id', type: 'bytes32' }],
+    outputs: [{ name: '', type: 'bool' }]
+  },
   // Get atom cost (creation fees)
-  'function getAtomCost() external view returns (uint256)',
-
+  {
+    name: 'getAtomCost',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
   // Events
-  'event AtomCreated(address indexed creator, bytes32 indexed termId, bytes atomData, address atomWallet)',
-  'event Deposited(address indexed sender, address indexed receiver, bytes32 indexed termId, uint256 curveId, uint256 assets, uint256 assetsAfterFees, uint256 shares, uint256 totalShares, uint8 vaultType)',
-];
+  {
+    name: 'AtomCreated',
+    type: 'event',
+    inputs: [
+      { name: 'creator', type: 'address', indexed: true },
+      { name: 'termId', type: 'bytes32', indexed: true },
+      { name: 'atomData', type: 'bytes', indexed: false },
+      { name: 'atomWallet', type: 'address', indexed: false }
+    ]
+  },
+  {
+    name: 'Deposited',
+    type: 'event',
+    inputs: [
+      { name: 'sender', type: 'address', indexed: true },
+      { name: 'receiver', type: 'address', indexed: true },
+      { name: 'termId', type: 'bytes32', indexed: true },
+      { name: 'curveId', type: 'uint256', indexed: false },
+      { name: 'assets', type: 'uint256', indexed: false },
+      { name: 'assetsAfterFees', type: 'uint256', indexed: false },
+      { name: 'shares', type: 'uint256', indexed: false },
+      { name: 'totalShares', type: 'uint256', indexed: false },
+      { name: 'vaultType', type: 'uint8', indexed: false }
+    ]
+  }
+] as const;
 
 const ERC20_ABI = [
-  'function approve(address spender, uint256 amount) external returns (bool)',
-  'function allowance(address owner, address spender) external view returns (uint256)',
-  'function balanceOf(address account) external view returns (uint256)',
-  'function decimals() external view returns (uint8)',
-];
+  {
+    name: 'approve',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint256' }
+    ],
+    outputs: [{ name: '', type: 'bool' }]
+  },
+  {
+    name: 'allowance',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' }
+    ],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    name: 'balanceOf',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    name: 'decimals',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint8' }]
+  }
+] as const;
 
 // ============================================================================
 // Main Function
@@ -81,40 +171,49 @@ async function main() {
     console.log();
 
     // ------------------------------------------------------------------------
-    // Step 1: Setup Provider and Signer
+    // Step 1: Setup Clients
     // ------------------------------------------------------------------------
     console.log('Step 1: Connecting to Intuition network...');
 
-    const provider = new ethers.JsonRpcProvider(RPC_URL, {
-      chainId: CHAIN_ID,
-      name: 'intuition',
+    // Create public client for reading blockchain data
+    const publicClient = createPublicClient({
+      chain: base, // Replace with actual Intuition chain
+      transport: http(RPC_URL)
     });
 
-    // Create signer from private key
-    const signer = new ethers.Wallet(PRIVATE_KEY, provider);
-    console.log(`✓ Connected with address: ${signer.address}`);
+    // Create account from private key
+    const account = privateKeyToAccount(PRIVATE_KEY);
+
+    // Create wallet client for transactions
+    const walletClient = createWalletClient({
+      account,
+      chain: base, // Replace with actual Intuition chain
+      transport: http(RPC_URL)
+    });
+
+    console.log(`✓ Connected with address: ${account.address}`);
     console.log();
 
     // Check ETH balance for gas
-    const ethBalance = await provider.getBalance(signer.address);
-    console.log(`ETH Balance: ${ethers.formatEther(ethBalance)} ETH`);
+    const ethBalance = await publicClient.getBalance({ address: account.address });
+    console.log(`ETH Balance: ${formatEther(ethBalance)} ETH`);
 
     // ------------------------------------------------------------------------
     // Step 2: Initialize Contract Instances
     // ------------------------------------------------------------------------
     console.log('Step 2: Initializing contract instances...');
 
-    const multiVault = new ethers.Contract(
-      MULTIVAULT_ADDRESS,
-      MULTIVAULT_ABI,
-      signer
-    );
+    const multiVault = getContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: MULTIVAULT_ABI,
+      client: { public: publicClient, wallet: walletClient }
+    });
 
-    const wTrust = new ethers.Contract(
-      WTRUST_ADDRESS,
-      ERC20_ABI,
-      signer
-    );
+    const wTrust = getContract({
+      address: WTRUST_ADDRESS,
+      abi: ERC20_ABI,
+      client: { public: publicClient, wallet: walletClient }
+    });
 
     console.log(`✓ MultiVault: ${MULTIVAULT_ADDRESS}`);
     console.log(`✓ WTRUST: ${WTRUST_ADDRESS}`);
@@ -125,21 +224,21 @@ async function main() {
     // ------------------------------------------------------------------------
     console.log('Step 3: Checking WTRUST balance and atom creation cost...');
 
-    const wtrustBalance = await wTrust.balanceOf(signer.address);
-    console.log(`WTRUST Balance: ${ethers.formatEther(wtrustBalance)} WTRUST`);
+    const wtrustBalance = await wTrust.read.balanceOf([account.address]);
+    console.log(`WTRUST Balance: ${formatEther(wtrustBalance)} WTRUST`);
 
     // Get atom creation cost (includes protocol fee + atom wallet deposit fee)
-    const atomCost = await multiVault.getAtomCost();
-    console.log(`Atom Creation Cost: ${ethers.formatEther(atomCost)} WTRUST`);
+    const atomCost = await multiVault.read.getAtomCost();
+    console.log(`Atom Creation Cost: ${formatEther(atomCost)} WTRUST`);
 
     // Total amount needed = deposit + atom cost
     const totalRequired = DEPOSIT_AMOUNT + atomCost;
-    console.log(`Total Required: ${ethers.formatEther(totalRequired)} WTRUST`);
+    console.log(`Total Required: ${formatEther(totalRequired)} WTRUST`);
 
     // Verify sufficient balance
-    if (wtrustBalance &lt; totalRequired) {
+    if (wtrustBalance < totalRequired) {
       throw new Error(
-        `Insufficient WTRUST balance. Need ${ethers.formatEther(totalRequired)} but have ${ethers.formatEther(wtrustBalance)}`
+        `Insufficient WTRUST balance. Need ${formatEther(totalRequired)} but have ${formatEther(wtrustBalance)}`
       );
     }
     console.log('✓ Sufficient balance confirmed');
@@ -151,11 +250,11 @@ async function main() {
     console.log('Step 4: Calculating atom ID and checking if it exists...');
 
     // Calculate what the atom ID will be
-    const atomId = await multiVault.calculateAtomId(ATOM_DATA);
+    const atomId = await multiVault.read.calculateAtomId([ATOM_DATA]);
     console.log(`Atom ID: ${atomId}`);
 
     // Check if this atom already exists
-    const atomExists = await multiVault.isTermCreated(atomId);
+    const atomExists = await multiVault.read.isTermCreated([atomId]);
     if (atomExists) {
       console.log('⚠ Warning: This atom already exists!');
       console.log('You can still deposit into the existing vault, but creation will fail.');
@@ -171,14 +270,14 @@ async function main() {
 
     try {
       const [shares, assetsAfterFixedFees, assetsAfterFees] =
-        await multiVault.previewAtomCreate(atomId, DEPOSIT_AMOUNT);
+        await multiVault.read.previewAtomCreate([atomId, DEPOSIT_AMOUNT]);
 
-      console.log(`Expected shares to receive: ${ethers.formatEther(shares)}`);
-      console.log(`Assets after fixed fees: ${ethers.formatEther(assetsAfterFixedFees)} WTRUST`);
-      console.log(`Assets after all fees: ${ethers.formatEther(assetsAfterFees)} WTRUST`);
+      console.log(`Expected shares to receive: ${formatEther(shares)}`);
+      console.log(`Assets after fixed fees: ${formatEther(assetsAfterFixedFees)} WTRUST`);
+      console.log(`Assets after all fees: ${formatEther(assetsAfterFees)} WTRUST`);
 
       const totalFees = DEPOSIT_AMOUNT - assetsAfterFees;
-      console.log(`Total fees: ${ethers.formatEther(totalFees)} WTRUST`);
+      console.log(`Total fees: ${formatEther(totalFees)} WTRUST`);
     } catch (error) {
       console.log('⚠ Preview unavailable (normal for new atoms)');
     }
@@ -190,19 +289,19 @@ async function main() {
     console.log('Step 6: Approving WTRUST spending...');
 
     // Check current allowance
-    const currentAllowance = await wTrust.allowance(signer.address, MULTIVAULT_ADDRESS);
-    console.log(`Current allowance: ${ethers.formatEther(currentAllowance)} WTRUST`);
+    const currentAllowance = await wTrust.read.allowance([account.address, MULTIVAULT_ADDRESS]);
+    console.log(`Current allowance: ${formatEther(currentAllowance)} WTRUST`);
 
-    if (currentAllowance &lt; totalRequired) {
+    if (currentAllowance < totalRequired) {
       console.log('Approving WTRUST tokens...');
 
-      // Approve exact amount needed (or use ethers.MaxUint256 for unlimited)
-      const approveTx = await wTrust.approve(MULTIVAULT_ADDRESS, totalRequired);
-      console.log(`Approval tx submitted: ${approveTx.hash}`);
+      // Approve exact amount needed (or use maxUint256 for unlimited)
+      const approveTx = await wTrust.write.approve([MULTIVAULT_ADDRESS, totalRequired]);
+      console.log(`Approval tx submitted: ${approveTx}`);
 
       // Wait for approval confirmation
-      const approveReceipt = await approveTx.wait();
-      console.log(`✓ Approval confirmed in block ${approveReceipt?.blockNumber}`);
+      const approveReceipt = await publicClient.waitForTransactionReceipt({ hash: approveTx });
+      console.log(`✓ Approval confirmed in block ${approveReceipt.blockNumber}`);
     } else {
       console.log('✓ Sufficient allowance already exists');
     }
@@ -212,29 +311,29 @@ async function main() {
     // Step 7: Create Atom
     // ------------------------------------------------------------------------
     console.log('Step 7: Creating atom vault...');
-    console.log(`Atom data: "${ethers.toUtf8String(ATOM_DATA)}"`);
-    console.log(`Initial deposit: ${ethers.formatEther(DEPOSIT_AMOUNT)} WTRUST`);
+    console.log(`Atom data: "${hexToString(ATOM_DATA)}"`);
+    console.log(`Initial deposit: ${formatEther(DEPOSIT_AMOUNT)} WTRUST`);
 
     // Prepare arrays for batch creation (even though we're creating just one)
     const atomDatas = [ATOM_DATA];
     const assets = [DEPOSIT_AMOUNT];
 
     // Estimate gas before sending
-    const gasEstimate = await multiVault.createAtoms.estimateGas(atomDatas, assets);
+    const gasEstimate = await multiVault.estimateGas.createAtoms([atomDatas, assets]);
     console.log(`Estimated gas: ${gasEstimate.toString()}`);
 
     // Create the atom
-    const createTx = await multiVault.createAtoms(atomDatas, assets, {
-      gasLimit: gasEstimate * 120n / 100n, // Add 20% buffer
+    const createTx = await multiVault.write.createAtoms([atomDatas, assets], {
+      gas: gasEstimate * 120n / 100n, // Add 20% buffer
     });
 
-    console.log(`Transaction submitted: ${createTx.hash}`);
+    console.log(`Transaction submitted: ${createTx}`);
     console.log('Waiting for confirmation...');
 
     // Wait for transaction to be mined
-    const receipt = await createTx.wait();
-    console.log(`✓ Transaction confirmed in block ${receipt?.blockNumber}`);
-    console.log(`Gas used: ${receipt?.gasUsed.toString()}`);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: createTx });
+    console.log(`✓ Transaction confirmed in block ${receipt.blockNumber}`);
+    console.log(`Gas used: ${receipt.gasUsed.toString()}`);
     console.log();
 
     // ------------------------------------------------------------------------
@@ -242,55 +341,69 @@ async function main() {
     // ------------------------------------------------------------------------
     console.log('Step 8: Parsing transaction events...');
 
-    if (receipt) {
-      // Find AtomCreated event
-      const atomCreatedEvent = receipt.logs
-        .map(log =&gt; {
-          try {
-            return multiVault.interface.parseLog({
-              topics: log.topics as string[],
-              data: log.data,
-            });
-          } catch {
-            return null;
-          }
-        })
-        .find(event =&gt; event?.name === 'AtomCreated');
+    // Find AtomCreated event
+    const atomCreatedLog = receipt.logs.find(log => {
+      try {
+        const event = publicClient.parseEventLogs({
+          abi: MULTIVAULT_ABI,
+          logs: [log],
+          eventName: 'AtomCreated'
+        });
+        return event.length > 0;
+      } catch {
+        return false;
+      }
+    });
 
-      if (atomCreatedEvent) {
+    if (atomCreatedLog) {
+      const atomCreatedEvent = publicClient.parseEventLogs({
+        abi: MULTIVAULT_ABI,
+        logs: [atomCreatedLog],
+        eventName: 'AtomCreated'
+      })[0];
+
+      if (atomCreatedEvent && atomCreatedEvent.args) {
         console.log('AtomCreated Event:');
-        console.log(`  Creator: ${atomCreatedEvent.args[0]}`);
-        console.log(`  Atom ID: ${atomCreatedEvent.args[1]}`);
-        console.log(`  Atom Data: "${ethers.toUtf8String(atomCreatedEvent.args[2])}"`);
-        console.log(`  Atom Wallet: ${atomCreatedEvent.args[3]}`);
+        console.log(`  Creator: ${atomCreatedEvent.args.creator}`);
+        console.log(`  Atom ID: ${atomCreatedEvent.args.termId}`);
+        console.log(`  Atom Data: "${hexToString(atomCreatedEvent.args.atomData as `0x${string}`)}"`);
+        console.log(`  Atom Wallet: ${atomCreatedEvent.args.atomWallet}`);
         console.log();
       }
+    }
 
-      // Find Deposited event
-      const depositedEvent = receipt.logs
-        .map(log =&gt; {
-          try {
-            return multiVault.interface.parseLog({
-              topics: log.topics as string[],
-              data: log.data,
-            });
-          } catch {
-            return null;
-          }
-        })
-        .find(event =&gt; event?.name === 'Deposited');
+    // Find Deposited event
+    const depositedLog = receipt.logs.find(log => {
+      try {
+        const event = publicClient.parseEventLogs({
+          abi: MULTIVAULT_ABI,
+          logs: [log],
+          eventName: 'Deposited'
+        });
+        return event.length > 0;
+      } catch {
+        return false;
+      }
+    });
 
-      if (depositedEvent) {
+    if (depositedLog) {
+      const depositedEvent = publicClient.parseEventLogs({
+        abi: MULTIVAULT_ABI,
+        logs: [depositedLog],
+        eventName: 'Deposited'
+      })[0];
+
+      if (depositedEvent && depositedEvent.args) {
         console.log('Deposited Event:');
-        console.log(`  Sender: ${depositedEvent.args[0]}`);
-        console.log(`  Receiver: ${depositedEvent.args[1]}`);
-        console.log(`  Term ID: ${depositedEvent.args[2]}`);
-        console.log(`  Curve ID: ${depositedEvent.args[3]}`);
-        console.log(`  Assets: ${ethers.formatEther(depositedEvent.args[4])} WTRUST`);
-        console.log(`  Assets After Fees: ${ethers.formatEther(depositedEvent.args[5])} WTRUST`);
-        console.log(`  Shares Minted: ${ethers.formatEther(depositedEvent.args[6])}`);
-        console.log(`  Total Shares: ${ethers.formatEther(depositedEvent.args[7])}`);
-        console.log(`  Vault Type: ${depositedEvent.args[8]}`); // 0 = ATOM
+        console.log(`  Sender: ${depositedEvent.args.sender}`);
+        console.log(`  Receiver: ${depositedEvent.args.receiver}`);
+        console.log(`  Term ID: ${depositedEvent.args.termId}`);
+        console.log(`  Curve ID: ${depositedEvent.args.curveId}`);
+        console.log(`  Assets: ${formatEther(depositedEvent.args.assets)} WTRUST`);
+        console.log(`  Assets After Fees: ${formatEther(depositedEvent.args.assetsAfterFees)} WTRUST`);
+        console.log(`  Shares Minted: ${formatEther(depositedEvent.args.shares)}`);
+        console.log(`  Total Shares: ${formatEther(depositedEvent.args.totalShares)}`);
+        console.log(`  Vault Type: ${depositedEvent.args.vaultType}`); // 0 = ATOM
         console.log();
       }
     }
@@ -301,7 +414,7 @@ async function main() {
     console.log('='.repeat(80));
     console.log('✓ Atom creation successful!');
     console.log(`Atom ID: ${atomId}`);
-    console.log(`View on explorer: https://explorer.intuit.network/tx/${receipt?.hash}`);
+    console.log(`View on explorer: https://explorer.intuit.network/tx/${receipt.transactionHash}`);
     console.log('='.repeat(80));
 
   } catch (error) {
@@ -340,8 +453,8 @@ async function main() {
 
 // Run the main function
 main()
-  .then(() =&gt; process.exit(0))
-  .catch((error) =&gt; {
+  .then(() => process.exit(0))
+  .catch((error) => {
     console.error(error);
     process.exit(1);
   });

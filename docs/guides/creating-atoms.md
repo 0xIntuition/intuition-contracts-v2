@@ -16,25 +16,21 @@ This guide shows you how to create atoms programmatically using TypeScript and P
 
 ### Required Knowledge
 - Basic understanding of Ethereum transactions
-- Familiarity with ERC20 token approvals
+- Familiarity with sending native tokens via payable functions
 - Understanding of [atoms and their role in the protocol](../concepts/atoms-and-triples.md)
 
 ### Contracts Needed
 - **MultiVault**: Main contract for creating atoms
   - Mainnet: `0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e`
   - Testnet: `0x2Ece8D4dEdcB9918A398528f3fa4688b1d2CAB91`
-- **WrappedTrust (WTRUST)**: Asset token for deposits
-  - Mainnet: `0x81cFb09cb44f7184Ad934C09F82000701A4bF672`
-  - Testnet: `0xDE80b6EE63f7D809427CA350e30093F436A0fe35`
 
 ### Tokens Required
-- WTRUST tokens for the initial deposit
+- Native TRUST for the initial deposit (sent as msg.value)
 - Native ETH for gas fees
-- Sufficient approval for MultiVault to spend WTRUST
 
 ### Key Parameters
 - `atomData`: Bytes array (max 256 bytes) containing the atom's data
-- `assets`: Amount of WTRUST to deposit (must meet minimum deposit requirement)
+- `assets`: Amount of TRUST to deposit (must meet minimum deposit requirement)
 
 ## Step-by-Step Guide
 
@@ -74,19 +70,7 @@ const minDeposit = await multiVault.getGeneralConfig().then(c => c.minDeposit);
 const requiredDeposit = atomCost + minDeposit;
 ```
 
-### Step 3: Approve WTRUST Spending
-
-The MultiVault contract needs approval to spend your WTRUST tokens.
-
-```typescript
-const tx = await wtrustContract.approve(
-  multiVaultAddress,
-  assetsToDeposit
-);
-await tx.wait();
-```
-
-### Step 4: Preview Atom Creation
+### Step 3: Preview Atom Creation
 
 Simulate the creation to see expected shares and fees before executing.
 
@@ -95,19 +79,22 @@ const [shares, assetsAfterFixedFees, assetsAfterFees] =
   await multiVault.previewAtomCreate(atomId, assetsToDeposit);
 ```
 
-### Step 5: Create the Atom
+### Step 4: Create the Atom
 
-Call `createAtoms` with your atom data and deposit amount. This function accepts arrays for batch creation.
+Call `createAtoms` with your atom data and deposit amount, sending native TRUST via the value parameter. This function accepts arrays for batch creation.
 
 ```typescript
 const tx = await multiVault.createAtoms(
   [atomData],      // Array of atom data
-  [assetsToDeposit] // Array of deposit amounts
+  [assetsToDeposit], // Array of deposit amounts
+  {
+    value: assetsToDeposit // Send native TRUST with transaction
+  }
 );
 const receipt = await tx.wait();
 ```
 
-### Step 6: Extract Atom ID from Events
+### Step 5: Extract Atom ID from Events
 
 Parse the `AtomCreated` event to get the atom ID and wallet address.
 
@@ -135,7 +122,6 @@ import ERC20ABI from './abis/ERC20.json';
 
 // Configuration
 const MULTIVAULT_ADDRESS = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e';
-const WTRUST_ADDRESS = '0x81cFb09cb44f7184Ad934C09F82000701A4bF672';
 const RPC_URL = 'YOUR_INTUITION_RPC_URL';
 
 /**
@@ -159,11 +145,6 @@ async function createAtom(
   const multiVault = new ethers.Contract(
     MULTIVAULT_ADDRESS,
     MultiVaultABI,
-    wallet
-  );
-  const wtrust = new ethers.Contract(
-    WTRUST_ADDRESS,
-    ERC20ABI,
     wallet
   );
 
@@ -194,28 +175,19 @@ async function createAtom(
     const minDeposit = generalConfig.minDeposit;
     const minimumRequired = atomCost + minDeposit;
 
-    console.log('Atom creation cost:', ethers.formatEther(atomCost), 'WTRUST');
-    console.log('Minimum deposit:', ethers.formatEther(minDeposit), 'WTRUST');
-    console.log('Total minimum:', ethers.formatEther(minimumRequired), 'WTRUST');
+    console.log('Atom creation cost:', ethers.formatEther(atomCost), 'TRUST');
+    console.log('Minimum deposit:', ethers.formatEther(minDeposit), 'TRUST');
+    console.log('Total minimum:', ethers.formatEther(minimumRequired), 'TRUST');
 
     // Validate deposit amount
     if (depositAmount < minimumRequired) {
       throw new Error(
         `Deposit amount ${ethers.formatEther(depositAmount)} is below minimum ` +
-        `${ethers.formatEther(minimumRequired)} WTRUST`
+        `${ethers.formatEther(minimumRequired)} TRUST`
       );
     }
 
-    // Step 5: Check WTRUST balance
-    const balance = await wtrust.balanceOf(wallet.address);
-    if (balance < depositAmount) {
-      throw new Error(
-        `Insufficient WTRUST balance. Have: ${ethers.formatEther(balance)}, ` +
-        `Need: ${ethers.formatEther(depositAmount)}`
-      );
-    }
-
-    // Step 6: Preview the creation
+    // Step 5: Preview the creation
     const [expectedShares, assetsAfterFixedFees, assetsAfterAllFees] =
       await multiVault.previewAtomCreate(atomId, depositAmount);
 
@@ -223,18 +195,13 @@ async function createAtom(
     console.log('Assets after fixed fees:', ethers.formatEther(assetsAfterFixedFees));
     console.log('Assets after all fees:', ethers.formatEther(assetsAfterAllFees));
 
-    // Step 7: Approve WTRUST spending
-    console.log('Approving WTRUST spending...');
-    const approveTx = await wtrust.approve(MULTIVAULT_ADDRESS, depositAmount);
-    await approveTx.wait();
-    console.log('Approval confirmed');
-
-    // Step 8: Create the atom
+    // Step 6: Create the atom
     console.log('Creating atom...');
     const createTx = await multiVault.createAtoms(
       [atomData],
       [depositAmount],
       {
+        value: depositAmount,
         gasLimit: 500000n // Explicit gas limit for safety
       }
     );
@@ -301,7 +268,7 @@ async function main() {
   try {
     const result = await createAtom(
       "verified-developer",
-      ethers.parseEther("10"), // 10 WTRUST
+      ethers.parseEther("10"), // 10 TRUST
       "YOUR_PRIVATE_KEY"
     );
 
@@ -334,7 +301,6 @@ import json
 
 # Configuration
 MULTIVAULT_ADDRESS = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e'
-WTRUST_ADDRESS = '0x81cFb09cb44f7184Ad934C09F82000701A4bF672'
 RPC_URL = 'YOUR_INTUITION_RPC_URL'
 
 # Load ABIs (from your ABI files)
@@ -355,7 +321,7 @@ def create_atom(
 
     Args:
         atom_data_string: String data to encode in the atom
-        deposit_amount: Amount of WTRUST to deposit (in wei)
+        deposit_amount: Amount of TRUST to deposit (in wei)
         private_key: Private key for signing transactions
 
     Returns:
@@ -378,10 +344,6 @@ def create_atom(
     multivault = w3.eth.contract(
         address=Web3.to_checksum_address(MULTIVAULT_ADDRESS),
         abi=MULTIVAULT_ABI
-    )
-    wtrust = w3.eth.contract(
-        address=Web3.to_checksum_address(WTRUST_ADDRESS),
-        abi=ERC20_ABI
     )
 
     try:
@@ -407,26 +369,18 @@ def create_atom(
         min_deposit = general_config[4]  # minDeposit field
         minimum_required = atom_cost + min_deposit
 
-        print(f'Atom creation cost: {Web3.from_wei(atom_cost, "ether")} WTRUST')
-        print(f'Minimum deposit: {Web3.from_wei(min_deposit, "ether")} WTRUST')
-        print(f'Total minimum: {Web3.from_wei(minimum_required, "ether")} WTRUST')
+        print(f'Atom creation cost: {Web3.from_wei(atom_cost, "ether")} TRUST')
+        print(f'Minimum deposit: {Web3.from_wei(min_deposit, "ether")} TRUST')
+        print(f'Total minimum: {Web3.from_wei(minimum_required, "ether")} TRUST')
 
         # Validate deposit amount
         if deposit_amount < minimum_required:
             raise ValueError(
                 f'Deposit amount {Web3.from_wei(deposit_amount, "ether")} is below '
-                f'minimum {Web3.from_wei(minimum_required, "ether")} WTRUST'
+                f'minimum {Web3.from_wei(minimum_required, "ether")} TRUST'
             )
 
-        # Step 5: Check WTRUST balance
-        balance = wtrust.functions.balanceOf(account.address).call()
-        if balance < deposit_amount:
-            raise ValueError(
-                f'Insufficient WTRUST balance. Have: {Web3.from_wei(balance, "ether")}, '
-                f'Need: {Web3.from_wei(deposit_amount, "ether")}'
-            )
-
-        # Step 6: Preview the creation
+        # Step 5: Preview the creation
         preview = multivault.functions.previewAtomCreate(
             atom_id,
             deposit_amount
@@ -437,27 +391,7 @@ def create_atom(
         print(f'Assets after fixed fees: {Web3.from_wei(assets_after_fixed_fees, "ether")}')
         print(f'Assets after all fees: {Web3.from_wei(assets_after_all_fees, "ether")}')
 
-        # Step 7: Approve WTRUST spending
-        print('Approving WTRUST spending...')
-        approve_tx = wtrust.functions.approve(
-            MULTIVAULT_ADDRESS,
-            deposit_amount
-        ).build_transaction({
-            'from': account.address,
-            'nonce': w3.eth.get_transaction_count(account.address),
-            'gas': 100000,
-            'gasPrice': w3.eth.gas_price
-        })
-
-        signed_approve = account.sign_transaction(approve_tx)
-        approve_hash = w3.eth.send_raw_transaction(signed_approve.raw_transaction)
-        approve_receipt = w3.eth.wait_for_transaction_receipt(approve_hash)
-
-        if approve_receipt['status'] != 1:
-            raise Exception('Approval transaction failed')
-        print('Approval confirmed')
-
-        # Step 8: Create the atom
+        # Step 6: Create the atom
         print('Creating atom...')
 
         # Build transaction
@@ -466,6 +400,7 @@ def create_atom(
             [deposit_amount]
         ).build_transaction({
             'from': account.address,
+            'value': deposit_amount,
             'nonce': w3.eth.get_transaction_count(account.address),
             'gas': 500000,
             'gasPrice': w3.eth.gas_price
@@ -525,7 +460,7 @@ if __name__ == '__main__':
     try:
         result = create_atom(
             atom_data_string='verified-developer',
-            deposit_amount=Web3.to_wei(10, 'ether'),  # 10 WTRUST
+            deposit_amount=Web3.to_wei(10, 'ether'),  # 10 TRUST
             private_key='YOUR_PRIVATE_KEY'
         )
 
@@ -680,25 +615,23 @@ while True:
 
 #### 4. Insufficient Allowance
 
-**Error**: `ERC20: insufficient allowance`
+**Error**: `Insufficient funds`
 
-**Cause**: MultiVault not approved to spend enough WTRUST.
+**Cause**: Not enough native TRUST sent with transaction.
 
 **Recovery**:
-- Call `approve()` on WTRUST contract
-- Approve at least the deposit amount
-- Check current allowance: `allowance(owner, spender)`
+- Ensure value parameter matches deposit amount
+- Check wallet balance has sufficient TRUST
 
 #### 5. Insufficient Balance
 
-**Error**: `ERC20: transfer amount exceeds balance`
+**Error**: `Value mismatch`
 
-**Cause**: Not enough WTRUST tokens in wallet.
+**Cause**: msg.value doesn't match deposit amount parameter.
 
 **Recovery**:
-- Check balance: `balanceOf(address)`
-- Acquire more WTRUST tokens
-- Reduce deposit amount
+- Ensure value in transaction options matches deposit amount
+- For batch creates, value should equal sum of all deposits
 
 #### 6. Paused Contract
 
@@ -725,10 +658,9 @@ try {
     // Increase deposit amount
     const minRequired = await getMinimumDeposit();
     await createAtom(data, minRequired, privateKey);
-  } else if (error.message.includes('insufficient allowance')) {
-    // Approve and retry
-    await approveWTRUST(amount);
-    await createAtom(data, amount, privateKey);
+  } else if (error.message.includes('insufficient funds')) {
+    // Ensure correct value is being sent
+    console.error('Not enough TRUST sent with transaction');
   } else {
     // Unknown error, log and alert
     console.error('Atom creation failed:', error);
@@ -748,7 +680,6 @@ Operation costs on Intuition Mainnet (approximate):
 | Single atom creation | ~400,000 | Includes wallet deployment |
 | Batch (2 atoms) | ~650,000 | Saves ~150k vs 2 separate txs |
 | Batch (5 atoms) | ~1,400,000 | Scales sub-linearly |
-| WTRUST approval | ~50,000 | One-time per contract |
 
 ### Factors Affecting Cost
 
@@ -885,17 +816,16 @@ const atomData = 'a1b2c3d4';
 
 ## Common Pitfalls
 
-### 1. Forgetting to Approve
+### 1. Forgetting to Send Value
 
-Always approve WTRUST before calling `createAtoms`:
+Always include value parameter when calling `createAtoms`:
 
 ```typescript
-// WRONG: Will fail with "insufficient allowance"
+// WRONG: Will fail with "insufficient funds"
 await multiVault.createAtoms([data], [amount]);
 
-// CORRECT: Approve first
-await wtrust.approve(MULTIVAULT_ADDRESS, amount);
-await multiVault.createAtoms([data], [amount]);
+// CORRECT: Include value parameter
+await multiVault.createAtoms([data], [amount], { value: amount });
 ```
 
 ### 2. Not Checking Existence

@@ -12,7 +12,22 @@
  * - Batch operations
  */
 
-import { ethers, Contract, Provider, Signer } from 'ethers';
+import {
+  PublicClient,
+  WalletClient,
+  createPublicClient,
+  createWalletClient,
+  http,
+  getContract,
+  parseEther,
+  formatEther,
+  stringToHex,
+  type Address,
+  type Hash,
+  type Hex
+} from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { base } from 'viem/chains';
 
 // ============================================================================
 // Types and Interfaces
@@ -20,8 +35,8 @@ import { ethers, Contract, Provider, Signer } from 'ethers';
 
 export interface IntuitionConfig {
   rpcUrl: string;
-  multiVaultAddress: string;
-  wtrustAddress: string;
+  multiVaultAddress: Address;
+  wtrustAddress: Address;
   chainId?: number;
 }
 
@@ -31,21 +46,21 @@ export interface AtomData {
 }
 
 export interface TripleData {
-  subjectId: string;
-  predicateId: string;
-  objectId: string;
+  subjectId: Hex;
+  predicateId: Hex;
+  objectId: Hex;
   initialDeposit: bigint;
 }
 
 export interface DepositParams {
-  termId: string;
+  termId: Hex;
   curveId: number;
   amount: bigint;
   slippageBps?: number; // Basis points (100 = 1%)
 }
 
 export interface RedeemParams {
-  termId: string;
+  termId: Hex;
   curveId: number;
   shares: bigint;
   slippageBps?: number;
@@ -67,54 +82,302 @@ export interface UserPosition {
 // ============================================================================
 
 export class IntuitionSDK {
-  private provider: Provider;
-  private signer?: Signer;
-  private multiVault: Contract;
-  private wtrust: Contract;
+  private publicClient: PublicClient;
+  private walletClient?: WalletClient;
+  private multiVault: any;
+  private wtrust: any;
 
   private readonly MULTIVAULT_ABI = [
-    'function createAtoms(bytes[] calldata, uint256[] calldata) external payable returns (bytes32[] memory)',
-    'function createTriples(bytes32[] calldata, bytes32[] calldata, bytes32[] calldata, uint256[] calldata) external payable returns (bytes32[] memory)',
-    'function deposit(address, bytes32, uint256, uint256) external payable returns (uint256)',
-    'function redeem(address, bytes32, uint256, uint256, uint256) external returns (uint256)',
-    'function depositBatch(address, bytes32[] calldata, uint256[] calldata, uint256[] calldata, uint256[] calldata) external payable returns (uint256[] memory)',
-    'function redeemBatch(address, bytes32[] calldata, uint256[] calldata, uint256[] calldata, uint256[] calldata) external returns (uint256[] memory)',
-    'function previewDeposit(bytes32, uint256, uint256) external view returns (uint256, uint256)',
-    'function previewRedeem(bytes32, uint256, uint256) external view returns (uint256, uint256)',
-    'function previewAtomCreate(bytes32, uint256) external view returns (uint256, uint256, uint256)',
-    'function previewTripleCreate(bytes32, uint256) external view returns (uint256, uint256, uint256)',
-    'function calculateAtomId(bytes memory) external pure returns (bytes32)',
-    'function calculateTripleId(bytes32, bytes32, bytes32) external pure returns (bytes32)',
-    'function isTermCreated(bytes32) external view returns (bool)',
-    'function getVault(bytes32, uint256) external view returns (uint256, uint256)',
-    'function getShares(address, bytes32, uint256) external view returns (uint256)',
-    'function currentSharePrice(bytes32, uint256) external view returns (uint256)',
-    'function convertToAssets(bytes32, uint256, uint256) external view returns (uint256)',
-    'function getAtomCost() external view returns (uint256)',
-    'function getTripleCost() external view returns (uint256)',
-  ];
+    {
+      name: 'createAtoms',
+      type: 'function',
+      stateMutability: 'payable',
+      inputs: [
+        { name: 'atomDatas', type: 'bytes[]' },
+        { name: 'assets', type: 'uint256[]' }
+      ],
+      outputs: [{ name: '', type: 'bytes32[]' }]
+    },
+    {
+      name: 'createTriples',
+      type: 'function',
+      stateMutability: 'payable',
+      inputs: [
+        { name: 'subjectIds', type: 'bytes32[]' },
+        { name: 'predicateIds', type: 'bytes32[]' },
+        { name: 'objectIds', type: 'bytes32[]' },
+        { name: 'assets', type: 'uint256[]' }
+      ],
+      outputs: [{ name: '', type: 'bytes32[]' }]
+    },
+    {
+      name: 'deposit',
+      type: 'function',
+      stateMutability: 'payable',
+      inputs: [
+        { name: 'receiver', type: 'address' },
+        { name: 'termId', type: 'bytes32' },
+        { name: 'curveId', type: 'uint256' },
+        { name: 'minShares', type: 'uint256' }
+      ],
+      outputs: [{ name: '', type: 'uint256' }]
+    },
+    {
+      name: 'redeem',
+      type: 'function',
+      stateMutability: 'nonpayable',
+      inputs: [
+        { name: 'receiver', type: 'address' },
+        { name: 'termId', type: 'bytes32' },
+        { name: 'curveId', type: 'uint256' },
+        { name: 'shares', type: 'uint256' },
+        { name: 'minAssets', type: 'uint256' }
+      ],
+      outputs: [{ name: '', type: 'uint256' }]
+    },
+    {
+      name: 'depositBatch',
+      type: 'function',
+      stateMutability: 'payable',
+      inputs: [
+        { name: 'receiver', type: 'address' },
+        { name: 'termIds', type: 'bytes32[]' },
+        { name: 'curveIds', type: 'uint256[]' },
+        { name: 'assets', type: 'uint256[]' },
+        { name: 'minShares', type: 'uint256[]' }
+      ],
+      outputs: [{ name: '', type: 'uint256[]' }]
+    },
+    {
+      name: 'redeemBatch',
+      type: 'function',
+      stateMutability: 'nonpayable',
+      inputs: [
+        { name: 'receiver', type: 'address' },
+        { name: 'termIds', type: 'bytes32[]' },
+        { name: 'curveIds', type: 'uint256[]' },
+        { name: 'shares', type: 'uint256[]' },
+        { name: 'minAssets', type: 'uint256[]' }
+      ],
+      outputs: [{ name: '', type: 'uint256[]' }]
+    },
+    {
+      name: 'previewDeposit',
+      type: 'function',
+      stateMutability: 'view',
+      inputs: [
+        { name: 'termId', type: 'bytes32' },
+        { name: 'curveId', type: 'uint256' },
+        { name: 'assets', type: 'uint256' }
+      ],
+      outputs: [
+        { name: 'shares', type: 'uint256' },
+        { name: 'assetsAfterFees', type: 'uint256' }
+      ]
+    },
+    {
+      name: 'previewRedeem',
+      type: 'function',
+      stateMutability: 'view',
+      inputs: [
+        { name: 'termId', type: 'bytes32' },
+        { name: 'curveId', type: 'uint256' },
+        { name: 'shares', type: 'uint256' }
+      ],
+      outputs: [
+        { name: 'assetsAfterFees', type: 'uint256' },
+        { name: 'sharesUsed', type: 'uint256' }
+      ]
+    },
+    {
+      name: 'previewAtomCreate',
+      type: 'function',
+      stateMutability: 'view',
+      inputs: [
+        { name: 'termId', type: 'bytes32' },
+        { name: 'assets', type: 'uint256' }
+      ],
+      outputs: [
+        { name: 'shares', type: 'uint256' },
+        { name: 'assetsAfterFixedFees', type: 'uint256' },
+        { name: 'assetsAfterFees', type: 'uint256' }
+      ]
+    },
+    {
+      name: 'previewTripleCreate',
+      type: 'function',
+      stateMutability: 'view',
+      inputs: [
+        { name: 'termId', type: 'bytes32' },
+        { name: 'assets', type: 'uint256' }
+      ],
+      outputs: [
+        { name: 'shares', type: 'uint256' },
+        { name: 'assetsAfterFixedFees', type: 'uint256' },
+        { name: 'assetsAfterFees', type: 'uint256' }
+      ]
+    },
+    {
+      name: 'calculateAtomId',
+      type: 'function',
+      stateMutability: 'pure',
+      inputs: [{ name: 'data', type: 'bytes' }],
+      outputs: [{ name: 'id', type: 'bytes32' }]
+    },
+    {
+      name: 'calculateTripleId',
+      type: 'function',
+      stateMutability: 'pure',
+      inputs: [
+        { name: 'subjectId', type: 'bytes32' },
+        { name: 'predicateId', type: 'bytes32' },
+        { name: 'objectId', type: 'bytes32' }
+      ],
+      outputs: [{ name: 'id', type: 'bytes32' }]
+    },
+    {
+      name: 'isTermCreated',
+      type: 'function',
+      stateMutability: 'view',
+      inputs: [{ name: 'id', type: 'bytes32' }],
+      outputs: [{ name: '', type: 'bool' }]
+    },
+    {
+      name: 'getVault',
+      type: 'function',
+      stateMutability: 'view',
+      inputs: [
+        { name: 'termId', type: 'bytes32' },
+        { name: 'curveId', type: 'uint256' }
+      ],
+      outputs: [
+        { name: 'totalAssets', type: 'uint256' },
+        { name: 'totalShares', type: 'uint256' }
+      ]
+    },
+    {
+      name: 'getShares',
+      type: 'function',
+      stateMutability: 'view',
+      inputs: [
+        { name: 'account', type: 'address' },
+        { name: 'termId', type: 'bytes32' },
+        { name: 'curveId', type: 'uint256' }
+      ],
+      outputs: [{ name: '', type: 'uint256' }]
+    },
+    {
+      name: 'currentSharePrice',
+      type: 'function',
+      stateMutability: 'view',
+      inputs: [
+        { name: 'termId', type: 'bytes32' },
+        { name: 'curveId', type: 'uint256' }
+      ],
+      outputs: [{ name: '', type: 'uint256' }]
+    },
+    {
+      name: 'convertToAssets',
+      type: 'function',
+      stateMutability: 'view',
+      inputs: [
+        { name: 'termId', type: 'bytes32' },
+        { name: 'curveId', type: 'uint256' },
+        { name: 'shares', type: 'uint256' }
+      ],
+      outputs: [{ name: '', type: 'uint256' }]
+    },
+    {
+      name: 'getAtomCost',
+      type: 'function',
+      stateMutability: 'view',
+      inputs: [],
+      outputs: [{ name: '', type: 'uint256' }]
+    },
+    {
+      name: 'getTripleCost',
+      type: 'function',
+      stateMutability: 'view',
+      inputs: [],
+      outputs: [{ name: '', type: 'uint256' }]
+    },
+    // Events
+    {
+      name: 'Deposited',
+      type: 'event',
+      inputs: [
+        { name: 'sender', type: 'address', indexed: true },
+        { name: 'receiver', type: 'address', indexed: true },
+        { name: 'termId', type: 'bytes32', indexed: true },
+        { name: 'curveId', type: 'uint256', indexed: false },
+        { name: 'assets', type: 'uint256', indexed: false },
+        { name: 'assetsAfterFees', type: 'uint256', indexed: false },
+        { name: 'shares', type: 'uint256', indexed: false },
+        { name: 'totalShares', type: 'uint256', indexed: false },
+        { name: 'vaultType', type: 'uint8', indexed: false }
+      ]
+    }
+  ] as const;
 
   private readonly ERC20_ABI = [
-    'function approve(address, uint256) external returns (bool)',
-    'function allowance(address, address) external view returns (uint256)',
-    'function balanceOf(address) external view returns (uint256)',
-  ];
+    {
+      name: 'approve',
+      type: 'function',
+      stateMutability: 'nonpayable',
+      inputs: [
+        { name: 'spender', type: 'address' },
+        { name: 'amount', type: 'uint256' }
+      ],
+      outputs: [{ name: '', type: 'bool' }]
+    },
+    {
+      name: 'allowance',
+      type: 'function',
+      stateMutability: 'view',
+      inputs: [
+        { name: 'owner', type: 'address' },
+        { name: 'spender', type: 'address' }
+      ],
+      outputs: [{ name: '', type: 'uint256' }]
+    },
+    {
+      name: 'balanceOf',
+      type: 'function',
+      stateMutability: 'view',
+      inputs: [{ name: 'account', type: 'address' }],
+      outputs: [{ name: '', type: 'uint256' }]
+    }
+  ] as const;
 
-  constructor(config: IntuitionConfig, signer?: Signer) {
-    this.provider = new ethers.JsonRpcProvider(config.rpcUrl, config.chainId);
-    this.signer = signer;
+  constructor(config: IntuitionConfig, privateKey?: Hex) {
+    // Create public client for reading
+    this.publicClient = createPublicClient({
+      chain: base,
+      transport: http(config.rpcUrl)
+    });
 
-    this.multiVault = new Contract(
-      config.multiVaultAddress,
-      this.MULTIVAULT_ABI,
-      signer || this.provider
-    );
+    // Create wallet client if private key provided
+    if (privateKey) {
+      const account = privateKeyToAccount(privateKey);
+      this.walletClient = createWalletClient({
+        account,
+        chain: base,
+        transport: http(config.rpcUrl)
+      });
+    }
 
-    this.wtrust = new Contract(
-      config.wtrustAddress,
-      this.ERC20_ABI,
-      signer || this.provider
-    );
+    // Initialize contract instances
+    this.multiVault = getContract({
+      address: config.multiVaultAddress,
+      abi: this.MULTIVAULT_ABI,
+      client: { public: this.publicClient, wallet: this.walletClient }
+    });
+
+    this.wtrust = getContract({
+      address: config.wtrustAddress,
+      abi: this.ERC20_ABI,
+      client: { public: this.publicClient, wallet: this.walletClient }
+    });
   }
 
   // ============================================================================
@@ -124,16 +387,16 @@ export class IntuitionSDK {
   /**
    * Calculate the deterministic atom ID from data
    */
-  async calculateAtomId(data: string | Uint8Array): Promise<string> {
-    const bytes = typeof data === 'string' ? ethers.toUtf8Bytes(data) : data;
-    return await this.multiVault.calculateAtomId(bytes);
+  async calculateAtomId(data: string | Uint8Array): Promise<Hex> {
+    const bytes = typeof data === 'string' ? stringToHex(data) : data;
+    return await this.multiVault.read.calculateAtomId([bytes]);
   }
 
   /**
    * Check if an atom exists
    */
-  async atomExists(atomId: string): Promise<boolean> {
-    return await this.multiVault.isTermCreated(atomId);
+  async atomExists(atomId: Hex): Promise<boolean> {
+    return await this.multiVault.read.isTermCreated([atomId]);
   }
 
   /**
@@ -142,10 +405,10 @@ export class IntuitionSDK {
   async createAtom(
     data: string | Uint8Array,
     initialDeposit: bigint
-  ): Promise<{ atomId: string; txHash: string; shares: bigint }> {
-    if (!this.signer) throw new Error('Signer required for write operations');
+  ): Promise<{ atomId: Hex; txHash: Hash; shares: bigint }> {
+    if (!this.walletClient) throw new Error('Signer required for write operations');
 
-    const bytes = typeof data === 'string' ? ethers.toUtf8Bytes(data) : data;
+    const bytes = typeof data === 'string' ? stringToHex(data) : data;
     const atomId = await this.calculateAtomId(bytes);
 
     // Check if already exists
@@ -154,31 +417,44 @@ export class IntuitionSDK {
     }
 
     // Get creation cost
-    const atomCost = await this.multiVault.getAtomCost();
+    const atomCost = await this.multiVault.read.getAtomCost();
     const totalAmount = initialDeposit + atomCost;
 
     // Ensure approval
     await this.ensureApproval(totalAmount);
 
     // Create atom
-    const tx = await this.multiVault.createAtoms([bytes], [initialDeposit]);
-    const receipt = await tx.wait();
+    const hash = await this.multiVault.write.createAtoms([[bytes], [initialDeposit]]);
+    const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
 
     // Parse events to get shares minted
-    const depositEvent = receipt.logs
-      .map((log: any) =&gt; {
-        try {
-          return this.multiVault.interface.parseLog(log);
-        } catch {
-          return null;
-        }
-      })
-      .find((e: any) =&gt; e?.name === 'Deposited');
+    const depositLog = receipt.logs.find(log => {
+      try {
+        const parsed = this.publicClient.parseEventLogs({
+          abi: this.MULTIVAULT_ABI,
+          logs: [log],
+          eventName: 'Deposited'
+        });
+        return parsed.length > 0;
+      } catch {
+        return false;
+      }
+    });
+
+    let shares = 0n;
+    if (depositLog) {
+      const parsed = this.publicClient.parseEventLogs({
+        abi: this.MULTIVAULT_ABI,
+        logs: [depositLog],
+        eventName: 'Deposited'
+      })[0];
+      shares = parsed.args.shares;
+    }
 
     return {
       atomId,
-      txHash: receipt.hash,
-      shares: depositEvent?.args?.[6] || 0n,
+      txHash: hash,
+      shares,
     };
   }
 
@@ -190,23 +466,23 @@ export class IntuitionSDK {
    * Calculate the deterministic triple ID
    */
   async calculateTripleId(
-    subjectId: string,
-    predicateId: string,
-    objectId: string
-  ): Promise<string> {
-    return await this.multiVault.calculateTripleId(subjectId, predicateId, objectId);
+    subjectId: Hex,
+    predicateId: Hex,
+    objectId: Hex
+  ): Promise<Hex> {
+    return await this.multiVault.read.calculateTripleId([subjectId, predicateId, objectId]);
   }
 
   /**
    * Create a new triple vault
    */
   async createTriple(
-    subjectId: string,
-    predicateId: string,
-    objectId: string,
+    subjectId: Hex,
+    predicateId: Hex,
+    objectId: Hex,
     initialDeposit: bigint
-  ): Promise<{ tripleId: string; txHash: string; shares: bigint }> {
-    if (!this.signer) throw new Error('Signer required for write operations');
+  ): Promise<{ tripleId: Hex; txHash: Hash; shares: bigint }> {
+    if (!this.walletClient) throw new Error('Signer required for write operations');
 
     const tripleId = await this.calculateTripleId(subjectId, predicateId, objectId);
 
@@ -222,41 +498,54 @@ export class IntuitionSDK {
     }
 
     // Check if triple already exists
-    if (await this.multiVault.isTermCreated(tripleId)) {
+    if (await this.multiVault.read.isTermCreated([tripleId])) {
       throw new Error(`Triple ${tripleId} already exists`);
     }
 
     // Get creation cost
-    const tripleCost = await this.multiVault.getTripleCost();
+    const tripleCost = await this.multiVault.read.getTripleCost();
     const totalAmount = initialDeposit + tripleCost;
 
     // Ensure approval
     await this.ensureApproval(totalAmount);
 
     // Create triple
-    const tx = await this.multiVault.createTriples(
+    const hash = await this.multiVault.write.createTriples([
       [subjectId],
       [predicateId],
       [objectId],
       [initialDeposit]
-    );
-    const receipt = await tx.wait();
+    ]);
+    const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
 
     // Parse events
-    const depositEvent = receipt.logs
-      .map((log: any) =&gt; {
-        try {
-          return this.multiVault.interface.parseLog(log);
-        } catch {
-          return null;
-        }
-      })
-      .find((e: any) =&gt; e?.name === 'Deposited' && e?.args?.[8] === 1); // VaultType.TRIPLE
+    const depositLog = receipt.logs.find(log => {
+      try {
+        const parsed = this.publicClient.parseEventLogs({
+          abi: this.MULTIVAULT_ABI,
+          logs: [log],
+          eventName: 'Deposited'
+        });
+        return parsed.length > 0 && parsed[0].args.vaultType === 1; // VaultType.TRIPLE
+      } catch {
+        return false;
+      }
+    });
+
+    let shares = 0n;
+    if (depositLog) {
+      const parsed = this.publicClient.parseEventLogs({
+        abi: this.MULTIVAULT_ABI,
+        logs: [depositLog],
+        eventName: 'Deposited'
+      })[0];
+      shares = parsed.args.shares;
+    }
 
     return {
       tripleId,
-      txHash: receipt.hash,
-      shares: depositEvent?.args?.[6] || 0n,
+      txHash: hash,
+      shares,
     };
   }
 
@@ -267,17 +556,17 @@ export class IntuitionSDK {
   /**
    * Deposit into a vault
    */
-  async deposit(params: DepositParams): Promise<{ txHash: string; shares: bigint }> {
-    if (!this.signer) throw new Error('Signer required for write operations');
+  async deposit(params: DepositParams): Promise<{ txHash: Hash; shares: bigint }> {
+    if (!this.walletClient) throw new Error('Signer required for write operations');
 
     const slippageBps = params.slippageBps || 100; // Default 1%
 
     // Preview deposit
-    const [expectedShares] = await this.multiVault.previewDeposit(
+    const [expectedShares] = await this.multiVault.read.previewDeposit([
       params.termId,
-      params.curveId,
+      BigInt(params.curveId),
       params.amount
-    );
+    ]);
 
     // Calculate min shares with slippage
     const minShares = (expectedShares * BigInt(10000 - slippageBps)) / 10000n;
@@ -286,75 +575,85 @@ export class IntuitionSDK {
     await this.ensureApproval(params.amount);
 
     // Execute deposit
-    const signerAddress = await this.signer.getAddress();
-    const tx = await this.multiVault.deposit(
-      signerAddress,
+    const account = this.walletClient.account;
+    if (!account) throw new Error('No account found');
+
+    const hash = await this.multiVault.write.deposit([
+      account.address,
       params.termId,
-      params.curveId,
+      BigInt(params.curveId),
       minShares
-    );
-    const receipt = await tx.wait();
+    ]);
+    const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
 
     // Parse event
-    const depositEvent = receipt.logs
-      .map((log: any) =&gt; {
-        try {
-          return this.multiVault.interface.parseLog(log);
-        } catch {
-          return null;
-        }
-      })
-      .find((e: any) =&gt; e?.name === 'Deposited');
+    const depositLog = receipt.logs.find(log => {
+      try {
+        const parsed = this.publicClient.parseEventLogs({
+          abi: this.MULTIVAULT_ABI,
+          logs: [log],
+          eventName: 'Deposited'
+        });
+        return parsed.length > 0;
+      } catch {
+        return false;
+      }
+    });
+
+    let shares = 0n;
+    if (depositLog) {
+      const parsed = this.publicClient.parseEventLogs({
+        abi: this.MULTIVAULT_ABI,
+        logs: [depositLog],
+        eventName: 'Deposited'
+      })[0];
+      shares = parsed.args.shares;
+    }
 
     return {
-      txHash: receipt.hash,
-      shares: depositEvent?.args?.[6] || 0n,
+      txHash: hash,
+      shares,
     };
   }
 
   /**
    * Redeem shares from a vault
    */
-  async redeem(params: RedeemParams): Promise<{ txHash: string; assets: bigint }> {
-    if (!this.signer) throw new Error('Signer required for write operations');
+  async redeem(params: RedeemParams): Promise<{ txHash: Hash; assets: bigint }> {
+    if (!this.walletClient) throw new Error('Signer required for write operations');
 
     const slippageBps = params.slippageBps || 100; // Default 1%
 
     // Preview redemption
-    const [expectedAssets] = await this.multiVault.previewRedeem(
+    const [expectedAssets] = await this.multiVault.read.previewRedeem([
       params.termId,
-      params.curveId,
+      BigInt(params.curveId),
       params.shares
-    );
+    ]);
 
     // Calculate min assets with slippage
     const minAssets = (expectedAssets * BigInt(10000 - slippageBps)) / 10000n;
 
     // Execute redemption
-    const signerAddress = await this.signer.getAddress();
-    const tx = await this.multiVault.redeem(
-      signerAddress,
+    const account = this.walletClient.account;
+    if (!account) throw new Error('No account found');
+
+    const hash = await this.multiVault.write.redeem([
+      account.address,
       params.termId,
-      params.curveId,
+      BigInt(params.curveId),
       params.shares,
       minAssets
-    );
-    const receipt = await tx.wait();
+    ]);
+    const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
 
-    // Parse event
-    const redeemEvent = receipt.logs
-      .map((log: any) =&gt; {
-        try {
-          return this.multiVault.interface.parseLog(log);
-        } catch {
-          return null;
-        }
-      })
-      .find((e: any) =&gt; e?.name === 'Redeemed');
+    // Parse event to get actual assets received
+    let assets = expectedAssets;
+    // In a production SDK, you would parse the Redeemed event here
 
     return {
-      txHash: receipt.hash,
-      assets: redeemEvent?.args?.[6] || 0n,
+      txHash: hash,
+      assets,
     };
   }
 
@@ -365,9 +664,15 @@ export class IntuitionSDK {
   /**
    * Get vault information
    */
-  async getVaultInfo(termId: string, curveId: number): Promise<VaultInfo> {
-    const [totalAssets, totalShares] = await this.multiVault.getVault(termId, curveId);
-    const sharePrice = await this.multiVault.currentSharePrice(termId, curveId);
+  async getVaultInfo(termId: Hex, curveId: number): Promise<VaultInfo> {
+    const [totalAssets, totalShares] = await this.multiVault.read.getVault([
+      termId,
+      BigInt(curveId)
+    ]);
+    const sharePrice = await this.multiVault.read.currentSharePrice([
+      termId,
+      BigInt(curveId)
+    ]);
 
     return { totalAssets, totalShares, sharePrice };
   }
@@ -376,12 +681,20 @@ export class IntuitionSDK {
    * Get user position in a vault
    */
   async getUserPosition(
-    userAddress: string,
-    termId: string,
+    userAddress: Address,
+    termId: Hex,
     curveId: number
   ): Promise<UserPosition> {
-    const shares = await this.multiVault.getShares(userAddress, termId, curveId);
-    const value = await this.multiVault.convertToAssets(termId, curveId, shares);
+    const shares = await this.multiVault.read.getShares([
+      userAddress,
+      termId,
+      BigInt(curveId)
+    ]);
+    const value = await this.multiVault.read.convertToAssets([
+      termId,
+      BigInt(curveId),
+      shares
+    ]);
 
     return { shares, value };
   }
@@ -394,20 +707,22 @@ export class IntuitionSDK {
    * Ensure sufficient WTRUST approval
    */
   private async ensureApproval(amount: bigint): Promise<void> {
-    if (!this.signer) throw new Error('Signer required');
+    if (!this.walletClient) throw new Error('Signer required');
 
-    const signerAddress = await this.signer.getAddress();
-    const currentAllowance = await this.wtrust.allowance(
-      signerAddress,
-      await this.multiVault.getAddress()
-    );
+    const account = this.walletClient.account;
+    if (!account) throw new Error('No account found');
 
-    if (currentAllowance &lt; amount) {
-      const tx = await this.wtrust.approve(
-        await this.multiVault.getAddress(),
+    const currentAllowance = await this.wtrust.read.allowance([
+      account.address,
+      this.multiVault.address
+    ]);
+
+    if (currentAllowance < amount) {
+      const hash = await this.wtrust.write.approve([
+        this.multiVault.address,
         amount
-      );
-      await tx.wait();
+      ]);
+      await this.publicClient.waitForTransactionReceipt({ hash });
     }
   }
 }
@@ -419,32 +734,33 @@ export class IntuitionSDK {
 async function exampleUsage() {
   const config: IntuitionConfig = {
     rpcUrl: 'YOUR_INTUITION_RPC_URL',
-    multiVaultAddress: '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e',
-    wtrustAddress: '0x81cFb09cb44f7184Ad934C09F82000701A4bF672',
+    multiVaultAddress: '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e' as Address,
+    wtrustAddress: '0x81cFb09cb44f7184Ad934C09F82000701A4bF672' as Address,
   };
 
-  const signer = new ethers.Wallet('PRIVATE_KEY', new ethers.JsonRpcProvider(config.rpcUrl));
-  const sdk = new IntuitionSDK(config, signer);
+  const privateKey = 'PRIVATE_KEY' as Hex;
+  const sdk = new IntuitionSDK(config, privateKey);
 
   // Create an atom
   const { atomId, shares } = await sdk.createAtom(
     'My Atom Data',
-    ethers.parseEther('10')
+    parseEther('10')
   );
-  console.log(`Created atom ${atomId} with ${ethers.formatEther(shares)} shares`);
+  console.log(`Created atom ${atomId} with ${formatEther(shares)} shares`);
 
   // Deposit into vault
   const depositResult = await sdk.deposit({
     termId: atomId,
     curveId: 1,
-    amount: ethers.parseEther('5'),
+    amount: parseEther('5'),
     slippageBps: 100, // 1% slippage
   });
-  console.log(`Deposited, received ${ethers.formatEther(depositResult.shares)} shares`);
+  console.log(`Deposited, received ${formatEther(depositResult.shares)} shares`);
 
   // Query position
-  const position = await sdk.getUserPosition(await signer.getAddress(), atomId, 1);
-  console.log(`Your position: ${ethers.formatEther(position.shares)} shares worth ${ethers.formatEther(position.value)} WTRUST`);
+  const account = privateKeyToAccount(privateKey);
+  const position = await sdk.getUserPosition(account.address, atomId, 1);
+  console.log(`Your position: ${formatEther(position.shares)} shares worth ${formatEther(position.value)} WTRUST`);
 
   // Redeem shares
   const redeemResult = await sdk.redeem({
@@ -453,7 +769,7 @@ async function exampleUsage() {
     shares: position.shares / 2n, // Redeem 50%
     slippageBps: 100,
   });
-  console.log(`Redeemed ${ethers.formatEther(redeemResult.assets)} WTRUST`);
+  console.log(`Redeemed ${formatEther(redeemResult.assets)} WTRUST`);
 }
 
 // Uncomment to run:

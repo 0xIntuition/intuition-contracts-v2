@@ -1,7 +1,7 @@
 /**
  * @title Claim Rewards Example
  * @notice Demonstrates how to claim TRUST token rewards from the TrustBonding contract
- * @dev Uses ethers.js v6 to interact with TrustBonding (voting escrow + rewards)
+ * @dev Uses viem to interact with TrustBonding (voting escrow + rewards)
  *
  * What this example does:
  * 1. Checks user's current epoch and reward eligibility
@@ -11,12 +11,14 @@
  *
  * Prerequisites:
  * - Node.js v18+
- * - ethers.js v6
+ * - viem installed: `npm install viem`
  * - Bonded TRUST tokens (veWTRUST)
  * - Active utilization in the previous epoch
  */
 
-import { ethers } from 'ethers';
+import { createPublicClient, createWalletClient, http, formatEther, getContract } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { base } from 'viem/chains';
 
 // ============================================================================
 // Configuration
@@ -25,10 +27,9 @@ import { ethers } from 'ethers';
 const RPC_URL = 'YOUR_INTUITION_RPC_URL';
 const CHAIN_ID = 0;
 
-const TRUST_BONDING_ADDRESS = '0x635bBD1367B66E7B16a21D6E5A63C812fFC00617'; // Intuition Mainnet
-const WTRUST_ADDRESS = '0x81cFb09cb44f7184Ad934C09F82000701A4bF672';
+const TRUST_BONDING_ADDRESS = '0x635bBD1367B66E7B16a21D6E5A63C812fFC00617' as `0x${string}`; // Intuition Mainnet
 
-const PRIVATE_KEY = process.env.PRIVATE_KEY || '';
+const PRIVATE_KEY = (process.env.PRIVATE_KEY || '') as `0x${string}`;
 
 // Reward recipient (defaults to sender if not specified)
 const REWARD_RECIPIENT = ''; // Leave empty to claim to yourself
@@ -39,34 +40,149 @@ const REWARD_RECIPIENT = ''; // Leave empty to claim to yourself
 
 const TRUST_BONDING_ABI = [
   // Epoch functions
-  'function currentEpoch() external view returns (uint256)',
-  'function previousEpoch() external view returns (uint256)',
-  'function epochLength() external view returns (uint256)',
-  'function epochsPerYear() external view returns (uint256)',
-  'function epochTimestampEnd(uint256 epoch) external view returns (uint256)',
-
+  {
+    name: 'currentEpoch',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    name: 'previousEpoch',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    name: 'epochLength',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    name: 'epochsPerYear',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    name: 'epochTimestampEnd',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'epoch', type: 'uint256' }],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
   // Reward functions
-  'function claimRewards(address recipient) external',
-  'function getUserCurrentClaimableRewards(address account) external view returns (uint256)',
-  'function getUserRewardsForEpoch(address account, uint256 epoch) external view returns (uint256 eligibleRewards, uint256 maxRewards)',
-  'function hasClaimedRewardsForEpoch(address account, uint256 epoch) external view returns (bool)',
-  'function getUserInfo(address account) external view returns (tuple(uint256 personalUtilization, uint256 eligibleRewards, uint256 maxRewards, uint256 lockedAmount, uint256 lockEnd, uint256 bondedBalance))',
-
+  {
+    name: 'claimRewards',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'recipient', type: 'address' }],
+    outputs: []
+  },
+  {
+    name: 'getUserCurrentClaimableRewards',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    name: 'getUserRewardsForEpoch',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'account', type: 'address' },
+      { name: 'epoch', type: 'uint256' }
+    ],
+    outputs: [
+      { name: 'eligibleRewards', type: 'uint256' },
+      { name: 'maxRewards', type: 'uint256' }
+    ]
+  },
+  {
+    name: 'hasClaimedRewardsForEpoch',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'account', type: 'address' },
+      { name: 'epoch', type: 'uint256' }
+    ],
+    outputs: [{ name: '', type: 'bool' }]
+  },
+  {
+    name: 'getUserInfo',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [
+      {
+        name: '',
+        type: 'tuple',
+        components: [
+          { name: 'personalUtilization', type: 'uint256' },
+          { name: 'eligibleRewards', type: 'uint256' },
+          { name: 'maxRewards', type: 'uint256' },
+          { name: 'lockedAmount', type: 'uint256' },
+          { name: 'lockEnd', type: 'uint256' },
+          { name: 'bondedBalance', type: 'uint256' }
+        ]
+      }
+    ]
+  },
   // APY functions
-  'function getUserApy(address account) external view returns (uint256 currentApy, uint256 maxApy)',
-  'function getSystemApy() external view returns (uint256 currentApy, uint256 maxApy)',
-
+  {
+    name: 'getUserApy',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [
+      { name: 'currentApy', type: 'uint256' },
+      { name: 'maxApy', type: 'uint256' }
+    ]
+  },
+  {
+    name: 'getSystemApy',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [
+      { name: 'currentApy', type: 'uint256' },
+      { name: 'maxApy', type: 'uint256' }
+    ]
+  },
   // Utilization functions
-  'function getPersonalUtilizationRatio(address account, uint256 epoch) external view returns (uint256)',
-  'function getSystemUtilizationRatio(uint256 epoch) external view returns (uint256)',
-
+  {
+    name: 'getPersonalUtilizationRatio',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'account', type: 'address' },
+      { name: 'epoch', type: 'uint256' }
+    ],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    name: 'getSystemUtilizationRatio',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'epoch', type: 'uint256' }],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
   // Events
-  'event RewardsClaimed(address indexed user, address indexed recipient, uint256 amount)',
-];
-
-const ERC20_ABI = [
-  'function balanceOf(address account) external view returns (uint256)',
-];
+  {
+    name: 'RewardsClaimed',
+    type: 'event',
+    inputs: [
+      { name: 'user', type: 'address', indexed: true },
+      { name: 'recipient', type: 'address', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false }
+    ]
+  }
+] as const;
 
 // ============================================================================
 // Helper Functions
@@ -102,13 +218,23 @@ async function main() {
     // ------------------------------------------------------------------------
     console.log('Step 1: Connecting to Intuition network...');
 
-    const provider = new ethers.JsonRpcProvider(RPC_URL, {
-      chainId: CHAIN_ID,
-      name: 'intuition',
+    // Create public client for reading blockchain data
+    const publicClient = createPublicClient({
+      chain: base, // Replace with actual Intuition chain
+      transport: http(RPC_URL)
     });
 
-    const signer = new ethers.Wallet(PRIVATE_KEY, provider);
-    console.log(`✓ Connected with address: ${signer.address}`);
+    // Create account from private key
+    const account = privateKeyToAccount(PRIVATE_KEY);
+
+    // Create wallet client for transactions
+    const walletClient = createWalletClient({
+      account,
+      chain: base, // Replace with actual Intuition chain
+      transport: http(RPC_URL)
+    });
+
+    console.log(`✓ Connected with address: ${account.address}`);
     console.log();
 
     // ------------------------------------------------------------------------
@@ -116,20 +242,13 @@ async function main() {
     // ------------------------------------------------------------------------
     console.log('Step 2: Initializing contract instances...');
 
-    const trustBonding = new ethers.Contract(
-      TRUST_BONDING_ADDRESS,
-      TRUST_BONDING_ABI,
-      signer
-    );
-
-    const wTrust = new ethers.Contract(
-      WTRUST_ADDRESS,
-      ERC20_ABI,
-      signer
-    );
+    const trustBonding = getContract({
+      address: TRUST_BONDING_ADDRESS,
+      abi: TRUST_BONDING_ABI,
+      client: { public: publicClient, wallet: walletClient }
+    });
 
     console.log(`✓ TrustBonding: ${TRUST_BONDING_ADDRESS}`);
-    console.log(`✓ WTRUST: ${WTRUST_ADDRESS}`);
     console.log();
 
     // ------------------------------------------------------------------------
@@ -137,10 +256,10 @@ async function main() {
     // ------------------------------------------------------------------------
     console.log('Step 3: Checking epoch information...');
 
-    const currentEpoch = await trustBonding.currentEpoch();
-    const previousEpoch = await trustBonding.previousEpoch();
-    const epochLength = await trustBonding.epochLength();
-    const epochsPerYear = await trustBonding.epochsPerYear();
+    const currentEpoch = await trustBonding.read.currentEpoch();
+    const previousEpoch = await trustBonding.read.previousEpoch();
+    const epochLength = await trustBonding.read.epochLength();
+    const epochsPerYear = await trustBonding.read.epochsPerYear();
 
     console.log(`Current Epoch: ${currentEpoch}`);
     console.log(`Previous Epoch: ${previousEpoch} (claimable)`);
@@ -148,11 +267,11 @@ async function main() {
     console.log(`Epochs Per Year: ${epochsPerYear}`);
 
     // Get previous epoch end time
-    const prevEpochEnd = await trustBonding.epochTimestampEnd(previousEpoch);
+    const prevEpochEnd = await trustBonding.read.epochTimestampEnd([previousEpoch]);
     console.log(`Previous Epoch Ended: ${formatTimestamp(prevEpochEnd)}`);
 
     // Get current epoch end time
-    const currEpochEnd = await trustBonding.epochTimestampEnd(currentEpoch);
+    const currEpochEnd = await trustBonding.read.epochTimestampEnd([currentEpoch]);
     console.log(`Current Epoch Ends: ${formatTimestamp(currEpochEnd)}`);
     console.log();
 
@@ -166,21 +285,21 @@ async function main() {
     // ------------------------------------------------------------------------
     console.log('Step 4: Fetching your user information...');
 
-    const userInfo = await trustBonding.getUserInfo(signer.address);
+    const userInfo = await trustBonding.read.getUserInfo([account.address]);
 
     console.log('Your User Info:');
-    console.log(`  Bonded Balance: ${ethers.formatEther(userInfo.bondedBalance)} veWTRUST`);
-    console.log(`  Locked Amount: ${ethers.formatEther(userInfo.lockedAmount)} WTRUST`);
+    console.log(`  Bonded Balance: ${formatEther(userInfo.bondedBalance)} veWTRUST`);
+    console.log(`  Locked Amount: ${formatEther(userInfo.lockedAmount)} TRUST`);
 
-    if (userInfo.lockEnd &gt; 0n) {
+    if (userInfo.lockEnd > 0n) {
       console.log(`  Lock Ends: ${formatTimestamp(userInfo.lockEnd)}`);
     } else {
       console.log(`  Lock Ends: Not locked`);
     }
 
     console.log(`  Personal Utilization: ${userInfo.personalUtilization}`);
-    console.log(`  Eligible Rewards: ${ethers.formatEther(userInfo.eligibleRewards)} WTRUST`);
-    console.log(`  Max Rewards: ${ethers.formatEther(userInfo.maxRewards)} WTRUST`);
+    console.log(`  Eligible Rewards: ${formatEther(userInfo.eligibleRewards)} TRUST`);
+    console.log(`  Max Rewards: ${formatEther(userInfo.maxRewards)} TRUST`);
     console.log();
 
     if (userInfo.bondedBalance === 0n) {
@@ -194,18 +313,18 @@ async function main() {
     // ------------------------------------------------------------------------
     console.log('Step 5: Checking claimable rewards...');
 
-    const claimableRewards = await trustBonding.getUserCurrentClaimableRewards(signer.address);
-    console.log(`Current Claimable Rewards: ${ethers.formatEther(claimableRewards)} WTRUST`);
+    const claimableRewards = await trustBonding.read.getUserCurrentClaimableRewards([account.address]);
+    console.log(`Current Claimable Rewards: ${formatEther(claimableRewards)} TRUST`);
 
     if (claimableRewards === 0n) {
       console.log();
       console.log('⚠ No rewards to claim at this time');
 
       // Check if already claimed for previous epoch
-      const alreadyClaimed = await trustBonding.hasClaimedRewardsForEpoch(
-        signer.address,
+      const alreadyClaimed = await trustBonding.read.hasClaimedRewardsForEpoch([
+        account.address,
         previousEpoch
-      );
+      ]);
 
       if (alreadyClaimed) {
         console.log(`You already claimed rewards for epoch ${previousEpoch}`);
@@ -222,16 +341,16 @@ async function main() {
     // ------------------------------------------------------------------------
     console.log('Step 6: Getting detailed reward info for previous epoch...');
 
-    const [eligibleRewards, maxRewards] = await trustBonding.getUserRewardsForEpoch(
-      signer.address,
+    const [eligibleRewards, maxRewards] = await trustBonding.read.getUserRewardsForEpoch([
+      account.address,
       previousEpoch
-    );
+    ]);
 
     console.log(`Epoch ${previousEpoch} Rewards:`);
-    console.log(`  Eligible Rewards: ${ethers.formatEther(eligibleRewards)} WTRUST`);
-    console.log(`  Max Possible Rewards: ${ethers.formatEther(maxRewards)} WTRUST`);
+    console.log(`  Eligible Rewards: ${formatEther(eligibleRewards)} TRUST`);
+    console.log(`  Max Possible Rewards: ${formatEther(maxRewards)} TRUST`);
 
-    const utilizationEfficiency = maxRewards &gt; 0n
+    const utilizationEfficiency = maxRewards > 0n
       ? (Number(eligibleRewards) / Number(maxRewards) * 100).toFixed(2)
       : '0.00';
     console.log(`  Utilization Efficiency: ${utilizationEfficiency}%`);
@@ -239,11 +358,11 @@ async function main() {
 
     // Get utilization ratios for context
     try {
-      const personalRatio = await trustBonding.getPersonalUtilizationRatio(
-        signer.address,
+      const personalRatio = await trustBonding.read.getPersonalUtilizationRatio([
+        account.address,
         previousEpoch
-      );
-      const systemRatio = await trustBonding.getSystemUtilizationRatio(previousEpoch);
+      ]);
+      const systemRatio = await trustBonding.read.getSystemUtilizationRatio([previousEpoch]);
 
       console.log(`Epoch ${previousEpoch} Utilization:`);
       console.log(`  Your Personal Ratio: ${formatUtilization(personalRatio)}`);
@@ -259,8 +378,8 @@ async function main() {
     // ------------------------------------------------------------------------
     console.log('Step 7: Checking current APY...');
 
-    const [userCurrentApy, userMaxApy] = await trustBonding.getUserApy(signer.address);
-    const [systemCurrentApy, systemMaxApy] = await trustBonding.getSystemApy();
+    const [userCurrentApy, userMaxApy] = await trustBonding.read.getUserApy([account.address]);
+    const [systemCurrentApy, systemMaxApy] = await trustBonding.read.getSystemApy();
 
     console.log('Your APY:');
     console.log(`  Current APY: ${formatApy(userCurrentApy)}`);
@@ -273,13 +392,13 @@ async function main() {
     console.log();
 
     // ------------------------------------------------------------------------
-    // Step 8: Check Current WTRUST Balance
+    // Step 8: Check Current Native Balance
     // ------------------------------------------------------------------------
-    console.log('Step 8: Checking current WTRUST balance...');
+    console.log('Step 8: Checking current native TRUST balance...');
 
-    const currentBalance = await wTrust.balanceOf(signer.address);
-    console.log(`Current WTRUST Balance: ${ethers.formatEther(currentBalance)} WTRUST`);
-    console.log(`Expected After Claim: ${ethers.formatEther(currentBalance + claimableRewards)} WTRUST`);
+    const currentBalance = await publicClient.getBalance({ address: account.address });
+    console.log(`Current TRUST Balance: ${formatEther(currentBalance)} TRUST`);
+    console.log(`Expected After Claim: ${formatEther(currentBalance + claimableRewards)} TRUST`);
     console.log();
 
     // ------------------------------------------------------------------------
@@ -288,26 +407,26 @@ async function main() {
     console.log('Step 9: Claiming rewards...');
 
     // Determine recipient
-    const recipient = REWARD_RECIPIENT || signer.address;
-    console.log(`Claiming ${ethers.formatEther(claimableRewards)} WTRUST`);
+    const recipient = (REWARD_RECIPIENT || account.address) as `0x${string}`;
+    console.log(`Claiming ${formatEther(claimableRewards)} TRUST`);
     console.log(`Recipient: ${recipient}`);
     console.log();
 
     // Estimate gas
-    const gasEstimate = await trustBonding.claimRewards.estimateGas(recipient);
+    const gasEstimate = await trustBonding.estimateGas.claimRewards([recipient]);
     console.log(`Estimated gas: ${gasEstimate.toString()}`);
 
     // Execute claim
-    const claimTx = await trustBonding.claimRewards(recipient, {
-      gasLimit: gasEstimate * 120n / 100n, // Add 20% buffer
+    const claimTx = await trustBonding.write.claimRewards([recipient], {
+      gas: gasEstimate * 120n / 100n, // Add 20% buffer
     });
 
-    console.log(`Transaction submitted: ${claimTx.hash}`);
+    console.log(`Transaction submitted: ${claimTx}`);
     console.log('Waiting for confirmation...');
 
-    const receipt = await claimTx.wait();
-    console.log(`✓ Transaction confirmed in block ${receipt?.blockNumber}`);
-    console.log(`Gas used: ${receipt?.gasUsed.toString()}`);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: claimTx });
+    console.log(`✓ Transaction confirmed in block ${receipt.blockNumber}`);
+    console.log(`Gas used: ${receipt.gasUsed.toString()}`);
     console.log();
 
     // ------------------------------------------------------------------------
@@ -315,25 +434,31 @@ async function main() {
     // ------------------------------------------------------------------------
     console.log('Step 10: Parsing transaction events...');
 
-    if (receipt) {
-      const rewardsClaimedEvent = receipt.logs
-        .map(log =&gt; {
-          try {
-            return trustBonding.interface.parseLog({
-              topics: log.topics as string[],
-              data: log.data,
-            });
-          } catch {
-            return null;
-          }
-        })
-        .find(event =&gt; event?.name === 'RewardsClaimed');
+    const rewardsClaimedLog = receipt.logs.find(log => {
+      try {
+        const event = publicClient.parseEventLogs({
+          abi: TRUST_BONDING_ABI,
+          logs: [log],
+          eventName: 'RewardsClaimed'
+        });
+        return event.length > 0;
+      } catch {
+        return false;
+      }
+    });
 
-      if (rewardsClaimedEvent) {
+    if (rewardsClaimedLog) {
+      const rewardsClaimedEvent = publicClient.parseEventLogs({
+        abi: TRUST_BONDING_ABI,
+        logs: [rewardsClaimedLog],
+        eventName: 'RewardsClaimed'
+      })[0];
+
+      if (rewardsClaimedEvent && rewardsClaimedEvent.args) {
         console.log('RewardsClaimed Event:');
-        console.log(`  User: ${rewardsClaimedEvent.args[0]}`);
-        console.log(`  Recipient: ${rewardsClaimedEvent.args[1]}`);
-        console.log(`  Amount: ${ethers.formatEther(rewardsClaimedEvent.args[2])} WTRUST`);
+        console.log(`  User: ${rewardsClaimedEvent.args.user}`);
+        console.log(`  Recipient: ${rewardsClaimedEvent.args.recipient}`);
+        console.log(`  Amount: ${formatEther(rewardsClaimedEvent.args.amount)} TRUST`);
         console.log();
       }
     }
@@ -341,18 +466,18 @@ async function main() {
     // ------------------------------------------------------------------------
     // Step 11: Verify Updated Balance
     // ------------------------------------------------------------------------
-    console.log('Step 11: Verifying updated WTRUST balance...');
+    console.log('Step 11: Verifying updated native TRUST balance...');
 
-    const recipientBalance = await wTrust.balanceOf(recipient);
-    console.log(`Recipient WTRUST Balance: ${ethers.formatEther(recipientBalance)} WTRUST`);
+    const recipientBalance = await publicClient.getBalance({ address: recipient });
+    console.log(`Recipient TRUST Balance: ${formatEther(recipientBalance)} TRUST`);
     console.log();
 
     // Verify claim worked
-    const newClaimable = await trustBonding.getUserCurrentClaimableRewards(signer.address);
+    const newClaimable = await trustBonding.read.getUserCurrentClaimableRewards([account.address]);
     if (newClaimable === 0n) {
       console.log('✓ All available rewards have been claimed');
     } else {
-      console.log(`Remaining Claimable: ${ethers.formatEther(newClaimable)} WTRUST`);
+      console.log(`Remaining Claimable: ${formatEther(newClaimable)} TRUST`);
     }
     console.log();
 
@@ -361,8 +486,8 @@ async function main() {
     // ------------------------------------------------------------------------
     console.log('='.repeat(80));
     console.log('✓ Rewards claimed successfully!');
-    console.log(`Claimed: ${ethers.formatEther(claimableRewards)} WTRUST`);
-    console.log(`View on explorer: https://explorer.intuit.network/tx/${receipt?.hash}`);
+    console.log(`Claimed: ${formatEther(claimableRewards)} TRUST`);
+    console.log(`View on explorer: https://explorer.intuit.network/tx/${receipt.transactionHash}`);
     console.log('='.repeat(80));
 
   } catch (error) {
@@ -396,8 +521,8 @@ async function main() {
 // ============================================================================
 
 main()
-  .then(() =&gt; process.exit(0))
-  .catch((error) =&gt; {
+  .then(() => process.exit(0))
+  .catch((error) => {
     console.error(error);
     process.exit(1);
   });
@@ -416,7 +541,6 @@ Step 1: Connecting to Intuition network...
 
 Step 2: Initializing contract instances...
 ✓ TrustBonding: 0x635bBD1367B66E7B16a21D6E5A63C812fFC00617
-✓ WTRUST: 0x81cFb09cb44f7184Ad934C09F82000701A4bF672
 
 Step 3: Checking epoch information...
 Current Epoch: 42
@@ -432,19 +556,19 @@ Current Epoch Ends: 12/11/2025, 12:00:00 PM
 Step 4: Fetching your user information...
 Your User Info:
   Bonded Balance: 1000.0 veWTRUST
-  Locked Amount: 1000.0 WTRUST
+  Locked Amount: 1000.0 TRUST
   Lock Ends: 6/10/2026, 12:00:00 PM
   Personal Utilization: 500000000000000000000
-  Eligible Rewards: 5.5 WTRUST
-  Max Rewards: 10.0 WTRUST
+  Eligible Rewards: 5.5 TRUST
+  Max Rewards: 10.0 TRUST
 
 Step 5: Checking claimable rewards...
-Current Claimable Rewards: 5.5 WTRUST
+Current Claimable Rewards: 5.5 TRUST
 
 Step 6: Getting detailed reward info for previous epoch...
 Epoch 41 Rewards:
-  Eligible Rewards: 5.5 WTRUST
-  Max Possible Rewards: 10.0 WTRUST
+  Eligible Rewards: 5.5 TRUST
+  Max Possible Rewards: 10.0 TRUST
   Utilization Efficiency: 55.00%
 
 Epoch 41 Utilization:
@@ -460,12 +584,12 @@ System APY:
   Current APY: 15.20%
   Max Possible APY: 25.00%
 
-Step 8: Checking current WTRUST balance...
-Current WTRUST Balance: 50.0 WTRUST
-Expected After Claim: 55.5 WTRUST
+Step 8: Checking current native TRUST balance...
+Current TRUST Balance: 50.0 TRUST
+Expected After Claim: 55.5 TRUST
 
 Step 9: Claiming rewards...
-Claiming 5.5 WTRUST
+Claiming 5.5 TRUST
 Recipient: 0x1234567890123456789012345678901234567890
 
 Estimated gas: 120000
@@ -478,16 +602,16 @@ Step 10: Parsing transaction events...
 RewardsClaimed Event:
   User: 0x1234567890123456789012345678901234567890
   Recipient: 0x1234567890123456789012345678901234567890
-  Amount: 5.5 WTRUST
+  Amount: 5.5 TRUST
 
-Step 11: Verifying updated WTRUST balance...
-Recipient WTRUST Balance: 55.5 WTRUST
+Step 11: Verifying updated native TRUST balance...
+Recipient TRUST Balance: 55.5 TRUST
 
 ✓ All available rewards have been claimed
 
 ================================================================================
 ✓ Rewards claimed successfully!
-Claimed: 5.5 WTRUST
+Claimed: 5.5 TRUST
 View on explorer: https://explorer.intuit.network/tx/0xabc123...
 ================================================================================
 */

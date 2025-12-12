@@ -1,7 +1,7 @@
 /**
  * @title Event Listener Example
  * @notice Demonstrates how to listen for and parse MultiVault events in real-time
- * @dev Uses ethers.js v6 event listeners and WebSocket connection
+ * @dev Uses viem event listeners and WebSocket connection
  *
  * Events monitored:
  * - AtomCreated: New atom vaults created
@@ -11,20 +11,87 @@
  * - SharePriceChanged: Share price updates
  */
 
-import { ethers } from 'ethers';
+import { createPublicClient, http, webSocket, formatEther, hexToString, parseAbiItem } from 'viem';
+import { base } from 'viem/chains';
 
 const WS_RPC_URL = 'YOUR_INTUITION_WS_RPC_URL'; // WebSocket endpoint
-const MULTIVAULT_ADDRESS = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e';
+const MULTIVAULT_ADDRESS = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e' as `0x${string}`;
 
 // Full event ABI
 const MULTIVAULT_ABI = [
-  'event AtomCreated(address indexed creator, bytes32 indexed termId, bytes atomData, address atomWallet)',
-  'event TripleCreated(address indexed creator, bytes32 indexed termId, bytes32 subjectId, bytes32 predicateId, bytes32 objectId)',
-  'event Deposited(address indexed sender, address indexed receiver, bytes32 indexed termId, uint256 curveId, uint256 assets, uint256 assetsAfterFees, uint256 shares, uint256 totalShares, uint8 vaultType)',
-  'event Redeemed(address indexed sender, address indexed receiver, bytes32 indexed termId, uint256 curveId, uint256 shares, uint256 totalShares, uint256 assets, uint256 fees, uint8 vaultType)',
-  'event SharePriceChanged(bytes32 indexed termId, uint256 indexed curveId, uint256 sharePrice, uint256 totalAssets, uint256 totalShares, uint8 vaultType)',
-  'event ProtocolFeeAccrued(uint256 indexed epoch, address indexed sender, uint256 amount)',
-];
+  {
+    name: 'AtomCreated',
+    type: 'event',
+    inputs: [
+      { name: 'creator', type: 'address', indexed: true },
+      { name: 'termId', type: 'bytes32', indexed: true },
+      { name: 'atomData', type: 'bytes', indexed: false },
+      { name: 'atomWallet', type: 'address', indexed: false }
+    ]
+  },
+  {
+    name: 'TripleCreated',
+    type: 'event',
+    inputs: [
+      { name: 'creator', type: 'address', indexed: true },
+      { name: 'termId', type: 'bytes32', indexed: true },
+      { name: 'subjectId', type: 'bytes32', indexed: false },
+      { name: 'predicateId', type: 'bytes32', indexed: false },
+      { name: 'objectId', type: 'bytes32', indexed: false }
+    ]
+  },
+  {
+    name: 'Deposited',
+    type: 'event',
+    inputs: [
+      { name: 'sender', type: 'address', indexed: true },
+      { name: 'receiver', type: 'address', indexed: true },
+      { name: 'termId', type: 'bytes32', indexed: true },
+      { name: 'curveId', type: 'uint256', indexed: false },
+      { name: 'assets', type: 'uint256', indexed: false },
+      { name: 'assetsAfterFees', type: 'uint256', indexed: false },
+      { name: 'shares', type: 'uint256', indexed: false },
+      { name: 'totalShares', type: 'uint256', indexed: false },
+      { name: 'vaultType', type: 'uint8', indexed: false }
+    ]
+  },
+  {
+    name: 'Redeemed',
+    type: 'event',
+    inputs: [
+      { name: 'sender', type: 'address', indexed: true },
+      { name: 'receiver', type: 'address', indexed: true },
+      { name: 'termId', type: 'bytes32', indexed: true },
+      { name: 'curveId', type: 'uint256', indexed: false },
+      { name: 'shares', type: 'uint256', indexed: false },
+      { name: 'totalShares', type: 'uint256', indexed: false },
+      { name: 'assets', type: 'uint256', indexed: false },
+      { name: 'fees', type: 'uint256', indexed: false },
+      { name: 'vaultType', type: 'uint8', indexed: false }
+    ]
+  },
+  {
+    name: 'SharePriceChanged',
+    type: 'event',
+    inputs: [
+      { name: 'termId', type: 'bytes32', indexed: true },
+      { name: 'curveId', type: 'uint256', indexed: true },
+      { name: 'sharePrice', type: 'uint256', indexed: false },
+      { name: 'totalAssets', type: 'uint256', indexed: false },
+      { name: 'totalShares', type: 'uint256', indexed: false },
+      { name: 'vaultType', type: 'uint8', indexed: false }
+    ]
+  },
+  {
+    name: 'ProtocolFeeAccrued',
+    type: 'event',
+    inputs: [
+      { name: 'epoch', type: 'uint256', indexed: true },
+      { name: 'sender', type: 'address', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false }
+    ]
+  }
+] as const;
 
 // Helper to format vault type
 function formatVaultType(vaultType: number): string {
@@ -38,15 +105,11 @@ async function main() {
   console.log('='.repeat(80));
   console.log();
 
-  // Create WebSocket provider for real-time events
-  const provider = new ethers.WebSocketProvider(WS_RPC_URL);
-
-  // Create contract instance
-  const multiVault = new ethers.Contract(
-    MULTIVAULT_ADDRESS,
-    MULTIVAULT_ABI,
-    provider
-  );
+  // Create WebSocket public client for real-time events
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: webSocket(WS_RPC_URL)
+  });
 
   console.log('✓ Connected to Intuition network via WebSocket');
   console.log(`Monitoring contract: ${MULTIVAULT_ADDRESS}`);
@@ -59,161 +122,172 @@ async function main() {
   // AtomCreated Event
   // ============================================================================
 
-  multiVault.on('AtomCreated', (creator, termId, atomData, atomWallet, event) =&gt; {
-    console.log('🔵 AtomCreated');
-    console.log(`  Block: ${event.log.blockNumber}`);
-    console.log(`  Tx: ${event.log.transactionHash}`);
-    console.log(`  Creator: ${creator}`);
-    console.log(`  Atom ID: ${termId}`);
+  const unsubscribeAtomCreated = publicClient.watchEvent({
+    address: MULTIVAULT_ADDRESS,
+    event: parseAbiItem('event AtomCreated(address indexed creator, bytes32 indexed termId, bytes atomData, address atomWallet)'),
+    onLogs: logs => {
+      logs.forEach(log => {
+        const { creator, termId, atomData, atomWallet } = log.args;
 
-    // Try to decode atom data as UTF-8 string
-    try {
-      const dataStr = ethers.toUtf8String(atomData);
-      console.log(`  Atom Data: "${dataStr}"`);
-    } catch {
-      console.log(`  Atom Data: ${atomData} (binary)`);
+        console.log('🔵 AtomCreated');
+        console.log(`  Block: ${log.blockNumber}`);
+        console.log(`  Tx: ${log.transactionHash}`);
+        console.log(`  Creator: ${creator}`);
+        console.log(`  Atom ID: ${termId}`);
+
+        // Try to decode atom data as UTF-8 string
+        try {
+          const dataStr = hexToString(atomData as `0x${string}`);
+          console.log(`  Atom Data: "${dataStr}"`);
+        } catch {
+          console.log(`  Atom Data: ${atomData} (binary)`);
+        }
+
+        console.log(`  Atom Wallet: ${atomWallet}`);
+        console.log();
+      });
     }
-
-    console.log(`  Atom Wallet: ${atomWallet}`);
-    console.log();
   });
 
   // ============================================================================
   // TripleCreated Event
   // ============================================================================
 
-  multiVault.on('TripleCreated', (creator, termId, subjectId, predicateId, objectId, event) =&gt; {
-    console.log('🟢 TripleCreated');
-    console.log(`  Block: ${event.log.blockNumber}`);
-    console.log(`  Tx: ${event.log.transactionHash}`);
-    console.log(`  Creator: ${creator}`);
-    console.log(`  Triple ID: ${termId}`);
-    console.log(`  Subject: ${subjectId}`);
-    console.log(`  Predicate: ${predicateId}`);
-    console.log(`  Object: ${objectId}`);
-    console.log();
+  const unsubscribeTripleCreated = publicClient.watchEvent({
+    address: MULTIVAULT_ADDRESS,
+    event: parseAbiItem('event TripleCreated(address indexed creator, bytes32 indexed termId, bytes32 subjectId, bytes32 predicateId, bytes32 objectId)'),
+    onLogs: logs => {
+      logs.forEach(log => {
+        const { creator, termId, subjectId, predicateId, objectId } = log.args;
+
+        console.log('🟢 TripleCreated');
+        console.log(`  Block: ${log.blockNumber}`);
+        console.log(`  Tx: ${log.transactionHash}`);
+        console.log(`  Creator: ${creator}`);
+        console.log(`  Triple ID: ${termId}`);
+        console.log(`  Subject: ${subjectId}`);
+        console.log(`  Predicate: ${predicateId}`);
+        console.log(`  Object: ${objectId}`);
+        console.log();
+      });
+    }
   });
 
   // ============================================================================
   // Deposited Event
   // ============================================================================
 
-  multiVault.on('Deposited', (
-    sender,
-    receiver,
-    termId,
-    curveId,
-    assets,
-    assetsAfterFees,
-    shares,
-    totalShares,
-    vaultType,
-    event
-  ) =&gt; {
-    const vaultTypeName = formatVaultType(vaultType);
+  const unsubscribeDeposited = publicClient.watchEvent({
+    address: MULTIVAULT_ADDRESS,
+    event: parseAbiItem('event Deposited(address indexed sender, address indexed receiver, bytes32 indexed termId, uint256 curveId, uint256 assets, uint256 assetsAfterFees, uint256 shares, uint256 totalShares, uint8 vaultType)'),
+    onLogs: logs => {
+      logs.forEach(log => {
+        const { sender, receiver, termId, curveId, assets, assetsAfterFees, shares, totalShares, vaultType } = log.args;
+        const vaultTypeName = formatVaultType(vaultType);
 
-    console.log(`🟡 Deposited (${vaultTypeName})`);
-    console.log(`  Block: ${event.log.blockNumber}`);
-    console.log(`  Tx: ${event.log.transactionHash}`);
-    console.log(`  Sender: ${sender}`);
-    console.log(`  Receiver: ${receiver}`);
-    console.log(`  Term ID: ${termId.slice(0, 10)}...${termId.slice(-8)}`);
-    console.log(`  Curve ID: ${curveId}`);
-    console.log(`  Assets: ${ethers.formatEther(assets)} WTRUST`);
-    console.log(`  Assets After Fees: ${ethers.formatEther(assetsAfterFees)} WTRUST`);
-    console.log(`  Shares Minted: ${ethers.formatEther(shares)}`);
-    console.log(`  User Total Shares: ${ethers.formatEther(totalShares)}`);
+        console.log(`🟡 Deposited (${vaultTypeName})`);
+        console.log(`  Block: ${log.blockNumber}`);
+        console.log(`  Tx: ${log.transactionHash}`);
+        console.log(`  Sender: ${sender}`);
+        console.log(`  Receiver: ${receiver}`);
+        console.log(`  Term ID: ${termId.slice(0, 10)}...${termId.slice(-8)}`);
+        console.log(`  Curve ID: ${curveId}`);
+        console.log(`  Assets: ${formatEther(assets)} WTRUST`);
+        console.log(`  Assets After Fees: ${formatEther(assetsAfterFees)} WTRUST`);
+        console.log(`  Shares Minted: ${formatEther(shares)}`);
+        console.log(`  User Total Shares: ${formatEther(totalShares)}`);
 
-    const feePercentage = assets &gt; 0n
-      ? ((Number(assets - assetsAfterFees) / Number(assets)) * 100).toFixed(2)
-      : '0.00';
-    console.log(`  Fees: ${feePercentage}%`);
-    console.log();
+        const feePercentage = assets > 0n
+          ? ((Number(assets - assetsAfterFees) / Number(assets)) * 100).toFixed(2)
+          : '0.00';
+        console.log(`  Fees: ${feePercentage}%`);
+        console.log();
+      });
+    }
   });
 
   // ============================================================================
   // Redeemed Event
   // ============================================================================
 
-  multiVault.on('Redeemed', (
-    sender,
-    receiver,
-    termId,
-    curveId,
-    shares,
-    totalShares,
-    assets,
-    fees,
-    vaultType,
-    event
-  ) =&gt; {
-    const vaultTypeName = formatVaultType(vaultType);
+  const unsubscribeRedeemed = publicClient.watchEvent({
+    address: MULTIVAULT_ADDRESS,
+    event: parseAbiItem('event Redeemed(address indexed sender, address indexed receiver, bytes32 indexed termId, uint256 curveId, uint256 shares, uint256 totalShares, uint256 assets, uint256 fees, uint8 vaultType)'),
+    onLogs: logs => {
+      logs.forEach(log => {
+        const { sender, receiver, termId, curveId, shares, totalShares, assets, fees, vaultType } = log.args;
+        const vaultTypeName = formatVaultType(vaultType);
 
-    console.log(`🔴 Redeemed (${vaultTypeName})`);
-    console.log(`  Block: ${event.log.blockNumber}`);
-    console.log(`  Tx: ${event.log.transactionHash}`);
-    console.log(`  Sender: ${sender}`);
-    console.log(`  Receiver: ${receiver}`);
-    console.log(`  Term ID: ${termId.slice(0, 10)}...${termId.slice(-8)}`);
-    console.log(`  Curve ID: ${curveId}`);
-    console.log(`  Shares Burned: ${ethers.formatEther(shares)}`);
-    console.log(`  User Remaining Shares: ${ethers.formatEther(totalShares)}`);
-    console.log(`  Assets Received: ${ethers.formatEther(assets)} WTRUST`);
-    console.log(`  Fees Paid: ${ethers.formatEther(fees)} WTRUST`);
-    console.log();
+        console.log(`🔴 Redeemed (${vaultTypeName})`);
+        console.log(`  Block: ${log.blockNumber}`);
+        console.log(`  Tx: ${log.transactionHash}`);
+        console.log(`  Sender: ${sender}`);
+        console.log(`  Receiver: ${receiver}`);
+        console.log(`  Term ID: ${termId.slice(0, 10)}...${termId.slice(-8)}`);
+        console.log(`  Curve ID: ${curveId}`);
+        console.log(`  Shares Burned: ${formatEther(shares)}`);
+        console.log(`  User Remaining Shares: ${formatEther(totalShares)}`);
+        console.log(`  Assets Received: ${formatEther(assets)} WTRUST`);
+        console.log(`  Fees Paid: ${formatEther(fees)} WTRUST`);
+        console.log();
+      });
+    }
   });
 
   // ============================================================================
   // SharePriceChanged Event
   // ============================================================================
 
-  multiVault.on('SharePriceChanged', (
-    termId,
-    curveId,
-    sharePrice,
-    totalAssets,
-    totalShares,
-    vaultType,
-    event
-  ) =&gt; {
-    const vaultTypeName = formatVaultType(vaultType);
+  const unsubscribeSharePriceChanged = publicClient.watchEvent({
+    address: MULTIVAULT_ADDRESS,
+    event: parseAbiItem('event SharePriceChanged(bytes32 indexed termId, uint256 indexed curveId, uint256 sharePrice, uint256 totalAssets, uint256 totalShares, uint8 vaultType)'),
+    onLogs: logs => {
+      logs.forEach(log => {
+        const { termId, curveId, sharePrice, totalAssets, totalShares, vaultType } = log.args;
+        const vaultTypeName = formatVaultType(vaultType);
 
-    console.log(`📊 SharePriceChanged (${vaultTypeName})`);
-    console.log(`  Block: ${event.log.blockNumber}`);
-    console.log(`  Term ID: ${termId.slice(0, 10)}...${termId.slice(-8)}`);
-    console.log(`  Curve ID: ${curveId}`);
-    console.log(`  Share Price: ${ethers.formatEther(sharePrice)} WTRUST`);
-    console.log(`  Total Assets: ${ethers.formatEther(totalAssets)} WTRUST`);
-    console.log(`  Total Shares: ${ethers.formatEther(totalShares)}`);
-    console.log();
+        console.log(`📊 SharePriceChanged (${vaultTypeName})`);
+        console.log(`  Block: ${log.blockNumber}`);
+        console.log(`  Term ID: ${termId.slice(0, 10)}...${termId.slice(-8)}`);
+        console.log(`  Curve ID: ${curveId}`);
+        console.log(`  Share Price: ${formatEther(sharePrice)} WTRUST`);
+        console.log(`  Total Assets: ${formatEther(totalAssets)} WTRUST`);
+        console.log(`  Total Shares: ${formatEther(totalShares)}`);
+        console.log();
+      });
+    }
   });
 
   // ============================================================================
   // ProtocolFeeAccrued Event
   // ============================================================================
 
-  multiVault.on('ProtocolFeeAccrued', (epoch, sender, amount, event) =&gt; {
-    console.log('💰 ProtocolFeeAccrued');
-    console.log(`  Block: ${event.log.blockNumber}`);
-    console.log(`  Epoch: ${epoch}`);
-    console.log(`  Sender: ${sender}`);
-    console.log(`  Amount: ${ethers.formatEther(amount)} WTRUST`);
-    console.log();
-  });
+  const unsubscribeProtocolFeeAccrued = publicClient.watchEvent({
+    address: MULTIVAULT_ADDRESS,
+    event: parseAbiItem('event ProtocolFeeAccrued(uint256 indexed epoch, address indexed sender, uint256 amount)'),
+    onLogs: logs => {
+      logs.forEach(log => {
+        const { epoch, sender, amount } = log.args;
 
-  // ============================================================================
-  // Error Handling
-  // ============================================================================
-
-  provider.on('error', (error) =&gt; {
-    console.error('❌ WebSocket Error:', error);
-    console.log('Attempting to reconnect...');
+        console.log('💰 ProtocolFeeAccrued');
+        console.log(`  Block: ${log.blockNumber}`);
+        console.log(`  Epoch: ${epoch}`);
+        console.log(`  Sender: ${sender}`);
+        console.log(`  Amount: ${formatEther(amount)} WTRUST`);
+        console.log();
+      });
+    }
   });
 
   // Keep the process running
-  process.on('SIGINT', () =&gt; {
+  process.on('SIGINT', () => {
     console.log('\n\nStopping event listener...');
-    provider.destroy();
+    unsubscribeAtomCreated();
+    unsubscribeTripleCreated();
+    unsubscribeDeposited();
+    unsubscribeRedeemed();
+    unsubscribeSharePriceChanged();
+    unsubscribeProtocolFeeAccrued();
     process.exit(0);
   });
 }
@@ -225,44 +299,57 @@ async function main() {
 async function queryHistoricalEvents() {
   console.log('Querying Historical Events\n');
 
-  const provider = new ethers.JsonRpcProvider('YOUR_INTUITION_RPC_URL');
-  const multiVault = new ethers.Contract(
-    MULTIVAULT_ADDRESS,
-    MULTIVAULT_ABI,
-    provider
-  );
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http('YOUR_INTUITION_RPC_URL')
+  });
 
   // Get current block
-  const currentBlock = await provider.getBlockNumber();
+  const currentBlock = await publicClient.getBlockNumber();
   console.log(`Current block: ${currentBlock}`);
 
   // Query last 1000 blocks
-  const fromBlock = currentBlock - 1000;
+  const fromBlock = currentBlock - 1000n;
   console.log(`Querying blocks ${fromBlock} to ${currentBlock}\n`);
 
   // Query AtomCreated events
-  const atomFilter = multiVault.filters.AtomCreated();
-  const atomEvents = await multiVault.queryFilter(atomFilter, fromBlock, currentBlock);
-  console.log(`Found ${atomEvents.length} AtomCreated events`);
+  const atomLogs = await publicClient.getLogs({
+    address: MULTIVAULT_ADDRESS,
+    event: parseAbiItem('event AtomCreated(address indexed creator, bytes32 indexed termId, bytes atomData, address atomWallet)'),
+    fromBlock,
+    toBlock: currentBlock
+  });
+  console.log(`Found ${atomLogs.length} AtomCreated events`);
 
   // Query TripleCreated events
-  const tripleFilter = multiVault.filters.TripleCreated();
-  const tripleEvents = await multiVault.queryFilter(tripleFilter, fromBlock, currentBlock);
-  console.log(`Found ${tripleEvents.length} TripleCreated events`);
+  const tripleLogs = await publicClient.getLogs({
+    address: MULTIVAULT_ADDRESS,
+    event: parseAbiItem('event TripleCreated(address indexed creator, bytes32 indexed termId, bytes32 subjectId, bytes32 predicateId, bytes32 objectId)'),
+    fromBlock,
+    toBlock: currentBlock
+  });
+  console.log(`Found ${tripleLogs.length} TripleCreated events`);
 
   // Query Deposited events for a specific user
-  const userAddress = '0x1234567890123456789012345678901234567890';
-  const depositFilter = multiVault.filters.Deposited(userAddress);
-  const depositEvents = await multiVault.queryFilter(depositFilter, fromBlock, currentBlock);
-  console.log(`Found ${depositEvents.length} Deposited events for ${userAddress}`);
+  const userAddress = '0x1234567890123456789012345678901234567890' as `0x${string}`;
+  const depositLogs = await publicClient.getLogs({
+    address: MULTIVAULT_ADDRESS,
+    event: parseAbiItem('event Deposited(address indexed sender, address indexed receiver, bytes32 indexed termId, uint256 curveId, uint256 assets, uint256 assetsAfterFees, uint256 shares, uint256 totalShares, uint8 vaultType)'),
+    args: {
+      sender: userAddress
+    },
+    fromBlock,
+    toBlock: currentBlock
+  });
+  console.log(`Found ${depositLogs.length} Deposited events for ${userAddress}`);
 
   // Display first event if any
-  if (atomEvents.length &gt; 0) {
+  if (atomLogs.length > 0) {
     console.log('\nFirst AtomCreated event:');
-    const event = atomEvents[0];
+    const event = atomLogs[0];
     console.log(`  Block: ${event.blockNumber}`);
-    console.log(`  Creator: ${event.args?.[0]}`);
-    console.log(`  Atom ID: ${event.args?.[1]}`);
+    console.log(`  Creator: ${event.args.creator}`);
+    console.log(`  Atom ID: ${event.args.termId}`);
   }
 }
 
