@@ -1049,71 +1049,138 @@ multiVault.approve(operatorAddress, ApprovalTypes.NONE);
 
 ## Usage Examples
 
-### TypeScript (ethers.js v6)
+### TypeScript (viem)
 
 #### Creating an Atom with Initial Deposit
 
 ```typescript
-import { ethers } from 'ethers';
+import { createPublicClient, createWalletClient, http, parseEther, formatEther, encodeAbiParameters, keccak256, concat } from 'viem';
+import { intuition } from 'viem/chains';
+import { privateKeyToAccount } from 'viem/accounts';
 
 // Setup
-const provider = new ethers.JsonRpcProvider('YOUR_INTUITION_RPC');
-const signer = new ethers.Wallet('YOUR_PRIVATE_KEY', provider);
+const account = privateKeyToAccount('0x...');
+
+const publicClient = createPublicClient({
+  chain: intuition,
+  transport: http()
+});
+
+const walletClient = createWalletClient({
+  account,
+  chain: intuition,
+  transport: http()
+});
 
 // Contract addresses
 const MULTIVAULT_ADDRESS = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e';
 const WTRUST_ADDRESS = '0x81cFb09cb44f7184Ad934C09F82000701A4bF672';
 
 // ABIs (simplified for example)
-const multiVaultABI = [
-  'function createAtoms(bytes[] calldata atomDatas, uint256[] calldata assets) external payable returns (bytes32[])',
-  'function getAtomCost() external view returns (uint256)',
-  'function previewAtomCreate(bytes32 termId, uint256 assets) external view returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees)'
-];
+const multiVaultAbi = [
+  {
+    name: 'createAtoms',
+    type: 'function',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'atomDatas', type: 'bytes[]' },
+      { name: 'assets', type: 'uint256[]' }
+    ],
+    outputs: [{ name: '', type: 'bytes32[]' }]
+  },
+  {
+    name: 'getAtomCost',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    name: 'previewAtomCreate',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'termId', type: 'bytes32' },
+      { name: 'assets', type: 'uint256' }
+    ],
+    outputs: [
+      { name: 'shares', type: 'uint256' },
+      { name: 'assetsAfterFixedFees', type: 'uint256' },
+      { name: 'assetsAfterFees', type: 'uint256' }
+    ]
+  }
+] as const;
 
-const wrappedTrustABI = [
-  'function approve(address spender, uint256 amount) external returns (bool)',
-  'function balanceOf(address account) external view returns (uint256)'
-];
-
-const multiVault = new ethers.Contract(MULTIVAULT_ADDRESS, multiVaultABI, signer);
-const wTrust = new ethers.Contract(WTRUST_ADDRESS, wrappedTrustABI, signer);
+const wrappedTrustAbi = [
+  {
+    name: 'approve',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint256' }
+    ],
+    outputs: [{ name: '', type: 'bool' }]
+  },
+  {
+    name: 'balanceOf',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }]
+  }
+] as const;
 
 async function createAtom() {
   try {
     // Prepare atom data (example: storing an address)
-    const atomData = ethers.AbiCoder.defaultAbiCoder().encode(
-      ['address'],
-      [signer.address]
+    const atomData = encodeAbiParameters(
+      [{ name: 'address', type: 'address' }],
+      [account.address]
     );
 
     // Calculate atom ID
-    const ATOM_SALT = ethers.keccak256(ethers.toUtf8Bytes('ATOM_SALT'));
-    const atomId = ethers.keccak256(
-      ethers.concat([ATOM_SALT, ethers.keccak256(atomData)])
+    const ATOM_SALT = keccak256(toBytes('ATOM_SALT'));
+    const atomId = keccak256(
+      concat([ATOM_SALT, keccak256(atomData)])
     );
 
     console.log('Atom ID:', atomId);
 
     // Get atom creation cost
-    const atomCost = await multiVault.getAtomCost();
-    const depositAmount = ethers.parseEther('10'); // 10 TRUST tokens
+    const atomCost = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultAbi,
+      functionName: 'getAtomCost'
+    });
+
+    const depositAmount = parseEther('10'); // 10 TRUST tokens
     const totalAmount = atomCost + depositAmount;
 
-    console.log('Atom cost:', ethers.formatEther(atomCost), 'TRUST');
-    console.log('Deposit amount:', ethers.formatEther(depositAmount), 'TRUST');
-    console.log('Total amount:', ethers.formatEther(totalAmount), 'TRUST');
+    console.log('Atom cost:', formatEther(atomCost), 'TRUST');
+    console.log('Deposit amount:', formatEther(depositAmount), 'TRUST');
+    console.log('Total amount:', formatEther(totalAmount), 'TRUST');
 
     // Preview the creation to see expected shares
     const [shares, assetsAfterFixedFees, assetsAfterFees] =
-      await multiVault.previewAtomCreate(atomId, totalAmount);
+      await publicClient.readContract({
+        address: MULTIVAULT_ADDRESS,
+        abi: multiVaultAbi,
+        functionName: 'previewAtomCreate',
+        args: [atomId, totalAmount]
+      });
 
-    console.log('Expected shares:', ethers.formatEther(shares));
-    console.log('Assets after fees:', ethers.formatEther(assetsAfterFees), 'TRUST');
+    console.log('Expected shares:', formatEther(shares));
+    console.log('Assets after fees:', formatEther(assetsAfterFees), 'TRUST');
 
     // Check and approve TRUST tokens
-    const balance = await wTrust.balanceOf(signer.address);
-    console.log('TRUST balance:', ethers.formatEther(balance));
+    const balance = await publicClient.readContract({
+      address: WTRUST_ADDRESS,
+      abi: wrappedTrustAbi,
+      functionName: 'balanceOf',
+      args: [account.address]
+    });
+    console.log('TRUST balance:', formatEther(balance));
 
     if (balance < totalAmount) {
       throw new Error('Insufficient TRUST balance');
@@ -1121,28 +1188,28 @@ async function createAtom() {
 
     // Approve MultiVault to spend TRUST
     console.log('Approving TRUST...');
-    const approveTx = await wTrust.approve(MULTIVAULT_ADDRESS, totalAmount);
-    await approveTx.wait();
+    const approveHash = await walletClient.writeContract({
+      address: WTRUST_ADDRESS,
+      abi: wrappedTrustAbi,
+      functionName: 'approve',
+      args: [MULTIVAULT_ADDRESS, totalAmount]
+    });
+    await publicClient.waitForTransactionReceipt({ hash: approveHash });
     console.log('Approved');
 
     // Create atom
     console.log('Creating atom...');
-    const tx = await multiVault.createAtoms([atomData], [totalAmount]);
-    console.log('Transaction hash:', tx.hash);
+    const hash = await walletClient.writeContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultAbi,
+      functionName: 'createAtoms',
+      args: [[atomData], [totalAmount]]
+    });
+    console.log('Transaction hash:', hash);
 
-    const receipt = await tx.wait();
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
     console.log('Atom created successfully!');
     console.log('Gas used:', receipt.gasUsed.toString());
-
-    // Parse events
-    const atomCreatedEvent = receipt.logs.find(
-      (log) => log.topics[0] === ethers.id('AtomCreated(address,bytes32,bytes,address)')
-    );
-
-    if (atomCreatedEvent) {
-      console.log('AtomCreated event found');
-      // Decode event data for atomWallet address
-    }
 
     return atomId;
 
@@ -1176,8 +1243,8 @@ async function depositIntoVault(
       depositAmount
     );
 
-    console.log('Expected shares:', ethers.formatEther(shares));
-    console.log('Assets after fees:', ethers.formatEther(assetsAfterFees));
+    console.log('Expected shares:', formatEther(shares));
+    console.log('Assets after fees:', formatEther(assetsAfterFees));
 
     // Set slippage tolerance (e.g., 1%)
     const minShares = shares * 99n / 100n;
@@ -1201,7 +1268,7 @@ async function depositIntoVault(
 
     // Get updated share balance
     const shareBalance = await multiVault.getShares(receiver, termId, curveId);
-    console.log('New share balance:', ethers.formatEther(shareBalance));
+    console.log('New share balance:', formatEther(shareBalance));
 
   } catch (error) {
     console.error('Error depositing:', error);
@@ -1223,7 +1290,7 @@ async function redeemShares(
 
     // Check share balance
     const shareBalance = await multiVault.getShares(signer.address, termId, curveId);
-    console.log('Share balance:', ethers.formatEther(shareBalance));
+    console.log('Share balance:', formatEther(shareBalance));
 
     if (shareBalance < sharesToRedeem) {
       throw new Error('Insufficient shares');
@@ -1236,7 +1303,7 @@ async function redeemShares(
       sharesToRedeem
     );
 
-    console.log('Expected assets:', ethers.formatEther(assetsAfterFees));
+    console.log('Expected assets:', formatEther(assetsAfterFees));
 
     // Set slippage tolerance (e.g., 1%)
     const minAssets = assetsAfterFees * 99n / 100n;
@@ -1259,8 +1326,8 @@ async function redeemShares(
     const newShareBalance = await multiVault.getShares(receiver, termId, curveId);
     const trustBalance = await wTrust.balanceOf(receiver);
 
-    console.log('New share balance:', ethers.formatEther(newShareBalance));
-    console.log('TRUST balance:', ethers.formatEther(trustBalance));
+    console.log('New share balance:', formatEther(newShareBalance));
+    console.log('TRUST balance:', formatEther(trustBalance));
 
   } catch (error) {
     console.error('Error redeeming:', error);

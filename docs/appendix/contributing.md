@@ -392,40 +392,63 @@ git push origin feat/add-new-curve
  * and receive shares in return.
  */
 
-import { ethers } from 'ethers';
+import { createWalletClient, createPublicClient, http, parseEther, formatEther } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { base } from 'viem/chains';
 
-// Setup provider and signer
-const provider = new ethers.JsonRpcProvider('https://rpc.example.com');
-const signer = new ethers.Wallet('PRIVATE_KEY', provider);
+// Setup clients
+const account = privateKeyToAccount('0xPRIVATE_KEY');
 
-// Contract instances
-const trust = new ethers.Contract(TRUST_ADDRESS, TRUST_ABI, signer);
-const multiVault = new ethers.Contract(MULTIVAULT_ADDRESS, MULTIVAULT_ABI, signer);
+const publicClient = createPublicClient({
+  chain: base,
+  transport: http('https://rpc.example.com')
+});
+
+const walletClient = createWalletClient({
+  account,
+  chain: base,
+  transport: http('https://rpc.example.com')
+});
 
 async function depositExample() {
   try {
     // Parameters
     const termId = '0x...';
     const curveId = 1;
-    const assets = ethers.parseEther('10');
-    const receiver = signer.address;
+    const assets = parseEther('10');
+    const receiver = account.address;
 
     // 1. Approve TRUST
     console.log('Approving TRUST...');
-    const approveTx = await trust.approve(MULTIVAULT_ADDRESS, assets);
-    await approveTx.wait();
+    const approveHash = await walletClient.writeContract({
+      address: TRUST_ADDRESS,
+      abi: TRUST_ABI,
+      functionName: 'approve',
+      args: [MULTIVAULT_ADDRESS, assets]
+    });
+    await publicClient.waitForTransactionReceipt({ hash: approveHash });
 
     // 2. Deposit
     console.log('Depositing...');
-    const depositTx = await multiVault.deposit(termId, curveId, assets, receiver);
-    const receipt = await depositTx.wait();
+    const depositHash = await walletClient.writeContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: MULTIVAULT_ABI,
+      functionName: 'deposit',
+      args: [termId, curveId, assets, receiver]
+    });
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: depositHash });
 
     console.log('Deposit successful!');
-    console.log('Transaction hash:', receipt.hash);
+    console.log('Transaction hash:', receipt.transactionHash);
 
     // 3. Check balance
-    const balance = await multiVault.balanceOf(receiver, termId, curveId);
-    console.log('New balance:', ethers.formatEther(balance), 'shares');
+    const balance = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: MULTIVAULT_ABI,
+      functionName: 'balanceOf',
+      args: [receiver, termId, curveId]
+    });
+    console.log('New balance:', formatEther(balance), 'shares');
   } catch (error) {
     console.error('Deposit failed:', error.message);
   }

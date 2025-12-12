@@ -229,15 +229,17 @@ contract LinearCurve is BaseCurve {
 **Example**:
 
 ```javascript
+import { parseEther, formatEther } from 'viem';
+
 // Linear curve is ID 0
 const curveId = 0;
 
 // Deposit 10 ETH
-const assets = ethers.parseEther('10');
+const assets = parseEther('10');
 const [shares] = await multiVault.previewDeposit(termId, curveId, assets);
 
-console.log('Assets:', ethers.formatEther(assets));    // 10.0
-console.log('Shares:', ethers.formatEther(shares));     // 10.0
+console.log('Assets:', formatEther(assets));    // 10.0
+console.log('Shares:', formatEther(shares));     // 10.0
 // Always 1:1 ratio
 ```
 
@@ -364,19 +366,21 @@ contract ProgressiveCurve is BaseCurve {
 **Example**:
 
 ```javascript
+import { parseEther, formatEther } from 'viem';
+
 // Progressive curve is ID 1
 const curveId = 1;
 
 // First deposit: 10 ETH
-const deposit1 = ethers.parseEther('10');
+const deposit1 = parseEther('10');
 const [shares1] = await multiVault.previewDeposit(termId, curveId, deposit1);
 
 // Later deposit: 10 ETH (same amount)
-const deposit2 = ethers.parseEther('10');
+const deposit2 = parseEther('10');
 const [shares2] = await multiVault.previewDeposit(termId, curveId, deposit2);
 
-console.log('First deposit shares:', ethers.formatEther(shares1));   // ~10.0
-console.log('Later deposit shares:', ethers.formatEther(shares2));   // ~8.5
+console.log('First deposit shares:', formatEther(shares1));   // ~10.0
+console.log('Later deposit shares:', formatEther(shares2));   // ~8.5
 
 // Later deposit gets fewer shares due to increased price
 ```
@@ -571,21 +575,39 @@ interface IBondingCurveRegistry {
 ### Querying Curves
 
 ```javascript
+import { createPublicClient, http, getContract } from 'viem';
+import { base } from 'viem/chains';
+
 const REGISTRY_ADDRESS = '0x...'; // From deployment addresses
-const registry = new ethers.Contract(REGISTRY_ADDRESS, REGISTRY_ABI, provider);
+
+const publicClient = createPublicClient({
+  chain: base,
+  transport: http()
+});
+
+const registry = getContract({
+  address: REGISTRY_ADDRESS,
+  abi: REGISTRY_ABI,
+  client: publicClient
+});
 
 // Get total number of curves
-const totalCurves = await registry.totalCurves();
+const totalCurves = await registry.read.totalCurves();
 console.log(`Total curves: ${totalCurves}`);
 
 // Get curve address by ID
-const curveAddress = await registry.getCurve(0);
+const curveAddress = await registry.read.getCurve([0]);
 console.log(`Linear curve address: ${curveAddress}`);
 
 // Load curve contract
-const curve = new ethers.Contract(curveAddress, CURVE_ABI, provider);
-const curveName = await curve.name();
-const maxShares = await curve.maxShares();
+const curve = getContract({
+  address: curveAddress,
+  abi: CURVE_ABI,
+  client: publicClient
+});
+
+const curveName = await curve.read.name();
+const maxShares = await curve.read.maxShares();
 
 console.log(`Curve: ${curveName}`);
 console.log(`Max shares: ${maxShares}`);
@@ -662,20 +684,48 @@ contract ExponentialCurve is BaseCurve {
 ### Registering Custom Curves
 
 ```javascript
+import { createWalletClient, http, parseAbiItem } from 'viem';
+import { base } from 'viem/chains';
+import { privateKeyToAccount } from 'viem/accounts';
+
+const account = privateKeyToAccount('0x...');
+const walletClient = createWalletClient({
+  account,
+  chain: base,
+  transport: http()
+});
+
 // Deploy your custom curve
-const customCurve = await CustomCurve.deploy();
-await customCurve.waitForDeployment();
+const customCurveAddress = await walletClient.deployContract({
+  abi: CustomCurveABI,
+  bytecode: CustomCurveBytecode
+});
 
 // Register with the registry (requires admin role)
-const tx = await registry.addCurve(await customCurve.getAddress());
-const receipt = await tx.wait();
+const hash = await walletClient.writeContract({
+  address: registryAddress,
+  abi: registryABI,
+  functionName: 'addCurve',
+  args: [customCurveAddress]
+});
 
-// Get the assigned curve ID
-const curveId = receipt.logs[0].args.curveId;
+const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+// Get the assigned curve ID from logs
+const log = receipt.logs.find(log =>
+  log.topics[0] === parseAbiItem('event CurveAdded(uint256 indexed curveId, address curveAddress)').topics[0]
+);
+const curveId = log.args.curveId;
 console.log(`Custom curve registered as ID: ${curveId}`);
 
 // Now vaults can use this curve
-await multiVault.deposit(receiver, termId, curveId, minShares, { value: assets });
+await walletClient.writeContract({
+  address: multiVaultAddress,
+  abi: multiVaultABI,
+  functionName: 'deposit',
+  args: [receiver, termId, curveId, minShares],
+  value: assets
+});
 ```
 
 ## Best Practices
@@ -698,23 +748,33 @@ await multiVault.deposit(receiver, termId, curveId, minShares, { value: assets }
 Always preview operations to avoid surprises:
 
 ```javascript
+import { formatEther } from 'viem';
+
 async function safeDeposit(termId, curveId, assets) {
   // Preview first
-  const [expectedShares, assetsAfterFees] = await multiVault.previewDeposit(
-    termId,
-    curveId,
-    assets
-  );
+  const [expectedShares, assetsAfterFees] = await publicClient.readContract({
+    address: multiVaultAddress,
+    abi: multiVaultABI,
+    functionName: 'previewDeposit',
+    args: [termId, curveId, assets]
+  });
 
-  console.log(`You will receive approximately ${ethers.formatEther(expectedShares)} shares`);
-  console.log(`After fees: ${ethers.formatEther(assetsAfterFees)} assets`);
+  console.log(`You will receive approximately ${formatEther(expectedShares)} shares`);
+  console.log(`After fees: ${formatEther(assetsAfterFees)} assets`);
 
   // Ask for user confirmation
   const confirmed = await getUserConfirmation();
 
   if (confirmed) {
     const minShares = expectedShares * 99n / 100n; // 1% slippage
-    return await multiVault.deposit(receiver, termId, curveId, minShares, { value: assets });
+    const hash = await walletClient.writeContract({
+      address: multiVaultAddress,
+      abi: multiVaultABI,
+      functionName: 'deposit',
+      args: [receiver, termId, curveId, minShares],
+      value: assets
+    });
+    return await publicClient.waitForTransactionReceipt({ hash });
   }
 }
 ```
@@ -748,23 +808,32 @@ function getRecommendedSlippage(curveId) {
 Track curve performance over time:
 
 ```javascript
+import { parseAbiItem } from 'viem';
+
 class CurveMonitor {
   async trackPriceHistory(termId, curveId) {
     const history = [];
 
     // Query historical deposits
-    const filter = multiVault.filters.Deposited(null, null, termId, curveId);
-    const events = await multiVault.queryFilter(filter, -10000, 'latest');
+    const currentBlock = await publicClient.getBlockNumber();
+    const logs = await publicClient.getLogs({
+      address: multiVaultAddress,
+      event: parseAbiItem('event Deposited(address indexed sender, address indexed receiver, bytes32 indexed termId, uint256 curveId, uint256 assets, uint256 shares, uint256 totalShares)'),
+      args: { termId, curveId },
+      fromBlock: currentBlock - 10000n,
+      toBlock: 'latest'
+    });
 
-    for (const event of events) {
-      const { assets, shares, totalShares } = event.args;
-      const price = assets / shares;
+    for (const log of logs) {
+      const { assets, shares, totalShares } = log.args;
+      const price = Number(assets) / Number(shares);
+      const block = await publicClient.getBlock({ blockNumber: log.blockNumber });
 
       history.push({
-        blockNumber: event.blockNumber,
+        blockNumber: log.blockNumber,
         price,
         totalShares,
-        timestamp: (await event.getBlock()).timestamp
+        timestamp: block.timestamp
       });
     }
 
@@ -794,19 +863,19 @@ Test curve behavior across different scenarios:
 ```javascript
 describe('Bonding Curve Tests', () => {
   it('should handle first deposit correctly', async () => {
-    const assets = ethers.parseEther('10');
+    const assets = parseEther('10');
     const [shares] = await multiVault.previewDeposit(termId, curveId, assets);
     expect(shares).to.be.gt(0);
   });
 
   it('should handle large deposits without overflow', async () => {
-    const largeAssets = ethers.parseEther('1000000');
+    const largeAssets = parseEther('1000000');
     const [shares] = await multiVault.previewDeposit(termId, curveId, largeAssets);
     expect(shares).to.be.lte(await curve.maxShares());
   });
 
   it('should have consistent round-trip', async () => {
-    const assets = ethers.parseEther('100');
+    const assets = parseEther('100');
 
     // Deposit
     const [shares] = await multiVault.previewDeposit(termId, curveId, assets);
@@ -815,7 +884,7 @@ describe('Bonding Curve Tests', () => {
     const [returnedAssets] = await multiVault.previewRedeem(termId, curveId, shares);
 
     // Should get back approximately same amount (minus fees)
-    expect(returnedAssets).to.be.closeTo(assets, ethers.parseEther('1'));
+    expect(returnedAssets).to.be.closeTo(assets, parseEther('1'));
   });
 });
 ```
@@ -847,7 +916,7 @@ Combine multiple curves for complex behaviors:
 ```javascript
 // Hybrid strategy: Use different curves for different amounts
 async function hybridDeposit(termId, totalAssets) {
-  const smallAmount = ethers.parseEther('10');
+  const smallAmount = parseEther('10');
 
   if (totalAssets <= smallAmount) {
     // Small deposits: Use linear curve

@@ -153,66 +153,90 @@ const createdTripleId = tripleCreatedEvent.args.termId;
 
 ## Code Examples
 
-### TypeScript (ethers.js v6)
+### TypeScript (viem)
 
 Complete example with error handling:
 
 ```typescript
-import { ethers } from 'ethers';
+import {
+  createPublicClient,
+  createWalletClient,
+  http,
+  formatEther,
+  parseEther,
+  isHex,
+  type Hash,
+  type Address
+} from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { base } from 'viem/chains';
 
 // Contract ABIs
-import MultiVaultABI from './abis/IMultiVault.json';
-import ERC20ABI from './abis/ERC20.json';
+import { multiVaultAbi } from './abis/IMultiVault';
+import { erc20Abi } from './abis/ERC20';
 
 // Configuration
-const MULTIVAULT_ADDRESS = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e';
-const WTRUST_ADDRESS = '0x81cFb09cb44f7184Ad934C09F82000701A4bF672';
+const MULTIVAULT_ADDRESS = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e' as Address;
+const WTRUST_ADDRESS = '0x81cFb09cb44f7184Ad934C09F82000701A4bF672' as Address;
 const RPC_URL = 'YOUR_INTUITION_RPC_URL';
 
 /**
  * Creates a single triple with initial deposit
  */
 async function createTriple(
-  subjectId: string,
-  predicateId: string,
-  objectId: string,
+  subjectId: `0x${string}`,
+  predicateId: `0x${string}`,
+  objectId: `0x${string}`,
   depositAmount: bigint,
-  privateKey: string
+  privateKey: `0x${string}`
 ): Promise<{
-  tripleId: string;
-  counterTripleId: string;
+  tripleId: `0x${string}`;
+  counterTripleId: `0x${string}`;
   sharesMinted: bigint;
-  txHash: string;
+  txHash: Hash;
 }> {
-  // Setup
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
-  const wallet = new ethers.Wallet(privateKey, provider);
+  // Setup clients
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http(RPC_URL)
+  });
 
-  const multiVault = new ethers.Contract(
-    MULTIVAULT_ADDRESS,
-    MultiVaultABI,
-    wallet
-  );
-  const wtrust = new ethers.Contract(
-    WTRUST_ADDRESS,
-    ERC20ABI,
-    wallet
-  );
+  const account = privateKeyToAccount(privateKey);
+  const walletClient = createWalletClient({
+    account,
+    chain: base,
+    transport: http(RPC_URL)
+  });
 
   try {
     // Step 1: Validate atom IDs format
-    if (!ethers.isHexString(subjectId, 32) ||
-        !ethers.isHexString(predicateId, 32) ||
-        !ethers.isHexString(objectId, 32)) {
+    if (!isHex(subjectId, { strict: true }) ||
+        !isHex(predicateId, { strict: true }) ||
+        !isHex(objectId, { strict: true })) {
       throw new Error('Invalid atom ID format (must be 32-byte hex strings)');
     }
 
     // Step 2: Check all atoms exist
     console.log('Checking atoms exist...');
     const [subjectExists, predicateExists, objectExists] = await Promise.all([
-      multiVault.isTermCreated(subjectId),
-      multiVault.isTermCreated(predicateId),
-      multiVault.isTermCreated(objectId)
+      publicClient.readContract({
+        address: MULTIVAULT_ADDRESS,
+        abi: multiVaultAbi,
+        functionName: 'isTermCreated',
+        args: [subjectId]
+      }),
+      publicClient.readContract({
+        address: MULTIVAULT_ADDRESS,
+        abi: multiVaultAbi,
+        functionName: 'isTermCreated',
+        args: [predicateId]
+      }),
+      publicClient.readContract({
+        address: MULTIVAULT_ADDRESS,
+        abi: multiVaultAbi,
+        functionName: 'isTermCreated',
+        args: [objectId]
+      })
     ]);
 
     if (!subjectExists) {
@@ -226,34 +250,59 @@ async function createTriple(
     }
 
     // Step 3: Calculate triple ID
-    const tripleId = await multiVault.calculateTripleId(
-      subjectId,
-      predicateId,
-      objectId
-    );
+    const tripleId = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultAbi,
+      functionName: 'calculateTripleId',
+      args: [subjectId, predicateId, objectId]
+    });
     console.log('Computed Triple ID:', tripleId);
 
     // Step 4: Calculate counter triple ID
-    const counterTripleId = await multiVault.getCounterIdFromTripleId(tripleId);
+    const counterTripleId = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultAbi,
+      functionName: 'getCounterIdFromTripleId',
+      args: [tripleId]
+    });
     console.log('Counter Triple ID:', counterTripleId);
 
     // Step 5: Check triple doesn't exist
-    const tripleExists = await multiVault.isTermCreated(tripleId);
+    const tripleExists = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultAbi,
+      functionName: 'isTermCreated',
+      args: [tripleId]
+    });
     if (tripleExists) {
       throw new Error(`Triple already exists with ID: ${tripleId}`);
     }
 
     // Step 6: Get triple creation costs
-    const tripleCost = await multiVault.getTripleCost();
-    const generalConfig = await multiVault.getGeneralConfig();
-    const tripleConfig = await multiVault.getTripleConfig();
+    const [tripleCost, generalConfig, tripleConfig] = await Promise.all([
+      publicClient.readContract({
+        address: MULTIVAULT_ADDRESS,
+        abi: multiVaultAbi,
+        functionName: 'getTripleCost'
+      }),
+      publicClient.readContract({
+        address: MULTIVAULT_ADDRESS,
+        abi: multiVaultAbi,
+        functionName: 'getGeneralConfig'
+      }),
+      publicClient.readContract({
+        address: MULTIVAULT_ADDRESS,
+        abi: multiVaultAbi,
+        functionName: 'getTripleConfig'
+      })
+    ]);
 
     const minDeposit = generalConfig.minDeposit;
     const minimumRequired = tripleCost + minDeposit;
 
-    console.log('Triple creation cost:', ethers.formatEther(tripleCost), 'WTRUST');
-    console.log('Minimum deposit:', ethers.formatEther(minDeposit), 'WTRUST');
-    console.log('Total minimum:', ethers.formatEther(minimumRequired), 'WTRUST');
+    console.log('Triple creation cost:', formatEther(tripleCost), 'WTRUST');
+    console.log('Minimum deposit:', formatEther(minDeposit), 'WTRUST');
+    console.log('Total minimum:', formatEther(minimumRequired), 'WTRUST');
 
     // Calculate atom deposit fraction
     const atomFraction = tripleConfig.atomDepositFractionForTriple;
@@ -261,103 +310,137 @@ async function createTriple(
     const atomDepositPerAtom = (depositAmount * atomFraction) / feeDenominator;
 
     console.log('Atom deposit fraction:', atomFraction, '/', feeDenominator);
-    console.log('Deposit to each atom:', ethers.formatEther(atomDepositPerAtom), 'WTRUST');
+    console.log('Deposit to each atom:', formatEther(atomDepositPerAtom), 'WTRUST');
 
     // Validate deposit amount
     if (depositAmount < minimumRequired) {
       throw new Error(
-        `Deposit amount ${ethers.formatEther(depositAmount)} is below minimum ` +
-        `${ethers.formatEther(minimumRequired)} WTRUST`
+        `Deposit amount ${formatEther(depositAmount)} is below minimum ` +
+        `${formatEther(minimumRequired)} WTRUST`
       );
     }
 
     // Step 7: Check WTRUST balance
-    const balance = await wtrust.balanceOf(wallet.address);
+    const balance = await publicClient.readContract({
+      address: WTRUST_ADDRESS,
+      abi: erc20Abi,
+      functionName: 'balanceOf',
+      args: [account.address]
+    });
     if (balance < depositAmount) {
       throw new Error(
-        `Insufficient WTRUST balance. Have: ${ethers.formatEther(balance)}, ` +
-        `Need: ${ethers.formatEther(depositAmount)}`
+        `Insufficient WTRUST balance. Have: ${formatEther(balance)}, ` +
+        `Need: ${formatEther(depositAmount)}`
       );
     }
 
     // Step 8: Preview the creation
-    const [expectedShares, assetsAfterFixedFees, assetsAfterAllFees] =
-      await multiVault.previewTripleCreate(tripleId, depositAmount);
+    const previewResult = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultAbi,
+      functionName: 'previewTripleCreate',
+      args: [tripleId, depositAmount]
+    });
+    const [expectedShares, assetsAfterFixedFees, assetsAfterAllFees] = previewResult;
 
-    console.log('Expected shares:', ethers.formatEther(expectedShares));
-    console.log('Assets after fixed fees:', ethers.formatEther(assetsAfterFixedFees));
-    console.log('Assets after all fees:', ethers.formatEther(assetsAfterAllFees));
+    console.log('Expected shares:', formatEther(expectedShares));
+    console.log('Assets after fixed fees:', formatEther(assetsAfterFixedFees));
+    console.log('Assets after all fees:', formatEther(assetsAfterAllFees));
 
     // Step 9: Approve WTRUST spending
     console.log('Approving WTRUST spending...');
-    const approveTx = await wtrust.approve(MULTIVAULT_ADDRESS, depositAmount);
-    await approveTx.wait();
+    const approveHash = await walletClient.writeContract({
+      address: WTRUST_ADDRESS,
+      abi: erc20Abi,
+      functionName: 'approve',
+      args: [MULTIVAULT_ADDRESS, depositAmount]
+    });
+    await publicClient.waitForTransactionReceipt({ hash: approveHash });
     console.log('Approval confirmed');
 
     // Step 10: Create the triple
     console.log('Creating triple...');
-    const createTx = await multiVault.createTriples(
-      [subjectId],
-      [predicateId],
-      [objectId],
-      [depositAmount],
-      {
-        gasLimit: 800000n // Higher gas limit for triple creation
-      }
-    );
+    const createHash = await walletClient.writeContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultAbi,
+      functionName: 'createTriples',
+      args: [
+        [subjectId],
+        [predicateId],
+        [objectId],
+        [depositAmount]
+      ],
+      gas: 800000n // Higher gas limit for triple creation
+    });
 
-    console.log('Transaction sent:', createTx.hash);
-    const receipt = await createTx.wait();
+    console.log('Transaction sent:', createHash);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: createHash });
     console.log('Transaction confirmed in block:', receipt.blockNumber);
 
     // Step 11: Parse events
-    let tripleCreatedEvent = null;
-    let depositedEvent = null;
     let sharesMinted = 0n;
 
-    for (const log of receipt.logs) {
+    // Parse TripleCreated events
+    const tripleCreatedLogs = receipt.logs.filter(log => {
       try {
-        const parsed = multiVault.interface.parseLog({
-          topics: log.topics,
-          data: log.data
+        const event = publicClient.parseEventLogs({
+          abi: multiVaultAbi,
+          logs: [log],
+          eventName: 'TripleCreated'
         });
+        return event.length > 0;
+      } catch {
+        return false;
+      }
+    });
 
-        if (parsed.name === 'TripleCreated') {
-          tripleCreatedEvent = parsed;
-          console.log('Triple created:', parsed.args.termId);
-          console.log('Subject:', parsed.args.subjectId);
-          console.log('Predicate:', parsed.args.predicateId);
-          console.log('Object:', parsed.args.objectId);
-        } else if (parsed.name === 'Deposited' && parsed.args.vaultType === 1) {
-          // VaultType.TRIPLE = 1
-          depositedEvent = parsed;
-          sharesMinted = parsed.args.shares;
-          console.log('Shares minted:', ethers.formatEther(sharesMinted));
-        }
-      } catch (e) {
-        // Not a MultiVault event, skip
+    if (tripleCreatedLogs.length > 0) {
+      const tripleCreatedEvent = publicClient.parseEventLogs({
+        abi: multiVaultAbi,
+        logs: tripleCreatedLogs,
+        eventName: 'TripleCreated'
+      })[0];
+
+      console.log('Triple created:', tripleCreatedEvent.args.termId);
+      console.log('Subject:', tripleCreatedEvent.args.subjectId);
+      console.log('Predicate:', tripleCreatedEvent.args.predicateId);
+      console.log('Object:', tripleCreatedEvent.args.objectId);
+    }
+
+    // Parse Deposited events
+    const depositedLogs = publicClient.parseEventLogs({
+      abi: multiVaultAbi,
+      logs: receipt.logs,
+      eventName: 'Deposited'
+    });
+
+    for (const log of depositedLogs) {
+      if (log.args.vaultType === 1) { // VaultType.TRIPLE = 1
+        sharesMinted = log.args.shares;
+        console.log('Shares minted:', formatEther(sharesMinted));
+        break;
       }
     }
 
-    if (!tripleCreatedEvent) {
+    if (tripleCreatedLogs.length === 0) {
       throw new Error('TripleCreated event not found in receipt');
     }
 
     return {
-      tripleId: tripleId,
-      counterTripleId: counterTripleId,
-      sharesMinted: sharesMinted,
-      txHash: receipt.hash
+      tripleId,
+      counterTripleId,
+      sharesMinted,
+      txHash: receipt.transactionHash
     };
 
   } catch (error) {
     // Handle specific errors
-    if (error.code === 'INSUFFICIENT_FUNDS') {
-      throw new Error('Insufficient ETH for gas fees');
-    } else if (error.code === 'CALL_EXCEPTION') {
-      throw new Error(`Contract call failed: ${error.reason || error.message}`);
-    } else if (error.code === 'NETWORK_ERROR') {
-      throw new Error('Network connection error. Please check RPC endpoint.');
+    if (error instanceof Error) {
+      if (error.message.includes('insufficient funds')) {
+        throw new Error('Insufficient ETH for gas fees');
+      } else if (error.message.includes('execution reverted')) {
+        throw new Error(`Contract call failed: ${error.message}`);
+      }
     }
 
     throw error;
@@ -373,39 +456,45 @@ async function createAtomsAndTriple(
   objectData: string,
   atomDeposit: bigint,
   tripleDeposit: bigint,
-  privateKey: string
+  privateKey: `0x${string}`
 ) {
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
-  const wallet = new ethers.Wallet(privateKey, provider);
-  const multiVault = new ethers.Contract(MULTIVAULT_ADDRESS, MultiVaultABI, wallet);
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http(RPC_URL)
+  });
+
+  const account = privateKeyToAccount(privateKey);
+  const walletClient = createWalletClient({
+    account,
+    chain: base,
+    transport: http(RPC_URL)
+  });
 
   // Create atoms
   console.log('Creating atoms...');
   const atomDatas = [
-    ethers.toUtf8Bytes(subjectData),
-    ethers.toUtf8Bytes(predicateData),
-    ethers.toUtf8Bytes(objectData)
+    stringToHex(subjectData, { size: 32 }),
+    stringToHex(predicateData, { size: 32 }),
+    stringToHex(objectData, { size: 32 })
   ];
 
-  const createAtomsTx = await multiVault.createAtoms(
-    atomDatas,
-    [atomDeposit, atomDeposit, atomDeposit]
-  );
-  const atomsReceipt = await createAtomsTx.wait();
+  const createAtomsHash = await walletClient.writeContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: multiVaultAbi,
+    functionName: 'createAtoms',
+    args: [atomDatas, [atomDeposit, atomDeposit, atomDeposit]]
+  });
+
+  const atomsReceipt = await publicClient.waitForTransactionReceipt({ hash: createAtomsHash });
 
   // Extract atom IDs from events
-  const atomIds: string[] = [];
-  for (const log of atomsReceipt.logs) {
-    try {
-      const parsed = multiVault.interface.parseLog({
-        topics: log.topics,
-        data: log.data
-      });
-      if (parsed.name === 'AtomCreated') {
-        atomIds.push(parsed.args.termId);
-      }
-    } catch (e) {}
-  }
+  const atomCreatedLogs = publicClient.parseEventLogs({
+    abi: multiVaultAbi,
+    logs: atomsReceipt.logs,
+    eventName: 'AtomCreated'
+  });
+
+  const atomIds = atomCreatedLogs.map(log => log.args.termId);
 
   if (atomIds.length !== 3) {
     throw new Error('Failed to create all atoms');
@@ -436,17 +525,17 @@ async function main() {
   try {
     // Option 1: Create triple from existing atoms
     const result = await createTriple(
-      '0x...', // existing subject atom ID
-      '0x...', // existing predicate atom ID
-      '0x...', // existing object atom ID
-      ethers.parseEther("50"), // 50 WTRUST
-      'YOUR_PRIVATE_KEY'
+      '0x...' as `0x${string}`, // existing subject atom ID
+      '0x...' as `0x${string}`, // existing predicate atom ID
+      '0x...' as `0x${string}`, // existing object atom ID
+      parseEther("50"), // 50 WTRUST
+      '0x...' as `0x${string}` // YOUR_PRIVATE_KEY
     );
 
     console.log('\nTriple creation successful!');
     console.log('Triple ID:', result.tripleId);
     console.log('Counter Triple ID:', result.counterTripleId);
-    console.log('Shares Minted:', ethers.formatEther(result.sharesMinted));
+    console.log('Shares Minted:', formatEther(result.sharesMinted));
     console.log('Transaction:', result.txHash);
 
     // Option 2: Create atoms and triple together
@@ -454,9 +543,9 @@ async function main() {
       'Alice',           // subject
       'knows',           // predicate
       'Bob',             // object
-      ethers.parseEther("10"),  // 10 WTRUST per atom
-      ethers.parseEther("50"),  // 50 WTRUST for triple
-      'YOUR_PRIVATE_KEY'
+      parseEther("10"),  // 10 WTRUST per atom
+      parseEther("50"),  // 50 WTRUST for triple
+      '0x...' as `0x${string}` // YOUR_PRIVATE_KEY
     );
 
     console.log('\nFull creation successful!');
@@ -466,15 +555,13 @@ async function main() {
     console.log('Triple ID:', fullResult.tripleId);
 
   } catch (error) {
-    console.error('Error:', error.message);
+    console.error('Error:', error instanceof Error ? error.message : 'Unknown error');
     process.exit(1);
   }
 }
 
 // Run if executed directly
-if (require.main === module) {
-  main();
-}
+main().catch(console.error);
 ```
 
 ### Python (web3.py)
@@ -789,21 +876,42 @@ Emitted for the triple vault and potentially for atom vaults if their share pric
 
 ### Listening for Triple Events
 
-**TypeScript**:
+**TypeScript (viem)**:
 ```typescript
-// Listen for triple creation events
-multiVault.on('TripleCreated', (creator, termId, subjectId, predicateId, objectId, event) => {
-  console.log('New triple created:');
-  console.log('  Creator:', creator);
-  console.log('  Triple ID:', termId);
-  console.log('  Subject:', subjectId);
-  console.log('  Predicate:', predicateId);
-  console.log('  Object:', objectId);
+import { parseAbiItem } from 'viem';
+
+// Watch for triple creation events
+const unwatch = publicClient.watchEvent({
+  address: MULTIVAULT_ADDRESS,
+  event: parseAbiItem('event TripleCreated(address indexed creator, bytes32 indexed termId, bytes32 subjectId, bytes32 predicateId, bytes32 objectId)'),
+  onLogs: (logs) => {
+    for (const log of logs) {
+      console.log('New triple created:');
+      console.log('  Creator:', log.args.creator);
+      console.log('  Triple ID:', log.args.termId);
+      console.log('  Subject:', log.args.subjectId);
+      console.log('  Predicate:', log.args.predicateId);
+      console.log('  Object:', log.args.objectId);
+    }
+  }
 });
 
-// Query triples involving a specific atom
-const subjectFilter = multiVault.filters.TripleCreated(null, null, specificAtomId);
-const events = await multiVault.queryFilter(subjectFilter);
+// Query past triples involving a specific atom
+const logs = await publicClient.getLogs({
+  address: MULTIVAULT_ADDRESS,
+  event: parseAbiItem('event TripleCreated(address indexed creator, bytes32 indexed termId, bytes32 subjectId, bytes32 predicateId, bytes32 objectId)'),
+  args: {
+    subjectId: specificAtomId
+  },
+  fromBlock: 'earliest',
+  toBlock: 'latest'
+});
+
+const events = publicClient.parseEventLogs({
+  abi: multiVaultAbi,
+  logs,
+  eventName: 'TripleCreated'
+});
 ```
 
 **Python**:
@@ -937,7 +1045,7 @@ const gasLimit = gasEstimate * 120n / 100n; // 20% buffer
 
 // 3. Monitor gas prices
 const gasPrice = await provider.getFeeData();
-if (gasPrice.gasPrice > ethers.parseUnits('50', 'gwei')) {
+if (gasPrice.gasPrice > parseUnits('50', 'gwei')) {
   console.warn('High gas prices, consider waiting');
 }
 ```

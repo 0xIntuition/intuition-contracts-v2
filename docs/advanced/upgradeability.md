@@ -169,37 +169,77 @@ forge script script/upgrades/TestnetUpgrade.s.sol \
 #### 3. Schedule Upgrade via Timelock
 
 ```typescript
-import { ethers } from 'ethers';
+import { createWalletClient, createPublicClient, http, encodeFunctionData, keccak256, toHex } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 
 // Prepare upgrade call
-const proxyAdmin = new ethers.Contract(PROXY_ADMIN_ADDRESS, PROXY_ADMIN_ABI, signer);
-const upgradeCalldata = proxyAdmin.interface.encodeFunctionData('upgradeAndCall', [
-  PROXY_ADDRESS,
-  NEW_IMPLEMENTATION,
-  '0x' // empty if no initialization needed
-]);
+const upgradeCalldata = encodeFunctionData({
+  abi: PROXY_ADMIN_ABI,
+  functionName: 'upgradeAndCall',
+  args: [
+    PROXY_ADDRESS,
+    NEW_IMPLEMENTATION,
+    '0x' // empty if no initialization needed
+  ]
+});
+
+const account = privateKeyToAccount(PROPOSER_PRIVATE_KEY);
+const walletClient = createWalletClient({
+  account,
+  chain,
+  transport: http()
+});
+
+const publicClient = createPublicClient({
+  chain,
+  transport: http()
+});
 
 // Schedule via TimelockController
-const timelock = new ethers.Contract(TIMELOCK_ADDRESS, TIMELOCK_ABI, signer);
-const tx = await timelock.schedule(
-  PROXY_ADMIN_ADDRESS,      // target
-  0,                        // value
-  upgradeCalldata,          // data
-  ethers.ZeroHash,          // predecessor
-  ethers.id('salt-string'), // salt
-  MINIMUM_DELAY             // delay (e.g., 2 days)
-);
+const zeroHash = '0x0000000000000000000000000000000000000000000000000000000000000000';
+const salt = keccak256(toHex('salt-string'));
 
-console.log('Upgrade scheduled:', tx.hash);
+const hash = await walletClient.writeContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'schedule',
+  args: [
+    PROXY_ADMIN_ADDRESS,      // target
+    0n,                       // value
+    upgradeCalldata,          // data
+    zeroHash,                 // predecessor
+    salt,                     // salt
+    MINIMUM_DELAY             // delay (e.g., 2 days)
+  ]
+});
+
+console.log('Upgrade scheduled:', hash);
 ```
 
 #### 4. Wait for Timelock Delay
 
 ```typescript
 // Check if ready to execute
-const timestamp = await timelock.getTimestamp(operationId);
-const isReady = await timelock.isOperationReady(operationId);
-const timeRemaining = timestamp - Math.floor(Date.now() / 1000);
+const publicClient = createPublicClient({
+  chain,
+  transport: http()
+});
+
+const timestamp = await publicClient.readContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'getTimestamp',
+  args: [operationId]
+});
+
+const isReady = await publicClient.readContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'isOperationReady',
+  args: [operationId]
+});
+
+const timeRemaining = Number(timestamp) - Math.floor(Date.now() / 1000);
 
 console.log(`Upgrade ready: ${isReady}`);
 console.log(`Time remaining: ${timeRemaining} seconds`);
@@ -209,28 +249,54 @@ console.log(`Time remaining: ${timeRemaining} seconds`);
 
 ```typescript
 // After delay has passed
-const executeTx = await timelock.execute(
-  PROXY_ADMIN_ADDRESS,
-  0,
-  upgradeCalldata,
-  ethers.ZeroHash,
-  ethers.id('salt-string')
-);
+const account = privateKeyToAccount(EXECUTOR_PRIVATE_KEY);
+const walletClient = createWalletClient({
+  account,
+  chain,
+  transport: http()
+});
 
-await executeTx.wait();
-console.log('Upgrade executed:', executeTx.hash);
+const publicClient = createPublicClient({
+  chain,
+  transport: http()
+});
+
+const hash = await walletClient.writeContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'execute',
+  args: [
+    PROXY_ADMIN_ADDRESS,
+    0n,
+    upgradeCalldata,
+    zeroHash,
+    keccak256(toHex('salt-string'))
+  ]
+});
+
+await publicClient.waitForTransactionReceipt({ hash });
+console.log('Upgrade executed:', hash);
 ```
 
 #### 6. Verify Upgrade
 
 ```typescript
 // Verify implementation changed
-const proxy = new ethers.Contract(PROXY_ADDRESS, PROXY_ABI, provider);
-const currentImpl = await proxyAdmin.getProxyImplementation(PROXY_ADDRESS);
+const publicClient = createPublicClient({
+  chain,
+  transport: http()
+});
+
+const currentImpl = await publicClient.readContract({
+  address: PROXY_ADMIN_ADDRESS,
+  abi: PROXY_ADMIN_ABI,
+  functionName: 'getProxyImplementation',
+  args: [PROXY_ADDRESS]
+});
 
 console.log('Current implementation:', currentImpl);
 console.log('Expected:', NEW_IMPLEMENTATION);
-console.log('Upgrade successful:', currentImpl === NEW_IMPLEMENTATION);
+console.log('Upgrade successful:', currentImpl.toLowerCase() === NEW_IMPLEMENTATION.toLowerCase());
 ```
 
 ### MultiVault Migration Upgrade
@@ -301,31 +367,51 @@ The Trust token requires special reinitialization when upgrading to add new feat
 **Upgrade with Reinitialization:**
 
 ```typescript
+import { encodeFunctionData, keccak256, toHex } from 'viem';
+
 // Generate reinitialize calldata
-const trust = new ethers.Contract(TRUST_ADDRESS, TRUST_ABI, signer);
-const reinitializeData = trust.interface.encodeFunctionData('reinitialize', [
-  ADMIN_ADDRESS,
-  BASE_EMISSIONS_CONTROLLER_ADDRESS
-]);
+const reinitializeData = encodeFunctionData({
+  abi: TRUST_ABI,
+  functionName: 'reinitialize',
+  args: [
+    ADMIN_ADDRESS,
+    BASE_EMISSIONS_CONTROLLER_ADDRESS
+  ]
+});
 
 // Generate upgrade and call data
-const proxyAdmin = new ethers.Contract(PROXY_ADMIN_ADDRESS, PROXY_ADMIN_ABI, signer);
-const upgradeData = proxyAdmin.interface.encodeFunctionData('upgradeAndCall', [
-  TRUST_PROXY_ADDRESS,
-  NEW_TRUST_IMPLEMENTATION,
-  reinitializeData
-]);
+const upgradeData = encodeFunctionData({
+  abi: PROXY_ADMIN_ABI,
+  functionName: 'upgradeAndCall',
+  args: [
+    TRUST_PROXY_ADDRESS,
+    NEW_TRUST_IMPLEMENTATION,
+    reinitializeData
+  ]
+});
+
+const account = privateKeyToAccount(PROPOSER_PRIVATE_KEY);
+const walletClient = createWalletClient({
+  account,
+  chain,
+  transport: http()
+});
 
 // Schedule via timelock
-const timelock = new ethers.Contract(TIMELOCK_ADDRESS, TIMELOCK_ABI, signer);
-await timelock.schedule(
-  PROXY_ADMIN_ADDRESS,
-  0,
-  upgradeData,
-  ethers.ZeroHash,
-  ethers.id('trust-upgrade-v2'),
-  MINIMUM_DELAY
-);
+const zeroHash = '0x0000000000000000000000000000000000000000000000000000000000000000';
+await walletClient.writeContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'schedule',
+  args: [
+    PROXY_ADMIN_ADDRESS,
+    0n,
+    upgradeData,
+    zeroHash,
+    keccak256(toHex('trust-upgrade-v2')),
+    MINIMUM_DELAY
+  ]
+});
 ```
 
 **Utility Script:**
@@ -424,8 +510,26 @@ If an issue is discovered during the timelock delay:
 
 ```typescript
 // Cancel scheduled operation
-const timelock = new ethers.Contract(TIMELOCK_ADDRESS, TIMELOCK_ABI, signer);
-await timelock.cancel(operationId);
+const account = privateKeyToAccount(CANCELLER_PRIVATE_KEY);
+const walletClient = createWalletClient({
+  account,
+  chain,
+  transport: http()
+});
+
+const publicClient = createPublicClient({
+  chain,
+  transport: http()
+});
+
+const hash = await walletClient.writeContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'cancel',
+  args: [operationId]
+});
+
+await publicClient.waitForTransactionReceipt({ hash });
 
 console.log('Upgrade cancelled');
 ```
@@ -435,20 +539,39 @@ console.log('Upgrade cancelled');
 If issues are discovered after upgrade:
 
 ```typescript
-// Schedule rollback to previous implementation
-const rollbackData = proxyAdmin.interface.encodeFunctionData('upgrade', [
-  PROXY_ADDRESS,
-  PREVIOUS_IMPLEMENTATION
-]);
+import { encodeFunctionData, keccak256, toHex } from 'viem';
 
-await timelock.schedule(
-  PROXY_ADMIN_ADDRESS,
-  0,
-  rollbackData,
-  ethers.ZeroHash,
-  ethers.id('rollback-salt'),
-  MINIMUM_DELAY
-);
+// Schedule rollback to previous implementation
+const rollbackData = encodeFunctionData({
+  abi: PROXY_ADMIN_ABI,
+  functionName: 'upgrade',
+  args: [
+    PROXY_ADDRESS,
+    PREVIOUS_IMPLEMENTATION
+  ]
+});
+
+const account = privateKeyToAccount(PROPOSER_PRIVATE_KEY);
+const walletClient = createWalletClient({
+  account,
+  chain,
+  transport: http()
+});
+
+const zeroHash = '0x0000000000000000000000000000000000000000000000000000000000000000';
+await walletClient.writeContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'schedule',
+  args: [
+    PROXY_ADMIN_ADDRESS,
+    0n,
+    rollbackData,
+    zeroHash,
+    keccak256(toHex('rollback-salt')),
+    MINIMUM_DELAY
+  ]
+});
 ```
 
 ## Beacon Upgrades
@@ -457,12 +580,29 @@ await timelock.schedule(
 
 ```typescript
 // Upgrade all atom wallets simultaneously
-const beacon = new ethers.Contract(ATOM_WALLET_BEACON, BEACON_ABI, signer);
+const account = privateKeyToAccount(BEACON_OWNER_PRIVATE_KEY);
+const walletClient = createWalletClient({
+  account,
+  chain,
+  transport: http()
+});
+
+const publicClient = createPublicClient({
+  chain,
+  transport: http()
+});
+
 const newWalletImpl = '0x...'; // new AtomWallet implementation
 
 // This immediately affects ALL wallet proxies
-const tx = await beacon.upgradeTo(newWalletImpl);
-await tx.wait();
+const hash = await walletClient.writeContract({
+  address: ATOM_WALLET_BEACON,
+  abi: BEACON_ABI,
+  functionName: 'upgradeTo',
+  args: [newWalletImpl]
+});
+
+await publicClient.waitForTransactionReceipt({ hash });
 
 console.log('All atom wallets upgraded to:', newWalletImpl);
 ```
@@ -496,27 +636,55 @@ function testBeaconUpgrade() public {
 ```typescript
 // Comprehensive post-upgrade verification
 async function verifyUpgrade() {
-  const proxy = new ethers.Contract(PROXY_ADDRESS, ABI, provider);
+  const publicClient = createPublicClient({
+    chain,
+    transport: http()
+  });
 
   // 1. Check implementation
-  const impl = await proxyAdmin.getProxyImplementation(PROXY_ADDRESS);
+  const impl = await publicClient.readContract({
+    address: PROXY_ADMIN_ADDRESS,
+    abi: PROXY_ADMIN_ABI,
+    functionName: 'getProxyImplementation',
+    args: [PROXY_ADDRESS]
+  });
   console.log('Implementation:', impl);
 
   // 2. Test core functionality
-  const balance = await proxy.balanceOf(TEST_ADDRESS);
+  const balance = await publicClient.readContract({
+    address: PROXY_ADDRESS,
+    abi: ABI,
+    functionName: 'balanceOf',
+    args: [TEST_ADDRESS]
+  });
   console.log('Balance query works:', balance.toString());
 
   // 3. Check access control
-  const hasRole = await proxy.hasRole(DEFAULT_ADMIN_ROLE, ADMIN_ADDRESS);
+  const hasRole = await publicClient.readContract({
+    address: PROXY_ADDRESS,
+    abi: ABI,
+    functionName: 'hasRole',
+    args: [DEFAULT_ADMIN_ROLE, ADMIN_ADDRESS]
+  });
   console.log('Admin role preserved:', hasRole);
 
   // 4. Verify state preservation
-  const totalSupply = await proxy.totalSupply();
+  const totalSupply = await publicClient.readContract({
+    address: PROXY_ADDRESS,
+    abi: ABI,
+    functionName: 'totalSupply'
+  });
   console.log('State preserved, total supply:', totalSupply.toString());
 
   // 5. Check events
-  const filter = proxy.filters.Upgraded();
-  const events = await proxy.queryFilter(filter);
+  const currentBlock = await publicClient.getBlockNumber();
+  const events = await publicClient.getContractEvents({
+    address: PROXY_ADDRESS,
+    abi: ABI,
+    eventName: 'Upgraded',
+    fromBlock: currentBlock - 1000n,
+    toBlock: currentBlock
+  });
   console.log('Upgrade event emitted:', events.length > 0);
 }
 ```
@@ -525,19 +693,29 @@ async function verifyUpgrade() {
 
 ```typescript
 // Listen for upgrade events
-const proxyAdmin = new ethers.Contract(PROXY_ADMIN_ADDRESS, PROXY_ADMIN_ABI, provider);
+const publicClient = createPublicClient({
+  chain,
+  transport: http()
+});
 
-proxyAdmin.on('Upgraded', (proxy, implementation, event) => {
-  console.log(`Proxy ${proxy} upgraded to ${implementation}`);
-  console.log('Transaction:', event.transactionHash);
+const unwatch = publicClient.watchContractEvent({
+  address: PROXY_ADMIN_ADDRESS,
+  abi: PROXY_ADMIN_ABI,
+  eventName: 'Upgraded',
+  onLogs: (logs) => {
+    for (const log of logs) {
+      console.log(`Proxy ${log.args.proxy} upgraded to ${log.args.implementation}`);
+      console.log('Transaction:', log.transactionHash);
 
-  // Trigger alerts/notifications
-  sendAlert({
-    type: 'UPGRADE',
-    proxy,
-    implementation,
-    txHash: event.transactionHash
-  });
+      // Trigger alerts/notifications
+      sendAlert({
+        type: 'UPGRADE',
+        proxy: log.args.proxy,
+        implementation: log.args.implementation,
+        txHash: log.transactionHash
+      });
+    }
+  }
 });
 ```
 

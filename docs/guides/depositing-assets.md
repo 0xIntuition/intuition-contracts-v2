@@ -76,8 +76,8 @@ const [expectedShares, assetsAfterFees] = await multiVault.previewDeposit(
   depositAmount
 );
 
-console.log('Expected shares:', ethers.formatEther(expectedShares));
-console.log('Assets after fees:', ethers.formatEther(assetsAfterFees));
+console.log('Expected shares:', formatEther(expectedShares));
+console.log('Assets after fees:', formatEther(assetsAfterFees));
 ```
 
 ### Step 4: Set Minimum Shares (Slippage Protection)
@@ -114,57 +114,70 @@ const depositedEvent = receipt.logs
   .find(event => event.name === 'Deposited');
 
 const sharesMinted = depositedEvent.args.shares;
-console.log('Shares minted:', ethers.formatEther(sharesMinted));
+console.log('Shares minted:', formatEther(sharesMinted));
 ```
 
 ## Code Examples
 
-### TypeScript (ethers.js v6)
+### TypeScript (viem)
 
 Complete deposit example with error handling:
 
 ```typescript
-import { ethers } from 'ethers';
+import {
+  createPublicClient,
+  createWalletClient,
+  http,
+  formatEther,
+  parseEther,
+  isHex,
+  type Hash,
+  type Address
+} from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { base } from 'viem/chains';
 
 // ABIs
-import MultiVaultABI from './abis/IMultiVault.json';
-import ERC20ABI from './abis/ERC20.json';
+import { multiVaultAbi } from './abis/IMultiVault';
 
 // Configuration
-const MULTIVAULT_ADDRESS = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e';
+const MULTIVAULT_ADDRESS = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e' as Address;
 const RPC_URL = 'YOUR_INTUITION_RPC_URL';
 
 /**
  * Deposits assets into a vault
  */
 async function depositToVault(
-  termId: string,
+  termId: `0x${string}`,
   curveId: number,
   depositAmount: bigint,
   slippageBps: number,
-  privateKey: string,
-  receiverAddress?: string
+  privateKey: `0x${string}`,
+  receiverAddress?: Address
 ): Promise<{
   sharesMinted: bigint;
   assetsDeposited: bigint;
-  txHash: string;
+  txHash: Hash;
 }> {
-  // Setup
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
-  const wallet = new ethers.Wallet(privateKey, provider);
+  // Setup clients
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http(RPC_URL)
+  });
 
-  const multiVault = new ethers.Contract(
-    MULTIVAULT_ADDRESS,
-    MultiVaultABI,
-    wallet
-  );
+  const account = privateKeyToAccount(privateKey);
+  const walletClient = createWalletClient({
+    account,
+    chain: base,
+    transport: http(RPC_URL)
+  });
 
   // Default receiver is the sender
-  const receiver = receiverAddress || wallet.address;
+  const receiver = receiverAddress || account.address;
 
   try {
     // Step 1: Validate inputs
-    if (!ethers.isHexString(termId, 32)) {
+    if (!isHex(termId, { strict: true })) {
       throw new Error('Invalid term ID format (must be 32-byte hex string)');
     }
 
@@ -177,79 +190,86 @@ async function depositToVault(
     }
 
     // Step 2: Check vault exists
-    const exists = await multiVault.isTermCreated(termId);
+    const exists = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultAbi,
+      functionName: 'isTermCreated',
+      args: [termId]
+    });
     if (!exists) {
       throw new Error(`Vault does not exist for term ID: ${termId}`);
     }
 
     // Step 3: Get vault info
-    const [totalAssets, totalShares] = await multiVault.getVault(termId, curveId);
+    const vaultInfo = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultAbi,
+      functionName: 'getVault',
+      args: [termId, curveId]
+    });
+    const [totalAssets, totalShares] = vaultInfo;
     console.log('Vault state:');
-    console.log('  Total assets:', ethers.formatEther(totalAssets));
-    console.log('  Total shares:', ethers.formatEther(totalShares));
+    console.log('  Total assets:', formatEther(totalAssets));
+    console.log('  Total shares:', formatEther(totalShares));
 
     // Step 4: Preview the deposit
-    const [expectedShares, assetsAfterFees] = await multiVault.previewDeposit(
-      termId,
-      curveId,
-      depositAmount
-    );
+    const previewResult = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultAbi,
+      functionName: 'previewDeposit',
+      args: [termId, curveId, depositAmount]
+    });
+    const [expectedShares, assetsAfterFees] = previewResult;
 
     console.log('Deposit preview:');
-    console.log('  Depositing:', ethers.formatEther(depositAmount), 'TRUST');
-    console.log('  Expected shares:', ethers.formatEther(expectedShares));
-    console.log('  Assets after fees:', ethers.formatEther(assetsAfterFees));
+    console.log('  Depositing:', formatEther(depositAmount), 'TRUST');
+    console.log('  Expected shares:', formatEther(expectedShares));
+    console.log('  Assets after fees:', formatEther(assetsAfterFees));
 
     // Calculate fees
     const totalFees = depositAmount - assetsAfterFees;
-    console.log('  Total fees:', ethers.formatEther(totalFees), 'TRUST');
+    console.log('  Total fees:', formatEther(totalFees), 'TRUST');
 
     // Step 5: Calculate minimum shares with slippage protection
     const minShares = expectedShares * (10000n - BigInt(slippageBps)) / 10000n;
-    console.log('  Minimum shares:', ethers.formatEther(minShares));
+    console.log('  Minimum shares:', formatEther(minShares));
     console.log('  Slippage tolerance:', slippageBps / 100, '%');
 
     // Step 6: Execute deposit
     console.log('Executing deposit...');
 
-    const depositTx = await multiVault.deposit(
-      receiver,
-      termId,
-      curveId,
-      minShares,
-      {
-        value: depositAmount,
-        gasLimit: 400000n
-      }
-    );
+    const depositHash = await walletClient.writeContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultAbi,
+      functionName: 'deposit',
+      args: [receiver, termId, curveId, minShares],
+      value: depositAmount,
+      gas: 400000n
+    });
 
-    console.log('Transaction sent:', depositTx.hash);
-    const receipt = await depositTx.wait();
+    console.log('Transaction sent:', depositHash);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: depositHash });
     console.log('Transaction confirmed in block:', receipt.blockNumber);
 
     // Step 7: Parse events
     let sharesMinted = 0n;
     let actualAssetsDeposited = 0n;
 
-    for (const log of receipt.logs) {
-      try {
-        const parsed = multiVault.interface.parseLog({
-          topics: log.topics,
-          data: log.data
-        });
+    const depositedLogs = publicClient.parseEventLogs({
+      abi: multiVaultAbi,
+      logs: receipt.logs,
+      eventName: 'Deposited'
+    });
 
-        if (parsed.name === 'Deposited') {
-          sharesMinted = parsed.args.shares;
-          actualAssetsDeposited = parsed.args.assets;
+    if (depositedLogs.length > 0) {
+      const depositEvent = depositedLogs[0].args;
+      sharesMinted = depositEvent.shares;
+      actualAssetsDeposited = depositEvent.assets;
 
-          console.log('Deposit successful!');
-          console.log('  Shares minted:', ethers.formatEther(sharesMinted));
-          console.log('  Total shares now:', ethers.formatEther(parsed.args.totalShares));
-          console.log('  Vault type:', ['ATOM', 'TRIPLE', 'COUNTER_TRIPLE'][parsed.args.vaultType]);
-        }
-      } catch (e) {
-        // Not a MultiVault event, skip
-      }
+      console.log('Deposit successful!');
+      console.log('  Shares minted:', formatEther(sharesMinted));
+      console.log('  Total shares now:', formatEther(depositEvent.totalShares));
+      console.log('  Vault type:', ['ATOM', 'TRIPLE', 'COUNTER_TRIPLE'][depositEvent.vaultType]);
     }
 
     if (sharesMinted === 0n) {
@@ -259,24 +279,26 @@ async function depositToVault(
     // Verify slippage protection worked
     if (sharesMinted < minShares) {
       throw new Error(
-        `Slippage too high! Expected >= ${ethers.formatEther(minShares)}, ` +
-        `got ${ethers.formatEther(sharesMinted)}`
+        `Slippage too high! Expected >= ${formatEther(minShares)}, ` +
+        `got ${formatEther(sharesMinted)}`
       );
     }
 
     return {
       sharesMinted,
       assetsDeposited: actualAssetsDeposited,
-      txHash: receipt.hash
+      txHash: receipt.transactionHash
     };
 
   } catch (error) {
-    if (error.code === 'INSUFFICIENT_FUNDS') {
-      throw new Error('Insufficient ETH for gas fees');
-    } else if (error.code === 'CALL_EXCEPTION') {
-      throw new Error(`Contract call failed: ${error.reason || error.message}`);
-    } else if (error.message?.includes('slippage')) {
-      throw new Error('Transaction would result in excessive slippage');
+    if (error instanceof Error) {
+      if (error.message.includes('insufficient funds')) {
+        throw new Error('Insufficient ETH for gas fees');
+      } else if (error.message.includes('execution reverted')) {
+        throw new Error(`Contract call failed: ${error.message}`);
+      } else if (error.message.includes('slippage')) {
+        throw new Error('Transaction would result in excessive slippage');
+      }
     }
 
     throw error;
@@ -288,19 +310,27 @@ async function depositToVault(
  */
 async function depositBatch(
   deposits: Array<{
-    termId: string;
+    termId: `0x${string}`;
     curveId: number;
     amount: bigint;
     minShares: bigint;
   }>,
-  privateKey: string,
-  receiverAddress?: string
+  privateKey: `0x${string}`,
+  receiverAddress?: Address
 ) {
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
-  const wallet = new ethers.Wallet(privateKey, provider);
-  const multiVault = new ethers.Contract(MULTIVAULT_ADDRESS, MultiVaultABI, wallet);
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http(RPC_URL)
+  });
 
-  const receiver = receiverAddress || wallet.address;
+  const account = privateKeyToAccount(privateKey);
+  const walletClient = createWalletClient({
+    account,
+    chain: base,
+    transport: http(RPC_URL)
+  });
+
+  const receiver = receiverAddress || account.address;
 
   // Extract arrays for batch call
   const termIds = deposits.map(d => d.termId);
@@ -312,38 +342,29 @@ async function depositBatch(
   const totalAmount = amounts.reduce((sum, amt) => sum + amt, 0n);
 
   // Execute batch deposit
-  const tx = await multiVault.depositBatch(
-    receiver,
-    termIds,
-    curveIds,
-    amounts,
-    minSharesArray,
-    {
-      value: totalAmount,
-      gasLimit: 1000000n // Higher limit for batch
-    }
-  );
+  const batchHash = await walletClient.writeContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: multiVaultAbi,
+    functionName: 'depositBatch',
+    args: [receiver, termIds, curveIds, amounts, minSharesArray],
+    value: totalAmount,
+    gas: 1000000n // Higher limit for batch
+  });
 
-  const receipt = await tx.wait();
+  const receipt = await publicClient.waitForTransactionReceipt({ hash: batchHash });
 
   // Parse all Deposited events
-  const results = [];
-  for (const log of receipt.logs) {
-    try {
-      const parsed = multiVault.interface.parseLog({
-        topics: log.topics,
-        data: log.data
-      });
+  const depositedLogs = publicClient.parseEventLogs({
+    abi: multiVaultAbi,
+    logs: receipt.logs,
+    eventName: 'Deposited'
+  });
 
-      if (parsed.name === 'Deposited') {
-        results.push({
-          termId: parsed.args.termId,
-          shares: parsed.args.shares,
-          assets: parsed.args.assets
-        });
-      }
-    } catch (e) {}
-  }
+  const results = depositedLogs.map(log => ({
+    termId: log.args.termId,
+    shares: log.args.shares,
+    assets: log.args.assets
+  }));
 
   return results;
 }
@@ -353,39 +374,37 @@ async function main() {
   try {
     // Single deposit
     const result = await depositToVault(
-      '0x...', // term ID
+      '0x...' as `0x${string}`, // term ID
       1,       // curve ID (linear)
-      ethers.parseEther("25"), // 25 TRUST
+      parseEther("25"), // 25 TRUST
       50,      // 0.5% slippage tolerance
-      'YOUR_PRIVATE_KEY'
+      '0x...' as `0x${string}` // YOUR_PRIVATE_KEY
     );
 
     console.log('\nDeposit successful!');
-    console.log('Shares minted:', ethers.formatEther(result.sharesMinted));
+    console.log('Shares minted:', formatEther(result.sharesMinted));
     console.log('Transaction:', result.txHash);
 
     // Batch deposit
     const batchResults = await depositBatch(
       [
-        { termId: '0x...', curveId: 1, amount: ethers.parseEther("10"), minShares: 0n },
-        { termId: '0x...', curveId: 1, amount: ethers.parseEther("20"), minShares: 0n },
-        { termId: '0x...', curveId: 1, amount: ethers.parseEther("15"), minShares: 0n }
+        { termId: '0x...' as `0x${string}`, curveId: 1, amount: parseEther("10"), minShares: 0n },
+        { termId: '0x...' as `0x${string}`, curveId: 1, amount: parseEther("20"), minShares: 0n },
+        { termId: '0x...' as `0x${string}`, curveId: 1, amount: parseEther("15"), minShares: 0n }
       ],
-      'YOUR_PRIVATE_KEY'
+      '0x...' as `0x${string}` // YOUR_PRIVATE_KEY
     );
 
     console.log('\nBatch deposit successful!');
     console.log('Deposits completed:', batchResults.length);
 
   } catch (error) {
-    console.error('Error:', error.message);
+    console.error('Error:', error instanceof Error ? error.message : 'Unknown error');
     process.exit(1);
   }
 }
 
-if (require.main === module) {
-  main();
-}
+main().catch(console.error);
 ```
 
 ### Python (web3.py)
@@ -623,15 +642,27 @@ Emitted when deposits affect utilization tracking for rewards.
 
 ### Listening for Deposits
 
-**TypeScript**:
+**TypeScript (viem)**:
 ```typescript
-multiVault.on('Deposited', (sender, receiver, termId, curveId, assets, assetsAfterFees, shares, totalShares, vaultType, event) => {
-  console.log('New deposit:');
-  console.log('  Sender:', sender);
-  console.log('  Receiver:', receiver);
-  console.log('  Term ID:', termId);
-  console.log('  Shares:', ethers.formatEther(shares));
+import { parseAbiItem } from 'viem';
+
+// Watch for deposit events
+const unwatch = publicClient.watchEvent({
+  address: MULTIVAULT_ADDRESS,
+  event: parseAbiItem('event Deposited(address indexed sender, address indexed receiver, bytes32 indexed termId, uint256 curveId, uint256 assets, uint256 assetsAfterFees, uint256 shares, uint256 totalShares, uint8 vaultType)'),
+  onLogs: (logs) => {
+    for (const log of logs) {
+      console.log('New deposit:');
+      console.log('  Sender:', log.args.sender);
+      console.log('  Receiver:', log.args.receiver);
+      console.log('  Term ID:', log.args.termId);
+      console.log('  Shares:', formatEther(log.args.shares));
+    }
+  }
 });
+
+// Stop watching
+// unwatch();
 ```
 
 ## Error Handling

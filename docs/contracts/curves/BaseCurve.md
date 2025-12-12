@@ -504,7 +504,7 @@ const price = await bondingCurveRegistry.currentPrice(
     totalAssets
 );
 
-console.log(`Share price: ${ethers.formatEther(price)} TRUST per share`);
+console.log(`Share price: ${formatEther(price)} TRUST per share`);
 ```
 
 #### Simulating Deposit
@@ -520,7 +520,7 @@ const shares = await bondingCurveRegistry.previewDeposit(
     curveId
 );
 
-console.log(`Expected shares: ${ethers.formatEther(shares)}`);
+console.log(`Expected shares: ${formatEther(shares)}`);
 ```
 
 ### Edge Cases
@@ -532,42 +532,101 @@ console.log(`Expected shares: ${ethers.formatEther(shares)}`);
 
 ## Usage Examples
 
-### TypeScript (ethers.js v6)
+### TypeScript (viem)
 
 #### Querying Curve Information
 
 ```typescript
-import { ethers } from 'ethers';
+import { createPublicClient, http, formatEther } from 'viem';
+import { intuition } from 'viem/chains';
 
 // Setup
-const provider = new ethers.JsonRpcProvider('YOUR_INTUITION_RPC');
+const publicClient = createPublicClient({
+  chain: intuition,
+  transport: http()
+});
+
 const registryAddress = '0xd0E488Fb32130232527eedEB72f8cE2BFC0F9930';
 const multiVaultAddress = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e';
 
-const registryABI = [
-  'function getCurveName(uint256 id) external view returns (string memory)',
-  'function getCurveMaxShares(uint256 id) external view returns (uint256)',
-  'function getCurveMaxAssets(uint256 id) external view returns (uint256)',
-  'function currentPrice(uint256 id, uint256 totalShares, uint256 totalAssets) external view returns (uint256)'
-];
+const registryAbi = [
+  {
+    name: 'getCurveName',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'id', type: 'uint256' }],
+    outputs: [{ name: '', type: 'string' }]
+  },
+  {
+    name: 'getCurveMaxShares',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'id', type: 'uint256' }],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    name: 'getCurveMaxAssets',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'id', type: 'uint256' }],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    name: 'currentPrice',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'id', type: 'uint256' },
+      { name: 'totalShares', type: 'uint256' },
+      { name: 'totalAssets', type: 'uint256' }
+    ],
+    outputs: [{ name: '', type: 'uint256' }]
+  }
+] as const;
 
-const multiVaultABI = [
-  'function getVault(bytes32 termId, uint256 curveId) external view returns (uint256 totalAssets, uint256 totalShares)'
-];
-
-const registry = new ethers.Contract(registryAddress, registryABI, provider);
-const multiVault = new ethers.Contract(multiVaultAddress, multiVaultABI, provider);
+const multiVaultAbi = [
+  {
+    name: 'getVault',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'termId', type: 'bytes32' },
+      { name: 'curveId', type: 'uint256' }
+    ],
+    outputs: [
+      { name: 'totalAssets', type: 'uint256' },
+      { name: 'totalShares', type: 'uint256' }
+    ]
+  }
+] as const;
 
 async function getCurveInfo(curveId: number) {
   try {
     // Get curve metadata
-    const name = await registry.getCurveName(curveId);
-    const maxShares = await registry.getCurveMaxShares(curveId);
-    const maxAssets = await registry.getCurveMaxAssets(curveId);
+    const name = await publicClient.readContract({
+      address: registryAddress,
+      abi: registryAbi,
+      functionName: 'getCurveName',
+      args: [BigInt(curveId)]
+    });
+
+    const maxShares = await publicClient.readContract({
+      address: registryAddress,
+      abi: registryAbi,
+      functionName: 'getCurveMaxShares',
+      args: [BigInt(curveId)]
+    });
+
+    const maxAssets = await publicClient.readContract({
+      address: registryAddress,
+      abi: registryAbi,
+      functionName: 'getCurveMaxAssets',
+      args: [BigInt(curveId)]
+    });
 
     console.log(`Curve ${curveId}: ${name}`);
-    console.log(`Max Shares: ${ethers.formatEther(maxShares)}`);
-    console.log(`Max Assets: ${ethers.formatEther(maxAssets)}`);
+    console.log(`Max Shares: ${formatEther(maxShares)}`);
+    console.log(`Max Assets: ${formatEther(maxAssets)}`);
 
     return { name, maxShares, maxAssets };
   } catch (error) {
@@ -584,44 +643,49 @@ getCurveInfo(1);
 
 ```typescript
 async function simulateDeposit(
-  termId: string,
+  termId: `0x${string}`,
   curveId: number,
   depositAmount: bigint
 ) {
   try {
     // Get current vault state
-    const [totalAssets, totalShares] = await multiVault.getVault(
-      termId,
-      curveId
-    );
+    const vault = await publicClient.readContract({
+      address: multiVaultAddress,
+      abi: multiVaultAbi,
+      functionName: 'getVault',
+      args: [termId, BigInt(curveId)]
+    });
+
+    const [totalAssets, totalShares] = vault;
 
     console.log(`Current State:`);
-    console.log(`  Total Assets: ${ethers.formatEther(totalAssets)}`);
-    console.log(`  Total Shares: ${ethers.formatEther(totalShares)}`);
+    console.log(`  Total Assets: ${formatEther(totalAssets)}`);
+    console.log(`  Total Shares: ${formatEther(totalShares)}`);
 
     // Preview deposit through registry
-    const expectedShares = await registry.previewDeposit(
-      depositAmount,
-      totalAssets,
-      totalShares,
-      curveId
-    );
+    const expectedShares = await publicClient.readContract({
+      address: registryAddress,
+      abi: registryAbi,
+      functionName: 'previewDeposit',
+      args: [depositAmount, totalAssets, totalShares, BigInt(curveId)]
+    });
 
     console.log(`\nDeposit Simulation:`);
-    console.log(`  Deposit Amount: ${ethers.formatEther(depositAmount)}`);
-    console.log(`  Expected Shares: ${ethers.formatEther(expectedShares)}`);
+    console.log(`  Deposit Amount: ${formatEther(depositAmount)}`);
+    console.log(`  Expected Shares: ${formatEther(expectedShares)}`);
 
     // Calculate implied price
-    const impliedPrice = depositAmount * ethers.parseEther('1') / expectedShares;
-    console.log(`  Implied Price: ${ethers.formatEther(impliedPrice)} TRUST/share`);
+    const impliedPrice = (depositAmount * parseEther('1')) / expectedShares;
+    console.log(`  Implied Price: ${formatEther(impliedPrice)} TRUST/share`);
 
     // Get current marginal price
-    const currentPrice = await registry.currentPrice(
-      curveId,
-      totalShares,
-      totalAssets
-    );
-    console.log(`  Current Price: ${ethers.formatEther(currentPrice)} TRUST/share`);
+    const currentPrice = await publicClient.readContract({
+      address: registryAddress,
+      abi: registryAbi,
+      functionName: 'currentPrice',
+      args: [BigInt(curveId), totalShares, totalAssets]
+    });
+    console.log(`  Current Price: ${formatEther(currentPrice)} TRUST/share`);
 
     return expectedShares;
   } catch (error) {

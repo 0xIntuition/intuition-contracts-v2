@@ -54,33 +54,50 @@ Estimated gas costs for common operations (approximate):
 Profile gas costs for your specific use case:
 
 ```typescript
+import { createPublicClient, http, parseEther, formatEther } from 'viem';
+
 async function profileGasCosts() {
+  const publicClient = createPublicClient({
+    chain: mainnet,
+    transport: http()
+  });
+
   const operations = [
     {
       name: 'Single Deposit',
-      fn: async () => multiVault.deposit(
-        await signer.getAddress(),
-        atomId,
-        1,
-        parseEther('10'),
-        0n
-      ),
+      request: {
+        address: multiVaultAddress,
+        abi: multiVaultAbi,
+        functionName: 'deposit',
+        args: [
+          userAddress,
+          atomId,
+          1,
+          parseEther('10'),
+          0n
+        ],
+      },
     },
     {
       name: 'Batch Deposit (5)',
-      fn: async () => multiVault.depositBatch(
-        await signer.getAddress(),
-        [atomId, atomId2, atomId3, atomId4, atomId5],
-        [1, 1, 1, 1, 1],
-        [parseEther('10'), parseEther('10'), parseEther('10'), parseEther('10'), parseEther('10')],
-        [0n, 0n, 0n, 0n, 0n]
-      ),
+      request: {
+        address: multiVaultAddress,
+        abi: multiVaultAbi,
+        functionName: 'depositBatch',
+        args: [
+          userAddress,
+          [atomId, atomId2, atomId3, atomId4, atomId5],
+          [1, 1, 1, 1, 1],
+          [parseEther('10'), parseEther('10'), parseEther('10'), parseEther('10'), parseEther('10')],
+          [0n, 0n, 0n, 0n, 0n]
+        ],
+      },
     },
   ];
 
   for (const op of operations) {
-    const gasEstimate = await op.fn.estimateGas();
-    const gasPrice = (await signer.provider!.getFeeData()).gasPrice!;
+    const gasEstimate = await publicClient.estimateContractGas(op.request);
+    const gasPrice = await publicClient.getGasPrice();
     const cost = gasEstimate * gasPrice;
 
     console.log(`${op.name}:`);
@@ -97,6 +114,8 @@ async function profileGasCosts() {
 Deposit to multiple vaults in a single transaction:
 
 ```typescript
+import { createWalletClient, http, parseEther } from 'viem';
+
 async function batchDeposit(
   deposits: Array<{
     termId: string;
@@ -105,7 +124,12 @@ async function batchDeposit(
     minShares: bigint;
   }>
 ): Promise<TransactionResult> {
-  const receiver = await signer.getAddress();
+  const walletClient = createWalletClient({
+    chain: mainnet,
+    transport: http()
+  });
+
+  const [account] = await walletClient.getAddresses();
 
   // Prepare arrays for batch call
   const termIds = deposits.map(d => d.termId);
@@ -114,15 +138,19 @@ async function batchDeposit(
   const minShares = deposits.map(d => d.minShares);
 
   // Execute batch deposit
-  const tx = await multiVault.depositBatch(
-    receiver,
-    termIds,
-    curveIds,
-    assets,
-    minShares
-  );
+  const hash = await walletClient.writeContract({
+    address: multiVaultAddress,
+    abi: multiVaultAbi,
+    functionName: 'depositBatch',
+    args: [account, termIds, curveIds, assets, minShares],
+  });
 
-  return await tx.wait();
+  const publicClient = createPublicClient({
+    chain: mainnet,
+    transport: http()
+  });
+
+  return await publicClient.waitForTransactionReceipt({ hash });
 }
 
 // Usage
@@ -140,6 +168,8 @@ const result = await batchDeposit([
 Redeem from multiple vaults in a single transaction:
 
 ```typescript
+import { createWalletClient, createPublicClient, http } from 'viem';
+
 async function batchRedeem(
   redemptions: Array<{
     termId: string;
@@ -148,22 +178,31 @@ async function batchRedeem(
     minAssets: bigint;
   }>
 ): Promise<TransactionResult> {
-  const receiver = await signer.getAddress();
+  const walletClient = createWalletClient({
+    chain: mainnet,
+    transport: http()
+  });
+
+  const [account] = await walletClient.getAddresses();
 
   const termIds = redemptions.map(r => r.termId);
   const curveIds = redemptions.map(r => r.curveId);
   const shares = redemptions.map(r => r.shares);
   const minAssets = redemptions.map(r => r.minAssets);
 
-  const tx = await multiVault.redeemBatch(
-    receiver,
-    termIds,
-    curveIds,
-    shares,
-    minAssets
-  );
+  const hash = await walletClient.writeContract({
+    address: multiVaultAddress,
+    abi: multiVaultAbi,
+    functionName: 'redeemBatch',
+    args: [account, termIds, curveIds, shares, minAssets],
+  });
 
-  return await tx.wait();
+  const publicClient = createPublicClient({
+    chain: mainnet,
+    transport: http()
+  });
+
+  return await publicClient.waitForTransactionReceipt({ hash });
 }
 ```
 
@@ -172,6 +211,8 @@ async function batchRedeem(
 Create multiple atoms in a single transaction:
 
 ```typescript
+import { createWalletClient, createPublicClient, http, parseEther, decodeEventLog } from 'viem';
+
 async function createAtomsBatch(
   atoms: Array<{
     data: string;
@@ -179,6 +220,13 @@ async function createAtomsBatch(
   }>,
   curveId: number = 1
 ): Promise<{ atomIds: string[]; result: TransactionResult }> {
+  const walletClient = createWalletClient({
+    chain: mainnet,
+    transport: http()
+  });
+
+  const [account] = await walletClient.getAddresses();
+
   const atomDatas = atoms.map(a => a.data);
   const assets = atoms.map(a => a.assets);
 
@@ -186,19 +234,34 @@ async function createAtomsBatch(
   const totalAssets = assets.reduce((sum, a) => sum + a, 0n);
   const minShares = totalAssets / 100n; // 1% slippage
 
-  const tx = await multiVault.createAtoms(
-    atomDatas,
-    assets,
-    curveId,
-    await signer.getAddress(),
-    minShares
-  );
+  const hash = await walletClient.writeContract({
+    address: multiVaultAddress,
+    abi: multiVaultAbi,
+    functionName: 'createAtoms',
+    args: [atomDatas, assets, curveId, account, minShares],
+  });
 
-  const receipt = await tx.wait();
+  const publicClient = createPublicClient({
+    chain: mainnet,
+    transport: http()
+  });
+
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
   // Extract atom IDs from events
   const atomIds = receipt.logs
-    .filter(log => log.topics[0] === ATOM_CREATED_TOPIC)
+    .filter(log => {
+      try {
+        const decoded = decodeEventLog({
+          abi: multiVaultAbi,
+          data: log.data,
+          topics: log.topics,
+        });
+        return decoded.eventName === 'AtomCreated';
+      } catch {
+        return false;
+      }
+    })
     .map(log => log.topics[1]);
 
   return { atomIds, result: receipt };
@@ -221,29 +284,42 @@ const { atomIds } = await createAtomsBatch([
 Calldata costs 16 gas per non-zero byte and 4 gas per zero byte:
 
 ```typescript
+import { stringToBytes, toHex, parseEther } from 'viem';
+
 // LESS EFFICIENT: Using strings
-const atomData = ethers.toUtf8Bytes('my-atom-data-string');
+const atomData = stringToBytes('my-atom-data-string');
 
 // MORE EFFICIENT: Using compact bytes
-const atomData = ethers.hexlify(ethers.randomBytes(32)); // 32 bytes max
+const atomData = toHex(crypto.getRandomValues(new Uint8Array(32))); // 32 bytes max
 
 // LESS EFFICIENT: Redundant data
-await multiVault.deposit(
-  '0x1234567890123456789012345678901234567890', // Full address
-  termId,
-  curveId,
-  parseEther('10.123456789123456789'), // Full precision
-  0n
-);
+await walletClient.writeContract({
+  address: multiVaultAddress,
+  abi: multiVaultAbi,
+  functionName: 'deposit',
+  args: [
+    '0x1234567890123456789012345678901234567890', // Full address
+    termId,
+    curveId,
+    parseEther('10.123456789123456789'), // Full precision
+    0n
+  ],
+});
 
 // MORE EFFICIENT: Simplified where possible
-await multiVault.deposit(
-  await signer.getAddress(), // Let SDK handle
-  termId,
-  curveId,
-  parseEther('10.12'), // Round to needed precision
-  0n
-);
+const [account] = await walletClient.getAddresses();
+await walletClient.writeContract({
+  address: multiVaultAddress,
+  abi: multiVaultAbi,
+  functionName: 'deposit',
+  args: [
+    account, // Let SDK handle
+    termId,
+    curveId,
+    parseEther('10.12'), // Round to needed precision
+    0n
+  ],
+});
 ```
 
 ### Use Multicall Pattern
@@ -251,6 +327,8 @@ await multiVault.deposit(
 Combine multiple calls efficiently:
 
 ```typescript
+import { createPublicClient, http, encodeFunctionData, decodeFunctionResult } from 'viem';
+
 // Multicall interface
 interface Call {
   target: string;
@@ -258,39 +336,68 @@ interface Call {
 }
 
 async function multicall(calls: Call[]): Promise<string[]> {
-  // Use a multicall contract or library
-  const multicallContract = new ethers.Contract(
-    MULTICALL_ADDRESS,
-    MULTICALL_ABI,
-    provider
-  );
+  const publicClient = createPublicClient({
+    chain: mainnet,
+    transport: http()
+  });
 
-  const results = await multicallContract.aggregate.staticCall(calls);
+  // Use multicall contract or library
+  const results = await publicClient.readContract({
+    address: MULTICALL_ADDRESS,
+    abi: MULTICALL_ABI,
+    functionName: 'aggregate',
+    args: [calls],
+  });
+
   return results.returnData;
 }
 
 // Batch multiple read calls
 const calls: Call[] = [
   {
-    target: multiVault.address,
-    data: multiVault.interface.encodeFunctionData('getVault', [termId1, 1]),
+    target: multiVaultAddress,
+    data: encodeFunctionData({
+      abi: multiVaultAbi,
+      functionName: 'getVault',
+      args: [termId1, 1],
+    }),
   },
   {
-    target: multiVault.address,
-    data: multiVault.interface.encodeFunctionData('getVault', [termId2, 1]),
+    target: multiVaultAddress,
+    data: encodeFunctionData({
+      abi: multiVaultAbi,
+      functionName: 'getVault',
+      args: [termId2, 1],
+    }),
   },
   {
-    target: multiVault.address,
-    data: multiVault.interface.encodeFunctionData('getShares', [user, termId1, 1]),
+    target: multiVaultAddress,
+    data: encodeFunctionData({
+      abi: multiVaultAbi,
+      functionName: 'getShares',
+      args: [user, termId1, 1],
+    }),
   },
 ];
 
 const results = await multicall(calls);
 
 // Decode results
-const vault1 = multiVault.interface.decodeFunctionResult('getVault', results[0]);
-const vault2 = multiVault.interface.decodeFunctionResult('getVault', results[1]);
-const shares = multiVault.interface.decodeFunctionResult('getShares', results[2]);
+const vault1 = decodeFunctionResult({
+  abi: multiVaultAbi,
+  functionName: 'getVault',
+  data: results[0],
+});
+const vault2 = decodeFunctionResult({
+  abi: multiVaultAbi,
+  functionName: 'getVault',
+  data: results[1],
+});
+const shares = decodeFunctionResult({
+  abi: multiVaultAbi,
+  functionName: 'getShares',
+  data: results[2],
+});
 ```
 
 ## Storage Access Patterns
@@ -300,6 +407,8 @@ const shares = multiVault.interface.decodeFunctionResult('getShares', results[2]
 Reduce on-chain reads by caching locally:
 
 ```typescript
+import { createPublicClient, http } from 'viem';
+
 class VaultStateCache {
   private cache = new Map<string, {
     vault: { totalAssets: bigint; totalShares: bigint };
@@ -307,6 +416,10 @@ class VaultStateCache {
   }>();
 
   private ttl = 30000; // 30 seconds
+  private publicClient = createPublicClient({
+    chain: mainnet,
+    transport: http()
+  });
 
   async getVault(
     termId: string,
@@ -320,7 +433,12 @@ class VaultStateCache {
     }
 
     // Fetch from chain
-    const [totalAssets, totalShares] = await multiVault.getVault(termId, curveId);
+    const [totalAssets, totalShares] = await this.publicClient.readContract({
+      address: multiVaultAddress,
+      abi: multiVaultAbi,
+      functionName: 'getVault',
+      args: [termId, curveId],
+    });
     const vault = { totalAssets, totalShares };
 
     this.cache.set(key, { vault, timestamp: Date.now() });
@@ -344,7 +462,21 @@ const vault2 = await cache.getVault(termId, 1);
 Query multiple state variables in parallel:
 
 ```typescript
+import { createPublicClient, http } from 'viem';
+
 async function getUserPortfolio(user: string): Promise<Portfolio> {
+  const publicClient = createPublicClient({
+    chain: mainnet,
+    transport: http()
+  });
+
+  // First get previous epoch
+  const previousEpoch = await publicClient.readContract({
+    address: trustBondingAddress,
+    abi: trustBondingAbi,
+    functionName: 'previousEpoch',
+  });
+
   // Instead of sequential calls, query in parallel
   const [
     atom1Shares,
@@ -353,11 +485,36 @@ async function getUserPortfolio(user: string): Promise<Portfolio> {
     bondedBalance,
     pendingRewards,
   ] = await Promise.all([
-    multiVault.getShares(user, atom1, 1),
-    multiVault.getShares(user, atom2, 1),
-    multiVault.getShares(user, atom3, 1),
-    trustBonding.balanceOf(user),
-    trustBonding.getUserRewardsForEpoch(user, await trustBonding.previousEpoch()),
+    publicClient.readContract({
+      address: multiVaultAddress,
+      abi: multiVaultAbi,
+      functionName: 'getShares',
+      args: [user, atom1, 1],
+    }),
+    publicClient.readContract({
+      address: multiVaultAddress,
+      abi: multiVaultAbi,
+      functionName: 'getShares',
+      args: [user, atom2, 1],
+    }),
+    publicClient.readContract({
+      address: multiVaultAddress,
+      abi: multiVaultAbi,
+      functionName: 'getShares',
+      args: [user, atom3, 1],
+    }),
+    publicClient.readContract({
+      address: trustBondingAddress,
+      abi: trustBondingAbi,
+      functionName: 'balanceOf',
+      args: [user],
+    }),
+    publicClient.readContract({
+      address: trustBondingAddress,
+      abi: trustBondingAbi,
+      functionName: 'getUserRewardsForEpoch',
+      args: [user, previousEpoch],
+    }),
   ]);
 
   return {
@@ -375,25 +532,31 @@ async function getUserPortfolio(user: string): Promise<Portfolio> {
 Wait for favorable gas prices:
 
 ```typescript
+import { createPublicClient, http, formatGwei, parseGwei } from 'viem';
+
 async function waitForLowGas(
   maxGasPrice: bigint,
   checkInterval: number = 10000, // 10 seconds
   timeout: number = 300000 // 5 minutes
 ): Promise<void> {
+  const publicClient = createPublicClient({
+    chain: mainnet,
+    transport: http()
+  });
+
   const startTime = Date.now();
 
   while (Date.now() - startTime < timeout) {
-    const feeData = await provider.getFeeData();
-    const currentGasPrice = feeData.gasPrice || 0n;
+    const currentGasPrice = await publicClient.getGasPrice();
 
-    console.log(`Current gas price: ${formatUnits(currentGasPrice, 'gwei')} gwei`);
+    console.log(`Current gas price: ${formatGwei(currentGasPrice)} gwei`);
 
     if (currentGasPrice <= maxGasPrice) {
       console.log('Gas price acceptable, proceeding...');
       return;
     }
 
-    console.log(`Waiting for gas price to drop below ${formatUnits(maxGasPrice, 'gwei')} gwei...`);
+    console.log(`Waiting for gas price to drop below ${formatGwei(maxGasPrice)} gwei...`);
     await sleep(checkInterval);
   }
 
@@ -401,7 +564,7 @@ async function waitForLowGas(
 }
 
 // Usage
-await waitForLowGas(parseUnits('20', 'gwei')); // Wait for < 20 gwei
+await waitForLowGas(parseGwei('20')); // Wait for < 20 gwei
 await deposit(termId, curveId, assets, minShares);
 ```
 
@@ -441,12 +604,23 @@ async function executeWhenCheap(
 For read-only operations, use static calls instead of transactions:
 
 ```typescript
-// INEFFICIENT: Sending transaction for read operation
-const tx = await multiVault.getVault(termId, curveId);
-await tx.wait(); // Wastes gas
+import { createPublicClient, http } from 'viem';
 
-// EFFICIENT: Use view function
-const [totalAssets, totalShares] = await multiVault.getVault(termId, curveId);
+const publicClient = createPublicClient({
+  chain: mainnet,
+  transport: http()
+});
+
+// INEFFICIENT: Would need to send transaction for write operation (not applicable for read)
+// Read operations in viem are always free
+
+// EFFICIENT: Use read function
+const [totalAssets, totalShares] = await publicClient.readContract({
+  address: multiVaultAddress,
+  abi: multiVaultAbi,
+  functionName: 'getVault',
+  args: [termId, curveId],
+});
 // No gas cost!
 ```
 
@@ -499,40 +673,47 @@ contract ProxyDepositor {
 Use access lists for predictable storage access:
 
 ```typescript
+import { createWalletClient, createPublicClient, http, encodeFunctionData } from 'viem';
+
 async function depositWithAccessList(
   termId: string,
   curveId: number,
   assets: bigint,
   minShares: bigint
 ): Promise<TransactionResult> {
+  const walletClient = createWalletClient({
+    chain: mainnet,
+    transport: http()
+  });
+
+  const publicClient = createPublicClient({
+    chain: mainnet,
+    transport: http()
+  });
+
+  const [account] = await walletClient.getAddresses();
+
   // Create access list
-  const accessList = await provider.send('eth_createAccessList', [
-    {
-      from: await signer.getAddress(),
-      to: multiVault.address,
-      data: multiVault.interface.encodeFunctionData('deposit', [
-        await signer.getAddress(),
-        termId,
-        curveId,
-        assets,
-        minShares,
-      ]),
-    },
-  ]);
+  const accessList = await publicClient.createAccessList({
+    account,
+    to: multiVaultAddress,
+    data: encodeFunctionData({
+      abi: multiVaultAbi,
+      functionName: 'deposit',
+      args: [account, termId, curveId, assets, minShares],
+    }),
+  });
 
   // Send transaction with access list
-  const tx = await multiVault.deposit(
-    await signer.getAddress(),
-    termId,
-    curveId,
-    assets,
-    minShares,
-    {
-      accessList: accessList.accessList,
-    }
-  );
+  const hash = await walletClient.writeContract({
+    address: multiVaultAddress,
+    abi: multiVaultAbi,
+    functionName: 'deposit',
+    args: [account, termId, curveId, assets, minShares],
+    accessList: accessList.accessList,
+  });
 
-  return await tx.wait();
+  return await publicClient.waitForTransactionReceipt({ hash });
 }
 ```
 

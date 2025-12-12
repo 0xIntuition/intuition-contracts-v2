@@ -49,10 +49,10 @@ const protocolFeeNumerator = vaultFees.protocolFee;
 const feeDenominator = generalConfig.feeDenominator;
 
 // Calculate fee on 100 WTRUST deposit
-const depositAmount = ethers.parseEther('100');
+const depositAmount = parseEther('100');
 const protocolFeeAmount = await multiVault.protocolFeeAmount(depositAmount);
 
-console.log('Protocol fee:', ethers.formatEther(protocolFeeAmount), 'WTRUST');
+console.log('Protocol fee:', formatEther(protocolFeeAmount), 'WTRUST');
 console.log('Fee percentage:', Number(protocolFeeNumerator) / Number(feeDenominator) * 100, '%');
 ```
 
@@ -85,11 +85,11 @@ const feeThreshold = generalConfig.feeThreshold;
 const willChargeEntryFee = totalShares >= feeThreshold;
 
 if (willChargeEntryFee) {
-  const depositAmount = ethers.parseEther('100');
+  const depositAmount = parseEther('100');
   const entryFeeAmount = await multiVault.entryFeeAmount(depositAmount);
 
   console.log('Entry fee will be charged');
-  console.log('Entry fee amount:', ethers.formatEther(entryFeeAmount), 'WTRUST');
+  console.log('Entry fee amount:', formatEther(entryFeeAmount), 'WTRUST');
   console.log('Fee percentage:', Number(vaultFees.entryFee) / Number(generalConfig.feeDenominator) * 100, '%');
 } else {
   console.log('Vault below threshold, no entry fee');
@@ -114,7 +114,7 @@ if (willChargeEntryFee) {
 
 **Check if exit fee applies**:
 ```typescript
-const sharesToRedeem = ethers.parseEther('50');
+const sharesToRedeem = parseEther('50');
 
 const [totalAssets, totalShares] = await multiVault.getVault(termId, curveId);
 const generalConfig = await multiVault.getGeneralConfig();
@@ -130,7 +130,7 @@ if (willChargeExitFee) {
   const exitFeeAmount = await multiVault.exitFeeAmount(grossAssets);
 
   console.log('Exit fee will be charged');
-  console.log('Exit fee amount:', ethers.formatEther(exitFeeAmount), 'WTRUST');
+  console.log('Exit fee amount:', formatEther(exitFeeAmount), 'WTRUST');
 } else {
   console.log('Redemption leaves vault below threshold, no exit fee');
 }
@@ -162,13 +162,13 @@ const minDeposit = generalConfig.minDeposit;
 
 const totalMinimum = atomCreationFee + minDeposit;
 
-console.log('Atom creation fee:', ethers.formatEther(atomCreationFee), 'WTRUST');
-console.log('Minimum deposit:', ethers.formatEther(minDeposit), 'WTRUST');
-console.log('Total minimum:', ethers.formatEther(totalMinimum), 'WTRUST');
+console.log('Atom creation fee:', formatEther(atomCreationFee), 'WTRUST');
+console.log('Minimum deposit:', formatEther(minDeposit), 'WTRUST');
+console.log('Total minimum:', formatEther(totalMinimum), 'WTRUST');
 
 // Convenience function
 const atomCost = await multiVault.getAtomCost();
-console.log('Atom cost (same as creation fee):', ethers.formatEther(atomCost), 'WTRUST');
+console.log('Atom cost (same as creation fee):', formatEther(atomCost), 'WTRUST');
 ```
 
 **Typical values**:
@@ -198,13 +198,13 @@ const minDeposit = generalConfig.minDeposit;
 
 const totalMinimum = tripleCreationFee + minDeposit;
 
-console.log('Triple creation fee:', ethers.formatEther(tripleCreationFee), 'WTRUST');
-console.log('Minimum deposit:', ethers.formatEther(minDeposit), 'WTRUST');
-console.log('Total minimum:', ethers.formatEther(totalMinimum), 'WTRUST');
+console.log('Triple creation fee:', formatEther(tripleCreationFee), 'WTRUST');
+console.log('Minimum deposit:', formatEther(minDeposit), 'WTRUST');
+console.log('Total minimum:', formatEther(totalMinimum), 'WTRUST');
 
 // Convenience function
 const tripleCost = await multiVault.getTripleCost();
-console.log('Triple cost (same as creation fee):', ethers.formatEther(tripleCost), 'WTRUST');
+console.log('Triple cost (same as creation fee):', formatEther(tripleCost), 'WTRUST');
 ```
 
 **Typical values**:
@@ -233,10 +233,10 @@ const generalConfig = await multiVault.getGeneralConfig();
 const atomWalletFeeNumerator = atomConfig.atomWalletDepositFee;
 const feeDenominator = generalConfig.feeDenominator;
 
-const depositAmount = ethers.parseEther('100');
+const depositAmount = parseEther('100');
 const atomWalletFee = (depositAmount * atomWalletFeeNumerator) / feeDenominator;
 
-console.log('Atom wallet deposit fee:', ethers.formatEther(atomWalletFee), 'WTRUST');
+console.log('Atom wallet deposit fee:', formatEther(atomWalletFee), 'WTRUST');
 console.log('Fee percentage:', Number(atomWalletFeeNumerator) / Number(feeDenominator) * 100, '%');
 
 // Check accumulated fees for an atom
@@ -269,13 +269,13 @@ const generalConfig = await multiVault.getGeneralConfig();
 const fractionNumerator = tripleConfig.atomDepositFractionForTriple;
 const feeDenominator = generalConfig.feeDenominator;
 
-const tripleDepositAmount = ethers.parseEther('100');
+const tripleDepositAmount = parseEther('100');
 const totalToAtoms = await multiVault.atomDepositFractionAmount(tripleDepositAmount);
 const perAtom = totalToAtoms / 3n; // Split among subject, predicate, object
 
-console.log('Total to underlying atoms:', ethers.formatEther(totalToAtoms), 'WTRUST');
-console.log('Per atom (subject/predicate/object):', ethers.formatEther(perAtom), 'WTRUST');
-console.log('Remaining for triple vault:', ethers.formatEther(tripleDepositAmount - totalToAtoms), 'WTRUST');
+console.log('Total to underlying atoms:', formatEther(totalToAtoms), 'WTRUST');
+console.log('Per atom (subject/predicate/object):', formatEther(perAtom), 'WTRUST');
+console.log('Remaining for triple vault:', formatEther(tripleDepositAmount - totalToAtoms), 'WTRUST');
 console.log('Fraction percentage:', Number(fractionNumerator) / Number(feeDenominator) * 100, '%');
 ```
 
@@ -285,16 +285,16 @@ console.log('Fraction percentage:', Number(fractionNumerator) / Number(feeDenomi
 
 ## Code Examples
 
-### TypeScript (ethers.js v6)
+### TypeScript (viem)
 
 Comprehensive fee calculation utility:
 
 ```typescript
-import { ethers } from 'ethers';
-import MultiVaultABI from './abis/IMultiVault.json';
+import { createPublicClient, http, formatEther, parseEther, Address, Hex } from 'viem';
+import { intuitionMainnet } from './chains';
+import { multiVaultABI } from './abis/IMultiVault';
 
-const MULTIVAULT_ADDRESS = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e';
-const RPC_URL = 'YOUR_INTUITION_RPC_URL';
+const MULTIVAULT_ADDRESS = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e' as Address;
 
 interface FeeBreakdown {
   protocolFee: bigint;
@@ -306,27 +306,42 @@ interface FeeBreakdown {
 }
 
 class FeeCalculator {
-  private multiVault: ethers.Contract;
+  private publicClient;
   private generalConfig: any;
   private vaultFees: any;
   private atomConfig: any;
   private tripleConfig: any;
 
-  constructor(provider: ethers.Provider) {
-    this.multiVault = new ethers.Contract(
-      MULTIVAULT_ADDRESS,
-      MultiVaultABI,
-      provider
-    );
+  constructor(rpcUrl: string) {
+    this.publicClient = createPublicClient({
+      chain: intuitionMainnet,
+      transport: http(rpcUrl)
+    });
   }
 
   async initialize() {
     [this.generalConfig, this.vaultFees, this.atomConfig, this.tripleConfig] =
       await Promise.all([
-        this.multiVault.getGeneralConfig(),
-        this.multiVault.getVaultFees(),
-        this.multiVault.getAtomConfig(),
-        this.multiVault.getTripleConfig()
+        this.publicClient.readContract({
+          address: MULTIVAULT_ADDRESS,
+          abi: multiVaultABI,
+          functionName: 'getGeneralConfig'
+        }),
+        this.publicClient.readContract({
+          address: MULTIVAULT_ADDRESS,
+          abi: multiVaultABI,
+          functionName: 'getVaultFees'
+        }),
+        this.publicClient.readContract({
+          address: MULTIVAULT_ADDRESS,
+          abi: multiVaultABI,
+          functionName: 'getAtomConfig'
+        }),
+        this.publicClient.readContract({
+          address: MULTIVAULT_ADDRESS,
+          abi: multiVaultABI,
+          functionName: 'getTripleConfig'
+        })
       ]);
   }
 
@@ -334,24 +349,36 @@ class FeeCalculator {
    * Calculate all fees for a deposit operation
    */
   async calculateDepositFees(
-    termId: string,
+    termId: Hex,
     curveId: bigint,
     depositAmount: bigint,
     isAtom: boolean = true
   ): Promise<FeeBreakdown> {
     // Get vault state
-    const [totalAssets, totalShares] = await this.multiVault.getVault(
-      termId,
-      curveId
-    );
+    const [totalAssets, totalShares] = await this.publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultABI,
+      functionName: 'getVault',
+      args: [termId, curveId]
+    }) as [bigint, bigint];
 
     // Protocol fee (always charged)
-    const protocolFee = await this.multiVault.protocolFeeAmount(depositAmount);
+    const protocolFee = await this.publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultABI,
+      functionName: 'protocolFeeAmount',
+      args: [depositAmount]
+    }) as bigint;
 
     // Entry fee (only if vault above threshold)
     let entryFee = 0n;
     if (totalShares >= this.generalConfig.feeThreshold) {
-      entryFee = await this.multiVault.entryFeeAmount(depositAmount);
+      entryFee = await this.publicClient.readContract({
+        address: MULTIVAULT_ADDRESS,
+        abi: multiVaultABI,
+        functionName: 'entryFeeAmount',
+        args: [depositAmount]
+      }) as bigint;
     }
 
     // Atom wallet deposit fee (only for atom deposits)
@@ -378,31 +405,44 @@ class FeeCalculator {
    * Calculate all fees for a redemption operation
    */
   async calculateRedemptionFees(
-    termId: string,
+    termId: Hex,
     curveId: bigint,
     shares: bigint
   ): Promise<FeeBreakdown> {
     // Convert shares to assets
-    const grossAssets = await this.multiVault.convertToAssets(
-      termId,
-      curveId,
-      shares
-    );
+    const grossAssets = await this.publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultABI,
+      functionName: 'convertToAssets',
+      args: [termId, curveId, shares]
+    }) as bigint;
 
     // Get vault state
-    const [totalAssets, totalShares] = await this.multiVault.getVault(
-      termId,
-      curveId
-    );
+    const [totalAssets, totalShares] = await this.publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultABI,
+      functionName: 'getVault',
+      args: [termId, curveId]
+    }) as [bigint, bigint];
 
     // Protocol fee (always charged)
-    const protocolFee = await this.multiVault.protocolFeeAmount(grossAssets);
+    const protocolFee = await this.publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultABI,
+      functionName: 'protocolFeeAmount',
+      args: [grossAssets]
+    }) as bigint;
 
     // Exit fee (only if remaining shares >= threshold)
     let exitFee = 0n;
     const sharesAfterRedemption = totalShares - shares;
     if (sharesAfterRedemption >= this.generalConfig.feeThreshold) {
-      exitFee = await this.multiVault.exitFeeAmount(grossAssets);
+      exitFee = await this.publicClient.readContract({
+        address: MULTIVAULT_ADDRESS,
+        abi: multiVaultABI,
+        functionName: 'exitFeeAmount',
+        args: [grossAssets]
+      }) as bigint;
     }
 
     const totalFees = protocolFee + exitFee;
@@ -431,7 +471,13 @@ class FeeCalculator {
     const minDeposit = this.generalConfig.minDeposit;
 
     // For new atoms, vault starts empty so no entry fee
-    const protocolFee = await this.multiVault.protocolFeeAmount(depositAmount);
+    const protocolFee = await this.publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultABI,
+      functionName: 'protocolFeeAmount',
+      args: [depositAmount]
+    }) as bigint;
+
     const atomWalletFee = (depositAmount * this.atomConfig.atomWalletDepositFee) /
                          this.generalConfig.feeDenominator;
 
@@ -468,12 +514,20 @@ class FeeCalculator {
     const minDeposit = this.generalConfig.minDeposit;
 
     // Atom deposit fraction
-    const atomDepositFraction = await this.multiVault.atomDepositFractionAmount(
-      depositAmount
-    );
+    const atomDepositFraction = await this.publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultABI,
+      functionName: 'atomDepositFractionAmount',
+      args: [depositAmount]
+    }) as bigint;
 
     // For new triples, vault starts empty so no entry fee
-    const protocolFee = await this.multiVault.protocolFeeAmount(depositAmount);
+    const protocolFee = await this.publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultABI,
+      functionName: 'protocolFeeAmount',
+      args: [depositAmount]
+    }) as bigint;
 
     const depositFees: FeeBreakdown = {
       protocolFee,
@@ -501,12 +555,12 @@ class FeeCalculator {
   formatFeeBreakdown(fees: FeeBreakdown): string {
     const lines = [
       '=== Fee Breakdown ===',
-      `Protocol fee: ${ethers.formatEther(fees.protocolFee)} WTRUST`,
-      `Entry fee: ${ethers.formatEther(fees.entryFee)} WTRUST`,
-      `Exit fee: ${ethers.formatEther(fees.exitFee)} WTRUST`,
-      `Atom wallet fee: ${ethers.formatEther(fees.atomWalletFee)} WTRUST`,
-      `Total fees: ${ethers.formatEther(fees.totalFees)} WTRUST`,
-      `Net amount: ${ethers.formatEther(fees.netAmount)} WTRUST`
+      `Protocol fee: ${formatEther(fees.protocolFee)} WTRUST`,
+      `Entry fee: ${formatEther(fees.entryFee)} WTRUST`,
+      `Exit fee: ${formatEther(fees.exitFee)} WTRUST`,
+      `Atom wallet fee: ${formatEther(fees.atomWalletFee)} WTRUST`,
+      `Total fees: ${formatEther(fees.totalFees)} WTRUST`,
+      `Net amount: ${formatEther(fees.netAmount)} WTRUST`
     ];
     return lines.join('\n');
   }
@@ -514,13 +568,12 @@ class FeeCalculator {
 
 // Usage example
 async function main() {
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
-  const calculator = new FeeCalculator(provider);
+  const calculator = new FeeCalculator('YOUR_INTUITION_RPC_URL');
   await calculator.initialize();
 
   // Example: Calculate deposit fees
-  const termId = '0x...';
-  const depositAmount = ethers.parseEther('100');
+  const termId = '0x...' as Hex;
+  const depositAmount = parseEther('100');
 
   const depositFees = await calculator.calculateDepositFees(
     termId,
@@ -535,15 +588,13 @@ async function main() {
   const atomCosts = await calculator.calculateAtomCreationCosts(depositAmount);
 
   console.log('\n=== Atom Creation Costs ===');
-  console.log('Creation fee:', ethers.formatEther(atomCosts.creationFee));
-  console.log('Minimum deposit:', ethers.formatEther(atomCosts.minDeposit));
-  console.log('Total required:', ethers.formatEther(atomCosts.totalRequired));
+  console.log('Creation fee:', formatEther(atomCosts.creationFee));
+  console.log('Minimum deposit:', formatEther(atomCosts.minDeposit));
+  console.log('Total required:', formatEther(atomCosts.totalRequired));
   console.log('\n' + calculator.formatFeeBreakdown(atomCosts.depositFees));
 }
 
-if (require.main === module) {
-  main();
-}
+main();
 ```
 
 ### Python (web3.py)

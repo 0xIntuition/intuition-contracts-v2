@@ -795,38 +795,74 @@ Internal function to calculate total triple creation cost.
 
 ## Usage Examples
 
-### TypeScript (ethers.js v6)
+### TypeScript (viem)
 
 #### Calculating Atom ID Off-Chain
 
 ```typescript
-import { ethers } from 'ethers';
+import { createPublicClient, http, encodeAbiParameters } from 'viem';
+import { base } from 'viem/chains';
 
 // Setup
-const provider = new ethers.JsonRpcProvider('YOUR_INTUITION_RPC');
+const publicClient = createPublicClient({
+  chain: base,
+  transport: http('YOUR_INTUITION_RPC')
+});
+
 const MULTIVAULT_ADDRESS = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e';
 
 const multiVaultABI = [
-  'function calculateAtomId(bytes memory data) external pure returns (bytes32)',
-  'function isAtom(bytes32 atomId) external view returns (bool)',
-  'function getAtom(bytes32 atomId) external view returns (bytes memory)'
-];
+  {
+    name: 'calculateAtomId',
+    type: 'function',
+    stateMutability: 'pure',
+    inputs: [{ name: 'data', type: 'bytes' }],
+    outputs: [{ name: 'id', type: 'bytes32' }]
+  },
+  {
+    name: 'isAtom',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'atomId', type: 'bytes32' }],
+    outputs: [{ type: 'bool' }]
+  },
+  {
+    name: 'getAtom',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'atomId', type: 'bytes32' }],
+    outputs: [{ name: 'data', type: 'bytes' }]
+  }
+] as const;
 
-const multiVault = new ethers.Contract(MULTIVAULT_ADDRESS, multiVaultABI, provider);
-
-async function calculateAndVerifyAtom(atomData: string) {
+async function calculateAndVerifyAtom(atomData: `0x${string}`) {
   try {
     // Calculate atom ID
-    const atomId = await multiVault.calculateAtomId(atomData);
+    const atomId = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultABI,
+      functionName: 'calculateAtomId',
+      args: [atomData]
+    });
     console.log('Calculated Atom ID:', atomId);
 
     // Check if atom exists
-    const exists = await multiVault.isAtom(atomId);
+    const exists = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultABI,
+      functionName: 'isAtom',
+      args: [atomId]
+    });
     console.log('Atom exists:', exists);
 
     if (exists) {
       // Retrieve atom data
-      const data = await multiVault.getAtom(atomId);
+      const data = await publicClient.readContract({
+        address: MULTIVAULT_ADDRESS,
+        abi: multiVaultABI,
+        functionName: 'getAtom',
+        args: [atomId]
+      });
       console.log('Atom data:', data);
     }
 
@@ -838,8 +874,8 @@ async function calculateAndVerifyAtom(atomData: string) {
 }
 
 // Example: Calculate atom ID for an address
-const addressData = ethers.AbiCoder.defaultAbiCoder().encode(
-  ['address'],
+const addressData = encodeAbiParameters(
+  [{ type: 'address' }],
   ['0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb']
 );
 
@@ -850,39 +886,82 @@ calculateAndVerifyAtom(addressData);
 
 ```typescript
 async function calculateTripleIds(
-  subjectId: string,
-  predicateId: string,
-  objectId: string
+  subjectId: `0x${string}`,
+  predicateId: `0x${string}`,
+  objectId: `0x${string}`
 ) {
   try {
     const multiVaultABI = [
-      'function calculateTripleId(bytes32 subjectId, bytes32 predicateId, bytes32 objectId) external pure returns (bytes32)',
-      'function calculateCounterTripleId(bytes32 subjectId, bytes32 predicateId, bytes32 objectId) external pure returns (bytes32)',
-      'function isTriple(bytes32 id) external view returns (bool)',
-      'function isCounterTriple(bytes32 termId) external view returns (bool)'
-    ];
-
-    const multiVault = new ethers.Contract(MULTIVAULT_ADDRESS, multiVaultABI, provider);
+      {
+        name: 'calculateTripleId',
+        type: 'function',
+        stateMutability: 'pure',
+        inputs: [
+          { name: 'subjectId', type: 'bytes32' },
+          { name: 'predicateId', type: 'bytes32' },
+          { name: 'objectId', type: 'bytes32' }
+        ],
+        outputs: [{ type: 'bytes32' }]
+      },
+      {
+        name: 'calculateCounterTripleId',
+        type: 'function',
+        stateMutability: 'pure',
+        inputs: [
+          { name: 'subjectId', type: 'bytes32' },
+          { name: 'predicateId', type: 'bytes32' },
+          { name: 'objectId', type: 'bytes32' }
+        ],
+        outputs: [{ type: 'bytes32' }]
+      },
+      {
+        name: 'isTriple',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [{ name: 'id', type: 'bytes32' }],
+        outputs: [{ type: 'bool' }]
+      },
+      {
+        name: 'isCounterTriple',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [{ name: 'termId', type: 'bytes32' }],
+        outputs: [{ type: 'bool' }]
+      }
+    ] as const;
 
     // Calculate positive triple ID
-    const tripleId = await multiVault.calculateTripleId(
-      subjectId,
-      predicateId,
-      objectId
-    );
+    const tripleId = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultABI,
+      functionName: 'calculateTripleId',
+      args: [subjectId, predicateId, objectId]
+    });
     console.log('Positive Triple ID:', tripleId);
 
     // Calculate counter triple ID
-    const counterTripleId = await multiVault.calculateCounterTripleId(
-      subjectId,
-      predicateId,
-      objectId
-    );
+    const counterTripleId = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultABI,
+      functionName: 'calculateCounterTripleId',
+      args: [subjectId, predicateId, objectId]
+    });
     console.log('Counter Triple ID:', counterTripleId);
 
     // Verify existence
-    const tripleExists = await multiVault.isTriple(tripleId);
-    const counterExists = await multiVault.isCounterTriple(counterTripleId);
+    const tripleExists = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultABI,
+      functionName: 'isTriple',
+      args: [tripleId]
+    });
+
+    const counterExists = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultABI,
+      functionName: 'isCounterTriple',
+      args: [counterTripleId]
+    });
 
     console.log('Positive triple exists:', tripleExists);
     console.log('Counter triple exists:', counterExists);
@@ -898,40 +977,114 @@ async function calculateTripleIds(
 #### Querying Configuration
 
 ```typescript
+import { formatEther } from 'viem';
+
 async function getProtocolConfiguration() {
   try {
     const multiVaultABI = [
-      'function getGeneralConfig() external view returns (tuple(address admin, address protocolMultisig, uint256 feeDenominator, address trustBonding, uint256 minDeposit, uint256 minShare, uint256 atomDataMaxLength, uint256 feeThreshold))',
-      'function getAtomConfig() external view returns (tuple(uint256 atomCreationProtocolFee, uint256 atomWalletDepositFee))',
-      'function getTripleConfig() external view returns (tuple(uint256 tripleCreationProtocolFee, uint256 atomDepositFractionForTriple))',
-      'function getVaultFees() external view returns (tuple(uint256 entryFee, uint256 exitFee, uint256 protocolFee))'
-    ];
-
-    const multiVault = new ethers.Contract(MULTIVAULT_ADDRESS, multiVaultABI, provider);
+      {
+        name: 'getGeneralConfig',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [],
+        outputs: [{
+          type: 'tuple',
+          components: [
+            { name: 'admin', type: 'address' },
+            { name: 'protocolMultisig', type: 'address' },
+            { name: 'feeDenominator', type: 'uint256' },
+            { name: 'trustBonding', type: 'address' },
+            { name: 'minDeposit', type: 'uint256' },
+            { name: 'minShare', type: 'uint256' },
+            { name: 'atomDataMaxLength', type: 'uint256' },
+            { name: 'feeThreshold', type: 'uint256' }
+          ]
+        }]
+      },
+      {
+        name: 'getAtomConfig',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [],
+        outputs: [{
+          type: 'tuple',
+          components: [
+            { name: 'atomCreationProtocolFee', type: 'uint256' },
+            { name: 'atomWalletDepositFee', type: 'uint256' }
+          ]
+        }]
+      },
+      {
+        name: 'getTripleConfig',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [],
+        outputs: [{
+          type: 'tuple',
+          components: [
+            { name: 'tripleCreationProtocolFee', type: 'uint256' },
+            { name: 'atomDepositFractionForTriple', type: 'uint256' }
+          ]
+        }]
+      },
+      {
+        name: 'getVaultFees',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [],
+        outputs: [{
+          type: 'tuple',
+          components: [
+            { name: 'entryFee', type: 'uint256' },
+            { name: 'exitFee', type: 'uint256' },
+            { name: 'protocolFee', type: 'uint256' }
+          ]
+        }]
+      }
+    ] as const;
 
     // Get all configurations
-    const generalConfig = await multiVault.getGeneralConfig();
-    const atomConfig = await multiVault.getAtomConfig();
-    const tripleConfig = await multiVault.getTripleConfig();
-    const vaultFees = await multiVault.getVaultFees();
+    const generalConfig = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultABI,
+      functionName: 'getGeneralConfig'
+    });
+
+    const atomConfig = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultABI,
+      functionName: 'getAtomConfig'
+    });
+
+    const tripleConfig = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultABI,
+      functionName: 'getTripleConfig'
+    });
+
+    const vaultFees = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultABI,
+      functionName: 'getVaultFees'
+    });
 
     console.log('General Config:', {
       admin: generalConfig.admin,
       protocolMultisig: generalConfig.protocolMultisig,
       feeDenominator: generalConfig.feeDenominator.toString(),
-      minDeposit: ethers.formatEther(generalConfig.minDeposit),
-      minShare: ethers.formatEther(generalConfig.minShare),
+      minDeposit: formatEther(generalConfig.minDeposit),
+      minShare: formatEther(generalConfig.minShare),
       atomDataMaxLength: generalConfig.atomDataMaxLength.toString(),
       feeThreshold: generalConfig.feeThreshold.toString()
     });
 
     console.log('Atom Config:', {
-      atomCreationProtocolFee: ethers.formatEther(atomConfig.atomCreationProtocolFee),
+      atomCreationProtocolFee: formatEther(atomConfig.atomCreationProtocolFee),
       atomWalletDepositFee: atomConfig.atomWalletDepositFee.toString()
     });
 
     console.log('Triple Config:', {
-      tripleCreationProtocolFee: ethers.formatEther(tripleConfig.tripleCreationProtocolFee),
+      tripleCreationProtocolFee: formatEther(tripleConfig.tripleCreationProtocolFee),
       atomDepositFractionForTriple: tripleConfig.atomDepositFractionForTriple.toString()
     });
 
@@ -1168,29 +1321,55 @@ contract AtomTripleQuery {
 
 ```typescript
 // Check if atom already exists before creating
-const atomId = await multiVault.calculateAtomId(atomData);
-const exists = await multiVault.isAtom(atomId);
+const atomId = await publicClient.readContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: multiVaultABI,
+  functionName: 'calculateAtomId',
+  args: [atomData]
+});
+
+const exists = await publicClient.readContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: multiVaultABI,
+  functionName: 'isAtom',
+  args: [atomId]
+});
 
 if (exists) {
   console.log('Atom already exists, skipping creation');
   return atomId;
 }
 
-// Proceed with creation
-await multiVault.createAtoms([atomData], [depositAmount]);
+// Proceed with creation (see MultiVault documentation for createAtoms)
 ```
 
 #### Navigating Triple Relationships
 
 ```typescript
 // Get triple components
-const [subjectId, predicateId, objectId] = await multiVault.getTriple(tripleId);
+const triple = await publicClient.readContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: multiVaultABI,
+  functionName: 'getTriple',
+  args: [tripleId]
+});
+const [subjectId, predicateId, objectId] = triple;
 
 // Get the counter triple
-const counterTripleId = await multiVault.getInverseTripleId(tripleId);
+const counterTripleId = await publicClient.readContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: multiVaultABI,
+  functionName: 'getInverseTripleId',
+  args: [tripleId]
+});
 
 // Or calculate it directly
-const counterTripleId2 = await multiVault.getCounterIdFromTripleId(tripleId);
+const counterTripleId2 = await publicClient.readContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: multiVaultABI,
+  functionName: 'getCounterIdFromTripleId',
+  args: [tripleId]
+});
 ```
 
 ### Edge Cases

@@ -146,14 +146,25 @@ console.log('Epochs since last activity:', currentEpoch - lastActiveEpoch);
 ### Step 5: Calculate Utilization Ratio
 
 ```typescript
-const trustBonding = new ethers.Contract(TRUST_BONDING_ADDRESS, TrustBondingABI, provider);
+import { createPublicClient, http } from 'viem';
 
-const personalRatio = await trustBonding.getPersonalUtilizationRatio(
-  myAddress,
-  currentEpoch
-);
+const client = createPublicClient({
+  transport: http(RPC_URL)
+});
 
-const systemRatio = await trustBonding.getSystemUtilizationRatio(currentEpoch);
+const personalRatio = await client.readContract({
+  address: TRUST_BONDING_ADDRESS,
+  abi: TrustBondingABI,
+  functionName: 'getPersonalUtilizationRatio',
+  args: [myAddress, currentEpoch]
+});
+
+const systemRatio = await client.readContract({
+  address: TRUST_BONDING_ADDRESS,
+  abi: TrustBondingABI,
+  functionName: 'getSystemUtilizationRatio',
+  args: [currentEpoch]
+});
 
 console.log('Personal ratio:', Number(personalRatio) / 1e18);
 console.log('System ratio:', Number(systemRatio) / 1e18);
@@ -166,18 +177,36 @@ console.log('Your reward multiplier:', Math.min(
 ### Step 6: Track Utilization Changes
 
 ```typescript
-// Listen for utilization events
-multiVault.on('PersonalUtilizationAdded', (user, epoch, valueAdded, newUtilization) => {
-  if (user === myAddress) {
-    console.log(`Utilization increased by ${valueAdded} in epoch ${epoch}`);
-    console.log(`New utilization: ${newUtilization}`);
+import { createPublicClient, http, parseAbiItem } from 'viem';
+
+const client = createPublicClient({
+  transport: http(RPC_URL)
+});
+
+// Watch for utilization events
+const unwatch = client.watchEvent({
+  address: MULTIVAULT_ADDRESS,
+  event: parseAbiItem('event PersonalUtilizationAdded(address indexed user, uint256 indexed epoch, int256 indexed valueAdded, int256 newUtilization)'),
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      if (log.args.user === myAddress) {
+        console.log(`Utilization increased by ${log.args.valueAdded} in epoch ${log.args.epoch}`);
+        console.log(`New utilization: ${log.args.newUtilization}`);
+      }
+    });
   }
 });
 
-multiVault.on('PersonalUtilizationRemoved', (user, epoch, valueRemoved, newUtilization) => {
-  if (user === myAddress) {
-    console.log(`Utilization decreased by ${valueRemoved} in epoch ${epoch}`);
-    console.log(`New utilization: ${newUtilization}`);
+client.watchEvent({
+  address: MULTIVAULT_ADDRESS,
+  event: parseAbiItem('event PersonalUtilizationRemoved(address indexed user, uint256 indexed epoch, int256 indexed valueRemoved, int256 newUtilization)'),
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      if (log.args.user === myAddress) {
+        console.log(`Utilization decreased by ${log.args.valueRemoved} in epoch ${log.args.epoch}`);
+        console.log(`New utilization: ${log.args.newUtilization}`);
+      }
+    });
   }
 });
 ```
@@ -203,7 +232,7 @@ async function optimizeUtilization() {
 
     if (personalRatio < 1.0) {
       const additionalDeposit = bondedBalance - myUtilization;
-      console.log('Consider depositing:', ethers.formatEther(additionalDeposit), 'WTRUST');
+      console.log('Consider depositing:', formatEther(additionalDeposit), 'WTRUST');
       console.log('This would maximize your utilization ratio to 1.0');
     }
   } else {
@@ -214,12 +243,12 @@ async function optimizeUtilization() {
 
 ## Code Examples
 
-### TypeScript (ethers.js v6)
+### TypeScript (viem)
 
 Comprehensive utilization tracking utility:
 
 ```typescript
-import { ethers } from 'ethers';
+import { createPublicClient, http, formatEther, type Address, type PublicClient } from 'viem';
 
 interface UtilizationSnapshot {
   epoch: bigint;
@@ -232,32 +261,32 @@ interface UtilizationSnapshot {
 }
 
 class UtilizationTracker {
-  private multiVault: ethers.Contract;
-  private trustBonding: ethers.Contract;
+  private client: PublicClient;
+  private multiVaultAddress: Address;
+  private trustBondingAddress: Address;
 
   constructor(
-    multiVaultAddress: string,
-    trustBondingAddress: string,
-    provider: ethers.Provider
+    multiVaultAddress: Address,
+    trustBondingAddress: Address,
+    rpcUrl: string
   ) {
-    this.multiVault = new ethers.Contract(
-      multiVaultAddress,
-      MultiVaultABI,
-      provider
-    );
-    this.trustBonding = new ethers.Contract(
-      trustBondingAddress,
-      TrustBondingABI,
-      provider
-    );
+    this.client = createPublicClient({
+      transport: http(rpcUrl)
+    });
+    this.multiVaultAddress = multiVaultAddress;
+    this.trustBondingAddress = trustBondingAddress;
   }
 
   async getSnapshot(
-    userAddress: string,
+    userAddress: Address,
     epoch?: bigint
   ): Promise<UtilizationSnapshot> {
     if (!epoch) {
-      epoch = await this.multiVault.currentEpoch();
+      epoch = await this.client.readContract({
+        address: this.multiVaultAddress,
+        abi: MultiVaultABI,
+        functionName: 'currentEpoch'
+      }) as bigint;
     }
 
     const [
@@ -267,12 +296,37 @@ class UtilizationTracker {
       systemRatio,
       userInfo
     ] = await Promise.all([
-      this.multiVault.getUserUtilizationForEpoch(userAddress, epoch),
-      this.multiVault.getTotalUtilizationForEpoch(epoch),
-      this.trustBonding.getPersonalUtilizationRatio(userAddress, epoch),
-      this.trustBonding.getSystemUtilizationRatio(epoch),
-      this.trustBonding.getUserInfo(userAddress)
-    ]);
+      this.client.readContract({
+        address: this.multiVaultAddress,
+        abi: MultiVaultABI,
+        functionName: 'getUserUtilizationForEpoch',
+        args: [userAddress, epoch]
+      }),
+      this.client.readContract({
+        address: this.multiVaultAddress,
+        abi: MultiVaultABI,
+        functionName: 'getTotalUtilizationForEpoch',
+        args: [epoch]
+      }),
+      this.client.readContract({
+        address: this.trustBondingAddress,
+        abi: TrustBondingABI,
+        functionName: 'getPersonalUtilizationRatio',
+        args: [userAddress, epoch]
+      }),
+      this.client.readContract({
+        address: this.trustBondingAddress,
+        abi: TrustBondingABI,
+        functionName: 'getSystemUtilizationRatio',
+        args: [epoch]
+      }),
+      this.client.readContract({
+        address: this.trustBondingAddress,
+        abi: TrustBondingABI,
+        functionName: 'getUserInfo',
+        args: [userAddress]
+      })
+    ]) as [bigint, bigint, bigint, bigint, any];
 
     const rewardMultiplier = Math.min(
       Number(personalRatio) / 1e18,
@@ -291,10 +345,15 @@ class UtilizationTracker {
   }
 
   async getUtilizationHistory(
-    userAddress: string,
+    userAddress: Address,
     epochCount: number
   ): Promise<UtilizationSnapshot[]> {
-    const currentEpoch = await this.multiVault.currentEpoch();
+    const currentEpoch = await this.client.readContract({
+      address: this.multiVaultAddress,
+      abi: MultiVaultABI,
+      functionName: 'currentEpoch'
+    }) as bigint;
+
     const startEpoch = currentEpoch >= BigInt(epochCount)
       ? currentEpoch - BigInt(epochCount) + 1n
       : 0n;
@@ -322,35 +381,47 @@ System utilization: ${snapshot.systemUtilization}
 Personal ratio: ${snapshot.personalRatio.toFixed(4)}
 System ratio: ${snapshot.systemRatio.toFixed(4)}
 Reward multiplier: ${snapshot.rewardMultiplier.toFixed(4)}
-Bonded balance: ${ethers.formatEther(snapshot.bondedBalance)} TRUST
+Bonded balance: ${formatEther(snapshot.bondedBalance)} TRUST
 Status: ${snapshot.personalUtilization > 0 ? 'Eligible for rewards' : 'Not eligible'}
     `.trim();
   }
 
-  async trackRealtime(userAddress: string, callback: (event: any) => void) {
+  async trackRealtime(userAddress: Address, callback: (event: any) => void) {
     // Listen for utilization changes
-    this.multiVault.on('PersonalUtilizationAdded', async (user, epoch, valueAdded, utilization, event) => {
-      if (user.toLowerCase() === userAddress.toLowerCase()) {
-        callback({
-          type: 'added',
-          user,
-          epoch,
-          valueAdded,
-          utilization,
-          block: event.log.blockNumber
+    this.client.watchEvent({
+      address: this.multiVaultAddress,
+      event: parseAbiItem('event PersonalUtilizationAdded(address indexed user, uint256 indexed epoch, int256 indexed valueAdded, int256 utilization)'),
+      onLogs: (logs) => {
+        logs.forEach((log) => {
+          if (log.args.user?.toLowerCase() === userAddress.toLowerCase()) {
+            callback({
+              type: 'added',
+              user: log.args.user,
+              epoch: log.args.epoch,
+              valueAdded: log.args.valueAdded,
+              utilization: log.args.utilization,
+              block: log.blockNumber
+            });
+          }
         });
       }
     });
 
-    this.multiVault.on('PersonalUtilizationRemoved', async (user, epoch, valueRemoved, utilization, event) => {
-      if (user.toLowerCase() === userAddress.toLowerCase()) {
-        callback({
-          type: 'removed',
-          user,
-          epoch,
-          valueRemoved,
-          utilization,
-          block: event.log.blockNumber
+    this.client.watchEvent({
+      address: this.multiVaultAddress,
+      event: parseAbiItem('event PersonalUtilizationRemoved(address indexed user, uint256 indexed epoch, int256 indexed valueRemoved, int256 utilization)'),
+      onLogs: (logs) => {
+        logs.forEach((log) => {
+          if (log.args.user?.toLowerCase() === userAddress.toLowerCase()) {
+            callback({
+              type: 'removed',
+              user: log.args.user,
+              epoch: log.args.epoch,
+              valueRemoved: log.args.valueRemoved,
+              utilization: log.args.utilization,
+              block: log.blockNumber
+            });
+          }
         });
       }
     });
@@ -359,24 +430,23 @@ Status: ${snapshot.personalUtilization > 0 ? 'Eligible for rewards' : 'Not eligi
 
 // Usage example
 async function main() {
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
   const tracker = new UtilizationTracker(
     MULTIVAULT_ADDRESS,
     TRUST_BONDING_ADDRESS,
-    provider
+    RPC_URL
   );
 
   // Get current snapshot
-  const snapshot = await tracker.getSnapshot('0xYourAddress');
+  const snapshot = await tracker.getSnapshot('0xYourAddress' as Address);
   console.log(tracker.formatSnapshot(snapshot));
 
   // Get history
-  const history = await tracker.getUtilizationHistory('0xYourAddress', 10);
+  const history = await tracker.getUtilizationHistory('0xYourAddress' as Address, 10);
   console.log(`\nUtilization over last ${history.length} epochs:`);
   history.forEach(s => console.log(`Epoch ${s.epoch}: ${s.personalUtilization}`));
 
   // Track real-time
-  await tracker.trackRealtime('0xYourAddress', (event) => {
+  await tracker.trackRealtime('0xYourAddress' as Address, (event) => {
     console.log(`Utilization ${event.type}:`, event.valueAdded || event.valueRemoved);
     console.log('New utilization:', event.utilization);
   });

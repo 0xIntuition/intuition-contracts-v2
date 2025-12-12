@@ -342,7 +342,7 @@ event Deposit(address indexed account, uint256 amount);
 **Example Listener** (TypeScript):
 ```typescript
 wrappedTrust.on('Deposit', (account, amount, event) => {
-  console.log(`${account} wrapped ${ethers.formatEther(amount)} ETH`);
+  console.log(`${account} wrapped ${formatEther(amount)} ETH`);
 });
 ```
 

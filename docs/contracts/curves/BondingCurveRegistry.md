@@ -473,41 +473,101 @@ Owner
 
 ## Usage Examples
 
-### TypeScript (ethers.js v6)
+### TypeScript (viem)
 
 #### Querying Available Curves
 
 ```typescript
-import { ethers } from 'ethers';
+import { createPublicClient, http, formatEther } from 'viem';
+import { intuition } from 'viem/chains';
 
-const provider = new ethers.JsonRpcProvider('YOUR_INTUITION_RPC');
+const publicClient = createPublicClient({
+  chain: intuition,
+  transport: http()
+});
+
 const registryAddress = '0xd0E488Fb32130232527eedEB72f8cE2BFC0F9930';
 
-const registryABI = [
-  'function count() external view returns (uint256)',
-  'function getCurveName(uint256 id) external view returns (string memory)',
-  'function getCurveMaxShares(uint256 id) external view returns (uint256)',
-  'function getCurveMaxAssets(uint256 id) external view returns (uint256)',
-  'function curveAddresses(uint256 id) external view returns (address)'
-];
-
-const registry = new ethers.Contract(registryAddress, registryABI, provider);
+const registryAbi = [
+  {
+    name: 'count',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    name: 'getCurveName',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'id', type: 'uint256' }],
+    outputs: [{ name: '', type: 'string' }]
+  },
+  {
+    name: 'getCurveMaxShares',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'id', type: 'uint256' }],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    name: 'getCurveMaxAssets',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'id', type: 'uint256' }],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    name: 'curveAddresses',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'id', type: 'uint256' }],
+    outputs: [{ name: '', type: 'address' }]
+  }
+] as const;
 
 async function listAllCurves() {
   try {
-    const curveCount = await registry.count();
+    const curveCount = await publicClient.readContract({
+      address: registryAddress,
+      abi: registryAbi,
+      functionName: 'count'
+    });
     console.log(`Total registered curves: ${curveCount}\n`);
 
-    for (let id = 1; id <= curveCount; id++) {
-      const name = await registry.getCurveName(id);
-      const address = await registry.curveAddresses(id);
-      const maxShares = await registry.getCurveMaxShares(id);
-      const maxAssets = await registry.getCurveMaxAssets(id);
+    for (let id = 1; id <= Number(curveCount); id++) {
+      const name = await publicClient.readContract({
+        address: registryAddress,
+        abi: registryAbi,
+        functionName: 'getCurveName',
+        args: [BigInt(id)]
+      });
+
+      const address = await publicClient.readContract({
+        address: registryAddress,
+        abi: registryAbi,
+        functionName: 'curveAddresses',
+        args: [BigInt(id)]
+      });
+
+      const maxShares = await publicClient.readContract({
+        address: registryAddress,
+        abi: registryAbi,
+        functionName: 'getCurveMaxShares',
+        args: [BigInt(id)]
+      });
+
+      const maxAssets = await publicClient.readContract({
+        address: registryAddress,
+        abi: registryAbi,
+        functionName: 'getCurveMaxAssets',
+        args: [BigInt(id)]
+      });
 
       console.log(`Curve ID ${id}: ${name}`);
       console.log(`  Address: ${address}`);
-      console.log(`  Max Shares: ${ethers.formatEther(maxShares)}`);
-      console.log(`  Max Assets: ${ethers.formatEther(maxAssets)}\n`);
+      console.log(`  Max Shares: ${formatEther(maxShares)}`);
+      console.log(`  Max Assets: ${formatEther(maxAssets)}\n`);
     }
   } catch (error) {
     console.error('Error listing curves:', error);
@@ -530,8 +590,8 @@ async function compareCurvePricing(
     const curveCount = await registry.count();
 
     console.log('Comparing curves for deposit:\n');
-    console.log(`Deposit Amount: ${ethers.formatEther(depositAmount)} TRUST`);
-    console.log(`Vault State: ${ethers.formatEther(totalAssets)} assets, ${ethers.formatEther(totalShares)} shares\n`);
+    console.log(`Deposit Amount: ${formatEther(depositAmount)} TRUST`);
+    console.log(`Vault State: ${formatEther(totalAssets)} assets, ${formatEther(totalShares)} shares\n`);
 
     for (let id = 1; id <= curveCount; id++) {
       const name = await registry.getCurveName(id);
@@ -552,12 +612,12 @@ async function compareCurvePricing(
       );
 
       // Calculate average price
-      const avgPrice = depositAmount * ethers.parseEther('1') / shares;
+      const avgPrice = depositAmount * parseEther('1') / shares;
 
       console.log(`${name}:`);
-      console.log(`  Shares received: ${ethers.formatEther(shares)}`);
-      console.log(`  Current price: ${ethers.formatEther(price)} TRUST/share`);
-      console.log(`  Average price: ${ethers.formatEther(avgPrice)} TRUST/share`);
+      console.log(`  Shares received: ${formatEther(shares)}`);
+      console.log(`  Current price: ${formatEther(price)} TRUST/share`);
+      console.log(`  Average price: ${formatEther(avgPrice)} TRUST/share`);
       console.log(`  Price difference: ${((avgPrice - price) * 100n / price)}%\n`);
     }
   } catch (error) {
@@ -568,38 +628,63 @@ async function compareCurvePricing(
 
 // Example: Compare with 10 TRUST deposit
 compareCurvePricing(
-  ethers.parseEther('1000'),  // 1000 TRUST in vault
-  ethers.parseEther('500'),   // 500 shares outstanding
-  ethers.parseEther('10')     // 10 TRUST deposit
+  parseEther('1000'),  // 1000 TRUST in vault
+  parseEther('500'),   // 500 shares outstanding
+  parseEther('10')     // 10 TRUST deposit
 );
 ```
 
 #### Adding a New Curve (Owner Only)
 
 ```typescript
-async function addNewCurve(curveAddress: string) {
-  const signer = new ethers.Wallet('OWNER_PRIVATE_KEY', provider);
-  const registryWithSigner = registry.connect(signer);
+import { createWalletClient, http, parseAbiItem } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { intuition } from 'viem/chains';
+
+async function addNewCurve(curveAddress: `0x${string}`) {
+  const account = privateKeyToAccount('OWNER_PRIVATE_KEY' as `0x${string}`);
+
+  const walletClient = createWalletClient({
+    account,
+    chain: intuition,
+    transport: http()
+  });
+
+  const publicClient = createPublicClient({
+    chain: intuition,
+    transport: http()
+  });
 
   try {
     console.log(`Adding curve at ${curveAddress}...`);
 
     // Add the curve
-    const tx = await registryWithSigner.addBondingCurve(curveAddress);
-    console.log(`Transaction hash: ${tx.hash}`);
+    const hash = await walletClient.writeContract({
+      address: registryAddress,
+      abi: registryAbi,
+      functionName: 'addBondingCurve',
+      args: [curveAddress]
+    });
 
-    const receipt = await tx.wait();
+    console.log(`Transaction hash: ${hash}`);
+
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
     console.log(`Curve added in block ${receipt.blockNumber}`);
 
     // Parse event to get curve ID
-    const event = receipt.logs.find(
-      log => log.topics[0] === ethers.id('BondingCurveAdded(uint256,address,string)')
-    );
+    const eventAbi = parseAbiItem('event BondingCurveAdded(uint256 indexed curveId, address indexed curveAddress, string indexed curveName)');
 
-    if (event) {
-      const decoded = registry.interface.parseLog(event);
-      console.log(`Curve ID: ${decoded.args.curveId}`);
-      console.log(`Curve Name: ${decoded.args.curveName}`);
+    const logs = await publicClient.getLogs({
+      address: registryAddress,
+      event: eventAbi,
+      fromBlock: receipt.blockNumber,
+      toBlock: receipt.blockNumber
+    });
+
+    if (logs.length > 0) {
+      const log = logs[0];
+      console.log(`Curve ID: ${log.args.curveId}`);
+      console.log(`Curve Name: ${log.args.curveName}`);
     }
 
     return receipt;

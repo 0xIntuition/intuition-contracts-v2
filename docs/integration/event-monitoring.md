@@ -53,9 +53,17 @@ event AtomCreated(
 
 **Example Subscription**:
 ```typescript
-multiVault.on('AtomCreated', (creator, termId, atomData, atomWallet, event) => {
-  console.log(`New atom ${termId} created by ${creator}`);
-  // Index atom data...
+const unwatch = publicClient.watchContractEvent({
+  address: MULTIVAULT_ADDRESS,
+  abi: multiVaultAbi,
+  eventName: 'AtomCreated',
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      const { creator, termId, atomData, atomWallet } = log.args;
+      console.log(`New atom ${termId} created by ${creator}`);
+      // Index atom data...
+    });
+  },
 });
 ```
 
@@ -81,9 +89,17 @@ event TripleCreated(
 
 **Example Subscription**:
 ```typescript
-multiVault.on('TripleCreated', (creator, termId, subjectId, predicateId, objectId, event) => {
-  console.log(`Triple: ${subjectId} → ${predicateId} → ${objectId}`);
-  // Build graph edge...
+const unwatch = publicClient.watchContractEvent({
+  address: MULTIVAULT_ADDRESS,
+  abi: multiVaultAbi,
+  eventName: 'TripleCreated',
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      const { creator, termId, subjectId, predicateId, objectId } = log.args;
+      console.log(`Triple: ${subjectId} → ${predicateId} → ${objectId}`);
+      // Build graph edge...
+    });
+  },
 });
 ```
 
@@ -113,21 +129,20 @@ event Deposited(
 
 **Example Subscription**:
 ```typescript
-multiVault.on('Deposited', (
-  sender,
-  receiver,
-  termId,
-  curveId,
-  assets,
-  assetsAfterFees,
-  shares,
-  totalShares,
-  vaultType,
-  event
-) => {
-  const fees = assets - assetsAfterFees;
-  console.log(`Deposit: ${formatEther(assets)} TRUST (${formatEther(fees)} fees)`);
-  // Update TVL...
+import { formatEther } from 'viem';
+
+const unwatch = publicClient.watchContractEvent({
+  address: MULTIVAULT_ADDRESS,
+  abi: multiVaultAbi,
+  eventName: 'Deposited',
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      const { sender, receiver, termId, curveId, assets, assetsAfterFees, shares, totalShares, vaultType } = log.args;
+      const fees = assets - assetsAfterFees;
+      console.log(`Deposit: ${formatEther(assets)} TRUST (${formatEther(fees)} fees)`);
+      // Update TVL...
+    });
+  },
 });
 ```
 
@@ -282,9 +297,19 @@ event RewardsClaimed(
 
 **Example Subscription**:
 ```typescript
-trustBonding.on('RewardsClaimed', (user, recipient, amount, event) => {
-  console.log(`${user} claimed ${formatEther(amount)} TRUST`);
-  // Update user rewards dashboard...
+import { formatEther } from 'viem';
+
+const unwatch = publicClient.watchContractEvent({
+  address: TRUST_BONDING_ADDRESS,
+  abi: trustBondingAbi,
+  eventName: 'RewardsClaimed',
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      const { user, recipient, amount } = log.args;
+      console.log(`${user} claimed ${formatEther(amount)} TRUST`);
+      // Update user rewards dashboard...
+    });
+  },
 });
 ```
 
@@ -292,27 +317,47 @@ trustBonding.on('RewardsClaimed', (user, recipient, amount, event) => {
 
 ### Basic Event Subscription
 
-Simple event listener using ethers.js:
+Simple event listener using viem:
 
 ```typescript
-import { ethers } from 'ethers';
+import { createPublicClient, http } from 'viem';
+import { base } from 'viem/chains';
 
-const provider = new ethers.JsonRpcProvider('RPC_URL');
-const multiVault = new ethers.Contract(MULTIVAULT_ADDRESS, ABI, provider);
+const publicClient = createPublicClient({
+  chain: base,
+  transport: http('RPC_URL'),
+});
 
 // Listen for atom creation
-multiVault.on('AtomCreated', (creator, termId, atomData, atomWallet) => {
-  console.log(`Atom ${termId} created`);
+const unwatchAtom = publicClient.watchContractEvent({
+  address: MULTIVAULT_ADDRESS,
+  abi: multiVaultAbi,
+  eventName: 'AtomCreated',
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      const { creator, termId } = log.args;
+      console.log(`Atom ${termId} created`);
+    });
+  },
 });
 
 // Listen for deposits
-multiVault.on('Deposited', (sender, receiver, termId, ...args) => {
-  console.log(`Deposit to ${termId}`);
+const unwatchDeposit = publicClient.watchContractEvent({
+  address: MULTIVAULT_ADDRESS,
+  abi: multiVaultAbi,
+  eventName: 'Deposited',
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      const { sender, receiver, termId } = log.args;
+      console.log(`Deposit to ${termId}`);
+    });
+  },
 });
 
 // Cleanup when done
 process.on('SIGINT', () => {
-  multiVault.removeAllListeners();
+  unwatchAtom();
+  unwatchDeposit();
   process.exit(0);
 });
 ```
@@ -323,21 +368,51 @@ Subscribe to events for specific users or terms:
 
 ```typescript
 // Monitor deposits for a specific user
-const userFilter = multiVault.filters.Deposited(USER_ADDRESS, null, null);
-multiVault.on(userFilter, (sender, receiver, termId, ...args) => {
-  console.log(`${sender} deposited to ${termId}`);
+const unwatchUserDeposits = publicClient.watchContractEvent({
+  address: MULTIVAULT_ADDRESS,
+  abi: multiVaultAbi,
+  eventName: 'Deposited',
+  args: {
+    sender: USER_ADDRESS,
+  },
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      const { sender, receiver, termId } = log.args;
+      console.log(`${sender} deposited to ${termId}`);
+    });
+  },
 });
 
 // Monitor all events for a specific atom
-const atomFilter = multiVault.filters.Deposited(null, null, ATOM_ID);
-multiVault.on(atomFilter, (sender, receiver, termId, ...args) => {
-  console.log(`Deposit to atom ${ATOM_ID}`);
+const unwatchAtomDeposits = publicClient.watchContractEvent({
+  address: MULTIVAULT_ADDRESS,
+  abi: multiVaultAbi,
+  eventName: 'Deposited',
+  args: {
+    termId: ATOM_ID,
+  },
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      const { sender, receiver, termId } = log.args;
+      console.log(`Deposit to atom ${ATOM_ID}`);
+    });
+  },
 });
 
 // Monitor triple creation by a specific creator
-const creatorFilter = multiVault.filters.TripleCreated(CREATOR_ADDRESS);
-multiVault.on(creatorFilter, (creator, termId, ...args) => {
-  console.log(`${creator} created triple ${termId}`);
+const unwatchCreatorTriples = publicClient.watchContractEvent({
+  address: MULTIVAULT_ADDRESS,
+  abi: multiVaultAbi,
+  eventName: 'TripleCreated',
+  args: {
+    creator: CREATOR_ADDRESS,
+  },
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      const { creator, termId } = log.args;
+      console.log(`${creator} created triple ${termId}`);
+    });
+  },
 });
 ```
 
@@ -385,8 +460,16 @@ const batcher = new EventBatcher(100, 1000, async (events) => {
   await database.insertMany(events);
 });
 
-multiVault.on('Deposited', (sender, receiver, termId, ...args) => {
-  batcher.add({ type: 'deposit', sender, receiver, termId, args });
+const unwatch = publicClient.watchContractEvent({
+  address: MULTIVAULT_ADDRESS,
+  abi: multiVaultAbi,
+  eventName: 'Deposited',
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      const { sender, receiver, termId } = log.args;
+      batcher.add({ type: 'deposit', sender, receiver, termId, log });
+    });
+  },
 });
 ```
 
@@ -494,22 +577,26 @@ CREATE TABLE vault_states (
 Complete event indexer with database persistence:
 
 ```typescript
-import { ethers } from 'ethers';
+import { createPublicClient, http, parseAbiItem, type PublicClient, type Log } from 'viem';
+import { base } from 'viem/chains';
 import { Pool } from 'pg';
 
 class EventIndexer {
-  private provider: ethers.Provider;
-  private contracts: {
-    multiVault: ethers.Contract;
-    trustBonding: ethers.Contract;
+  private publicClient: PublicClient;
+  private contracts = {
+    multiVault: MULTIVAULT_ADDRESS,
+    trustBonding: TRUST_BONDING_ADDRESS,
   };
   private db: Pool;
-  private lastProcessedBlock: number = 0;
+  private lastProcessedBlock: bigint = 0n;
+  private unwatchFunctions: Array<() => void> = [];
 
   constructor(rpcUrl: string, dbConfig: any) {
-    this.provider = new ethers.JsonRpcProvider(rpcUrl);
+    this.publicClient = createPublicClient({
+      chain: base,
+      transport: http(rpcUrl),
+    });
     this.db = new Pool(dbConfig);
-    this.initializeContracts();
   }
 
   async start() {
@@ -524,20 +611,20 @@ class EventIndexer {
   }
 
   private async syncHistoricalEvents() {
-    const currentBlock = await this.provider.getBlockNumber();
-    const fromBlock = this.lastProcessedBlock + 1;
+    const currentBlock = await this.publicClient.getBlockNumber();
+    const fromBlock = this.lastProcessedBlock + 1n;
 
     console.log(`Syncing events from block ${fromBlock} to ${currentBlock}`);
 
     // Fetch events in chunks to avoid RPC limits
-    const chunkSize = 10000;
+    const chunkSize = 10000n;
     for (let i = fromBlock; i <= currentBlock; i += chunkSize) {
-      const toBlock = Math.min(i + chunkSize - 1, currentBlock);
+      const toBlock = i + chunkSize - 1n > currentBlock ? currentBlock : i + chunkSize - 1n;
       await this.processBlockRange(i, toBlock);
     }
   }
 
-  private async processBlockRange(fromBlock: number, toBlock: number) {
+  private async processBlockRange(fromBlock: bigint, toBlock: bigint) {
     console.log(`Processing blocks ${fromBlock} to ${toBlock}`);
 
     // Query all events in parallel
@@ -548,31 +635,41 @@ class EventIndexer {
       redeemedEvents,
       rewardsClaimedEvents,
     ] = await Promise.all([
-      this.contracts.multiVault.queryFilter(
-        this.contracts.multiVault.filters.AtomCreated(),
+      this.publicClient.getContractEvents({
+        address: this.contracts.multiVault,
+        abi: multiVaultAbi,
+        eventName: 'AtomCreated',
         fromBlock,
-        toBlock
-      ),
-      this.contracts.multiVault.queryFilter(
-        this.contracts.multiVault.filters.TripleCreated(),
+        toBlock,
+      }),
+      this.publicClient.getContractEvents({
+        address: this.contracts.multiVault,
+        abi: multiVaultAbi,
+        eventName: 'TripleCreated',
         fromBlock,
-        toBlock
-      ),
-      this.contracts.multiVault.queryFilter(
-        this.contracts.multiVault.filters.Deposited(),
+        toBlock,
+      }),
+      this.publicClient.getContractEvents({
+        address: this.contracts.multiVault,
+        abi: multiVaultAbi,
+        eventName: 'Deposited',
         fromBlock,
-        toBlock
-      ),
-      this.contracts.multiVault.queryFilter(
-        this.contracts.multiVault.filters.Redeemed(),
+        toBlock,
+      }),
+      this.publicClient.getContractEvents({
+        address: this.contracts.multiVault,
+        abi: multiVaultAbi,
+        eventName: 'Redeemed',
         fromBlock,
-        toBlock
-      ),
-      this.contracts.trustBonding.queryFilter(
-        this.contracts.trustBonding.filters.RewardsClaimed(),
+        toBlock,
+      }),
+      this.publicClient.getContractEvents({
+        address: this.contracts.trustBonding,
+        abi: trustBondingAbi,
+        eventName: 'RewardsClaimed',
         fromBlock,
-        toBlock
-      ),
+        toBlock,
+      }),
     ]);
 
     // Process events
@@ -586,32 +683,47 @@ class EventIndexer {
     await this.updateLastProcessedBlock(toBlock);
   }
 
-  private async processAtomCreatedEvents(events: ethers.Log[]) {
+  private async processAtomCreatedEvents(events: Log[]) {
     for (const event of events) {
-      const parsed = this.contracts.multiVault.interface.parseLog(event);
-      const block = await event.getBlock();
+      const { creator, termId, atomData, atomWallet } = event.args as {
+        creator: string;
+        termId: string;
+        atomData: string;
+        atomWallet: string;
+      };
+      const block = await this.publicClient.getBlock({ blockNumber: event.blockNumber });
 
       await this.db.query(
         `INSERT INTO atoms (id, creator, data, wallet, created_at, block_number, tx_hash)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (id) DO NOTHING`,
         [
-          parsed.args.termId,
-          parsed.args.creator,
-          parsed.args.atomData,
-          parsed.args.atomWallet,
-          new Date(block.timestamp * 1000),
-          event.blockNumber,
+          termId,
+          creator,
+          atomData,
+          atomWallet,
+          new Date(Number(block.timestamp) * 1000),
+          Number(event.blockNumber),
           event.transactionHash,
         ]
       );
     }
   }
 
-  private async processDepositedEvents(events: ethers.Log[]) {
+  private async processDepositedEvents(events: Log[]) {
     for (const event of events) {
-      const parsed = this.contracts.multiVault.interface.parseLog(event);
-      const block = await event.getBlock();
+      const { sender, receiver, termId, curveId, assets, assetsAfterFees, shares, totalShares, vaultType } = event.args as {
+        sender: string;
+        receiver: string;
+        termId: string;
+        curveId: number;
+        assets: bigint;
+        assetsAfterFees: bigint;
+        shares: bigint;
+        totalShares: bigint;
+        vaultType: number;
+      };
+      const block = await this.publicClient.getBlock({ blockNumber: event.blockNumber });
 
       await this.db.query(
         `INSERT INTO deposits (
@@ -620,59 +732,71 @@ class EventIndexer {
          )
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
         [
-          parsed.args.sender,
-          parsed.args.receiver,
-          parsed.args.termId,
-          parsed.args.curveId,
-          parsed.args.assets.toString(),
-          parsed.args.assetsAfterFees.toString(),
-          parsed.args.shares.toString(),
-          parsed.args.totalShares.toString(),
-          parsed.args.vaultType,
-          new Date(block.timestamp * 1000),
-          event.blockNumber,
+          sender,
+          receiver,
+          termId,
+          curveId,
+          assets.toString(),
+          assetsAfterFees.toString(),
+          shares.toString(),
+          totalShares.toString(),
+          vaultType,
+          new Date(Number(block.timestamp) * 1000),
+          Number(event.blockNumber),
           event.transactionHash,
         ]
       );
 
       // Update vault state
-      await this.updateVaultState(
-        parsed.args.termId,
-        parsed.args.curveId,
-        event.blockNumber
-      );
+      await this.updateVaultState(termId, curveId, event.blockNumber);
     }
   }
 
   private subscribeToEvents() {
     // Subscribe to all events
-    this.contracts.multiVault.on('AtomCreated', async (...args) => {
-      await this.processAtomCreatedEvents([args[args.length - 1]]);
+    const unwatchAtom = this.publicClient.watchContractEvent({
+      address: this.contracts.multiVault,
+      abi: multiVaultAbi,
+      eventName: 'AtomCreated',
+      onLogs: async (logs) => {
+        await this.processAtomCreatedEvents(logs);
+      },
     });
 
-    this.contracts.multiVault.on('Deposited', async (...args) => {
-      await this.processDepositedEvents([args[args.length - 1]]);
+    const unwatchDeposit = this.publicClient.watchContractEvent({
+      address: this.contracts.multiVault,
+      abi: multiVaultAbi,
+      eventName: 'Deposited',
+      onLogs: async (logs) => {
+        await this.processDepositedEvents(logs);
+      },
     });
 
+    this.unwatchFunctions.push(unwatchAtom, unwatchDeposit);
     // Add other event subscriptions...
   }
 
-  private async getLastProcessedBlock(): Promise<number> {
+  private async getLastProcessedBlock(): Promise<bigint> {
     const result = await this.db.query(
       'SELECT value FROM indexer_state WHERE key = $1',
       ['last_processed_block']
     );
-    return result.rows[0]?.value || 0;
+    return BigInt(result.rows[0]?.value || 0);
   }
 
-  private async updateLastProcessedBlock(blockNumber: number) {
+  private async updateLastProcessedBlock(blockNumber: bigint) {
     await this.db.query(
       `INSERT INTO indexer_state (key, value)
        VALUES ($1, $2)
        ON CONFLICT (key) DO UPDATE SET value = $2`,
-      ['last_processed_block', blockNumber]
+      ['last_processed_block', blockNumber.toString()]
     );
     this.lastProcessedBlock = blockNumber;
+  }
+
+  async stop() {
+    // Cleanup watchers
+    this.unwatchFunctions.forEach(unwatch => unwatch());
   }
 }
 ```
@@ -684,11 +808,13 @@ class EventIndexer {
 Protect against blockchain reorganizations:
 
 ```typescript
-class ReorgSafeIndexer {
-  private confirmationBlocks = 12; // Wait for 12 confirmations
+import { type Log } from 'viem';
 
-  async processEvent(event: ethers.Log) {
-    const currentBlock = await this.provider.getBlockNumber();
+class ReorgSafeIndexer {
+  private confirmationBlocks = 12n; // Wait for 12 confirmations
+
+  async processEvent(event: Log) {
+    const currentBlock = await this.publicClient.getBlockNumber();
     const confirmations = currentBlock - event.blockNumber;
 
     if (confirmations < this.confirmationBlocks) {
@@ -701,21 +827,21 @@ class ReorgSafeIndexer {
     await this.processConfirmedEvent(event);
   }
 
-  async handleReorg(reorgedBlock: number) {
+  async handleReorg(reorgedBlock: bigint) {
     console.log(`Handling reorg at block ${reorgedBlock}`);
 
     // Delete events from reorged blocks
     await this.db.query(
       'DELETE FROM deposits WHERE block_number >= $1',
-      [reorgedBlock]
+      [Number(reorgedBlock)]
     );
     await this.db.query(
       'DELETE FROM redemptions WHERE block_number >= $1',
-      [reorgedBlock]
+      [Number(reorgedBlock)]
     );
 
     // Re-sync from reorg point
-    await this.processBlockRange(reorgedBlock, await this.provider.getBlockNumber());
+    await this.processBlockRange(reorgedBlock, await this.publicClient.getBlockNumber());
   }
 }
 ```
@@ -801,14 +927,22 @@ class EventStreamer {
 // Usage
 const streamer = new EventStreamer(8080);
 
-multiVault.on('Deposited', (sender, receiver, termId, ...args) => {
-  streamer.broadcast({
-    type: 'deposit',
-    sender,
-    receiver,
-    termId,
-    // Additional data...
-  });
+const unwatch = publicClient.watchContractEvent({
+  address: MULTIVAULT_ADDRESS,
+  abi: multiVaultAbi,
+  eventName: 'Deposited',
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      const { sender, receiver, termId } = log.args;
+      streamer.broadcast({
+        type: 'deposit',
+        sender,
+        receiver,
+        termId,
+        // Additional data...
+      });
+    });
+  },
 });
 ```
 
@@ -842,8 +976,16 @@ function broadcastEvent(event: any) {
   });
 }
 
-multiVault.on('AtomCreated', (creator, termId, ...args) => {
-  broadcastEvent({ type: 'atom_created', creator, termId });
+const unwatch = publicClient.watchContractEvent({
+  address: MULTIVAULT_ADDRESS,
+  abi: multiVaultAbi,
+  eventName: 'AtomCreated',
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      const { creator, termId } = log.args;
+      broadcastEvent({ type: 'atom_created', creator, termId });
+    });
+  },
 });
 
 app.listen(3000);
@@ -855,8 +997,16 @@ app.listen(3000);
 
 ```typescript
 async function getRecentDeposits(limit: number = 100) {
-  const filter = multiVault.filters.Deposited();
-  const events = await multiVault.queryFilter(filter, -10000, 'latest');
+  const currentBlock = await publicClient.getBlockNumber();
+  const fromBlock = currentBlock - 10000n;
+
+  const events = await publicClient.getContractEvents({
+    address: MULTIVAULT_ADDRESS,
+    abi: multiVaultAbi,
+    eventName: 'Deposited',
+    fromBlock,
+    toBlock: 'latest',
+  });
 
   return events
     .slice(-limit)
@@ -873,29 +1023,38 @@ async function getRecentDeposits(limit: number = 100) {
 ### Query User Activity
 
 ```typescript
-async function getUserActivity(userAddress: string, fromBlock: number) {
+async function getUserActivity(userAddress: string, fromBlock: bigint) {
   const [deposits, redemptions, rewards] = await Promise.all([
-    multiVault.queryFilter(
-      multiVault.filters.Deposited(userAddress),
-      fromBlock
-    ),
-    multiVault.queryFilter(
-      multiVault.filters.Redeemed(userAddress),
-      fromBlock
-    ),
-    trustBonding.queryFilter(
-      trustBonding.filters.RewardsClaimed(userAddress),
-      fromBlock
-    ),
+    publicClient.getContractEvents({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultAbi,
+      eventName: 'Deposited',
+      args: { sender: userAddress },
+      fromBlock,
+    }),
+    publicClient.getContractEvents({
+      address: MULTIVAULT_ADDRESS,
+      abi: multiVaultAbi,
+      eventName: 'Redeemed',
+      args: { sender: userAddress },
+      fromBlock,
+    }),
+    publicClient.getContractEvents({
+      address: TRUST_BONDING_ADDRESS,
+      abi: trustBondingAbi,
+      eventName: 'RewardsClaimed',
+      args: { user: userAddress },
+      fromBlock,
+    }),
   ]);
 
   return {
     deposits: deposits.length,
     redemptions: redemptions.length,
     rewardsClaimed: rewards.length,
-    totalDeposited: deposits.reduce((sum, e) => sum + e.args.assets, 0n),
-    totalRedeemed: redemptions.reduce((sum, e) => sum + e.args.assets, 0n),
-    totalRewards: rewards.reduce((sum, e) => sum + e.args.amount, 0n),
+    totalDeposited: deposits.reduce((sum, e) => sum + (e.args.assets as bigint), 0n),
+    totalRedeemed: redemptions.reduce((sum, e) => sum + (e.args.assets as bigint), 0n),
+    totalRewards: rewards.reduce((sum, e) => sum + (e.args.amount as bigint), 0n),
   };
 }
 ```
@@ -907,17 +1066,20 @@ async function getUserActivity(userAddress: string, fromBlock: number) {
 Cache recent events to reduce RPC calls:
 
 ```typescript
+import { type Log, type Abi } from 'viem';
+
 class EventCache {
-  private cache = new Map<string, any[]>();
+  private cache = new Map<string, Log[]>();
   private ttl = 60000; // 1 minute
 
   async getEvents(
-    contract: ethers.Contract,
+    publicClient: PublicClient,
+    address: string,
+    abi: Abi,
     eventName: string,
-    filter: any,
-    fromBlock: number,
-    toBlock: number
-  ): Promise<any[]> {
+    fromBlock: bigint,
+    toBlock: bigint | 'latest'
+  ): Promise<Log[]> {
     const cacheKey = `${eventName}:${fromBlock}:${toBlock}`;
     const cached = this.cache.get(cacheKey);
 
@@ -925,7 +1087,13 @@ class EventCache {
       return cached;
     }
 
-    const events = await contract.queryFilter(filter, fromBlock, toBlock);
+    const events = await publicClient.getContractEvents({
+      address,
+      abi,
+      eventName,
+      fromBlock,
+      toBlock,
+    });
     this.cache.set(cacheKey, events);
 
     setTimeout(() => this.cache.delete(cacheKey), this.ttl);

@@ -95,30 +95,50 @@ Every deposit and redemption updates utilization:
 
 ```javascript
 // Deposit increases utilization
-await multiVault.deposit(receiver, termId, curveId, minShares, { value: assets });
+const depositHash = await walletClient.writeContract({
+  address: multiVaultAddress,
+  abi: multiVaultABI,
+  functionName: 'deposit',
+  args: [receiver, termId, curveId, minShares],
+  value: assets
+});
+await publicClient.waitForTransactionReceipt({ hash: depositHash });
 // Event emitted: PersonalUtilizationAdded(user, epoch, +assets, newTotal)
 
 // Redemption decreases utilization
-await multiVault.redeem(receiver, termId, curveId, shares, minAssets);
+const redeemHash = await walletClient.writeContract({
+  address: multiVaultAddress,
+  abi: multiVaultABI,
+  functionName: 'redeem',
+  args: [receiver, termId, curveId, shares, minAssets]
+});
+await publicClient.waitForTransactionReceipt({ hash: redeemHash });
 // Event emitted: PersonalUtilizationRemoved(user, epoch, -assets, newTotal)
 ```
 
 ### Querying Personal Utilization
 
 ```javascript
+import { getContract, formatEther } from 'viem';
+
 const MULTIVAULT_ADDRESS = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e';
-const multiVault = new ethers.Contract(MULTIVAULT_ADDRESS, MULTIVAULT_ABI, provider);
+
+const multiVault = getContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  client: publicClient
+});
 
 // Get current epoch
-const currentEpoch = await trustBonding.currentEpoch();
+const currentEpoch = await trustBonding.read.currentEpoch();
 
 // Query personal utilization
-const personalUtil = await multiVault.getUserUtilizationForEpoch(
+const personalUtil = await multiVault.read.getUserUtilizationForEpoch([
   userAddress,
   currentEpoch
-);
+]);
 
-console.log(`Personal Utilization: ${ethers.formatEther(personalUtil)} TRUST`);
+console.log(`Personal Utilization: ${formatEther(personalUtil)} TRUST`);
 
 // Can be positive or negative
 if (personalUtil < 0n) {
@@ -187,10 +207,12 @@ System utilization measures **overall protocol health**:
 ### Querying System Utilization
 
 ```javascript
-// Get system-wide utilization for epoch
-const systemUtil = await multiVault.getTotalUtilizationForEpoch(currentEpoch);
+import { formatEther } from 'viem';
 
-console.log(`System Utilization: ${ethers.formatEther(systemUtil)} TRUST`);
+// Get system-wide utilization for epoch
+const systemUtil = await multiVault.read.getTotalUtilizationForEpoch([currentEpoch]);
+
+console.log(`System Utilization: ${formatEther(systemUtil)} TRUST`);
 
 // Interpret the value
 if (systemUtil > 0n) {
@@ -205,18 +227,20 @@ if (systemUtil > 0n) {
 ### System Health Indicator
 
 ```javascript
+import { formatEther } from 'viem';
+
 async function analyzeSystemHealth() {
   const epochs = [currentEpoch - 3n, currentEpoch - 2n, currentEpoch - 1n, currentEpoch];
   const utils = [];
 
   for (const epoch of epochs) {
-    const util = await multiVault.getTotalUtilizationForEpoch(epoch);
+    const util = await multiVault.read.getTotalUtilizationForEpoch([epoch]);
     utils.push(util);
   }
 
   console.log('System Utilization Trend:');
   utils.forEach((util, i) => {
-    console.log(`  Epoch ${epochs[i]}: ${ethers.formatEther(util)} TRUST`);
+    console.log(`  Epoch ${epochs[i]}: ${formatEther(util)} TRUST`);
   });
 
   // Check if trending up or down
@@ -247,10 +271,10 @@ where:
 ```javascript
 async function calculatePersonalRatio(userAddress, epoch) {
   // Get personal utilization
-  const personalUtil = await multiVault.getUserUtilizationForEpoch(userAddress, epoch);
+  const personalUtil = await multiVault.read.getUserUtilizationForEpoch([userAddress, epoch]);
 
   // Get bonded balance
-  const bondedBalance = await trustBonding.userBondedBalanceAtEpochEnd(userAddress, epoch);
+  const bondedBalance = await trustBonding.read.userBondedBalanceAtEpochEnd([userAddress, epoch]);
 
   // Calculate ratio
   let ratio;
@@ -294,10 +318,10 @@ where:
 ```javascript
 async function calculateSystemRatio(epoch) {
   // Get system utilization
-  const systemUtil = await multiVault.getTotalUtilizationForEpoch(epoch);
+  const systemUtil = await multiVault.read.getTotalUtilizationForEpoch([epoch]);
 
   // Get total bonded balance
-  const totalBonded = await trustBonding.totalBondedBalanceAtEpochEnd(epoch);
+  const totalBonded = await trustBonding.read.totalBondedBalanceAtEpochEnd([epoch]);
 
   // Calculate ratio
   let ratio;
@@ -338,7 +362,7 @@ where:
 **Scenario 1: Maximum Rewards**
 ```javascript
 // User with maximum engagement
-const baseRewards = ethers.parseEther('100');
+const baseRewards = parseEther('100');
 const systemRatio = 10000n;  // 100%
 const personalRatio = 10000n; // 100%
 
@@ -349,7 +373,7 @@ const finalRewards = baseRewards * systemRatio / 10000n * personalRatio / 10000n
 **Scenario 2: Moderate Engagement**
 ```javascript
 // User with moderate engagement
-const baseRewards = ethers.parseEther('100');
+const baseRewards = parseEther('100');
 const systemRatio = 7000n;   // 70%
 const personalRatio = 6000n; // 60%
 
@@ -360,7 +384,7 @@ const finalRewards = baseRewards * systemRatio / 10000n * personalRatio / 10000n
 **Scenario 3: Minimum Multipliers**
 ```javascript
 // Passive user (no activity)
-const baseRewards = ethers.parseEther('100');
+const baseRewards = parseEther('100');
 const systemRatio = 4000n;   // 40% (floor)
 const personalRatio = 2500n; // 25% (floor)
 
@@ -371,8 +395,10 @@ const finalRewards = baseRewards * systemRatio / 10000n * personalRatio / 10000n
 ### Reward Comparison Tool
 
 ```javascript
+import { formatEther } from 'viem';
+
 async function compareRewardScenarios(userAddress, epoch) {
-  const baseRewards = await trustBonding.userMaxRewardsForEpoch(userAddress, epoch);
+  const baseRewards = await trustBonding.read.userMaxRewardsForEpoch([userAddress, epoch]);
 
   const scenarios = [
     { name: 'Maximum Engagement', system: 10000, personal: 10000 },
@@ -383,7 +409,7 @@ async function compareRewardScenarios(userAddress, epoch) {
   ];
 
   console.log('Reward Scenarios:');
-  console.log(`Base Rewards: ${ethers.formatEther(baseRewards)} TRUST\n`);
+  console.log(`Base Rewards: ${formatEther(baseRewards)} TRUST\n`);
 
   for (const scenario of scenarios) {
     const final = baseRewards * BigInt(scenario.system) / 10000n * BigInt(scenario.personal) / 10000n;
@@ -391,7 +417,7 @@ async function compareRewardScenarios(userAddress, epoch) {
 
     console.log(`${scenario.name}:`);
     console.log(`  System: ${scenario.system / 100}%, Personal: ${scenario.personal / 100}%`);
-    console.log(`  Final Rewards: ${ethers.formatEther(final)} TRUST (${percentage}%)\n`);
+    console.log(`  Final Rewards: ${formatEther(final)} TRUST (${percentage}%)\n`);
   }
 }
 ```
@@ -435,22 +461,36 @@ event TotalUtilizationRemoved(
 ### Listening for Changes
 
 ```javascript
+import { parseAbiItem, formatEther } from 'viem';
+
 // Monitor your utilization in real-time
-multiVault.on('PersonalUtilizationAdded', (user, epoch, valueAdded, total) => {
-  if (user.toLowerCase() === userAddress.toLowerCase()) {
-    console.log(`Utilization increased by ${ethers.formatEther(valueAdded)}`);
-    console.log(`New total: ${ethers.formatEther(total)}`);
+publicClient.watchEvent({
+  address: multiVaultAddress,
+  event: parseAbiItem('event PersonalUtilizationAdded(address indexed user, uint256 indexed epoch, int256 indexed valueAdded, int256 personalUtilization)'),
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      if (log.args.user.toLowerCase() === userAddress.toLowerCase()) {
+        console.log(`Utilization increased by ${formatEther(log.args.valueAdded)}`);
+        console.log(`New total: ${formatEther(log.args.personalUtilization)}`);
+      }
+    });
   }
 });
 
-multiVault.on('PersonalUtilizationRemoved', (user, epoch, valueRemoved, total) => {
-  if (user.toLowerCase() === userAddress.toLowerCase()) {
-    console.log(`Utilization decreased by ${ethers.formatEther(valueRemoved)}`);
-    console.log(`New total: ${ethers.formatEther(total)}`);
+publicClient.watchEvent({
+  address: multiVaultAddress,
+  event: parseAbiItem('event PersonalUtilizationRemoved(address indexed user, uint256 indexed epoch, int256 indexed valueRemoved, int256 personalUtilization)'),
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      if (log.args.user.toLowerCase() === userAddress.toLowerCase()) {
+        console.log(`Utilization decreased by ${formatEther(log.args.valueRemoved)}`);
+        console.log(`New total: ${formatEther(log.args.personalUtilization)}`);
 
-    if (total < 0n) {
-      console.log('WARNING: Negative utilization! Consider depositing to improve ratio.');
-    }
+        if (log.args.personalUtilization < 0n) {
+          console.log('WARNING: Negative utilization! Consider depositing to improve ratio.');
+        }
+      }
+    });
   }
 });
 ```
@@ -458,16 +498,18 @@ multiVault.on('PersonalUtilizationRemoved', (user, epoch, valueRemoved, total) =
 ### Historical Analysis
 
 ```javascript
+import { formatEther } from 'viem';
+
 async function analyzeUtilizationHistory(userAddress, numEpochs = 10) {
-  const currentEpoch = await trustBonding.currentEpoch();
+  const currentEpoch = await trustBonding.read.currentEpoch();
   const history = [];
 
   for (let i = 0; i < numEpochs; i++) {
     const epoch = currentEpoch - BigInt(i);
     if (epoch < 0n) break;
 
-    const personalUtil = await multiVault.getUserUtilizationForEpoch(userAddress, epoch);
-    const bondedBalance = await trustBonding.userBondedBalanceAtEpochEnd(userAddress, epoch);
+    const personalUtil = await multiVault.read.getUserUtilizationForEpoch([userAddress, epoch]);
+    const bondedBalance = await trustBonding.read.userBondedBalanceAtEpochEnd([userAddress, epoch]);
 
     const ratio = bondedBalance > 0n
       ? (personalUtil * 10000n) / bondedBalance
@@ -484,8 +526,8 @@ async function analyzeUtilizationHistory(userAddress, numEpochs = 10) {
   console.log('Utilization History:');
   history.forEach(h => {
     console.log(`Epoch ${h.epoch}:`);
-    console.log(`  Utilization: ${ethers.formatEther(h.personalUtil)}`);
-    console.log(`  Bonded: ${ethers.formatEther(h.bondedBalance)}`);
+    console.log(`  Utilization: ${formatEther(h.personalUtil)}`);
+    console.log(`  Bonded: ${formatEther(h.bondedBalance)}`);
     console.log(`  Ratio: ${h.ratio}%\n`);
   });
 
@@ -498,9 +540,11 @@ async function analyzeUtilizationHistory(userAddress, numEpochs = 10) {
 ### Strategy 1: Maintain Positive Utilization
 
 ```javascript
+import { formatEther, parseEther } from 'viem';
+
 async function maintainPositiveUtilization() {
-  const currentEpoch = await trustBonding.currentEpoch();
-  const personalUtil = await multiVault.getUserUtilizationForEpoch(userAddress, currentEpoch);
+  const currentEpoch = await trustBonding.read.currentEpoch();
+  const personalUtil = await multiVault.read.getUserUtilizationForEpoch([userAddress, currentEpoch]);
 
   if (personalUtil < 0n) {
     console.log('Negative utilization detected!');
@@ -508,13 +552,13 @@ async function maintainPositiveUtilization() {
     // Calculate how much to deposit to reach 0
     const depositNeeded = -personalUtil;
 
-    console.log(`Deposit ${ethers.formatEther(depositNeeded)} to reach 0 utilization`);
+    console.log(`Deposit ${formatEther(depositNeeded)} to reach 0 utilization`);
 
     // Or deposit more to reach positive
-    const targetUtil = ethers.parseEther('100');
+    const targetUtil = parseEther('100');
     const totalDeposit = depositNeeded + targetUtil;
 
-    console.log(`Deposit ${ethers.formatEther(totalDeposit)} to reach target utilization`);
+    console.log(`Deposit ${formatEther(totalDeposit)} to reach target utilization`);
   }
 }
 ```
@@ -522,33 +566,43 @@ async function maintainPositiveUtilization() {
 ### Strategy 2: Time Redemptions Strategically
 
 ```javascript
+import { formatEther } from 'viem';
+
 async function strategicRedemption(amount) {
-  const currentEpoch = await trustBonding.currentEpoch();
-  const epochEnd = await trustBonding.epochTimestampEnd(currentEpoch);
+  const currentEpoch = await trustBonding.read.currentEpoch();
+  const epochEnd = await trustBonding.read.epochTimestampEnd([currentEpoch]);
   const now = Math.floor(Date.now() / 1000);
 
-  const personalUtil = await multiVault.getUserUtilizationForEpoch(userAddress, currentEpoch);
+  const personalUtil = await multiVault.read.getUserUtilizationForEpoch([userAddress, currentEpoch]);
 
   // If close to epoch end and utilization is good, wait for next epoch
-  if ((epochEnd - now) < 3600 && personalUtil > 0n) {
+  if ((Number(epochEnd) - now) < 3600 && personalUtil > 0n) {
     console.log('Waiting for next epoch to maintain positive utilization this epoch');
-    console.log(`Current utilization: ${ethers.formatEther(personalUtil)}`);
+    console.log(`Current utilization: ${formatEther(personalUtil)}`);
     return;
   }
 
   // Otherwise, redeem now
-  await multiVault.redeem(userAddress, termId, curveId, amount, minAssets);
+  const hash = await walletClient.writeContract({
+    address: multiVaultAddress,
+    abi: multiVaultABI,
+    functionName: 'redeem',
+    args: [userAddress, termId, curveId, amount, minAssets]
+  });
+  await publicClient.waitForTransactionReceipt({ hash });
 }
 ```
 
 ### Strategy 3: Balance Deposits and Redemptions
 
 ```javascript
+import { formatEther } from 'viem';
+
 class UtilizationManager {
   async getRecommendedAction() {
-    const currentEpoch = await trustBonding.currentEpoch();
-    const personalUtil = await multiVault.getUserUtilizationForEpoch(userAddress, currentEpoch);
-    const bondedBalance = await trustBonding.userBondedBalanceAtEpochEnd(userAddress, currentEpoch);
+    const currentEpoch = await trustBonding.read.currentEpoch();
+    const personalUtil = await multiVault.read.getUserUtilizationForEpoch([userAddress, currentEpoch]);
+    const bondedBalance = await trustBonding.read.userBondedBalanceAtEpochEnd([userAddress, currentEpoch]);
 
     const currentRatio = bondedBalance > 0n
       ? (personalUtil * 10000n) / bondedBalance
@@ -562,10 +616,10 @@ class UtilizationManager {
       return 'GOOD - Maintain current activity level';
     } else if (currentRatio >= 5000n) {
       const depositNeeded = bondedBalance / 2n - personalUtil;
-      return `MODERATE - Consider depositing ${ethers.formatEther(depositNeeded)} more`;
+      return `MODERATE - Consider depositing ${formatEther(depositNeeded)} more`;
     } else {
       const depositNeeded = bondedBalance - personalUtil;
-      return `LOW - Deposit ${ethers.formatEther(depositNeeded)} to reach 100% ratio`;
+      return `LOW - Deposit ${formatEther(depositNeeded)} to reach 100% ratio`;
     }
   }
 }
@@ -575,8 +629,8 @@ class UtilizationManager {
 
 ```javascript
 async function followSystemTrends() {
-  const currentEpoch = await trustBonding.currentEpoch();
-  const systemUtil = await multiVault.getTotalUtilizationForEpoch(currentEpoch);
+  const currentEpoch = await trustBonding.read.currentEpoch();
+  const systemUtil = await multiVault.read.getTotalUtilizationForEpoch([currentEpoch]);
 
   if (systemUtil > 0n) {
     console.log('System is net growing - good time to deposit and participate');
@@ -590,11 +644,13 @@ async function followSystemTrends() {
 ### Strategy 5: Auto-Optimize Utilization
 
 ```javascript
+import { formatEther } from 'viem';
+
 class AutoOptimizer {
   async optimizeUtilization(targetRatio = 8000) { // Target 80%
-    const currentEpoch = await trustBonding.currentEpoch();
-    const personalUtil = await multiVault.getUserUtilizationForEpoch(userAddress, currentEpoch);
-    const bondedBalance = await trustBonding.userBondedBalanceAtEpochEnd(userAddress, currentEpoch);
+    const currentEpoch = await trustBonding.read.currentEpoch();
+    const personalUtil = await multiVault.read.getUserUtilizationForEpoch([userAddress, currentEpoch]);
+    const bondedBalance = await trustBonding.read.userBondedBalanceAtEpochEnd([userAddress, currentEpoch]);
 
     if (bondedBalance === 0n) {
       console.log('No bonded balance - lock TRUST first');
@@ -608,16 +664,17 @@ class AutoOptimizer {
       // Need to deposit more
       const depositNeeded = targetUtil - personalUtil;
 
-      console.log(`Depositing ${ethers.formatEther(depositNeeded)} to reach ${targetRatio / 100}% ratio`);
+      console.log(`Depositing ${formatEther(depositNeeded)} to reach ${targetRatio / 100}% ratio`);
 
       // Execute deposit
-      await multiVault.deposit(
-        userAddress,
-        termId,
-        curveId,
-        0n, // minShares
-        { value: depositNeeded }
-      );
+      const hash = await walletClient.writeContract({
+        address: multiVaultAddress,
+        abi: multiVaultABI,
+        functionName: 'deposit',
+        args: [userAddress, termId, curveId, 0n], // minShares
+        value: depositNeeded
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
     } else {
       console.log(`Already at or above target ratio (${Number(currentRatio) / 100}%)`);
     }

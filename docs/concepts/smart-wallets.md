@@ -164,27 +164,41 @@ Atom wallets use the **Beacon Proxy** pattern:
 Atom wallets are created automatically when atoms are created:
 
 ```javascript
-// Create an atom
-const atomData = ethers.toUtf8Bytes('alice.eth');
-const depositAmount = ethers.parseEther('0.1');
+import { stringToHex, parseEther, parseAbiItem, decodeEventLog } from 'viem';
 
-const tx = await multiVault.createAtoms([atomData], [depositAmount], {
+// Create an atom
+const atomData = stringToHex('alice.eth');
+const depositAmount = parseEther('0.1');
+
+const hash = await walletClient.writeContract({
+  address: multiVaultAddress,
+  abi: multiVaultABI,
+  functionName: 'createAtoms',
+  args: [[atomData], [depositAmount]],
   value: depositAmount
 });
 
-const receipt = await tx.wait();
+const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
 // Extract atom wallet from event
-const atomCreatedEvent = receipt.logs.find(log => {
+const atomCreatedLog = receipt.logs.find(log => {
   try {
-    const parsed = multiVault.interface.parseLog(log);
-    return parsed.name === 'AtomCreated';
+    const decoded = decodeEventLog({
+      abi: multiVaultABI,
+      data: log.data,
+      topics: log.topics
+    });
+    return decoded.eventName === 'AtomCreated';
   } catch {
     return false;
   }
 });
 
-const { termId, atomWallet } = multiVault.interface.parseLog(atomCreatedEvent).args;
+const { termId, atomWallet } = decodeEventLog({
+  abi: multiVaultABI,
+  data: atomCreatedLog.data,
+  topics: atomCreatedLog.topics
+}).args;
 
 console.log(`Atom ID: ${termId}`);
 console.log(`Atom Wallet: ${atomWallet}`);
@@ -195,22 +209,25 @@ console.log(`Atom Wallet: ${atomWallet}`);
 Wallet addresses are deterministic and can be computed before deployment:
 
 ```javascript
+import { stringToHex, getContract, getBytecode } from 'viem';
+
 const ATOM_WALLET_FACTORY = '0x...'; // From deployment addresses
-const factory = new ethers.Contract(
-  ATOM_WALLET_FACTORY,
-  ATOM_WALLET_FACTORY_ABI,
-  provider
-);
+
+const factory = getContract({
+  address: ATOM_WALLET_FACTORY,
+  abi: ATOM_WALLET_FACTORY_ABI,
+  client: publicClient
+});
 
 // Compute wallet address for any atom ID
-const atomId = calculateAtomId(ethers.toUtf8Bytes('alice.eth'));
-const walletAddress = await factory.computeAtomWalletAddr(atomId);
+const atomId = calculateAtomId(stringToHex('alice.eth'));
+const walletAddress = await factory.read.computeAtomWalletAddr([atomId]);
 
 console.log(`Atom wallet will be deployed at: ${walletAddress}`);
 
 // Check if already deployed
-const code = await provider.getCode(walletAddress);
-const isDeployed = code !== '0x';
+const code = await publicClient.getBytecode({ address: walletAddress });
+const isDeployed = code !== undefined && code !== '0x';
 
 if (!isDeployed) {
   console.log('Wallet not yet deployed - will be created on atom creation');
@@ -220,21 +237,37 @@ if (!isDeployed) {
 ### Factory Methods
 
 ```javascript
+import { decodeEventLog } from 'viem';
+
 // Deploy wallet manually (if needed)
-const deployTx = await factory.deployAtomWallet(atomId);
-const deployReceipt = await deployTx.wait();
+const hash = await walletClient.writeContract({
+  address: ATOM_WALLET_FACTORY,
+  abi: ATOM_WALLET_FACTORY_ABI,
+  functionName: 'deployAtomWallet',
+  args: [atomId]
+});
+
+const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
 // Get deployed address from event
-const deployedEvent = deployReceipt.logs.find(log => {
+const deployedLog = receipt.logs.find(log => {
   try {
-    const parsed = factory.interface.parseLog(log);
-    return parsed.name === 'AtomWalletDeployed';
+    const decoded = decodeEventLog({
+      abi: ATOM_WALLET_FACTORY_ABI,
+      data: log.data,
+      topics: log.topics
+    });
+    return decoded.eventName === 'AtomWalletDeployed';
   } catch {
     return false;
   }
 });
 
-const { atomWallet } = factory.interface.parseLog(deployedEvent).args;
+const { atomWallet } = decodeEventLog({
+  abi: ATOM_WALLET_FACTORY_ABI,
+  data: deployedLog.data,
+  topics: deployedLog.topics
+}).args;
 console.log(`Wallet deployed at: ${atomWallet}`);
 ```
 
@@ -261,27 +294,34 @@ stateDiagram-v2
 If atom data represents an address, that address can claim ownership:
 
 ```javascript
+import { getContract, hexToBytes, getAddress } from 'viem';
+
 const ATOM_WARDEN_ADDRESS = '0x...'; // From deployment addresses
-const atomWarden = new ethers.Contract(
-  ATOM_WARDEN_ADDRESS,
-  ATOM_WARDEN_ABI,
-  signer
-);
 
 // Example: Atom data is your address
-const yourAddress = await signer.getAddress();
-const atomData = ethers.getBytes(yourAddress);
+const yourAddress = account.address;
+const atomData = hexToBytes(getAddress(yourAddress));
 const atomId = calculateAtomId(atomData);
 
 // Claim ownership
-const tx = await atomWarden.claimOwnershipOverAddressAtom(atomId);
-await tx.wait();
+const hash = await walletClient.writeContract({
+  address: ATOM_WARDEN_ADDRESS,
+  abi: ATOM_WARDEN_ABI,
+  functionName: 'claimOwnershipOverAddressAtom',
+  args: [atomId]
+});
+
+await publicClient.waitForTransactionReceipt({ hash });
 
 console.log('Ownership claimed! You now control the atom wallet.');
 
 // Verify ownership
-const wallet = new ethers.Contract(walletAddress, ATOM_WALLET_ABI, provider);
-const owner = await wallet.owner();
+const wallet = getContract({
+  address: walletAddress,
+  abi: ATOM_WALLET_ABI,
+  client: publicClient
+});
+const owner = await wallet.read.owner();
 
 console.log(`Wallet owner: ${owner}`);
 console.log(`Your address: ${yourAddress}`);
@@ -300,9 +340,15 @@ await atomWarden.claimOwnership(atomId, newOwnerAddress);
 ### Querying Ownership
 
 ```javascript
+import { getContract } from 'viem';
+
 // Get current owner of atom wallet
-const atomWallet = new ethers.Contract(walletAddress, ATOM_WALLET_ABI, provider);
-const currentOwner = await atomWallet.owner();
+const atomWallet = getContract({
+  address: walletAddress,
+  abi: ATOM_WALLET_ABI,
+  client: publicClient
+});
+const currentOwner = await atomWallet.read.owner();
 
 console.log(`Current owner: ${currentOwner}`);
 
@@ -326,14 +372,21 @@ Atom Wallet Deposit Fee: Configurable percentage (e.g., 1%)
 ### Fee Accumulation
 
 ```javascript
+import { getContract, formatEther, stringToHex } from 'viem';
+
 const MULTIVAULT_ADDRESS = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e';
-const multiVault = new ethers.Contract(MULTIVAULT_ADDRESS, MULTIVAULT_ABI, provider);
+
+const multiVault = getContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  client: publicClient
+});
 
 // Query accumulated fees for an atom
-const atomId = calculateAtomId(ethers.toUtf8Bytes('alice.eth'));
-const accumulatedFees = await multiVault.getAtomWalletDepositFees(atomId);
+const atomId = calculateAtomId(stringToHex('alice.eth'));
+const accumulatedFees = await multiVault.read.getAtomWalletDepositFees([atomId]);
 
-console.log(`Accumulated fees: ${ethers.formatEther(accumulatedFees)} ETH`);
+console.log(`Accumulated fees: ${formatEther(accumulatedFees)} ETH`);
 ```
 
 ### Claiming Fees
@@ -341,34 +394,50 @@ console.log(`Accumulated fees: ${ethers.formatEther(accumulatedFees)} ETH`);
 Only the atom wallet owner can claim accumulated fees:
 
 ```javascript
+import { formatEther, decodeEventLog } from 'viem';
+
 async function claimAtomWalletFees(atomId) {
   // Check accumulated fees
-  const fees = await multiVault.getAtomWalletDepositFees(atomId);
+  const fees = await multiVault.read.getAtomWalletDepositFees([atomId]);
 
   if (fees === 0n) {
     console.log('No fees to claim');
     return;
   }
 
-  console.log(`Claiming ${ethers.formatEther(fees)} ETH in fees...`);
+  console.log(`Claiming ${formatEther(fees)} ETH in fees...`);
 
   // Claim fees (must be wallet owner)
-  const tx = await multiVault.claimAtomWalletDepositFees(atomId);
-  const receipt = await tx.wait();
+  const hash = await walletClient.writeContract({
+    address: multiVault.address,
+    abi: MULTIVAULT_ABI,
+    functionName: 'claimAtomWalletDepositFees',
+    args: [atomId]
+  });
+
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
   // Parse event
-  const claimedEvent = receipt.logs.find(log => {
+  const claimedLog = receipt.logs.find(log => {
     try {
-      const parsed = multiVault.interface.parseLog(log);
-      return parsed.name === 'AtomWalletDepositFeesClaimed';
+      const decoded = decodeEventLog({
+        abi: MULTIVAULT_ABI,
+        data: log.data,
+        topics: log.topics
+      });
+      return decoded.eventName === 'AtomWalletDepositFeesClaimed';
     } catch {
       return false;
     }
   });
 
-  if (claimedEvent) {
-    const { feesClaimed } = multiVault.interface.parseLog(claimedEvent).args;
-    console.log(`Successfully claimed ${ethers.formatEther(feesClaimed)} ETH!`);
+  if (claimedLog) {
+    const { feesClaimed } = decodeEventLog({
+      abi: MULTIVAULT_ABI,
+      data: claimedLog.data,
+      topics: claimedLog.topics
+    }).args;
+    console.log(`Successfully claimed ${formatEther(feesClaimed)} ETH!`);
   }
 }
 ```
@@ -378,18 +447,32 @@ async function claimAtomWalletFees(atomId) {
 Monitor fee accumulation in real-time:
 
 ```javascript
+import { parseAbiItem, formatEther } from 'viem';
+
 // Listen for fee collection
-multiVault.on('AtomWalletDepositFeeCollected', (termId, sender, amount) => {
-  console.log(`Fee collected for atom ${termId}:`);
-  console.log(`  From: ${sender}`);
-  console.log(`  Amount: ${ethers.formatEther(amount)} ETH`);
+publicClient.watchEvent({
+  address: multiVaultAddress,
+  event: parseAbiItem('event AtomWalletDepositFeeCollected(bytes32 indexed termId, address indexed sender, uint256 amount)'),
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      console.log(`Fee collected for atom ${log.args.termId}:`);
+      console.log(`  From: ${log.args.sender}`);
+      console.log(`  Amount: ${formatEther(log.args.amount)} ETH`);
+    });
+  }
 });
 
 // Listen for fee claims
-multiVault.on('AtomWalletDepositFeesClaimed', (termId, atomWalletOwner, feesClaimed) => {
-  console.log(`Fees claimed for atom ${termId}:`);
-  console.log(`  Owner: ${atomWalletOwner}`);
-  console.log(`  Amount: ${ethers.formatEther(feesClaimed)} ETH`);
+publicClient.watchEvent({
+  address: multiVaultAddress,
+  event: parseAbiItem('event AtomWalletDepositFeesClaimed(bytes32 indexed termId, address indexed atomWalletOwner, uint256 feesClaimed)'),
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      console.log(`Fees claimed for atom ${log.args.termId}:`);
+      console.log(`  Owner: ${log.args.atomWalletOwner}`);
+      console.log(`  Amount: ${formatEther(log.args.feesClaimed)} ETH`);
+    });
+  }
 });
 ```
 
@@ -400,16 +483,21 @@ multiVault.on('AtomWalletDepositFeesClaimed', (termId, atomWalletOwner, feesClai
 As the wallet owner, you can execute arbitrary transactions:
 
 ```javascript
-// Get atom wallet instance
-const atomWallet = new ethers.Contract(walletAddress, ATOM_WALLET_ABI, signer);
+import { parseEther } from 'viem';
 
 // Execute a transaction
 const target = '0x...'; // Target contract
-const value = ethers.parseEther('0.1'); // ETH to send
+const value = parseEther('0.1'); // ETH to send
 const data = '0x...'; // Encoded function call
 
-const tx = await atomWallet.execute(target, value, data);
-await tx.wait();
+const hash = await walletClient.writeContract({
+  address: walletAddress,
+  abi: ATOM_WALLET_ABI,
+  functionName: 'execute',
+  args: [target, value, data]
+});
+
+await publicClient.waitForTransactionReceipt({ hash });
 
 console.log('Transaction executed via atom wallet');
 ```
@@ -419,60 +507,95 @@ console.log('Transaction executed via atom wallet');
 Execute multiple calls in one transaction:
 
 ```javascript
+import { encodeFunctionData } from 'viem';
+
 // Prepare multiple calls
 const calls = [
   {
     target: tokenAddress,
-    value: 0,
-    data: tokenInterface.encodeFunctionData('transfer', [recipient1, amount1])
+    value: 0n,
+    data: encodeFunctionData({
+      abi: tokenABI,
+      functionName: 'transfer',
+      args: [recipient1, amount1]
+    })
   },
   {
     target: tokenAddress,
-    value: 0,
-    data: tokenInterface.encodeFunctionData('transfer', [recipient2, amount2])
+    value: 0n,
+    data: encodeFunctionData({
+      abi: tokenABI,
+      functionName: 'transfer',
+      args: [recipient2, amount2]
+    })
   },
   {
     target: nftAddress,
-    value: 0,
-    data: nftInterface.encodeFunctionData('transferFrom', [walletAddress, recipient, tokenId])
+    value: 0n,
+    data: encodeFunctionData({
+      abi: nftABI,
+      functionName: 'transferFrom',
+      args: [walletAddress, recipient, tokenId]
+    })
   }
 ];
 
 // Execute batch
-const tx = await atomWallet.executeBatch(
-  calls.map(c => c.target),
-  calls.map(c => c.value),
-  calls.map(c => c.data)
-);
+const hash = await walletClient.writeContract({
+  address: walletAddress,
+  abi: ATOM_WALLET_ABI,
+  functionName: 'executeBatch',
+  args: [
+    calls.map(c => c.target),
+    calls.map(c => c.value),
+    calls.map(c => c.data)
+  ]
+});
 
-await tx.wait();
+await publicClient.waitForTransactionReceipt({ hash });
 console.log('Batch transaction executed');
 ```
 
 ### Transferring Assets
 
 ```javascript
-// Transfer ERC20 tokens from atom wallet
-const token = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
-const transferData = token.interface.encodeFunctionData('transfer', [
-  recipient,
-  ethers.parseUnits('100', 18)
-]);
+import { encodeFunctionData, parseUnits, parseEther } from 'viem';
 
-await atomWallet.execute(tokenAddress, 0, transferData);
+// Transfer ERC20 tokens from atom wallet
+const transferData = encodeFunctionData({
+  abi: ERC20_ABI,
+  functionName: 'transfer',
+  args: [recipient, parseUnits('100', 18)]
+});
+
+await walletClient.writeContract({
+  address: walletAddress,
+  abi: ATOM_WALLET_ABI,
+  functionName: 'execute',
+  args: [tokenAddress, 0n, transferData]
+});
 
 // Transfer ETH from atom wallet
-await atomWallet.execute(recipientAddress, ethers.parseEther('1'), '0x');
+await walletClient.writeContract({
+  address: walletAddress,
+  abi: ATOM_WALLET_ABI,
+  functionName: 'execute',
+  args: [recipientAddress, parseEther('1'), '0x']
+});
 
 // Transfer NFT from atom wallet
-const nft = new ethers.Contract(nftAddress, ERC721_ABI, provider);
-const nftTransferData = nft.interface.encodeFunctionData('transferFrom', [
-  walletAddress,
-  recipient,
-  tokenId
-]);
+const nftTransferData = encodeFunctionData({
+  abi: ERC721_ABI,
+  functionName: 'transferFrom',
+  args: [walletAddress, recipient, tokenId]
+});
 
-await atomWallet.execute(nftAddress, 0, nftTransferData);
+await walletClient.writeContract({
+  address: walletAddress,
+  abi: ATOM_WALLET_ABI,
+  functionName: 'execute',
+  args: [nftAddress, 0n, nftTransferData]
+});
 ```
 
 ## Use Cases
@@ -556,14 +679,22 @@ const reputationAtom = await createAtom('high-reputation', depositAmount);
 Automatically distribute fees to multiple parties:
 
 ```javascript
+import { getBalance } from 'viem';
+
 class FeeDistributor {
   async distributeFees(atomId, beneficiaries) {
     // Claim fees to wallet
-    await multiVault.claimAtomWalletDepositFees(atomId);
+    const claimHash = await walletClient.writeContract({
+      address: multiVaultAddress,
+      abi: MULTIVAULT_ABI,
+      functionName: 'claimAtomWalletDepositFees',
+      args: [atomId]
+    });
+    await publicClient.waitForTransactionReceipt({ hash: claimHash });
 
     // Get wallet balance
-    const walletAddress = await factory.computeAtomWalletAddr(atomId);
-    const balance = await provider.getBalance(walletAddress);
+    const walletAddress = await factory.read.computeAtomWalletAddr([atomId]);
+    const balance = await publicClient.getBalance({ address: walletAddress });
 
     // Calculate shares
     const totalShares = beneficiaries.reduce((sum, b) => sum + b.shares, 0);
@@ -576,12 +707,17 @@ class FeeDistributor {
     }));
 
     // Execute batch transfer
-    const atomWallet = new ethers.Contract(walletAddress, ATOM_WALLET_ABI, signer);
-    await atomWallet.executeBatch(
-      calls.map(c => c.target),
-      calls.map(c => c.value),
-      calls.map(c => c.data)
-    );
+    const hash = await walletClient.writeContract({
+      address: walletAddress,
+      abi: ATOM_WALLET_ABI,
+      functionName: 'executeBatch',
+      args: [
+        calls.map(c => c.target),
+        calls.map(c => c.value),
+        calls.map(c => c.data)
+      ]
+    });
+    await publicClient.waitForTransactionReceipt({ hash });
   }
 }
 ```
@@ -592,13 +728,13 @@ Set up automated fee claiming:
 
 ```javascript
 class AutoClaimer {
-  async autoClaimFees(atomId, minFees = ethers.parseEther('0.1')) {
+  async autoClaimFees(atomId, minFees = parseEther('0.1')) {
     // Check fees periodically
     setInterval(async () => {
       const fees = await multiVault.getAtomWalletDepositFees(atomId);
 
       if (fees >= minFees) {
-        console.log(`Auto-claiming ${ethers.formatEther(fees)} ETH...`);
+        console.log(`Auto-claiming ${formatEther(fees)} ETH...`);
         await multiVault.claimAtomWalletDepositFees(atomId);
       }
     }, 3600000); // Check every hour

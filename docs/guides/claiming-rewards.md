@@ -74,11 +74,11 @@ Retrieve comprehensive user information including eligible rewards.
 const userInfo = await trustBonding.getUserInfo(userAddress);
 
 console.log('Personal utilization:', userInfo.personalUtilization);
-console.log('Eligible rewards:', ethers.formatEther(userInfo.eligibleRewards));
-console.log('Max rewards:', ethers.formatEther(userInfo.maxRewards));
-console.log('Locked amount:', ethers.formatEther(userInfo.lockedAmount));
+console.log('Eligible rewards:', formatEther(userInfo.eligibleRewards));
+console.log('Max rewards:', formatEther(userInfo.maxRewards));
+console.log('Locked amount:', formatEther(userInfo.lockedAmount));
 console.log('Lock end:', new Date(Number(userInfo.lockEnd) * 1000));
-console.log('Bonded balance:', ethers.formatEther(userInfo.bondedBalance));
+console.log('Bonded balance:', formatEther(userInfo.bondedBalance));
 ```
 
 ### Step 4: Calculate Claimable Rewards
@@ -94,7 +94,7 @@ if (claimableRewards === 0n) {
   throw new Error('No rewards to claim');
 }
 
-console.log('Claimable rewards:', ethers.formatEther(claimableRewards), 'TRUST');
+console.log('Claimable rewards:', formatEther(claimableRewards), 'TRUST');
 ```
 
 ### Step 5: Check Utilization Ratios
@@ -150,7 +150,7 @@ const rewardsClaimedEvent = receipt.logs
   .find(event => event.name === 'RewardsClaimed');
 
 const amountClaimed = rewardsClaimedEvent.args.amount;
-console.log('TRUST claimed:', ethers.formatEther(amountClaimed));
+console.log('TRUST claimed:', formatEther(amountClaimed));
 ```
 
 ### Step 9: Check Updated Claim Status
@@ -168,12 +168,14 @@ console.log('Claim recorded for epoch', previousEpoch, ':', nowClaimed);
 
 ## Code Examples
 
-### TypeScript (ethers.js v6)
+### TypeScript (viem)
 
 Complete example with error handling and comprehensive reward information:
 
 ```typescript
-import { ethers } from 'ethers';
+import { createPublicClient, createWalletClient, http, formatEther } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { base } from 'viem/chains';
 
 // Contract ABIs (import from your ABI files)
 import TrustBondingABI from './abis/ITrustBonding.json';
@@ -181,17 +183,17 @@ import MultiVaultABI from './abis/IMultiVault.json';
 import ERC20ABI from './abis/ERC20.json';
 
 // Configuration
-const TRUST_BONDING_ADDRESS = '0x...'; // Check deployment addresses
-const MULTIVAULT_ADDRESS = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e';
-const TRUST_ADDRESS = '0x...'; // TRUST token address
+const TRUST_BONDING_ADDRESS = '0x...' as `0x${string}`; // Check deployment addresses
+const MULTIVAULT_ADDRESS = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e' as `0x${string}`;
+const TRUST_ADDRESS = '0x...' as `0x${string}`; // TRUST token address
 const RPC_URL = 'YOUR_INTUITION_RPC_URL';
 
 /**
  * Claims emission rewards for the previous epoch
  */
 async function claimRewards(
-  recipient: string,
-  privateKey: string
+  recipient: `0x${string}`,
+  privateKey: `0x${string}`
 ): Promise<{
   amountClaimed: bigint;
   epoch: bigint;
@@ -201,31 +203,33 @@ async function claimRewards(
     max: number;
   };
 }> {
-  // Setup provider and signer
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
-  const wallet = new ethers.Wallet(privateKey, provider);
+  // Setup account and clients
+  const account = privateKeyToAccount(privateKey);
 
-  // Contract instances
-  const trustBonding = new ethers.Contract(
-    TRUST_BONDING_ADDRESS,
-    TrustBondingABI,
-    wallet
-  );
-  const multiVault = new ethers.Contract(
-    MULTIVAULT_ADDRESS,
-    MultiVaultABI,
-    wallet
-  );
-  const trust = new ethers.Contract(
-    TRUST_ADDRESS,
-    ERC20ABI,
-    wallet
-  );
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http(RPC_URL)
+  });
+
+  const walletClient = createWalletClient({
+    account,
+    chain: base,
+    transport: http(RPC_URL)
+  });
 
   try {
     // Step 1: Get current and previous epoch
-    const currentEpoch = await trustBonding.currentEpoch();
-    const previousEpoch = await trustBonding.previousEpoch();
+    const currentEpoch = await publicClient.readContract({
+      address: TRUST_BONDING_ADDRESS,
+      abi: TrustBondingABI,
+      functionName: 'currentEpoch'
+    }) as bigint;
+
+    const previousEpoch = await publicClient.readContract({
+      address: TRUST_BONDING_ADDRESS,
+      abi: TrustBondingABI,
+      functionName: 'previousEpoch'
+    }) as bigint;
 
     console.log('Current epoch:', currentEpoch);
     console.log('Claimable epoch:', previousEpoch);
@@ -236,48 +240,60 @@ async function claimRewards(
     }
 
     // Step 2: Check if already claimed
-    const alreadyClaimed = await trustBonding.hasClaimedRewardsForEpoch(
-      wallet.address,
-      previousEpoch
-    );
+    const alreadyClaimed = await publicClient.readContract({
+      address: TRUST_BONDING_ADDRESS,
+      abi: TrustBondingABI,
+      functionName: 'hasClaimedRewardsForEpoch',
+      args: [account.address, previousEpoch]
+    }) as boolean;
 
     if (alreadyClaimed) {
       throw new Error(`Rewards already claimed for epoch ${previousEpoch}`);
     }
 
     // Step 3: Get comprehensive user information
-    const userInfo = await trustBonding.getUserInfo(wallet.address);
+    const userInfo = await publicClient.readContract({
+      address: TRUST_BONDING_ADDRESS,
+      abi: TrustBondingABI,
+      functionName: 'getUserInfo',
+      args: [account.address]
+    }) as [bigint, bigint, bigint, bigint, bigint, bigint];
 
     console.log('\nUser Information:');
-    console.log('  Personal utilization:', userInfo.personalUtilization.toString());
-    console.log('  Eligible rewards:', ethers.formatEther(userInfo.eligibleRewards), 'TRUST');
-    console.log('  Max rewards:', ethers.formatEther(userInfo.maxRewards), 'TRUST');
-    console.log('  Locked amount:', ethers.formatEther(userInfo.lockedAmount), 'TRUST');
-    console.log('  Lock end:', userInfo.lockEnd > 0n
-      ? new Date(Number(userInfo.lockEnd) * 1000).toISOString()
+    console.log('  Personal utilization:', userInfo[0].toString());
+    console.log('  Eligible rewards:', formatEther(userInfo[1]), 'TRUST');
+    console.log('  Max rewards:', formatEther(userInfo[2]), 'TRUST');
+    console.log('  Locked amount:', formatEther(userInfo[3]), 'TRUST');
+    console.log('  Lock end:', userInfo[4] > 0n
+      ? new Date(Number(userInfo[4]) * 1000).toISOString()
       : 'Not locked');
-    console.log('  Bonded balance:', ethers.formatEther(userInfo.bondedBalance), 'TRUST');
+    console.log('  Bonded balance:', formatEther(userInfo[5]), 'TRUST');
 
     // Step 4: Get claimable rewards
-    const claimableRewards = await trustBonding.getUserCurrentClaimableRewards(
-      wallet.address
-    );
+    const claimableRewards = await publicClient.readContract({
+      address: TRUST_BONDING_ADDRESS,
+      abi: TrustBondingABI,
+      functionName: 'getUserCurrentClaimableRewards',
+      args: [account.address]
+    }) as bigint;
 
     if (claimableRewards === 0n) {
       throw new Error('No rewards available to claim');
     }
 
-    console.log('\nClaimable rewards:', ethers.formatEther(claimableRewards), 'TRUST');
+    console.log('\nClaimable rewards:', formatEther(claimableRewards), 'TRUST');
 
     // Step 5: Get detailed rewards for previous epoch
-    const [eligibleRewards, maxRewards] = await trustBonding.getUserRewardsForEpoch(
-      wallet.address,
-      previousEpoch
-    );
+    const [eligibleRewards, maxRewards] = await publicClient.readContract({
+      address: TRUST_BONDING_ADDRESS,
+      abi: TrustBondingABI,
+      functionName: 'getUserRewardsForEpoch',
+      args: [account.address, previousEpoch]
+    }) as [bigint, bigint];
 
     console.log('\nEpoch', previousEpoch, 'Rewards:');
-    console.log('  Eligible rewards:', ethers.formatEther(eligibleRewards), 'TRUST');
-    console.log('  Max possible:', ethers.formatEther(maxRewards), 'TRUST');
+    console.log('  Eligible rewards:', formatEther(eligibleRewards), 'TRUST');
+    console.log('  Max possible:', formatEther(maxRewards), 'TRUST');
 
     if (eligibleRewards < maxRewards) {
       const efficiency = Number(eligibleRewards) / Number(maxRewards) * 100;
@@ -286,30 +302,55 @@ async function claimRewards(
     }
 
     // Step 6: Get utilization ratios
-    const personalRatio = await trustBonding.getPersonalUtilizationRatio(
-      wallet.address,
-      previousEpoch
-    );
+    const personalRatio = await publicClient.readContract({
+      address: TRUST_BONDING_ADDRESS,
+      abi: TrustBondingABI,
+      functionName: 'getPersonalUtilizationRatio',
+      args: [account.address, previousEpoch]
+    }) as bigint;
 
-    const systemRatio = await trustBonding.getSystemUtilizationRatio(
-      previousEpoch
-    );
+    const systemRatio = await publicClient.readContract({
+      address: TRUST_BONDING_ADDRESS,
+      abi: TrustBondingABI,
+      functionName: 'getSystemUtilizationRatio',
+      args: [previousEpoch]
+    }) as bigint;
 
     console.log('\nUtilization Ratios for Epoch', previousEpoch, ':');
     console.log('  Personal:', (Number(personalRatio) / 1e18).toFixed(4));
     console.log('  System:', (Number(systemRatio) / 1e18).toFixed(4));
 
     // Step 7: Get APY information
-    const [currentApy, maxApy] = await trustBonding.getUserApy(wallet.address);
+    const [currentApy, maxApy] = await publicClient.readContract({
+      address: TRUST_BONDING_ADDRESS,
+      abi: TrustBondingABI,
+      functionName: 'getUserApy',
+      args: [account.address]
+    }) as [bigint, bigint];
 
     console.log('\nAPY Information:');
     console.log('  Current APY:', (Number(currentApy) / 100).toFixed(2), '%');
     console.log('  Max possible APY:', (Number(maxApy) / 100).toFixed(2), '%');
 
     // Step 8: Get epoch information
-    const epochLength = await trustBonding.epochLength();
-    const epochsPerYear = await trustBonding.epochsPerYear();
-    const epochEndTime = await trustBonding.epochTimestampEnd(currentEpoch);
+    const epochLength = await publicClient.readContract({
+      address: TRUST_BONDING_ADDRESS,
+      abi: TrustBondingABI,
+      functionName: 'epochLength'
+    }) as bigint;
+
+    const epochsPerYear = await publicClient.readContract({
+      address: TRUST_BONDING_ADDRESS,
+      abi: TrustBondingABI,
+      functionName: 'epochsPerYear'
+    }) as bigint;
+
+    const epochEndTime = await publicClient.readContract({
+      address: TRUST_BONDING_ADDRESS,
+      abi: TrustBondingABI,
+      functionName: 'epochTimestampEnd',
+      args: [currentEpoch]
+    }) as bigint;
 
     console.log('\nEpoch Information:');
     console.log('  Epoch length:', Number(epochLength) / 86400, 'days');
@@ -317,83 +358,87 @@ async function claimRewards(
     console.log('  Current epoch ends:', new Date(Number(epochEndTime) * 1000).toISOString());
 
     // Step 9: Get bonded balance history
-    const bondedBalanceAtEpochEnd = await trustBonding.userBondedBalanceAtEpochEnd(
-      wallet.address,
-      previousEpoch
-    );
+    const bondedBalanceAtEpochEnd = await publicClient.readContract({
+      address: TRUST_BONDING_ADDRESS,
+      abi: TrustBondingABI,
+      functionName: 'userBondedBalanceAtEpochEnd',
+      args: [account.address, previousEpoch]
+    }) as bigint;
 
     console.log('  Bonded balance at epoch', previousEpoch, 'end:',
-      ethers.formatEther(bondedBalanceAtEpochEnd), 'TRUST');
+      formatEther(bondedBalanceAtEpochEnd), 'TRUST');
 
     // Step 10: Check TRUST balance before claiming
-    const balanceBefore = await trust.balanceOf(recipient);
-    console.log('\nTRUST balance before claim:', ethers.formatEther(balanceBefore));
+    const balanceBefore = await publicClient.readContract({
+      address: TRUST_ADDRESS,
+      abi: ERC20ABI,
+      functionName: 'balanceOf',
+      args: [recipient]
+    }) as bigint;
+    console.log('\nTRUST balance before claim:', formatEther(balanceBefore));
 
     // Step 11: Execute claim
     console.log('\nClaiming rewards...');
-    const claimTx = await trustBonding.claimRewards(
-      recipient,
-      {
-        gasLimit: 300000n // Explicit gas limit
-      }
-    );
+    const claimHash = await walletClient.writeContract({
+      address: TRUST_BONDING_ADDRESS,
+      abi: TrustBondingABI,
+      functionName: 'claimRewards',
+      args: [recipient],
+      gas: 300000n
+    });
 
-    console.log('Transaction sent:', claimTx.hash);
-    const receipt = await claimTx.wait();
+    console.log('Transaction sent:', claimHash);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: claimHash });
     console.log('Transaction confirmed in block:', receipt.blockNumber);
 
     // Step 12: Parse events
-    let rewardsClaimedEvent = null;
-    let amountClaimed = 0n;
+    const rewardsClaimedEvents = publicClient.parseEventLogs({
+      abi: TrustBondingABI,
+      logs: receipt.logs,
+      eventName: 'RewardsClaimed'
+    });
 
-    for (const log of receipt.logs) {
-      try {
-        const parsed = trustBonding.interface.parseLog({
-          topics: log.topics,
-          data: log.data
-        });
-
-        if (parsed.name === 'RewardsClaimed') {
-          rewardsClaimedEvent = parsed;
-          amountClaimed = parsed.args.amount;
-
-          console.log('\nRewards Claimed:');
-          console.log('  User:', parsed.args.user);
-          console.log('  Recipient:', parsed.args.recipient);
-          console.log('  Amount:', ethers.formatEther(amountClaimed), 'TRUST');
-        }
-      } catch (e) {
-        // Not a TrustBonding event, skip
-      }
-    }
-
-    if (!rewardsClaimedEvent) {
+    if (rewardsClaimedEvents.length === 0) {
       throw new Error('RewardsClaimed event not found in receipt');
     }
 
+    const amountClaimed = rewardsClaimedEvents[0].args.amount as bigint;
+
+    console.log('\nRewards Claimed:');
+    console.log('  User:', rewardsClaimedEvents[0].args.user);
+    console.log('  Recipient:', rewardsClaimedEvents[0].args.recipient);
+    console.log('  Amount:', formatEther(amountClaimed), 'TRUST');
+
     // Step 13: Verify TRUST balance increased
-    const balanceAfter = await trust.balanceOf(recipient);
+    const balanceAfter = await publicClient.readContract({
+      address: TRUST_ADDRESS,
+      abi: ERC20ABI,
+      functionName: 'balanceOf',
+      args: [recipient]
+    }) as bigint;
     const balanceIncrease = balanceAfter - balanceBefore;
 
-    console.log('\nTRUST balance after:', ethers.formatEther(balanceAfter));
-    console.log('Balance increase:', ethers.formatEther(balanceIncrease), 'TRUST');
+    console.log('\nTRUST balance after:', formatEther(balanceAfter));
+    console.log('Balance increase:', formatEther(balanceIncrease), 'TRUST');
 
     if (balanceIncrease !== amountClaimed) {
       console.warn('Warning: Balance increase does not match claimed amount');
     }
 
     // Step 14: Verify claim is now recorded
-    const nowClaimed = await trustBonding.hasClaimedRewardsForEpoch(
-      wallet.address,
-      previousEpoch
-    );
+    const nowClaimed = await publicClient.readContract({
+      address: TRUST_BONDING_ADDRESS,
+      abi: TrustBondingABI,
+      functionName: 'hasClaimedRewardsForEpoch',
+      args: [account.address, previousEpoch]
+    }) as boolean;
 
     console.log('Claim recorded for epoch', previousEpoch, ':', nowClaimed);
 
     return {
       amountClaimed: amountClaimed,
       epoch: previousEpoch,
-      txHash: receipt.hash,
+      txHash: claimHash,
       apy: {
         current: Number(currentApy) / 100,
         max: Number(maxApy) / 100
@@ -402,20 +447,14 @@ async function claimRewards(
 
   } catch (error) {
     // Handle specific errors
-    if (error.code === 'INSUFFICIENT_FUNDS') {
+    if (error.message?.includes('insufficient funds')) {
       throw new Error('Insufficient ETH for gas fees');
-    } else if (error.code === 'CALL_EXCEPTION') {
-      // Parse revert reason
-      if (error.message.includes('NoRewardsToClaim')) {
-        throw new Error('No rewards available to claim');
-      } else if (error.message.includes('RewardsAlreadyClaimedForEpoch')) {
-        throw new Error(`Rewards already claimed for epoch ${previousEpoch}`);
-      } else if (error.message.includes('NoClaimingDuringFirstEpoch')) {
-        throw new Error('Cannot claim rewards during the first epoch');
-      }
-      throw new Error(`Contract call failed: ${error.reason || error.message}`);
-    } else if (error.code === 'NETWORK_ERROR') {
-      throw new Error('Network connection error. Please check RPC endpoint.');
+    } else if (error.message?.includes('NoRewardsToClaim')) {
+      throw new Error('No rewards available to claim');
+    } else if (error.message?.includes('RewardsAlreadyClaimedForEpoch')) {
+      throw new Error(`Rewards already claimed for epoch ${previousEpoch}`);
+    } else if (error.message?.includes('NoClaimingDuringFirstEpoch')) {
+      throw new Error('Cannot claim rewards during the first epoch');
     }
 
     throw error;
@@ -426,7 +465,7 @@ async function claimRewards(
  * Gets detailed reward information without claiming
  */
 async function getRewardInfo(
-  userAddress: string,
+  userAddress: `0x${string}`,
   rpcUrl: string
 ): Promise<{
   claimableRewards: bigint;
@@ -438,33 +477,65 @@ async function getRewardInfo(
   currentApy: number;
   maxApy: number;
 }> {
-  const provider = new ethers.JsonRpcProvider(rpcUrl);
-  const trustBonding = new ethers.Contract(
-    TRUST_BONDING_ADDRESS,
-    TrustBondingABI,
-    provider
-  );
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http(rpcUrl)
+  });
 
-  const currentEpoch = await trustBonding.currentEpoch();
-  const previousEpoch = await trustBonding.previousEpoch();
+  const currentEpoch = await publicClient.readContract({
+    address: TRUST_BONDING_ADDRESS,
+    abi: TrustBondingABI,
+    functionName: 'currentEpoch'
+  }) as bigint;
+
+  const previousEpoch = await publicClient.readContract({
+    address: TRUST_BONDING_ADDRESS,
+    abi: TrustBondingABI,
+    functionName: 'previousEpoch'
+  }) as bigint;
 
   const claimableRewards = currentEpoch > 0n
-    ? await trustBonding.getUserCurrentClaimableRewards(userAddress)
+    ? await publicClient.readContract({
+        address: TRUST_BONDING_ADDRESS,
+        abi: TrustBondingABI,
+        functionName: 'getUserCurrentClaimableRewards',
+        args: [userAddress]
+      }) as bigint
     : 0n;
 
   const alreadyClaimed = currentEpoch > 0n
-    ? await trustBonding.hasClaimedRewardsForEpoch(userAddress, previousEpoch)
+    ? await publicClient.readContract({
+        address: TRUST_BONDING_ADDRESS,
+        abi: TrustBondingABI,
+        functionName: 'hasClaimedRewardsForEpoch',
+        args: [userAddress, previousEpoch]
+      }) as boolean
     : false;
 
   const personalRatio = currentEpoch > 0n
-    ? await trustBonding.getPersonalUtilizationRatio(userAddress, previousEpoch)
+    ? await publicClient.readContract({
+        address: TRUST_BONDING_ADDRESS,
+        abi: TrustBondingABI,
+        functionName: 'getPersonalUtilizationRatio',
+        args: [userAddress, previousEpoch]
+      }) as bigint
     : 0n;
 
   const systemRatio = currentEpoch > 0n
-    ? await trustBonding.getSystemUtilizationRatio(previousEpoch)
+    ? await publicClient.readContract({
+        address: TRUST_BONDING_ADDRESS,
+        abi: TrustBondingABI,
+        functionName: 'getSystemUtilizationRatio',
+        args: [previousEpoch]
+      }) as bigint
     : 0n;
 
-  const [currentApy, maxApy] = await trustBonding.getUserApy(userAddress);
+  const [currentApy, maxApy] = await publicClient.readContract({
+    address: TRUST_BONDING_ADDRESS,
+    abi: TrustBondingABI,
+    functionName: 'getUserApy',
+    args: [userAddress]
+  }) as [bigint, bigint];
 
   return {
     claimableRewards,
@@ -483,12 +554,12 @@ async function main() {
   try {
     // First, check reward info
     const info = await getRewardInfo(
-      '0xYourAddress',
+      '0xYourAddress' as `0x${string}`,
       RPC_URL
     );
 
     console.log('Reward Information:');
-    console.log('  Claimable:', ethers.formatEther(info.claimableRewards), 'TRUST');
+    console.log('  Claimable:', formatEther(info.claimableRewards), 'TRUST');
     console.log('  Current epoch:', info.currentEpoch);
     console.log('  Claimable epoch:', info.claimableEpoch);
     console.log('  Already claimed:', info.alreadyClaimed);
@@ -497,12 +568,12 @@ async function main() {
     if (info.claimableRewards > 0n && !info.alreadyClaimed) {
       // Claim rewards
       const result = await claimRewards(
-        '0xYourAddress', // recipient
-        'YOUR_PRIVATE_KEY'
+        '0xYourAddress' as `0x${string}`, // recipient
+        '0xYourPrivateKey' as `0x${string}`
       );
 
       console.log('\n=== Claim Successful ===');
-      console.log('Amount Claimed:', ethers.formatEther(result.amountClaimed), 'TRUST');
+      console.log('Amount Claimed:', formatEther(result.amountClaimed), 'TRUST');
       console.log('Epoch:', result.epoch);
       console.log('Transaction:', result.txHash);
       console.log('Current APY:', result.apy.current.toFixed(2), '%');
@@ -516,10 +587,7 @@ async function main() {
   }
 }
 
-// Run if executed directly
-if (require.main === module) {
-  main();
-}
+main();
 ```
 
 ### Python (web3.py)
@@ -887,7 +955,7 @@ trustBonding.on('RewardsClaimed', (user, recipient, amount, event) => {
   console.log('Rewards claimed:');
   console.log('  User:', user);
   console.log('  Recipient:', recipient);
-  console.log('  Amount:', ethers.formatEther(amount), 'TRUST');
+  console.log('  Amount:', formatEther(amount), 'TRUST');
   console.log('  Block:', event.log.blockNumber);
 });
 
@@ -900,7 +968,7 @@ const totalClaimed = events.reduce((sum, event) => {
   return sum + event.args.amount;
 }, 0n);
 
-console.log('Total TRUST claimed:', ethers.formatEther(totalClaimed));
+console.log('Total TRUST claimed:', formatEther(totalClaimed));
 ```
 
 **Python**:
@@ -1141,7 +1209,7 @@ console.log('Max APY:', Number(maxApy) / 100, '%');
 if (currentApy < maxApy) {
   const userInfo = await trustBonding.getUserInfo(address);
 
-  console.log('Locked amount:', ethers.formatEther(userInfo.lockedAmount));
+  console.log('Locked amount:', formatEther(userInfo.lockedAmount));
   console.log('Lock ends:', new Date(Number(userInfo.lockEnd) * 1000));
 
   // To maximize, lock more TRUST for longer duration
@@ -1206,9 +1274,9 @@ async function explainRewards() {
   );
 
   console.log('Reward Calculation for Epoch', previousEpoch);
-  console.log('  Total emissions:', ethers.formatEther(emissions), 'TRUST');
-  console.log('  Your bonded balance:', ethers.formatEther(bondedBalance), 'TRUST');
-  console.log('  Total bonded:', ethers.formatEther(totalBonded), 'TRUST');
+  console.log('  Total emissions:', formatEther(emissions), 'TRUST');
+  console.log('  Your bonded balance:', formatEther(bondedBalance), 'TRUST');
+  console.log('  Total bonded:', formatEther(totalBonded), 'TRUST');
   console.log('  Your share of voting power:', Number(bondedBalance) / Number(totalBonded) * 100, '%');
   console.log('  Your utilization ratio:', Number(personalRatio) / 1e18);
   console.log('  System utilization ratio:', Number(systemRatio) / 1e18);
@@ -1307,7 +1375,7 @@ await trustBonding.claimRewards('0x0000...');
 const recipient = '0xYourAddress';
 
 // Verify it's a valid address
-if (!ethers.isAddress(recipient)) {
+if (!isAddress(recipient)) {
   throw new Error('Invalid recipient address');
 }
 

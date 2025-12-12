@@ -352,50 +352,129 @@ BaseEmissionsController (Contract Address)
 
 ## Usage Examples
 
-### TypeScript (ethers.js v6)
+### TypeScript (viem)
 
 #### Checking Token Balance and Supply
 
 ```typescript
-import { ethers } from 'ethers';
+import { createPublicClient, http, formatEther } from 'viem';
+import { base } from 'viem/chains';
 
 // Setup
-const provider = new ethers.JsonRpcProvider('https://mainnet.base.org');
+const publicClient = createPublicClient({
+  chain: base,
+  transport: http('https://mainnet.base.org')
+});
+
 const TRUST_ADDRESS = '0x6cd905dF2Ed214b22e0d48FF17CD4200C1C6d8A3';
 
 const trustABI = [
-  'function name() view returns (string)',
-  'function symbol() view returns (string)',
-  'function decimals() view returns (uint8)',
-  'function totalSupply() view returns (uint256)',
-  'function balanceOf(address account) view returns (uint256)',
-  'function MAX_SUPPLY() view returns (uint256)',
-  'function totalMinted() view returns (uint256)',
-  'function baseEmissionsController() view returns (address)'
-];
-
-const trust = new ethers.Contract(TRUST_ADDRESS, trustABI, provider);
+  {
+    name: 'name',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'string' }]
+  },
+  {
+    name: 'symbol',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'string' }]
+  },
+  {
+    name: 'decimals',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint8' }]
+  },
+  {
+    name: 'totalSupply',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }]
+  },
+  {
+    name: 'balanceOf',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ type: 'uint256' }]
+  },
+  {
+    name: 'MAX_SUPPLY',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }]
+  },
+  {
+    name: 'totalMinted',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }]
+  },
+  {
+    name: 'baseEmissionsController',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }]
+  }
+] as const;
 
 async function getTokenInfo() {
   try {
     const [name, symbol, decimals, totalSupply, maxSupply, totalMinted, controller] =
       await Promise.all([
-        trust.name(),
-        trust.symbol(),
-        trust.decimals(),
-        trust.totalSupply(),
-        trust.MAX_SUPPLY(),
-        trust.totalMinted(),
-        trust.baseEmissionsController()
+        publicClient.readContract({
+          address: TRUST_ADDRESS,
+          abi: trustABI,
+          functionName: 'name'
+        }),
+        publicClient.readContract({
+          address: TRUST_ADDRESS,
+          abi: trustABI,
+          functionName: 'symbol'
+        }),
+        publicClient.readContract({
+          address: TRUST_ADDRESS,
+          abi: trustABI,
+          functionName: 'decimals'
+        }),
+        publicClient.readContract({
+          address: TRUST_ADDRESS,
+          abi: trustABI,
+          functionName: 'totalSupply'
+        }),
+        publicClient.readContract({
+          address: TRUST_ADDRESS,
+          abi: trustABI,
+          functionName: 'MAX_SUPPLY'
+        }),
+        publicClient.readContract({
+          address: TRUST_ADDRESS,
+          abi: trustABI,
+          functionName: 'totalMinted'
+        }),
+        publicClient.readContract({
+          address: TRUST_ADDRESS,
+          abi: trustABI,
+          functionName: 'baseEmissionsController'
+        })
       ]);
 
     console.log('Token Information:');
     console.log('Name:', name);
     console.log('Symbol:', symbol);
     console.log('Decimals:', decimals);
-    console.log('Total Supply:', ethers.formatEther(totalSupply), 'TRUST');
-    console.log('Max Supply:', ethers.formatEther(maxSupply), 'TRUST');
-    console.log('Total Minted:', ethers.formatEther(totalMinted), 'TRUST');
+    console.log('Total Supply:', formatEther(totalSupply), 'TRUST');
+    console.log('Max Supply:', formatEther(maxSupply), 'TRUST');
+    console.log('Total Minted:', formatEther(totalMinted), 'TRUST');
     console.log('Supply Utilization:', (Number(totalSupply) / Number(maxSupply) * 100).toFixed(2), '%');
     console.log('BaseEmissionsController:', controller);
 
@@ -415,10 +494,15 @@ async function getTokenInfo() {
 }
 
 // Get user balance
-async function getUserBalance(userAddress: string) {
+async function getUserBalance(userAddress: `0x${string}`) {
   try {
-    const balance = await trust.balanceOf(userAddress);
-    console.log(`Balance for ${userAddress}:`, ethers.formatEther(balance), 'TRUST');
+    const balance = await publicClient.readContract({
+      address: TRUST_ADDRESS,
+      abi: trustABI,
+      functionName: 'balanceOf',
+      args: [userAddress]
+    });
+    console.log(`Balance for ${userAddress}:`, formatEther(balance), 'TRUST');
     return balance;
   } catch (error) {
     console.error('Error:', error);
@@ -434,48 +518,87 @@ getUserBalance('0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb');
 #### Transferring TRUST Tokens
 
 ```typescript
-import { ethers } from 'ethers';
+import { createWalletClient, http, formatEther, parseEther } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { base } from 'viem/chains';
 
-// Setup with signer
-const provider = new ethers.JsonRpcProvider('https://mainnet.base.org');
-const signer = new ethers.Wallet('YOUR_PRIVATE_KEY', provider);
+// Setup with wallet
+const account = privateKeyToAccount('0xYOUR_PRIVATE_KEY');
+
+const walletClient = createWalletClient({
+  account,
+  chain: base,
+  transport: http('https://mainnet.base.org')
+});
 
 const TRUST_ADDRESS = '0x6cd905dF2Ed214b22e0d48FF17CD4200C1C6d8A3';
+
 const trustABI = [
-  'function transfer(address to, uint256 amount) returns (bool)',
-  'function approve(address spender, uint256 amount) returns (bool)',
-  'function transferFrom(address from, address to, uint256 amount) returns (bool)',
-  'function allowance(address owner, address spender) view returns (uint256)',
-  'function balanceOf(address account) view returns (uint256)'
-];
+  {
+    name: 'transfer',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'to', type: 'address' },
+      { name: 'amount', type: 'uint256' }
+    ],
+    outputs: [{ type: 'bool' }]
+  },
+  {
+    name: 'balanceOf',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ type: 'uint256' }]
+  }
+] as const;
 
-const trust = new ethers.Contract(TRUST_ADDRESS, trustABI, signer);
-
-async function transferTrust(recipientAddress: string, amount: bigint) {
+async function transferTrust(recipientAddress: `0x${string}`, amount: bigint) {
   try {
     // Check balance
-    const balance = await trust.balanceOf(signer.address);
-    console.log('Sender balance:', ethers.formatEther(balance), 'TRUST');
+    const balance = await publicClient.readContract({
+      address: TRUST_ADDRESS,
+      abi: trustABI,
+      functionName: 'balanceOf',
+      args: [account.address]
+    });
+    console.log('Sender balance:', formatEther(balance), 'TRUST');
 
     if (balance < amount) {
       throw new Error('Insufficient balance');
     }
 
     // Transfer
-    console.log('Transferring', ethers.formatEther(amount), 'TRUST to', recipientAddress);
-    const tx = await trust.transfer(recipientAddress, amount);
-    console.log('Transaction hash:', tx.hash);
+    console.log('Transferring', formatEther(amount), 'TRUST to', recipientAddress);
+    const hash = await walletClient.writeContract({
+      address: TRUST_ADDRESS,
+      abi: trustABI,
+      functionName: 'transfer',
+      args: [recipientAddress, amount]
+    });
+    console.log('Transaction hash:', hash);
 
-    const receipt = await tx.wait();
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
     console.log('Transfer successful!');
     console.log('Gas used:', receipt.gasUsed.toString());
 
     // Check new balances
-    const newBalance = await trust.balanceOf(signer.address);
-    const recipientBalance = await trust.balanceOf(recipientAddress);
+    const newBalance = await publicClient.readContract({
+      address: TRUST_ADDRESS,
+      abi: trustABI,
+      functionName: 'balanceOf',
+      args: [account.address]
+    });
 
-    console.log('New sender balance:', ethers.formatEther(newBalance), 'TRUST');
-    console.log('Recipient balance:', ethers.formatEther(recipientBalance), 'TRUST');
+    const recipientBalance = await publicClient.readContract({
+      address: TRUST_ADDRESS,
+      abi: trustABI,
+      functionName: 'balanceOf',
+      args: [recipientAddress]
+    });
+
+    console.log('New sender balance:', formatEther(newBalance), 'TRUST');
+    console.log('Recipient balance:', formatEther(recipientBalance), 'TRUST');
 
     return receipt;
   } catch (error) {
@@ -485,7 +608,7 @@ async function transferTrust(recipientAddress: string, amount: bigint) {
 }
 
 // Transfer 100 TRUST
-const transferAmount = ethers.parseEther('100');
+const transferAmount = parseEther('100');
 transferTrust('0xRecipientAddress...', transferAmount);
 ```
 
@@ -495,40 +618,81 @@ transferTrust('0xRecipientAddress...', transferAmount);
 async function burnTrust(amount: bigint) {
   try {
     const trustABI = [
-      'function burn(uint256 amount)',
-      'function balanceOf(address account) view returns (uint256)',
-      'function totalSupply() view returns (uint256)'
-    ];
-
-    const trust = new ethers.Contract(TRUST_ADDRESS, trustABI, signer);
+      {
+        name: 'burn',
+        type: 'function',
+        stateMutability: 'nonpayable',
+        inputs: [{ name: 'amount', type: 'uint256' }],
+        outputs: []
+      },
+      {
+        name: 'balanceOf',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [{ name: 'account', type: 'address' }],
+        outputs: [{ type: 'uint256' }]
+      },
+      {
+        name: 'totalSupply',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [],
+        outputs: [{ type: 'uint256' }]
+      }
+    ] as const;
 
     // Check current state
-    const balanceBefore = await trust.balanceOf(signer.address);
-    const supplyBefore = await trust.totalSupply();
+    const balanceBefore = await publicClient.readContract({
+      address: TRUST_ADDRESS,
+      abi: trustABI,
+      functionName: 'balanceOf',
+      args: [account.address]
+    });
 
-    console.log('Balance before:', ethers.formatEther(balanceBefore), 'TRUST');
-    console.log('Total supply before:', ethers.formatEther(supplyBefore), 'TRUST');
+    const supplyBefore = await publicClient.readContract({
+      address: TRUST_ADDRESS,
+      abi: trustABI,
+      functionName: 'totalSupply'
+    });
+
+    console.log('Balance before:', formatEther(balanceBefore), 'TRUST');
+    console.log('Total supply before:', formatEther(supplyBefore), 'TRUST');
 
     if (balanceBefore < amount) {
       throw new Error('Insufficient balance to burn');
     }
 
     // Burn tokens
-    console.log('Burning', ethers.formatEther(amount), 'TRUST...');
-    const tx = await trust.burn(amount);
-    console.log('Transaction hash:', tx.hash);
+    console.log('Burning', formatEther(amount), 'TRUST...');
+    const hash = await walletClient.writeContract({
+      address: TRUST_ADDRESS,
+      abi: trustABI,
+      functionName: 'burn',
+      args: [amount]
+    });
+    console.log('Transaction hash:', hash);
 
-    const receipt = await tx.wait();
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
     console.log('Burn successful!');
     console.log('Gas used:', receipt.gasUsed.toString());
 
     // Check new state
-    const balanceAfter = await trust.balanceOf(signer.address);
-    const supplyAfter = await trust.totalSupply();
+    const balanceAfter = await publicClient.readContract({
+      address: TRUST_ADDRESS,
+      abi: trustABI,
+      functionName: 'balanceOf',
+      args: [account.address]
+    });
 
-    console.log('Balance after:', ethers.formatEther(balanceAfter), 'TRUST');
-    console.log('Total supply after:', ethers.formatEther(supplyAfter), 'TRUST');
-    console.log('Tokens burned:', ethers.formatEther(amount), 'TRUST');
+    const supplyAfter = await publicClient.readContract({
+      address: TRUST_ADDRESS,
+      abi: trustABI,
+      functionName: 'totalSupply'
+    });
+
+    console.log('Balance after:', formatEther(balanceAfter), 'TRUST');
+    console.log('Total supply after:', formatEther(supplyAfter), 'TRUST');
+    console.log('Tokens burned:', formatEther(amount), 'TRUST');
 
     return receipt;
   } catch (error) {
@@ -538,7 +702,7 @@ async function burnTrust(amount: bigint) {
 }
 
 // Burn 10 TRUST
-const burnAmount = ethers.parseEther('10');
+const burnAmount = parseEther('10');
 burnTrust(burnAmount);
 ```
 
@@ -754,12 +918,22 @@ contract TrustTokenIntegration {
 
 ```typescript
 // Check current allowance
-const allowance = await trust.allowance(userAddress, spenderAddress);
+const allowance = await publicClient.readContract({
+  address: TRUST_ADDRESS,
+  abi: trustABI,
+  functionName: 'allowance',
+  args: [userAddress, spenderAddress]
+});
 
 if (allowance < requiredAmount) {
   // Request approval
-  const approveTx = await trust.approve(spenderAddress, requiredAmount);
-  await approveTx.wait();
+  const hash = await walletClient.writeContract({
+    address: TRUST_ADDRESS,
+    abi: trustABI,
+    functionName: 'approve',
+    args: [spenderAddress, requiredAmount]
+  });
+  await publicClient.waitForTransactionReceipt({ hash });
 }
 
 // Now proceed with operation that requires approval
@@ -768,8 +942,18 @@ if (allowance < requiredAmount) {
 #### Supply Utilization Tracking
 
 ```typescript
-const totalSupply = await trust.totalSupply();
-const maxSupply = await trust.MAX_SUPPLY();
+const totalSupply = await publicClient.readContract({
+  address: TRUST_ADDRESS,
+  abi: trustABI,
+  functionName: 'totalSupply'
+});
+
+const maxSupply = await publicClient.readContract({
+  address: TRUST_ADDRESS,
+  abi: trustABI,
+  functionName: 'MAX_SUPPLY'
+});
+
 const circulatingPercentage = (Number(totalSupply) / Number(maxSupply)) * 100;
 
 console.log(`${circulatingPercentage.toFixed(2)}% of max supply is in circulation`);

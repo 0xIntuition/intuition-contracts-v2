@@ -103,9 +103,19 @@ sequenceDiagram
 ### Bridging Workflow
 
 ```typescript
+import {
+  createPublicClient,
+  createWalletClient,
+  http,
+  type PublicClient,
+  type WalletClient,
+  type Hash,
+  type Address
+} from 'viem';
+
 interface BridgeMessage {
-  from: string;
-  to: string;
+  from: Address;
+  to: Address;
   amount: bigint;
   nonce: number;
   data: string;
@@ -113,92 +123,98 @@ interface BridgeMessage {
 
 class CrossChainBridge {
   constructor(
-    private baseChainProvider: ethers.Provider,
-    private satelliteChainProvider: ethers.Provider,
-    private bridgeAddress: string
+    private baseChainPublicClient: PublicClient,
+    private satelliteChainPublicClient: PublicClient,
+    private baseChainWalletClient: WalletClient,
+    private satelliteChainWalletClient: WalletClient,
+    private bridgeAddress: Address
   ) {}
 
   async bridgeToSatellite(
     amount: bigint,
-    recipient: string
+    recipient: Address
   ): Promise<{
-    baseTxHash: string;
-    satelliteTxHash: string;
+    baseTxHash: Hash;
+    satelliteTxHash: Hash;
   }> {
     // 1. Lock tokens on base chain
-    const baseTx = await this.lockOnBase(amount, recipient);
-    console.log(`Locked on base chain: ${baseTx.hash}`);
+    const baseTxHash = await this.lockOnBase(amount, recipient);
+    console.log(`Locked on base chain: ${baseTxHash}`);
 
     // 2. Wait for finality
-    await baseTx.wait(12); // 12 confirmations
+    await this.baseChainPublicClient.waitForTransactionReceipt({
+      hash: baseTxHash,
+      confirmations: 12,
+    });
 
     // 3. Generate proof
-    const proof = await this.generateProof(baseTx);
+    const proof = await this.generateProof(baseTxHash);
 
     // 4. Relay to satellite chain
-    const satelliteTx = await this.relayToSatellite(proof);
-    console.log(`Minted on satellite chain: ${satelliteTx.hash}`);
+    const satelliteTxHash = await this.relayToSatellite(proof);
+    console.log(`Minted on satellite chain: ${satelliteTxHash}`);
 
     return {
-      baseTxHash: baseTx.hash,
-      satelliteTxHash: satelliteTx.hash,
+      baseTxHash,
+      satelliteTxHash,
     };
   }
 
   async bridgeToBase(
     amount: bigint,
-    recipient: string
+    recipient: Address
   ): Promise<{
-    satelliteTxHash: string;
-    baseTxHash: string;
+    satelliteTxHash: Hash;
+    baseTxHash: Hash;
   }> {
     // 1. Burn tokens on satellite chain
-    const satelliteTx = await this.burnOnSatellite(amount, recipient);
-    console.log(`Burned on satellite chain: ${satelliteTx.hash}`);
+    const satelliteTxHash = await this.burnOnSatellite(amount, recipient);
+    console.log(`Burned on satellite chain: ${satelliteTxHash}`);
 
     // 2. Wait for finality
-    await satelliteTx.wait(12);
+    await this.satelliteChainPublicClient.waitForTransactionReceipt({
+      hash: satelliteTxHash,
+      confirmations: 12,
+    });
 
     // 3. Generate proof
-    const proof = await this.generateProof(satelliteTx);
+    const proof = await this.generateProof(satelliteTxHash);
 
     // 4. Relay to base chain
-    const baseTx = await this.relayToBase(proof);
-    console.log(`Unlocked on base chain: ${baseTx.hash}`);
+    const baseTxHash = await this.relayToBase(proof);
+    console.log(`Unlocked on base chain: ${baseTxHash}`);
 
     return {
-      satelliteTxHash: satelliteTx.hash,
-      baseTxHash: baseTx.hash,
+      satelliteTxHash,
+      baseTxHash,
     };
   }
 
-  private async lockOnBase(amount: bigint, recipient: string) {
+  private async lockOnBase(amount: bigint, recipient: Address): Promise<Hash> {
     // Implementation depends on bridge contract
     // This is a simplified example
-    const bridge = new ethers.Contract(
-      this.bridgeAddress,
-      BRIDGE_ABI,
-      this.baseChainProvider
-    );
-
-    return await bridge.lock(amount, recipient);
+    return await this.baseChainWalletClient.writeContract({
+      address: this.bridgeAddress,
+      abi: BRIDGE_ABI,
+      functionName: 'lock',
+      args: [amount, recipient],
+    });
   }
 
-  private async generateProof(tx: ethers.TransactionResponse): Promise<string> {
+  private async generateProof(txHash: Hash): Promise<string> {
     // Generate Merkle proof or equivalent
     // Implementation depends on bridge type
     return '0x...';
   }
 
-  private async relayToSatellite(proof: string) {
+  private async relayToSatellite(proof: string): Promise<Hash> {
     // Relay proof to satellite chain
-    const bridge = new ethers.Contract(
-      this.bridgeAddress,
-      BRIDGE_ABI,
-      this.satelliteChainProvider
-    );
-
-    return await bridge.mint(proof);
+    return await this.satelliteChainWalletClient.writeContract({
+      address: this.bridgeAddress,
+      abi: BRIDGE_ABI,
+      functionName: 'mint',
+      args: [proof],
+    });
   }
 }
 ```
@@ -266,8 +282,8 @@ class BridgeMonitor {
       address: SATELLITE_BRIDGE_ADDRESS,
       topics: [
         MINT_EVENT_TOPIC,
-        ethers.zeroPadValue(ethers.toBeHex(nonce), 32),
-        ethers.zeroPadValue(recipient, 32),
+        pad(toHex(nonce), 32),
+        pad(recipient, 32),
       ],
     };
 
@@ -341,32 +357,35 @@ interface ChainConfig {
 
 class MultiChainSDK {
   private chains = new Map<number, ChainConfig>();
-  private providers = new Map<number, ethers.Provider>();
-  private contracts = new Map<string, ethers.Contract>();
+  private publicClients = new Map<number, PublicClient>();
+  private walletClients = new Map<number, WalletClient>();
+  private contracts = new Map<string, { address: Address; abi: any }>();
 
   constructor(configs: ChainConfig[]) {
     for (const config of configs) {
       this.chains.set(config.chainId, config);
-      this.providers.set(
+      this.publicClients.set(
         config.chainId,
-        new ethers.JsonRpcProvider(config.rpcUrl)
+        createPublicClient({
+          chain: config.chain,
+          transport: http(config.rpcUrl)
+        })
       );
     }
   }
 
-  // Get contract instance for specific chain
+  // Get contract info for specific chain
   getContract(
     chainId: number,
     contractName: string
-  ): ethers.Contract {
+  ): { address: Address; abi: any } {
     const key = `${chainId}:${contractName}`;
     let contract = this.contracts.get(key);
 
     if (!contract) {
       const config = this.chains.get(chainId);
-      const provider = this.providers.get(chainId);
 
-      if (!config || !provider) {
+      if (!config) {
         throw new Error(`Chain ${chainId} not configured`);
       }
 
@@ -376,7 +395,7 @@ class MultiChainSDK {
       }
 
       const abi = this.getABI(contractName);
-      contract = new ethers.Contract(address, abi, provider);
+      contract = { address, abi };
       this.contracts.set(key, contract);
     }
 
@@ -388,33 +407,49 @@ class MultiChainSDK {
     termId: string,
     curveId: number,
     assets: bigint,
-    satelliteChainId: number
+    satelliteChainId: number,
+    account: Address
   ): Promise<TransactionResult> {
-    const multiVault = this.getContract(satelliteChainId, 'multiVault');
+    const { address, abi } = this.getContract(satelliteChainId, 'multiVault');
+    const walletClient = this.walletClients.get(satelliteChainId);
+    const publicClient = this.publicClients.get(satelliteChainId);
+
+    if (!walletClient || !publicClient) {
+      throw new Error('Client not configured');
+    }
 
     // Execute deposit
-    const tx = await multiVault.deposit(
-      await this.getSigner(satelliteChainId).getAddress(),
-      termId,
-      curveId,
-      assets,
-      0n
-    );
+    const hash = await walletClient.writeContract({
+      address,
+      abi,
+      functionName: 'deposit',
+      args: [account, termId, curveId, assets, 0n],
+    });
 
-    return await tx.wait();
+    return await publicClient.waitForTransactionReceipt({ hash });
   }
 
   // Claim rewards on satellite chain
   async claimRewards(
-    satelliteChainId: number
+    satelliteChainId: number,
+    account: Address
   ): Promise<TransactionResult> {
-    const trustBonding = this.getContract(satelliteChainId, 'trustBonding');
+    const { address, abi } = this.getContract(satelliteChainId, 'trustBonding');
+    const walletClient = this.walletClients.get(satelliteChainId);
+    const publicClient = this.publicClients.get(satelliteChainId);
 
-    const tx = await trustBonding.claimRewards(
-      await this.getSigner(satelliteChainId).getAddress()
-    );
+    if (!walletClient || !publicClient) {
+      throw new Error('Client not configured');
+    }
 
-    return await tx.wait();
+    const hash = await walletClient.writeContract({
+      address,
+      abi,
+      functionName: 'claimRewards',
+      args: [account],
+    });
+
+    return await publicClient.waitForTransactionReceipt({ hash });
   }
 
   // Get user portfolio across all chains
@@ -452,10 +487,14 @@ class MultiChainSDK {
     };
   }
 
-  private getSigner(chainId: number): ethers.Signer {
-    // Get signer for specific chain
+  private getWalletClient(chainId: number): WalletClient {
+    // Get wallet client for specific chain
     // Implementation depends on wallet connection
-    throw new Error('Not implemented');
+    const client = this.walletClients.get(chainId);
+    if (!client) {
+      throw new Error(`Wallet client not configured for chain ${chainId}`);
+    }
+    return client;
   }
 
   private getABI(contractName: string): any[] {

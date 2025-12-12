@@ -75,10 +75,23 @@ bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
 ```typescript
 // STEP 1: Immediate Pause
-import { ethers } from 'ethers';
+import { createWalletClient, http, createPublicClient } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 
 async function emergencyPause(reason: string) {
   console.log(`EMERGENCY PAUSE: ${reason}`);
+
+  const account = privateKeyToAccount(PAUSER_PRIVATE_KEY);
+  const walletClient = createWalletClient({
+    account,
+    chain,
+    transport: http()
+  });
+
+  const publicClient = createPublicClient({
+    chain,
+    transport: http()
+  });
 
   const contracts = [
     { name: 'MultiVault', address: MULTIVAULT_ADDRESS, abi: MULTIVAULT_ABI },
@@ -87,23 +100,22 @@ async function emergencyPause(reason: string) {
 
   for (const contract of contracts) {
     try {
-      const instance = new ethers.Contract(
-        contract.address,
-        contract.abi,
-        pauserSigner
-      );
+      const hash = await walletClient.writeContract({
+        address: contract.address,
+        abi: contract.abi,
+        functionName: 'pause'
+      });
 
-      const tx = await instance.pause();
-      await tx.wait();
+      await publicClient.waitForTransactionReceipt({ hash });
 
-      console.log(`${contract.name} paused: ${tx.hash}`);
+      console.log(`${contract.name} paused: ${hash}`);
 
       // Send alert
       await sendCriticalAlert({
         type: 'CONTRACT_PAUSED',
         contract: contract.name,
         reason,
-        txHash: tx.hash
+        txHash: hash
       });
     } catch (error) {
       console.error(`Failed to pause ${contract.name}:`, error);
@@ -143,17 +155,32 @@ async function assessSituation() {
 
 // STEP 5: Unpause
 async function unpauseAfterFix(contractAddress: string, contractABI: any) {
-  const contract = new ethers.Contract(contractAddress, contractABI, pauserSigner);
+  const account = privateKeyToAccount(PAUSER_PRIVATE_KEY);
+  const walletClient = createWalletClient({
+    account,
+    chain,
+    transport: http()
+  });
 
-  const tx = await contract.unpause();
-  await tx.wait();
+  const publicClient = createPublicClient({
+    chain,
+    transport: http()
+  });
 
-  console.log('Contract unpaused:', tx.hash);
+  const hash = await walletClient.writeContract({
+    address: contractAddress,
+    abi: contractABI,
+    functionName: 'unpause'
+  });
+
+  await publicClient.waitForTransactionReceipt({ hash });
+
+  console.log('Contract unpaused:', hash);
 
   await sendNotification({
     type: 'CONTRACT_UNPAUSED',
     contract: contractAddress,
-    txHash: tx.hash
+    txHash: hash
   });
 }
 ```
@@ -172,15 +199,21 @@ await emergencyPause('Potential oracle manipulation detected');
 
 // Investigate price data
 async function investigatePrices() {
-  const multiVault = new ethers.Contract(
-    MULTIVAULT_ADDRESS,
-    MULTIVAULT_ABI,
-    provider
-  );
+  const publicClient = createPublicClient({
+    chain,
+    transport: http()
+  });
+
+  const currentBlock = await publicClient.getBlockNumber();
 
   // Check recent deposits/redemptions
-  const filter = multiVault.filters.Deposited();
-  const events = await multiVault.queryFilter(filter, -1000); // Last 1000 blocks
+  const events = await publicClient.getContractEvents({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    eventName: 'Deposited',
+    fromBlock: currentBlock - 1000n,
+    toBlock: currentBlock
+  });
 
   // Analyze for suspicious patterns
   for (const event of events) {
@@ -207,17 +240,28 @@ await emergencyPause('Exploit attempt detected');
 
 // Review transaction patterns
 async function analyzeSuspiciousActivity(suspiciousAddress: string) {
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
+  const publicClient = createPublicClient({
+    chain,
+    transport: http(RPC_URL)
+  });
 
-  // Get transaction history
-  const txs = await provider.getHistory(suspiciousAddress);
+  const currentBlock = await publicClient.getBlockNumber();
 
-  console.log(`Analyzing ${txs.length} transactions from ${suspiciousAddress}`);
+  // Get recent transaction history for this address
+  // Note: You may need to use block scanning or external indexer
+  const blockNumber = currentBlock;
+  const block = await publicClient.getBlock({ blockNumber, includeTransactions: true });
 
-  for (const tx of txs) {
+  const suspiciousTxs = block.transactions.filter(
+    tx => tx.from === suspiciousAddress || tx.to === suspiciousAddress
+  );
+
+  console.log(`Analyzing ${suspiciousTxs.length} recent transactions from ${suspiciousAddress}`);
+
+  for (const tx of suspiciousTxs) {
     // Analyze transaction data
-    const receipt = await tx.wait();
-    console.log(`Tx: ${tx.hash}, Status: ${receipt.status}`);
+    const receipt = await publicClient.getTransactionReceipt({ hash: tx });
+    console.log(`Tx: ${tx}, Status: ${receipt.status}`);
   }
 }
 ```
@@ -232,11 +276,12 @@ async function analyzeSuspiciousActivity(suspiciousAddress: string) {
 **Response:**
 ```typescript
 // Pause satellite chain operations
-const satelliteEmissions = new ethers.Contract(
-  SATELLITE_EMISSIONS_ADDRESS,
-  SATELLITE_EMISSIONS_ABI,
-  pauserSigner
-);
+const account = privateKeyToAccount(PAUSER_PRIVATE_KEY);
+const walletClient = createWalletClient({
+  account,
+  chain,
+  transport: http()
+});
 
 // Note: SatelliteEmissionsController may not have pause
 // Check with admin functions instead
@@ -254,31 +299,52 @@ async function checkBridgeHealth() {
 ### Pausing MultiVault
 
 ```typescript
-import { ethers } from 'ethers';
+import { createWalletClient, createPublicClient, http } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 
 async function pauseMultiVault() {
-  const multiVault = new ethers.Contract(
-    MULTIVAULT_ADDRESS,
-    MULTIVAULT_ABI,
-    pauserSigner
-  );
+  const account = privateKeyToAccount(PAUSER_PRIVATE_KEY);
+  const walletClient = createWalletClient({
+    account,
+    chain,
+    transport: http()
+  });
+
+  const publicClient = createPublicClient({
+    chain,
+    transport: http()
+  });
 
   // Check if already paused
-  const isPaused = await multiVault.paused();
+  const isPaused = await publicClient.readContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'paused'
+  });
+
   if (isPaused) {
     console.log('MultiVault already paused');
     return;
   }
 
   // Pause
-  const tx = await multiVault.pause();
-  console.log('Pause transaction sent:', tx.hash);
+  const hash = await walletClient.writeContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'pause'
+  });
 
-  const receipt = await tx.wait();
+  console.log('Pause transaction sent:', hash);
+
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
   console.log('MultiVault paused at block:', receipt.blockNumber);
 
   // Verify pause state
-  const nowPaused = await multiVault.paused();
+  const nowPaused = await publicClient.readContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'paused'
+  });
   console.log('Pause confirmed:', nowPaused);
 
   return receipt;
@@ -301,14 +367,25 @@ async function pauseMultiVault() {
 
 ```typescript
 async function pauseTrustBonding() {
-  const trustBonding = new ethers.Contract(
-    TRUSTBONDING_ADDRESS,
-    TRUSTBONDING_ABI,
-    pauserSigner
-  );
+  const account = privateKeyToAccount(PAUSER_PRIVATE_KEY);
+  const walletClient = createWalletClient({
+    account,
+    chain,
+    transport: http()
+  });
 
-  const tx = await trustBonding.pause();
-  await tx.wait();
+  const publicClient = createPublicClient({
+    chain,
+    transport: http()
+  });
+
+  const hash = await walletClient.writeContract({
+    address: TRUSTBONDING_ADDRESS,
+    abi: TRUSTBONDING_ABI,
+    functionName: 'pause'
+  });
+
+  await publicClient.waitForTransactionReceipt({ hash });
 
   console.log('TrustBonding paused');
 }
@@ -327,14 +404,25 @@ async function pauseTrustBonding() {
 
 ```typescript
 async function unpauseMultiVault() {
-  const multiVault = new ethers.Contract(
-    MULTIVAULT_ADDRESS,
-    MULTIVAULT_ABI,
-    pauserSigner
-  );
+  const account = privateKeyToAccount(PAUSER_PRIVATE_KEY);
+  const walletClient = createWalletClient({
+    account,
+    chain,
+    transport: http()
+  });
+
+  const publicClient = createPublicClient({
+    chain,
+    transport: http()
+  });
 
   // Verify fix is deployed
-  const currentImpl = await proxyAdmin.getProxyImplementation(MULTIVAULT_ADDRESS);
+  const currentImpl = await publicClient.readContract({
+    address: PROXY_ADMIN_ADDRESS,
+    abi: PROXY_ADMIN_ABI,
+    functionName: 'getProxyImplementation',
+    args: [MULTIVAULT_ADDRESS]
+  });
   console.log('Current implementation:', currentImpl);
 
   // Confirm ready to unpause
@@ -345,8 +433,13 @@ async function unpauseMultiVault() {
   }
 
   // Unpause
-  const tx = await multiVault.unpause();
-  await tx.wait();
+  const hash = await walletClient.writeContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'unpause'
+  });
+
+  await publicClient.waitForTransactionReceipt({ hash });
 
   console.log('MultiVault unpaused');
 
@@ -366,38 +459,46 @@ async function unpauseMultiVault() {
 ```typescript
 // Monitor for suspicious activity
 class EmergencyMonitor {
-  private provider: ethers.Provider;
-  private contracts: Map<string, ethers.Contract>;
+  private publicClient: any;
 
   constructor() {
-    this.provider = new ethers.JsonRpcProvider(RPC_URL);
-    this.contracts = new Map();
-
-    // Initialize contracts
-    this.contracts.set('MultiVault', new ethers.Contract(
-      MULTIVAULT_ADDRESS,
-      MULTIVAULT_ABI,
-      this.provider
-    ));
+    this.publicClient = createPublicClient({
+      chain,
+      transport: http(RPC_URL)
+    });
   }
 
   async startMonitoring() {
     console.log('Starting emergency monitoring...');
 
     // Monitor pause events
-    const multiVault = this.contracts.get('MultiVault');
-
-    multiVault.on('Paused', (account, event) => {
-      this.handlePauseEvent('MultiVault', account, event);
+    const unwatchPaused = this.publicClient.watchContractEvent({
+      address: MULTIVAULT_ADDRESS,
+      abi: MULTIVAULT_ABI,
+      eventName: 'Paused',
+      onLogs: (logs) => {
+        for (const log of logs) {
+          this.handlePauseEvent('MultiVault', log.args.account, log);
+        }
+      }
     });
 
-    multiVault.on('Unpaused', (account, event) => {
-      this.handleUnpauseEvent('MultiVault', account, event);
+    const unwatchUnpaused = this.publicClient.watchContractEvent({
+      address: MULTIVAULT_ADDRESS,
+      abi: MULTIVAULT_ABI,
+      eventName: 'Unpaused',
+      onLogs: (logs) => {
+        for (const log of logs) {
+          this.handleUnpauseEvent('MultiVault', log.args.account, log);
+        }
+      }
     });
 
-    // Monitor for failed transactions
-    this.provider.on('block', async (blockNumber) => {
-      await this.checkBlockForAnomalies(blockNumber);
+    // Monitor for new blocks
+    const unwatchBlocks = this.publicClient.watchBlockNumber({
+      onBlockNumber: async (blockNumber) => {
+        await this.checkBlockForAnomalies(blockNumber);
+      }
     });
   }
 
@@ -417,7 +518,7 @@ class EmergencyMonitor {
     });
   }
 
-  private async checkBlockForAnomalies(blockNumber: number) {
+  private async checkBlockForAnomalies(blockNumber: bigint) {
     // Check for unusual patterns
     // High number of reverts, unusual gas usage, etc.
   }
@@ -433,29 +534,42 @@ monitor.startMonitoring();
 ```typescript
 // Periodic health checks
 async function performHealthCheck() {
+  const publicClient = createPublicClient({
+    chain,
+    transport: http()
+  });
+
   const results = {
     timestamp: Date.now(),
     checks: []
   };
 
   // 1. Check contract pause states
-  const multiVault = new ethers.Contract(
-    MULTIVAULT_ADDRESS,
-    MULTIVAULT_ABI,
-    provider
-  );
+  const isPaused = await publicClient.readContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'paused'
+  });
 
   results.checks.push({
     name: 'MultiVault Pause State',
-    status: await multiVault.paused() ? 'PAUSED' : 'ACTIVE',
+    status: isPaused ? 'PAUSED' : 'ACTIVE',
     critical: true
   });
 
   // 2. Check access control
-  const hasRole = await multiVault.hasRole(
-    await multiVault.DEFAULT_ADMIN_ROLE(),
-    EXPECTED_ADMIN
-  );
+  const adminRole = await publicClient.readContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'DEFAULT_ADMIN_ROLE'
+  });
+
+  const hasRole = await publicClient.readContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'hasRole',
+    args: [adminRole, EXPECTED_ADMIN]
+  });
 
   results.checks.push({
     name: 'Admin Role Assignment',
@@ -464,23 +578,22 @@ async function performHealthCheck() {
   });
 
   // 3. Check contract balances
-  const trustBalance = await trustToken.balanceOf(MULTIVAULT_ADDRESS);
+  const trustBalance = await publicClient.readContract({
+    address: TRUST_TOKEN_ADDRESS,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: [MULTIVAULT_ADDRESS]
+  });
 
   results.checks.push({
     name: 'MultiVault TRUST Balance',
-    value: ethers.formatEther(trustBalance),
+    value: formatEther(trustBalance),
     status: 'INFO'
   });
 
   // 4. Check for pending timelock operations
-  const timelock = new ethers.Contract(
-    TIMELOCK_ADDRESS,
-    TIMELOCK_ABI,
-    provider
-  );
-
   // Query pending operations
-  const pending = await queryPendingOperations(timelock);
+  const pending = await queryPendingOperations(publicClient);
 
   results.checks.push({
     name: 'Pending Timelock Operations',

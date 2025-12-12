@@ -99,7 +99,7 @@ This document tracks the progress of creating comprehensive documentation for In
 
 ## Usage Examples
 
-### TypeScript (ethers.js v6)
+### TypeScript (viem)
 [Complete example]
 
 ### Python (web3.py)
@@ -202,7 +202,7 @@ This document tracks the progress of creating comprehensive documentation for In
 
 ## Code Examples
 
-### TypeScript (ethers.js v6)
+### TypeScript (viem)
 ```typescript
 // Complete, runnable example with error handling
 ```
@@ -445,24 +445,38 @@ ls -la docs/guides/
 ### Code Example Standards
 
 **TypeScript**:
-- Use ethers.js v6 or viem
+- Use viem
 - Include complete setup
 - Type definitions
 - Error handling with try/catch
 - Example:
 ```typescript
-import { ethers } from 'ethers';
+import { createPublicClient, createWalletClient, http } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { intuition } from 'viem/chains';
 
 // Setup
-const provider = new ethers.JsonRpcProvider('RPC_URL');
-const signer = new ethers.Wallet('PRIVATE_KEY', provider);
-const contract = new ethers.Contract(ADDRESS, ABI, signer);
+const account = privateKeyToAccount('PRIVATE_KEY');
+const publicClient = createPublicClient({
+  chain: intuition,
+  transport: http('RPC_URL'),
+});
+const walletClient = createWalletClient({
+  account,
+  chain: intuition,
+  transport: http('RPC_URL'),
+});
 
 try {
   // Operation
-  const tx = await contract.functionName(params);
-  await tx.wait();
-  console.log('Success:', tx.hash);
+  const hash = await walletClient.writeContract({
+    address: ADDRESS,
+    abi: ABI,
+    functionName: 'functionName',
+    args: [params],
+  });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  console.log('Success:', receipt.transactionHash);
 } catch (error) {
   console.error('Error:', error);
 }

@@ -6,7 +6,7 @@ Direct integration with Intuition Protocol V2 using contract ABIs and web3 libra
 
 This guide is for developers who want to:
 - Build custom integrations directly with contract ABIs
-- Use any web3 library (ethers.js, web3.js, viem, web3.py, etc.)
+- Use any web3 library (viem, web3.js, ethers.js, web3.py, etc.)
 - Have full control over transaction construction
 - Integrate with existing codebases
 
@@ -91,17 +91,17 @@ Atoms are the fundamental data units. Each atom gets a unique ID and an associat
 Before creating an atom, you can compute its expected ID:
 
 ```javascript
-// Using ethers.js v6
-import { ethers } from 'ethers';
+// Using viem
+import { keccak256, toBytes, concat } from 'viem';
 
 function calculateAtomId(atomData) {
-  const SALT = ethers.keccak256(ethers.toUtf8Bytes('SALT'));
-  const dataHash = ethers.keccak256(atomData);
-  return ethers.keccak256(ethers.concat([SALT, dataHash]));
+  const SALT = keccak256(toBytes('SALT'));
+  const dataHash = keccak256(atomData);
+  return keccak256(concat([SALT, dataHash]));
 }
 
 // Example
-const atomData = ethers.toUtf8Bytes('example-atom');
+const atomData = toBytes('example-atom');
 const expectedAtomId = calculateAtomId(atomData);
 console.log('Expected Atom ID:', expectedAtomId);
 ```
@@ -141,49 +141,68 @@ function createAtoms(
 - `AtomCreated(address creator, bytes32 termId, bytes atomData, address atomWallet)`
 - `Deposited(address sender, address receiver, bytes32 termId, uint256 curveId, uint256 assets, uint256 assetsAfterFees, uint256 shares, uint256 totalShares, VaultType vaultType)`
 
-**Example (ethers.js)**:
+**Example (viem)**:
 
 ```javascript
-import { ethers } from 'ethers';
+import { createWalletClient, createPublicClient, http, parseEther, toBytes, decodeEventLog } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 import MULTIVAULT_ABI from './abis/MultiVault.json';
 
-const provider = new ethers.JsonRpcProvider('YOUR_INTUITION_RPC');
-const signer = new ethers.Wallet('PRIVATE_KEY', provider);
+// Setup clients
+const account = privateKeyToAccount('0xPRIVATE_KEY');
+const publicClient = createPublicClient({
+  transport: http('YOUR_INTUITION_RPC')
+});
+const walletClient = createWalletClient({
+  account,
+  transport: http('YOUR_INTUITION_RPC')
+});
 
 const MULTIVAULT_ADDRESS = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e';
-const multiVault = new ethers.Contract(MULTIVAULT_ADDRESS, MULTIVAULT_ABI, signer);
 
 async function createAtom(atomDataString, depositAmount) {
   // Encode atom data as bytes
-  const atomData = ethers.toUtf8Bytes(atomDataString);
+  const atomData = toBytes(atomDataString);
 
   // Prepare arrays (can create multiple atoms at once)
   const atomDatas = [atomData];
   const assets = [depositAmount];
 
   // Send transaction with ETH value
-  const tx = await multiVault.createAtoms(atomDatas, assets, {
+  const hash = await walletClient.writeContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'createAtoms',
+    args: [atomDatas, assets],
     value: depositAmount,
-    gasLimit: 500000 // Estimate appropriately
+    gas: 500000n // Estimate appropriately
   });
 
-  console.log('Transaction hash:', tx.hash);
-  const receipt = await tx.wait();
+  console.log('Transaction hash:', hash);
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
   // Parse AtomCreated event
   const atomCreatedLog = receipt.logs.find(log => {
     try {
-      const parsed = multiVault.interface.parseLog(log);
-      return parsed.name === 'AtomCreated';
+      const decoded = decodeEventLog({
+        abi: MULTIVAULT_ABI,
+        data: log.data,
+        topics: log.topics
+      });
+      return decoded.eventName === 'AtomCreated';
     } catch {
       return false;
     }
   });
 
   if (atomCreatedLog) {
-    const parsed = multiVault.interface.parseLog(atomCreatedLog);
-    const atomId = parsed.args.termId;
-    const atomWallet = parsed.args.atomWallet;
+    const decoded = decodeEventLog({
+      abi: MULTIVAULT_ABI,
+      data: atomCreatedLog.data,
+      topics: atomCreatedLog.topics
+    });
+    const atomId = decoded.args.termId;
+    const atomWallet = decoded.args.atomWallet;
 
     console.log('Atom created!');
     console.log('  Atom ID:', atomId);
@@ -196,7 +215,7 @@ async function createAtom(atomDataString, depositAmount) {
 }
 
 // Usage
-const depositAmount = ethers.parseEther('0.1');
+const depositAmount = parseEther('0.1');
 const result = await createAtom('My First Atom', depositAmount);
 ```
 
@@ -270,13 +289,15 @@ Triples express relationships between three atoms (subject-predicate-object).
 #### Calculate Triple ID (Off-Chain)
 
 ```javascript
-// Using ethers.js v6
+// Using viem
+import { keccak256, encodePacked } from 'viem';
+
 function calculateTripleId(subjectId, predicateId, objectId) {
-  const encoded = ethers.solidityPacked(
+  const encoded = encodePacked(
     ['bytes32', 'bytes32', 'bytes32'],
     [subjectId, predicateId, objectId]
   );
-  return ethers.keccak256(encoded);
+  return keccak256(encoded);
 }
 
 // Example
@@ -323,14 +344,29 @@ function createTriples(
 - `TripleCreated(address creator, bytes32 termId, bytes32 subjectId, bytes32 predicateId, bytes32 objectId, bytes32 counterTripleId)`
 - `Deposited(...)` - For triple vault and each underlying atom vault
 
-**Example (ethers.js)**:
+**Example (viem)**:
 
 ```javascript
 async function createTriple(subjectId, predicateId, objectId, depositAmount) {
   // Verify all atoms exist
-  const subjectExists = await multiVault.isTermCreated(subjectId);
-  const predicateExists = await multiVault.isTermCreated(predicateId);
-  const objectExists = await multiVault.isTermCreated(objectId);
+  const subjectExists = await publicClient.readContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'isTermCreated',
+    args: [subjectId]
+  });
+  const predicateExists = await publicClient.readContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'isTermCreated',
+    args: [predicateId]
+  });
+  const objectExists = await publicClient.readContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'isTermCreated',
+    args: [objectId]
+  });
 
   if (!subjectExists || !predicateExists || !objectExists) {
     throw new Error('One or more atoms do not exist');
@@ -343,32 +379,41 @@ async function createTriple(subjectId, predicateId, objectId, depositAmount) {
   const assets = [depositAmount];
 
   // Send transaction
-  const tx = await multiVault.createTriples(
-    subjectIds,
-    predicateIds,
-    objectIds,
-    assets,
-    { value: depositAmount, gasLimit: 800000 }
-  );
+  const hash = await walletClient.writeContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'createTriples',
+    args: [subjectIds, predicateIds, objectIds, assets],
+    value: depositAmount,
+    gas: 800000n
+  });
 
-  const receipt = await tx.wait();
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
   // Parse TripleCreated event
   const tripleCreatedLog = receipt.logs.find(log => {
     try {
-      const parsed = multiVault.interface.parseLog(log);
-      return parsed.name === 'TripleCreated';
+      const decoded = decodeEventLog({
+        abi: MULTIVAULT_ABI,
+        data: log.data,
+        topics: log.topics
+      });
+      return decoded.eventName === 'TripleCreated';
     } catch {
       return false;
     }
   });
 
   if (tripleCreatedLog) {
-    const parsed = multiVault.interface.parseLog(tripleCreatedLog);
+    const decoded = decodeEventLog({
+      abi: MULTIVAULT_ABI,
+      data: tripleCreatedLog.data,
+      topics: tripleCreatedLog.topics
+    });
     console.log('Triple created!');
-    console.log('  Triple ID:', parsed.args.termId);
-    console.log('  Counter Triple ID:', parsed.args.counterTripleId);
-    return parsed.args.termId;
+    console.log('  Triple ID:', decoded.args.termId);
+    console.log('  Counter Triple ID:', decoded.args.counterTripleId);
+    return decoded.args.termId;
   }
 
   throw new Error('TripleCreated event not found');
@@ -400,47 +445,58 @@ function deposit(
 **Example with Slippage Protection**:
 
 ```javascript
+import { formatEther } from 'viem';
+
 async function depositToVault(termId, curveId, assets, slippageBps = 100) {
   // 1. Preview the deposit to get expected shares
-  const [expectedShares, assetsAfterFees] = await multiVault.previewDeposit(
-    termId,
-    curveId,
-    assets
-  );
+  const [expectedShares, assetsAfterFees] = await publicClient.readContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'previewDeposit',
+    args: [termId, curveId, assets]
+  });
 
-  console.log(`Expected shares: ${ethers.formatEther(expectedShares)}`);
-  console.log(`Assets after fees: ${ethers.formatEther(assetsAfterFees)}`);
+  console.log(`Expected shares: ${formatEther(expectedShares)}`);
+  console.log(`Assets after fees: ${formatEther(assetsAfterFees)}`);
 
   // 2. Calculate minimum shares (allow 1% slippage by default)
   const minShares = expectedShares * (10000n - BigInt(slippageBps)) / 10000n;
 
   // 3. Execute deposit
-  const receiver = await signer.getAddress();
-  const tx = await multiVault.deposit(
-    receiver,
-    termId,
-    curveId,
-    minShares,
-    { value: assets }
-  );
+  const receiver = account.address;
+  const hash = await walletClient.writeContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'deposit',
+    args: [receiver, termId, curveId, minShares],
+    value: assets
+  });
 
-  const receipt = await tx.wait();
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
   console.log('Deposit successful!');
 
   // 4. Extract actual shares from event
   const depositedLog = receipt.logs.find(log => {
     try {
-      const parsed = multiVault.interface.parseLog(log);
-      return parsed.name === 'Deposited';
+      const decoded = decodeEventLog({
+        abi: MULTIVAULT_ABI,
+        data: log.data,
+        topics: log.topics
+      });
+      return decoded.eventName === 'Deposited';
     } catch {
       return false;
     }
   });
 
   if (depositedLog) {
-    const parsed = multiVault.interface.parseLog(depositedLog);
-    console.log(`Actual shares received: ${ethers.formatEther(parsed.args.shares)}`);
-    return parsed.args.shares;
+    const decoded = decodeEventLog({
+      abi: MULTIVAULT_ABI,
+      data: depositedLog.data,
+      topics: depositedLog.topics
+    });
+    console.log(`Actual shares received: ${formatEther(decoded.args.shares)}`);
+    return decoded.args.shares;
   }
 
   return expectedShares;
@@ -476,51 +532,64 @@ function redeem(
 ```javascript
 async function redeemShares(termId, curveId, shares, slippageBps = 100) {
   // 1. Check user's share balance
-  const userAddress = await signer.getAddress();
-  const userShares = await multiVault.getShares(userAddress, termId, curveId);
+  const userAddress = account.address;
+  const userShares = await publicClient.readContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'getShares',
+    args: [userAddress, termId, curveId]
+  });
 
   if (shares > userShares) {
     throw new Error(`Insufficient shares. Have: ${userShares}, want: ${shares}`);
   }
 
   // 2. Preview redemption
-  const [expectedAssets, sharesUsed] = await multiVault.previewRedeem(
-    termId,
-    curveId,
-    shares
-  );
+  const [expectedAssets, sharesUsed] = await publicClient.readContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'previewRedeem',
+    args: [termId, curveId, shares]
+  });
 
-  console.log(`Expected assets: ${ethers.formatEther(expectedAssets)}`);
+  console.log(`Expected assets: ${formatEther(expectedAssets)}`);
 
   // 3. Calculate minimum assets
   const minAssets = expectedAssets * (10000n - BigInt(slippageBps)) / 10000n;
 
   // 4. Execute redemption
-  const tx = await multiVault.redeem(
-    userAddress,
-    termId,
-    curveId,
-    shares,
-    minAssets
-  );
+  const hash = await walletClient.writeContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'redeem',
+    args: [userAddress, termId, curveId, shares, minAssets]
+  });
 
-  const receipt = await tx.wait();
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
   console.log('Redemption successful!');
 
   // 5. Extract actual assets from event
   const redeemedLog = receipt.logs.find(log => {
     try {
-      const parsed = multiVault.interface.parseLog(log);
-      return parsed.name === 'Redeemed';
+      const decoded = decodeEventLog({
+        abi: MULTIVAULT_ABI,
+        data: log.data,
+        topics: log.topics
+      });
+      return decoded.eventName === 'Redeemed';
     } catch {
       return false;
     }
   });
 
   if (redeemedLog) {
-    const parsed = multiVault.interface.parseLog(redeemedLog);
-    console.log(`Actual assets received: ${ethers.formatEther(parsed.args.assets)}`);
-    return parsed.args.assets;
+    const decoded = decodeEventLog({
+      abi: MULTIVAULT_ABI,
+      data: redeemedLog.data,
+      topics: redeemedLog.topics
+    });
+    console.log(`Actual assets received: ${formatEther(decoded.args.assets)}`);
+    return decoded.args.assets;
   }
 
   return expectedAssets;
@@ -535,41 +604,86 @@ Read vault information without sending transactions.
 
 ```javascript
 // Get vault totals
-const [totalAssets, totalShares] = await multiVault.getVault(termId, curveId);
+const [totalAssets, totalShares] = await publicClient.readContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'getVault',
+  args: [termId, curveId]
+});
 
 // Get user's share balance
-const userShares = await multiVault.getShares(userAddress, termId, curveId);
+const userShares = await publicClient.readContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'getShares',
+  args: [userAddress, termId, curveId]
+});
 
 // Get current share price (scaled by 1e18)
-const sharePrice = await multiVault.currentSharePrice(termId, curveId);
+const sharePrice = await publicClient.readContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'currentSharePrice',
+  args: [termId, curveId]
+});
 
 // Check if term exists
-const exists = await multiVault.isTermCreated(termId);
+const exists = await publicClient.readContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'isTermCreated',
+  args: [termId]
+});
 
 // Preview operations (no gas cost)
-const [shares, assetsAfterFees] = await multiVault.previewDeposit(termId, curveId, assets);
-const [assets, sharesUsed] = await multiVault.previewRedeem(termId, curveId, shares);
+const [shares, assetsAfterFees] = await publicClient.readContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'previewDeposit',
+  args: [termId, curveId, assets]
+});
+const [assets, sharesUsed] = await publicClient.readContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'previewRedeem',
+  args: [termId, curveId, shares]
+});
 ```
 
 **Complete Query Example**:
 
 ```javascript
 async function getVaultInfo(termId, curveId) {
-  const [totalAssets, totalShares] = await multiVault.getVault(termId, curveId);
-  const sharePrice = await multiVault.currentSharePrice(termId, curveId);
+  const [totalAssets, totalShares] = await publicClient.readContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'getVault',
+    args: [termId, curveId]
+  });
+  const sharePrice = await publicClient.readContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'currentSharePrice',
+    args: [termId, curveId]
+  });
 
-  const userAddress = await signer.getAddress();
-  const userShares = await multiVault.getShares(userAddress, termId, curveId);
+  const userAddress = account.address;
+  const userShares = await publicClient.readContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'getShares',
+    args: [userAddress, termId, curveId]
+  });
 
   // Calculate user's assets value
-  const userAssetsValue = userShares * sharePrice / ethers.parseEther('1');
+  const userAssetsValue = userShares * sharePrice / parseEther('1');
 
   console.log('Vault Information:');
-  console.log(`  Total Assets: ${ethers.formatEther(totalAssets)} ETH`);
-  console.log(`  Total Shares: ${ethers.formatEther(totalShares)}`);
-  console.log(`  Share Price: ${ethers.formatEther(sharePrice)} ETH`);
-  console.log(`  Your Shares: ${ethers.formatEther(userShares)}`);
-  console.log(`  Your Assets Value: ${ethers.formatEther(userAssetsValue)} ETH`);
+  console.log(`  Total Assets: ${formatEther(totalAssets)} ETH`);
+  console.log(`  Total Shares: ${formatEther(totalShares)}`);
+  console.log(`  Share Price: ${formatEther(sharePrice)} ETH`);
+  console.log(`  Your Shares: ${formatEther(userShares)}`);
+  console.log(`  Your Assets Value: ${formatEther(userAssetsValue)} ETH`);
 
   return {
     totalAssets,
@@ -608,7 +722,7 @@ async function batchDeposit(deposits) {
   //   ...
   // ]
 
-  const receiver = await signer.getAddress();
+  const receiver = account.address;
   const termIds = deposits.map(d => d.termId);
   const curveIds = deposits.map(d => d.curveId);
   const assets = deposits.map(d => d.assets);
@@ -617,16 +731,15 @@ async function batchDeposit(deposits) {
   // Calculate total value
   const totalValue = assets.reduce((sum, amt) => sum + amt, 0n);
 
-  const tx = await multiVault.depositBatch(
-    receiver,
-    termIds,
-    curveIds,
-    assets,
-    minShares,
-    { value: totalValue }
-  );
+  const hash = await walletClient.writeContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'depositBatch',
+    args: [receiver, termIds, curveIds, assets, minShares],
+    value: totalValue
+  });
 
-  const receipt = await tx.wait();
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
   console.log('Batch deposit successful!');
   return receipt;
 }
@@ -649,34 +762,57 @@ function redeemBatch(
 
 Listen for protocol events to track activity.
 
-### Subscribe to Events (ethers.js)
+### Subscribe to Events (viem)
 
 ```javascript
+import { toString } from 'viem';
+
 // Listen for atom creation
-multiVault.on('AtomCreated', (creator, termId, atomData, atomWallet, event) => {
-  console.log('New Atom Created:');
-  console.log(`  Creator: ${creator}`);
-  console.log(`  Atom ID: ${termId}`);
-  console.log(`  Atom Wallet: ${atomWallet}`);
-  console.log(`  Data: ${ethers.toUtf8String(atomData)}`);
+const unwatch = publicClient.watchContractEvent({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  eventName: 'AtomCreated',
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      console.log('New Atom Created:');
+      console.log(`  Creator: ${log.args.creator}`);
+      console.log(`  Atom ID: ${log.args.termId}`);
+      console.log(`  Atom Wallet: ${log.args.atomWallet}`);
+      console.log(`  Data: ${toString(log.args.atomData)}`);
+    });
+  }
 });
 
 // Listen for deposits
-multiVault.on('Deposited', (sender, receiver, termId, curveId, assets, assetsAfterFees, shares, totalShares, vaultType) => {
-  console.log('Deposit Event:');
-  console.log(`  Term ID: ${termId}`);
-  console.log(`  Assets: ${ethers.formatEther(assets)}`);
-  console.log(`  Shares: ${ethers.formatEther(shares)}`);
-  console.log(`  Vault Type: ${vaultType}`); // 0=ATOM, 1=TRIPLE, 2=COUNTER_TRIPLE
+publicClient.watchContractEvent({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  eventName: 'Deposited',
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      console.log('Deposit Event:');
+      console.log(`  Term ID: ${log.args.termId}`);
+      console.log(`  Assets: ${formatEther(log.args.assets)}`);
+      console.log(`  Shares: ${formatEther(log.args.shares)}`);
+      console.log(`  Vault Type: ${log.args.vaultType}`); // 0=ATOM, 1=TRIPLE, 2=COUNTER_TRIPLE
+    });
+  }
 });
 
 // Listen for redemptions
-multiVault.on('Redeemed', (sender, receiver, termId, curveId, shares, totalShares, assets, fees, vaultType) => {
-  console.log('Redemption Event:');
-  console.log(`  Term ID: ${termId}`);
-  console.log(`  Shares Redeemed: ${ethers.formatEther(shares)}`);
-  console.log(`  Assets Returned: ${ethers.formatEther(assets)}`);
-  console.log(`  Fees: ${ethers.formatEther(fees)}`);
+publicClient.watchContractEvent({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  eventName: 'Redeemed',
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      console.log('Redemption Event:');
+      console.log(`  Term ID: ${log.args.termId}`);
+      console.log(`  Shares Redeemed: ${formatEther(log.args.shares)}`);
+      console.log(`  Assets Returned: ${formatEther(log.args.assets)}`);
+      console.log(`  Fees: ${formatEther(log.args.fees)}`);
+    });
+  }
 });
 ```
 
@@ -684,21 +820,27 @@ multiVault.on('Redeemed', (sender, receiver, termId, curveId, shares, totalShare
 
 ```javascript
 async function getAtomCreationHistory(fromBlock, toBlock) {
-  const filter = multiVault.filters.AtomCreated();
-  const events = await multiVault.queryFilter(filter, fromBlock, toBlock);
+  const logs = await publicClient.getContractEvents({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    eventName: 'AtomCreated',
+    fromBlock,
+    toBlock
+  });
 
-  return events.map(event => ({
-    creator: event.args.creator,
-    termId: event.args.termId,
-    atomData: event.args.atomData,
-    atomWallet: event.args.atomWallet,
-    blockNumber: event.blockNumber,
-    transactionHash: event.transactionHash
+  return logs.map(log => ({
+    creator: log.args.creator,
+    termId: log.args.termId,
+    atomData: log.args.atomData,
+    atomWallet: log.args.atomWallet,
+    blockNumber: log.blockNumber,
+    transactionHash: log.transactionHash
   }));
 }
 
 // Usage
-const recentAtoms = await getAtomCreationHistory(-1000, 'latest');
+const currentBlock = await publicClient.getBlockNumber();
+const recentAtoms = await getAtomCreationHistory(currentBlock - 1000n, currentBlock);
 console.log(`Found ${recentAtoms.length} atoms in last ~1000 blocks`);
 ```
 
@@ -753,19 +895,29 @@ def get_deposits_for_term(term_id: str, from_block: int, to_block: str = 'latest
 async function safeDeposit(termId, curveId, assets) {
   try {
     // 1. Validate term exists
-    const exists = await multiVault.isTermCreated(termId);
+    const exists = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: MULTIVAULT_ABI,
+      functionName: 'isTermCreated',
+      args: [termId]
+    });
     if (!exists) {
       throw new Error(`Term ${termId} does not exist`);
     }
 
     // 2. Check balance
-    const balance = await provider.getBalance(await signer.getAddress());
+    const balance = await publicClient.getBalance({ address: account.address });
     if (balance < assets) {
       throw new Error(`Insufficient balance`);
     }
 
     // 3. Preview deposit
-    const [expectedShares] = await multiVault.previewDeposit(termId, curveId, assets);
+    const [expectedShares] = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: MULTIVAULT_ABI,
+      functionName: 'previewDeposit',
+      args: [termId, curveId, assets]
+    });
     if (expectedShares === 0n) {
       throw new Error('Deposit would result in zero shares');
     }
@@ -775,9 +927,9 @@ async function safeDeposit(termId, curveId, assets) {
 
   } catch (error) {
     // Handle specific error types
-    if (error.code === 'INSUFFICIENT_FUNDS') {
+    if (error.name === 'InsufficientFundsError') {
       console.error('Not enough ETH for gas + deposit');
-    } else if (error.code === 'UNPREDICTABLE_GAS_LIMIT') {
+    } else if (error.name === 'ContractFunctionExecutionError') {
       console.error('Transaction will likely fail - check parameters');
     } else if (error.message?.includes('MinSharesRequired')) {
       console.error('Deposit amount too small');
@@ -795,13 +947,14 @@ async function safeDeposit(termId, curveId, assets) {
 
 ```javascript
 // Estimate gas for a transaction
-const estimatedGas = await multiVault.deposit.estimateGas(
-  receiver,
-  termId,
-  curveId,
-  minShares,
-  { value: assets }
-);
+const estimatedGas = await publicClient.estimateContractGas({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'deposit',
+  args: [receiver, termId, curveId, minShares],
+  value: assets,
+  account
+});
 
 console.log(`Estimated gas: ${estimatedGas.toString()}`);
 
@@ -809,13 +962,14 @@ console.log(`Estimated gas: ${estimatedGas.toString()}`);
 const gasLimit = estimatedGas * 110n / 100n;
 
 // Send with explicit gas limit
-const tx = await multiVault.deposit(
-  receiver,
-  termId,
-  curveId,
-  minShares,
-  { value: assets, gasLimit }
-);
+const hash = await walletClient.writeContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'deposit',
+  args: [receiver, termId, curveId, minShares],
+  value: assets,
+  gas: gasLimit
+});
 ```
 
 ### Use Batch Operations
@@ -840,18 +994,19 @@ await depositBatch(
 
 ### Simulate Without Gas
 
-Use `staticCall` to test transactions without spending gas:
+Use `simulateContract` to test transactions without spending gas:
 
 ```javascript
 // Simulate deposit to check for errors
 try {
-  const shares = await multiVault.deposit.staticCall(
-    receiver,
-    termId,
-    curveId,
-    minShares,
-    { value: assets }
-  );
+  const { result: shares } = await publicClient.simulateContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'deposit',
+    args: [receiver, termId, curveId, minShares],
+    value: assets,
+    account
+  });
   console.log(`Simulation successful, would receive ${shares} shares`);
 } catch (error) {
   console.error('Simulation failed:', error.message);
@@ -867,12 +1022,21 @@ Each atom has an associated ERC-4337 smart wallet. Query the wallet address:
 
 ```javascript
 // Get atom wallet address
-const atomWallet = await multiVault.getAtomWallet(atomId);
+const atomWallet = await publicClient.readContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'getAtomWallet',
+  args: [atomId]
+});
 
 // Check atom wallet owner
 const ATOM_WARDEN_ADDRESS = '0x...'; // From deployment addresses
-const atomWarden = new ethers.Contract(ATOM_WARDEN_ADDRESS, ATOM_WARDEN_ABI, provider);
-const owner = await atomWarden.getAtomWalletOwner(atomId);
+const owner = await publicClient.readContract({
+  address: ATOM_WARDEN_ADDRESS,
+  abi: ATOM_WARDEN_ABI,
+  functionName: 'getAtomWalletOwner',
+  args: [atomId]
+});
 
 console.log(`Atom Wallet: ${atomWallet}`);
 console.log(`Owner: ${owner}`);
@@ -884,13 +1048,23 @@ If you own an atom wallet, you can claim accumulated fees:
 
 ```javascript
 // Query claimable fees
-const claimableFees = await multiVault.getAtomWalletDepositFees(atomId);
-console.log(`Claimable fees: ${ethers.formatEther(claimableFees)} ETH`);
+const claimableFees = await publicClient.readContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'getAtomWalletDepositFees',
+  args: [atomId]
+});
+console.log(`Claimable fees: ${formatEther(claimableFees)} ETH`);
 
 // Claim fees
 if (claimableFees > 0n) {
-  const tx = await multiVault.claimAtomWalletDepositFees(atomId);
-  await tx.wait();
+  const hash = await walletClient.writeContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'claimAtomWalletDepositFees',
+    args: [atomId]
+  });
+  await publicClient.waitForTransactionReceipt({ hash });
   console.log('Fees claimed!');
 }
 ```
@@ -901,16 +1075,29 @@ For rewards calculations, query utilization:
 
 ```javascript
 const TRUST_BONDING_ADDRESS = '0x2B0c2700BB0E9Ea294c7c6Ea5C5c42cC0dba3583';
-const trustBonding = new ethers.Contract(TRUST_BONDING_ADDRESS, TRUST_BONDING_ABI, provider);
 
 // Get current epoch
-const currentEpoch = await trustBonding.currentEpoch();
+const currentEpoch = await publicClient.readContract({
+  address: TRUST_BONDING_ADDRESS,
+  abi: TRUST_BONDING_ABI,
+  functionName: 'currentEpoch'
+});
 
 // Get personal utilization
-const personalUtil = await multiVault.getUserUtilizationForEpoch(userAddress, currentEpoch);
+const personalUtil = await publicClient.readContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'getUserUtilizationForEpoch',
+  args: [userAddress, currentEpoch]
+});
 
 // Get system utilization
-const systemUtil = await multiVault.getTotalUtilizationForEpoch(currentEpoch);
+const systemUtil = await publicClient.readContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'getTotalUtilizationForEpoch',
+  args: [currentEpoch]
+});
 
 console.log(`Personal Utilization: ${personalUtil}`);
 console.log(`System Utilization: ${systemUtil}`);
@@ -976,10 +1163,10 @@ See [Events Reference](../reference/events.md) for complete event documentation.
 
 ### Transaction Reverts Without Clear Error
 
-1. Check contract is not paused: `await multiVault.paused()`
-2. Verify term exists: `await multiVault.isTermCreated(termId)`
+1. Check contract is not paused: `await publicClient.readContract({ address: MULTIVAULT_ADDRESS, abi: MULTIVAULT_ABI, functionName: 'paused' })`
+2. Verify term exists: `await publicClient.readContract({ address: MULTIVAULT_ADDRESS, abi: MULTIVAULT_ABI, functionName: 'isTermCreated', args: [termId] })`
 3. Check sufficient balance and allowances
-4. Use `staticCall` to get revert reason
+4. Use `simulateContract` to get revert reason
 
 ### Events Not Appearing
 

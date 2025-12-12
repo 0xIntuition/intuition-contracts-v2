@@ -159,7 +159,7 @@ sequenceDiagram
 const currentEpoch = await baseEmissions.currentEpoch();
 const emissions = await baseEmissions.emissionsForEpoch(currentEpoch);
 
-console.log(`Epoch ${currentEpoch} emissions: ${ethers.formatEther(emissions)} TRUST`);
+console.log(`Epoch ${currentEpoch} emissions: ${formatEther(emissions)} TRUST`);
 ```
 
 **Step 2: Minting**
@@ -183,7 +183,7 @@ await baseEmissions.mintAndBridgeCurrentEpoch({ value: bridgeFee });
 // SatelliteEmissionsController receives tokens
 const receivedAmount = await satelliteEmissions.getEpochReceivedAmount(currentEpoch);
 
-console.log(`Received: ${ethers.formatEther(receivedAmount)} TRUST`);
+console.log(`Received: ${formatEther(receivedAmount)} TRUST`);
 
 // Automatically transferred to TrustBonding
 ```
@@ -228,7 +228,7 @@ const finalityState = await baseEmissions.getFinalityState();
 const gasCost = await baseEmissions.getMessageGasCost();
 
 console.log(`Finality: ${finalityState === 0 ? 'FINALIZED' : 'INSTANT'}`);
-console.log(`Bridge gas cost: ${ethers.formatEther(gasCost)} ETH`);
+console.log(`Bridge gas cost: ${formatEther(gasCost)} ETH`);
 ```
 
 **Satellite Chain Configuration**:
@@ -289,7 +289,7 @@ const totalEmissions = await trustBonding.emissionsForEpoch(previousEpoch);
 const totalClaimed = await trustBonding.totalClaimedRewardsForEpoch(previousEpoch);
 const unclaimed = totalEmissions - totalClaimed;
 
-console.log(`Unclaimed from epoch ${previousEpoch}: ${ethers.formatEther(unclaimed)} TRUST`);
+console.log(`Unclaimed from epoch ${previousEpoch}: ${formatEther(unclaimed)} TRUST`);
 ```
 
 **Step 2: Bridge Back**
@@ -307,7 +307,7 @@ console.log('Unclaimed rewards bridged back to base chain');
 // BaseEmissionsController receives and burns (automatic)
 const burned = await baseEmissions.getTotalBurned();
 
-console.log(`Total TRUST burned: ${ethers.formatEther(burned)}`);
+console.log(`Total TRUST burned: ${formatEther(burned)}`);
 ```
 
 ### Impact on Supply
@@ -319,9 +319,9 @@ async function analyzeSupplyImpact() {
   const netSupply = totalMinted - totalBurned;
 
   console.log('Supply Analysis:');
-  console.log(`  Total Minted: ${ethers.formatEther(totalMinted)} TRUST`);
-  console.log(`  Total Burned: ${ethers.formatEther(totalBurned)} TRUST`);
-  console.log(`  Net Supply: ${ethers.formatEther(netSupply)} TRUST`);
+  console.log(`  Total Minted: ${formatEther(totalMinted)} TRUST`);
+  console.log(`  Total Burned: ${formatEther(totalBurned)} TRUST`);
+  console.log(`  Net Supply: ${formatEther(netSupply)} TRUST`);
 
   const burnRate = totalBurned * 10000n / totalMinted;
   console.log(`  Burn Rate: ${Number(burnRate) / 100}%`);
@@ -360,13 +360,21 @@ console.log('Admins:', admins);
 ```
 
 **2. Timelock Delays**
-```javascript
+```typescript
 // Changes have mandatory delay
-const timelock = await trustBonding.timelock();
-const timelockContract = new ethers.Contract(timelock, TIMELOCK_ABI, provider);
+const timelock = await publicClient.readContract({
+  address: TRUSTBONDING_ADDRESS,
+  abi: TRUSTBONDING_ABI,
+  functionName: 'timelock',
+});
 
-const minDelay = await timelockContract.getMinDelay();
-console.log(`Timelock delay: ${minDelay / 86400} days`);
+const minDelay = await publicClient.readContract({
+  address: timelock,
+  abi: TIMELOCK_ABI,
+  functionName: 'getMinDelay',
+});
+
+console.log(`Timelock delay: ${minDelay / 86400n} days`);
 ```
 
 **3. Pausability**
@@ -399,8 +407,8 @@ class CrossChainMonitor {
     const satBalance = await trust.balanceOf(satelliteEmissions.address);
 
     console.log('Bridge Balances:');
-    console.log(`  Base: ${ethers.formatEther(baseBalance)}`);
-    console.log(`  Satellite: ${ethers.formatEther(satBalance)}`);
+    console.log(`  Base: ${formatEther(baseBalance)}`);
+    console.log(`  Satellite: ${formatEther(satBalance)}`);
 
     // 2. Pending bridges
     const currentEpoch = await baseEmissions.currentEpoch();
@@ -408,7 +416,7 @@ class CrossChainMonitor {
     const received = await satelliteEmissions.getEpochReceivedAmount(currentEpoch);
 
     if (minted > received) {
-      console.log(`WARNING: Pending bridge of ${ethers.formatEther(minted - received)} TRUST`);
+      console.log(`WARNING: Pending bridge of ${formatEther(minted - received)} TRUST`);
     }
 
     // 3. Unclaimed tracking
@@ -416,7 +424,7 @@ class CrossChainMonitor {
     const unclaimed = await this.calculateUnclaimed(previousEpoch);
 
     if (unclaimed > 0n) {
-      console.log(`Unclaimed from epoch ${previousEpoch}: ${ethers.formatEther(unclaimed)}`);
+      console.log(`Unclaimed from epoch ${previousEpoch}: ${formatEther(unclaimed)}`);
     }
   }
 
@@ -434,64 +442,94 @@ class CrossChainMonitor {
 
 **Connecting to Both Chains**:
 
-```javascript
-import { ethers } from 'ethers';
+```typescript
+import { createPublicClient, createWalletClient, http, getContract } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { base, intuition } from 'viem/chains';
 
 class IntuitionProtocol {
-  constructor() {
-    // Base chain connection
-    this.baseProvider = new ethers.JsonRpcProvider('https://mainnet.base.org');
-    this.baseSigner = new ethers.Wallet(PRIVATE_KEY, this.baseProvider);
+  basePublicClient;
+  satPublicClient;
+  satWalletClient;
+  account;
+  trust;
+  baseEmissions;
+  multiVault;
+  trustBonding;
 
-    // Satellite chain connection
-    this.satProvider = new ethers.JsonRpcProvider('INTUITION_RPC');
-    this.satSigner = new ethers.Wallet(PRIVATE_KEY, this.satProvider);
+  constructor() {
+    this.account = privateKeyToAccount(PRIVATE_KEY);
+
+    // Base chain connection
+    this.basePublicClient = createPublicClient({
+      chain: base,
+      transport: http('https://mainnet.base.org'),
+    });
+
+    // Satellite chain connections
+    this.satPublicClient = createPublicClient({
+      chain: intuition,
+      transport: http('INTUITION_RPC'),
+    });
+
+    this.satWalletClient = createWalletClient({
+      account: this.account,
+      chain: intuition,
+      transport: http('INTUITION_RPC'),
+    });
 
     // Base chain contracts
-    this.trust = new ethers.Contract(TRUST_ADDRESS, TRUST_ABI, this.baseProvider);
-    this.baseEmissions = new ethers.Contract(
-      BASE_EMISSIONS_ADDRESS,
-      BASE_EMISSIONS_ABI,
-      this.baseProvider
-    );
+    this.trust = getContract({
+      address: TRUST_ADDRESS,
+      abi: TRUST_ABI,
+      client: this.basePublicClient,
+    });
+
+    this.baseEmissions = getContract({
+      address: BASE_EMISSIONS_ADDRESS,
+      abi: BASE_EMISSIONS_ABI,
+      client: this.basePublicClient,
+    });
 
     // Satellite chain contracts
-    this.multiVault = new ethers.Contract(
-      MULTIVAULT_ADDRESS,
-      MULTIVAULT_ABI,
-      this.satSigner
-    );
-    this.trustBonding = new ethers.Contract(
-      TRUSTBONDING_ADDRESS,
-      TRUSTBONDING_ABI,
-      this.satSigner
-    );
+    this.multiVault = getContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: MULTIVAULT_ABI,
+      client: { public: this.satPublicClient, wallet: this.satWalletClient },
+    });
+
+    this.trustBonding = getContract({
+      address: TRUSTBONDING_ADDRESS,
+      abi: TRUSTBONDING_ABI,
+      client: { public: this.satPublicClient, wallet: this.satWalletClient },
+    });
   }
 
   // Query total supply (on base chain)
   async getTotalSupply() {
-    return await this.trust.totalSupply();
+    return await this.trust.read.totalSupply();
   }
 
   // Query emissions (on base chain)
   async getEmissions(epoch) {
-    return await this.baseEmissions.emissionsForEpoch(epoch);
+    return await this.baseEmissions.read.emissionsForEpoch([epoch]);
   }
 
   // Protocol operations (on satellite chain)
   async deposit(termId, curveId, assets) {
-    return await this.multiVault.deposit(
-      await this.satSigner.getAddress(),
+    const hash = await this.multiVault.write.deposit([
+      this.account.address,
       termId,
       curveId,
       0n,
-      { value: assets }
-    );
+    ], { value: assets });
+    return await this.satPublicClient.waitForTransactionReceipt({ hash });
   }
 
   // Claim rewards (on satellite chain)
   async claimRewards() {
-    return await this.trustBonding.claimRewards(await this.satSigner.getAddress());
+    const hash = await this.trustBonding.write.claimRewards([this.account.address]);
+    return await this.satPublicClient.waitForTransactionReceipt({ hash });
   }
 }
 ```
@@ -523,7 +561,7 @@ async function fullUserFlow() {
   }
 
   // 2. Lock TRUST for veTRUST (on satellite)
-  const lockAmount = ethers.parseEther('1000');
+  const lockAmount = parseEther('1000');
   const twoYears = 2 * 365 * 24 * 60 * 60;
   const unlockTime = Math.floor(Date.now() / 1000) + twoYears;
 
@@ -531,8 +569,8 @@ async function fullUserFlow() {
   await trustBonding.create_lock(lockAmount, unlockTime);
 
   // 3. Engage with protocol (on satellite)
-  const atomId = await createAtom('user-atom', ethers.parseEther('0.1'));
-  await depositToVault(atomId, 0, ethers.parseEther('1'));
+  const atomId = await createAtom('user-atom', parseEther('0.1'));
+  await depositToVault(atomId, 0, parseEther('1'));
 
   // 4. Wait for epoch to end...
 

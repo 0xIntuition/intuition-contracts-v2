@@ -52,9 +52,9 @@ Collect all vault identifiers and amounts for your batch operation.
 const termIds = [atomId1, tripleId1, atomId2]; // 3 vaults
 const curveIds = [1n, 1n, 1n]; // All using linear curve
 const depositAmounts = [
-  ethers.parseEther('10'),  // 10 WTRUST to vault 1
-  ethers.parseEther('20'),  // 20 WTRUST to vault 2
-  ethers.parseEther('15')   // 15 WTRUST to vault 3
+  parseEther('10'),  // 10 WTRUST to vault 1
+  parseEther('20'),  // 20 WTRUST to vault 2
+  parseEther('15')   // 15 WTRUST to vault 3
 ];
 ```
 
@@ -87,7 +87,7 @@ const previews = await Promise.all(
   })
 );
 
-console.log('Expected shares:', previews.map(p => ethers.formatEther(p.shares)));
+console.log('Expected shares:', previews.map(p => formatEther(p.shares)));
 ```
 
 ### Step 4: Calculate Minimum Amounts
@@ -148,12 +148,15 @@ console.log(`Minted shares across ${depositEvents.length} vaults`);
 
 ## Code Examples
 
-### TypeScript (ethers.js v6)
+### TypeScript (viem)
 
 Complete batch deposit and redemption examples:
 
 ```typescript
-import { ethers } from 'ethers';
+import { createPublicClient, createWalletClient, http, parseEther, formatEther } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { base } from 'viem/chains';
+import { parseAbiItem } from 'viem';
 
 // Contract ABIs
 import MultiVaultABI from './abis/IMultiVault.json';
@@ -165,7 +168,7 @@ const WTRUST_ADDRESS = '0x81cFb09cb44f7184Ad934C09F82000701A4bF672';
 const RPC_URL = 'YOUR_INTUITION_RPC_URL';
 
 interface BatchDepositParams {
-  termIds: string[];
+  termIds: `0x${string}`[];
   curveIds: bigint[];
   amounts: bigint[];
   slippageBps: number;
@@ -176,19 +179,26 @@ interface BatchDepositParams {
  */
 async function batchDeposit(
   params: BatchDepositParams,
-  receiver: string,
-  privateKey: string
+  receiver: `0x${string}`,
+  privateKey: `0x${string}`
 ): Promise<{
   sharesMinted: bigint[];
   totalAssets: bigint;
   totalShares: bigint;
   txHash: string;
 }> {
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
-  const wallet = new ethers.Wallet(privateKey, provider);
+  const account = privateKeyToAccount(privateKey);
 
-  const multiVault = new ethers.Contract(MULTIVAULT_ADDRESS, MultiVaultABI, wallet);
-  const wtrust = new ethers.Contract(WTRUST_ADDRESS, ERC20ABI, wallet);
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http(RPC_URL)
+  });
+
+  const walletClient = createWalletClient({
+    account,
+    chain: base,
+    transport: http(RPC_URL)
+  });
 
   try {
     // Validate arrays have same length
@@ -203,7 +213,12 @@ async function batchDeposit(
     // Step 1: Validate all vaults exist
     console.log('Validating vaults...');
     for (let i = 0; i < vaultCount; i++) {
-      const exists = await multiVault.isTermCreated(params.termIds[i]);
+      const exists = await publicClient.readContract({
+        address: MULTIVAULT_ADDRESS,
+        abi: MultiVaultABI,
+        functionName: 'isTermCreated',
+        args: [params.termIds[i]]
+      });
       if (!exists) {
         throw new Error(`Vault ${i} (${params.termIds[i]}) does not exist`);
       }
@@ -213,16 +228,17 @@ async function batchDeposit(
     console.log('Previewing deposits...');
     const previews = await Promise.all(
       params.termIds.map(async (termId, i) => {
-        const [shares, assetsAfterFees] = await multiVault.previewDeposit(
-          termId,
-          params.curveIds[i],
-          params.amounts[i]
-        );
+        const [shares, assetsAfterFees] = await publicClient.readContract({
+          address: MULTIVAULT_ADDRESS,
+          abi: MultiVaultABI,
+          functionName: 'previewDeposit',
+          args: [termId, params.curveIds[i], params.amounts[i]]
+        }) as [bigint, bigint];
 
         console.log(`Vault ${i}:`);
-        console.log(`  Assets: ${ethers.formatEther(params.amounts[i])} WTRUST`);
-        console.log(`  Expected shares: ${ethers.formatEther(shares)}`);
-        console.log(`  After fees: ${ethers.formatEther(assetsAfterFees)}`);
+        console.log(`  Assets: ${formatEther(params.amounts[i])} WTRUST`);
+        console.log(`  Expected shares: ${formatEther(shares)}`);
+        console.log(`  After fees: ${formatEther(assetsAfterFees)}`);
 
         return { shares, assetsAfterFees };
       })
@@ -235,53 +251,65 @@ async function batchDeposit(
 
     // Step 4: Calculate total deposit amount
     const totalDeposit = params.amounts.reduce((sum, amt) => sum + amt, 0n);
-    console.log(`\nTotal deposit: ${ethers.formatEther(totalDeposit)} WTRUST`);
+    console.log(`\nTotal deposit: ${formatEther(totalDeposit)} WTRUST`);
 
     // Step 5: Check WTRUST balance
-    const balance = await wtrust.balanceOf(wallet.address);
+    const balance = await publicClient.readContract({
+      address: WTRUST_ADDRESS,
+      abi: ERC20ABI,
+      functionName: 'balanceOf',
+      args: [account.address]
+    }) as bigint;
+
     if (balance < totalDeposit) {
       throw new Error(
-        `Insufficient WTRUST. Have: ${ethers.formatEther(balance)}, ` +
-        `Need: ${ethers.formatEther(totalDeposit)}`
+        `Insufficient WTRUST. Have: ${formatEther(balance)}, ` +
+        `Need: ${formatEther(totalDeposit)}`
       );
     }
 
     // Step 6: Approve total amount
     console.log('Approving WTRUST...');
-    const approveTx = await wtrust.approve(MULTIVAULT_ADDRESS, totalDeposit);
-    await approveTx.wait();
+    const approveHash = await walletClient.writeContract({
+      address: WTRUST_ADDRESS,
+      abi: ERC20ABI,
+      functionName: 'approve',
+      args: [MULTIVAULT_ADDRESS, totalDeposit]
+    });
+    await publicClient.waitForTransactionReceipt({ hash: approveHash });
     console.log('Approval confirmed');
 
     // Step 7: Execute batch deposit
     console.log('\nExecuting batch deposit...');
-    const depositTx = await multiVault.depositBatch(
-      receiver,
-      params.termIds,
-      params.curveIds,
-      params.amounts,
-      minShares,
-      {
-        gasLimit: 500000n + (BigInt(vaultCount) * 150000n) // Scale with vault count
-      }
-    );
+    const depositHash = await walletClient.writeContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: MultiVaultABI,
+      functionName: 'depositBatch',
+      args: [receiver, params.termIds, params.curveIds, params.amounts, minShares],
+      gas: 500000n + (BigInt(vaultCount) * 150000n) // Scale with vault count
+    });
 
-    console.log('Transaction sent:', depositTx.hash);
-    const receipt = await depositTx.wait();
+    console.log('Transaction sent:', depositHash);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: depositHash });
     console.log('Transaction confirmed in block:', receipt.blockNumber);
 
     // Step 8: Parse events to get shares minted per vault
     const depositEvents = receipt.logs
       .map(log => {
         try {
-          return multiVault.interface.parseLog({
-            topics: log.topics,
-            data: log.data
-          });
+          return {
+            eventName: 'Deposited',
+            args: publicClient.parseEventLogs({
+              abi: MultiVaultABI,
+              logs: [log],
+              eventName: 'Deposited'
+            })[0]?.args
+          };
         } catch {
           return null;
         }
       })
-      .filter(event => event && event.name === 'Deposited');
+      .filter(event => event?.args);
 
     const sharesMinted: bigint[] = [];
     let totalShares = 0n;
@@ -289,26 +317,27 @@ async function batchDeposit(
     console.log('\nDeposit Results:');
     for (let i = 0; i < depositEvents.length; i++) {
       const event = depositEvents[i];
-      sharesMinted.push(event.args.shares);
-      totalShares += event.args.shares;
+      const shares = event.args.shares as bigint;
+      sharesMinted.push(shares);
+      totalShares += shares;
 
       console.log(`Vault ${i}:`);
       console.log(`  Term ID: ${event.args.termId}`);
-      console.log(`  Shares minted: ${ethers.formatEther(event.args.shares)}`);
-      console.log(`  Total shares: ${ethers.formatEther(event.args.totalShares)}`);
+      console.log(`  Shares minted: ${formatEther(shares)}`);
+      console.log(`  Total shares: ${formatEther(event.args.totalShares as bigint)}`);
     }
 
-    console.log(`\nTotal shares minted: ${ethers.formatEther(totalShares)}`);
+    console.log(`\nTotal shares minted: ${formatEther(totalShares)}`);
 
     return {
       sharesMinted,
       totalAssets: totalDeposit,
       totalShares,
-      txHash: receipt.hash
+      txHash: depositHash
     };
 
   } catch (error) {
-    if (error.code === 'INSUFFICIENT_FUNDS') {
+    if (error.message?.includes('insufficient funds')) {
       throw new Error('Insufficient ETH for gas fees');
     } else if (error.message?.includes('MinSharesNotReached')) {
       throw new Error('Slippage exceeded on one or more deposits');
@@ -322,22 +351,31 @@ async function batchDeposit(
  */
 async function batchRedeem(
   params: {
-    termIds: string[];
+    termIds: `0x${string}`[];
     curveIds: bigint[];
     shares: bigint[];
     slippageBps: number;
   },
-  receiver: string,
-  privateKey: string
+  receiver: `0x${string}`,
+  privateKey: `0x${string}`
 ): Promise<{
   assetsReceived: bigint[];
   totalAssets: bigint;
   totalFees: bigint;
   txHash: string;
 }> {
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
-  const wallet = new ethers.Wallet(privateKey, provider);
-  const multiVault = new ethers.Contract(MULTIVAULT_ADDRESS, MultiVaultABI, wallet);
+  const account = privateKeyToAccount(privateKey);
+
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http(RPC_URL)
+  });
+
+  const walletClient = createWalletClient({
+    account,
+    chain: base,
+    transport: http(RPC_URL)
+  });
 
   try {
     const vaultCount = params.termIds.length;
@@ -346,17 +384,18 @@ async function batchRedeem(
     // Step 1: Verify user has sufficient shares in each vault
     console.log('Checking share balances...');
     for (let i = 0; i < vaultCount; i++) {
-      const balance = await multiVault.getShares(
-        wallet.address,
-        params.termIds[i],
-        params.curveIds[i]
-      );
+      const balance = await publicClient.readContract({
+        address: MULTIVAULT_ADDRESS,
+        abi: MultiVaultABI,
+        functionName: 'getShares',
+        args: [account.address, params.termIds[i], params.curveIds[i]]
+      }) as bigint;
 
       if (balance < params.shares[i]) {
         throw new Error(
           `Insufficient shares in vault ${i}. ` +
-          `Have: ${ethers.formatEther(balance)}, ` +
-          `Need: ${ethers.formatEther(params.shares[i])}`
+          `Have: ${formatEther(balance)}, ` +
+          `Need: ${formatEther(params.shares[i])}`
         );
       }
     }
@@ -365,15 +404,16 @@ async function batchRedeem(
     console.log('Previewing redemptions...');
     const previews = await Promise.all(
       params.termIds.map(async (termId, i) => {
-        const [assetsAfterFees, sharesUsed] = await multiVault.previewRedeem(
-          termId,
-          params.curveIds[i],
-          params.shares[i]
-        );
+        const [assetsAfterFees, sharesUsed] = await publicClient.readContract({
+          address: MULTIVAULT_ADDRESS,
+          abi: MultiVaultABI,
+          functionName: 'previewRedeem',
+          args: [termId, params.curveIds[i], params.shares[i]]
+        }) as [bigint, bigint];
 
         console.log(`Vault ${i}:`);
-        console.log(`  Shares: ${ethers.formatEther(params.shares[i])}`);
-        console.log(`  Expected assets: ${ethers.formatEther(assetsAfterFees)}`);
+        console.log(`  Shares: ${formatEther(params.shares[i])}`);
+        console.log(`  Expected assets: ${formatEther(assetsAfterFees)}`);
 
         return { assetsAfterFees, sharesUsed };
       })
@@ -386,31 +426,35 @@ async function batchRedeem(
 
     // Step 4: Execute batch redemption
     console.log('\nExecuting batch redemption...');
-    const redeemTx = await multiVault.redeemBatch(
-      receiver,
-      params.termIds,
-      params.curveIds,
-      params.shares,
-      minAssets,
-      {
-        gasLimit: 400000n + (BigInt(vaultCount) * 120000n)
-      }
-    );
+    const redeemHash = await walletClient.writeContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: MultiVaultABI,
+      functionName: 'redeemBatch',
+      args: [receiver, params.termIds, params.curveIds, params.shares, minAssets],
+      gas: 400000n + (BigInt(vaultCount) * 120000n)
+    });
 
-    console.log('Transaction sent:', redeemTx.hash);
-    const receipt = await redeemTx.wait();
+    console.log('Transaction sent:', redeemHash);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: redeemHash });
     console.log('Transaction confirmed in block:', receipt.blockNumber);
 
     // Step 5: Parse events
     const redeemEvents = receipt.logs
       .map(log => {
         try {
-          return multiVault.interface.parseLog({ topics: log.topics, data: log.data });
+          return {
+            eventName: 'Redeemed',
+            args: publicClient.parseEventLogs({
+              abi: MultiVaultABI,
+              logs: [log],
+              eventName: 'Redeemed'
+            })[0]?.args
+          };
         } catch {
           return null;
         }
       })
-      .filter(event => event && event.name === 'Redeemed');
+      .filter(event => event?.args);
 
     const assetsReceived: bigint[] = [];
     let totalAssets = 0n;
@@ -419,23 +463,25 @@ async function batchRedeem(
     console.log('\nRedemption Results:');
     for (let i = 0; i < redeemEvents.length; i++) {
       const event = redeemEvents[i];
-      assetsReceived.push(event.args.assets);
-      totalAssets += event.args.assets;
-      totalFees += event.args.fees;
+      const assets = event.args.assets as bigint;
+      const fees = event.args.fees as bigint;
+      assetsReceived.push(assets);
+      totalAssets += assets;
+      totalFees += fees;
 
       console.log(`Vault ${i}:`);
-      console.log(`  Assets received: ${ethers.formatEther(event.args.assets)}`);
-      console.log(`  Fees: ${ethers.formatEther(event.args.fees)}`);
+      console.log(`  Assets received: ${formatEther(assets)}`);
+      console.log(`  Fees: ${formatEther(fees)}`);
     }
 
-    console.log(`\nTotal assets received: ${ethers.formatEther(totalAssets)}`);
-    console.log(`Total fees: ${ethers.formatEther(totalFees)}`);
+    console.log(`\nTotal assets received: ${formatEther(totalAssets)}`);
+    console.log(`Total fees: ${formatEther(totalFees)}`);
 
     return {
       assetsReceived,
       totalAssets,
       totalFees,
-      txHash: receipt.hash
+      txHash: redeemHash
     };
 
   } catch (error) {
@@ -452,23 +498,23 @@ async function main() {
     // Batch deposit example
     const depositResult = await batchDeposit(
       {
-        termIds: ['0x1234...', '0x5678...', '0x9abc...'],
+        termIds: ['0x1234...' as `0x${string}`, '0x5678...' as `0x${string}`, '0x9abc...' as `0x${string}`],
         curveIds: [1n, 1n, 1n],
         amounts: [
-          ethers.parseEther('10'),
-          ethers.parseEther('20'),
-          ethers.parseEther('15')
+          parseEther('10'),
+          parseEther('20'),
+          parseEther('15')
         ],
         slippageBps: 50 // 0.5%
       },
-      '0xYourAddress',
-      'YOUR_PRIVATE_KEY'
+      '0xYourAddress' as `0x${string}`,
+      '0xYourPrivateKey' as `0x${string}`
     );
 
     console.log('\n=== Batch Deposit Successful ===');
     console.log('Transaction:', depositResult.txHash);
-    console.log('Total deposited:', ethers.formatEther(depositResult.totalAssets));
-    console.log('Total shares:', ethers.formatEther(depositResult.totalShares));
+    console.log('Total deposited:', formatEther(depositResult.totalAssets));
+    console.log('Total shares:', formatEther(depositResult.totalShares));
 
   } catch (error) {
     console.error('Error:', error.message);
@@ -476,9 +522,7 @@ async function main() {
   }
 }
 
-if (require.main === module) {
-  main();
-}
+main();
 ```
 
 ### Python (web3.py)

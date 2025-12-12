@@ -7,7 +7,7 @@ Contract ABI (Application Binary Interface) JSON files for Intuition Protocol V2
 This directory contains ABI JSON files extracted from compiled contracts. These ABIs are used for:
 
 - SDK development
-- Direct contract interaction via ethers.js, web3.py, etc.
+- Direct contract interaction via viem, web3.py, etc.
 - Frontend integration
 - Testing and development tools
 
@@ -65,52 +65,85 @@ done
 
 ## Using ABIs
 
-### TypeScript/JavaScript (ethers.js v6)
+### TypeScript/JavaScript (viem)
 
 ```typescript
-import { ethers } from 'ethers';
+import { createPublicClient, createWalletClient, http } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { intuition } from 'viem/chains';
 import MultiVaultABI from './abi/MultiVault.json';
 
-const provider = new ethers.JsonRpcProvider('RPC_URL');
-const multiVault = new ethers.Contract(
-  '0x...', // Contract address
-  MultiVaultABI,
-  provider
-);
+const publicClient = createPublicClient({
+  chain: intuition,
+  transport: http('RPC_URL'),
+});
 
 // Read functions
-const [totalAssets, totalShares] = await multiVault.getVault(termId, curveId);
+const [totalAssets, totalShares] = await publicClient.readContract({
+  address: '0x...', // Contract address
+  abi: MultiVaultABI,
+  functionName: 'getVault',
+  args: [termId, curveId],
+});
 
-// Write functions (requires signer)
-const signer = await provider.getSigner();
-const multiVaultWithSigner = multiVault.connect(signer);
-const tx = await multiVaultWithSigner.deposit(receiver, termId, curveId, assets, minShares);
-await tx.wait();
+// Write functions (requires wallet)
+const account = privateKeyToAccount('0x...');
+const walletClient = createWalletClient({
+  account,
+  chain: intuition,
+  transport: http('RPC_URL'),
+});
+
+const hash = await walletClient.writeContract({
+  address: '0x...',
+  abi: MultiVaultABI,
+  functionName: 'deposit',
+  args: [receiver, termId, curveId, assets, minShares],
+});
+
+const receipt = await publicClient.waitForTransactionReceipt({ hash });
 ```
 
 ### TypeScript with Type Generation
 
-Generate TypeScript types from ABIs using typechain:
+Generate TypeScript types from ABIs using wagmi CLI:
 
 ```bash
-# Install typechain
-npm install --save-dev typechain @typechain/ethers-v6
+# Install wagmi CLI
+npm install --save-dev @wagmi/cli
+
+# Configure wagmi.config.ts
+import { defineConfig } from '@wagmi/cli';
+import { foundry } from '@wagmi/cli/plugins';
+
+export default defineConfig({
+  out: 'src/generated.ts',
+  plugins: [
+    foundry({
+      project: '.',
+      include: ['MultiVault.json', 'Trust.json'],
+    }),
+  ],
+});
 
 # Generate types
-npx typechain --target ethers-v6 --out-dir src/types 'docs/reference/abi/*.json'
+npx wagmi generate
 ```
 
 Usage with generated types:
 
 ```typescript
-import { MultiVault } from './types';
-import { ethers } from 'ethers';
-
-const multiVault = MultiVault__factory.connect(address, provider);
+import { publicClient } from './client';
+import { multiVaultAbi } from './generated';
 
 // Full type safety!
-const vault: { totalAssets: bigint; totalShares: bigint } =
-  await multiVault.getVault(termId, curveId);
+const vault = await publicClient.readContract({
+  address: '0x...',
+  abi: multiVaultAbi,
+  functionName: 'getVault',
+  args: [termId, curveId],
+});
+// vault is typed as { totalAssets: bigint; totalShares: bigint }
 ```
 
 ### Python (web3.py)
@@ -187,35 +220,37 @@ contract MyContract {
 }
 ```
 
-### Rust (ethers-rs)
+### Rust (alloy-rs)
 
 ```rust
-use ethers::prelude::*;
+use alloy::prelude::*;
+use alloy::providers::{Provider, ProviderBuilder};
 use std::sync::Arc;
 
 // Import generated bindings
-abigen!(
+sol!(
+    #[sol(rpc)]
     MultiVault,
     "./abi/MultiVault.json"
 );
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let provider = Provider::<Http>::try_from("RPC_URL")?;
-    let client = Arc::new(provider);
+    let provider = ProviderBuilder::new()
+        .on_http("RPC_URL".parse()?);
 
     let multivault = MultiVault::new(
         "0x...".parse::<Address>()?,
-        client
+        provider
     );
 
-    let (total_assets, total_shares) = multivault
-        .get_vault(term_id, curve_id)
+    let MultiVault::getVaultReturn { totalAssets, totalShares } = multivault
+        .getVault(term_id, curve_id)
         .call()
         .await?;
 
-    println!("Total Assets: {}", total_assets);
-    println!("Total Shares: {}", total_shares);
+    println!("Total Assets: {}", totalAssets);
+    println!("Total Shares: {}", totalShares);
 
     Ok(())
 }
@@ -327,10 +362,10 @@ Each ABI JSON file contains an array of function and event definitions:
 These ABIs are compatible with:
 
 - **Solidity**: 0.8.29+
-- **ethers.js**: v6.x
+- **viem**: v2.x
 - **web3.js**: v4.x
 - **web3.py**: v6.x+
-- **ethers-rs**: Latest
+- **alloy-rs**: Latest
 - **go-ethereum**: v1.10+
 
 ## Updates

@@ -128,15 +128,17 @@ stateDiagram-v2
 **Critical Property**: Vaults for the same term are completely independent.
 
 ```javascript
+import { stringToHex } from 'viem';
+
 // Same atom, different vaults
-const atomId = calculateAtomId(ethers.toUtf8Bytes('example'));
+const atomId = calculateAtomId(stringToHex('example'));
 
 // Vault with linear curve
-const linearVault = await multiVault.getVault(atomId, 0);
+const linearVault = await multiVault.read.getVault([atomId, 0]);
 // { totalAssets: 100 ETH, totalShares: 100 }
 
 // Vault with progressive curve
-const progressiveVault = await multiVault.getVault(atomId, 1);
+const progressiveVault = await multiVault.read.getVault([atomId, 1]);
 // { totalAssets: 50 ETH, totalShares: 25 }
 
 // Completely independent:
@@ -178,13 +180,13 @@ await multiVault.deposit(receiver, termId, 0, minShares, { value });
 
 ```javascript
 // Check if a specific vault exists
-const exists = await multiVault.isVaultInitialized(termId, curveId);
+const exists = await multiVault.read.isVaultInitialized([termId, curveId]);
 
 // Get vault state
-const [totalAssets, totalShares] = await multiVault.getVault(termId, curveId);
+const [totalAssets, totalShares] = await multiVault.read.getVault([termId, curveId]);
 
 // Query user's shares in specific vault
-const userShares = await multiVault.getShares(userAddress, termId, curveId);
+const userShares = await multiVault.read.getShares([userAddress, termId, curveId]);
 ```
 
 ## Bonding Curve Selection
@@ -215,16 +217,76 @@ See [Bonding Curves](./bonding-curves.md) for detailed mechanics.
 Curves are registered in the `BondingCurveRegistry`:
 
 ```javascript
-const REGISTRY_ADDRESS = '0x...'; // From deployment addresses
-const registry = new ethers.Contract(REGISTRY_ADDRESS, REGISTRY_ABI, provider);
+import { createPublicClient, http } from 'viem';
+import { intuition } from 'viem/chains';
 
-// Get curve by ID
-const curveAddress = await registry.getCurve(curveId);
+const REGISTRY_ADDRESS = '0x...'; // From deployment addresses
+
+const publicClient = createPublicClient({
+  chain: intuition,
+  transport: http()
+});
+
+const registryAbi = [
+  {
+    name: 'curveAddresses',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'id', type: 'uint256' }],
+    outputs: [{ name: '', type: 'address' }]
+  }
+] as const;
+
+// Get curve address by ID
+const curveAddress = await publicClient.readContract({
+  address: REGISTRY_ADDRESS,
+  abi: registryAbi,
+  functionName: 'curveAddresses',
+  args: [curveId]
+});
 
 // Query curve info
-const curveName = await curve.name();
-const maxShares = await curve.maxShares();
-const maxAssets = await curve.maxAssets();
+const curveAbi = [
+  {
+    name: 'name',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'string' }]
+  },
+  {
+    name: 'maxShares',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    name: 'maxAssets',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }]
+  }
+] as const;
+
+const curveName = await publicClient.readContract({
+  address: curveAddress,
+  abi: curveAbi,
+  functionName: 'name'
+});
+
+const maxShares = await publicClient.readContract({
+  address: curveAddress,
+  abi: curveAbi,
+  functionName: 'maxShares'
+});
+
+const maxAssets = await publicClient.readContract({
+  address: curveAddress,
+  abi: curveAbi,
+  functionName: 'maxAssets'
+});
 ```
 
 ### Choosing a Curve
@@ -288,30 +350,33 @@ sequenceDiagram
 **Code Example**:
 
 ```javascript
+import { formatEther } from 'viem';
+
 async function depositToVault(termId, curveId, assets) {
   // Preview to get expected shares
-  const [expectedShares, assetsAfterFees] = await multiVault.previewDeposit(
-    termId,
-    curveId,
-    assets
-  );
+  const [expectedShares, assetsAfterFees] = await publicClient.readContract({
+    address: multiVaultAddress,
+    abi: multiVaultABI,
+    functionName: 'previewDeposit',
+    args: [termId, curveId, assets]
+  });
 
-  console.log(`Assets after fees: ${ethers.formatEther(assetsAfterFees)}`);
-  console.log(`Expected shares: ${ethers.formatEther(expectedShares)}`);
+  console.log(`Assets after fees: ${formatEther(assetsAfterFees)}`);
+  console.log(`Expected shares: ${formatEther(expectedShares)}`);
 
   // Set minimum shares (99% of expected)
   const minShares = expectedShares * 99n / 100n;
 
   // Execute deposit
-  const tx = await multiVault.deposit(
-    await signer.getAddress(),
-    termId,
-    curveId,
-    minShares,
-    { value: assets }
-  );
+  const hash = await walletClient.writeContract({
+    address: multiVaultAddress,
+    abi: multiVaultABI,
+    functionName: 'deposit',
+    args: [account.address, termId, curveId, minShares],
+    value: assets
+  });
 
-  const receipt = await tx.wait();
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
   console.log('Deposit successful!');
 
   return receipt;
@@ -345,35 +410,43 @@ sequenceDiagram
 **Code Example**:
 
 ```javascript
+import { formatEther } from 'viem';
+
 async function redeemFromVault(termId, curveId, shares) {
   // Check balance
-  const userShares = await multiVault.getShares(userAddress, termId, curveId);
+  const userShares = await publicClient.readContract({
+    address: multiVaultAddress,
+    abi: multiVaultABI,
+    functionName: 'getShares',
+    args: [userAddress, termId, curveId]
+  });
+
   if (shares > userShares) {
     throw new Error('Insufficient shares');
   }
 
   // Preview to get expected assets
-  const [expectedAssets, sharesUsed] = await multiVault.previewRedeem(
-    termId,
-    curveId,
-    shares
-  );
+  const [expectedAssets, sharesUsed] = await publicClient.readContract({
+    address: multiVaultAddress,
+    abi: multiVaultABI,
+    functionName: 'previewRedeem',
+    args: [termId, curveId, shares]
+  });
 
-  console.log(`Expected assets: ${ethers.formatEther(expectedAssets)}`);
+  console.log(`Expected assets: ${formatEther(expectedAssets)}`);
 
   // Set minimum assets (99% of expected)
   const minAssets = expectedAssets * 99n / 100n;
 
   // Execute redemption
-  const tx = await multiVault.redeem(
-    await signer.getAddress(),
-    termId,
-    curveId,
-    shares,
-    minAssets
-  );
+  const hash = await walletClient.writeContract({
+    address: multiVaultAddress,
+    abi: multiVaultABI,
+    functionName: 'redeem',
+    args: [account.address, termId, curveId, shares, minAssets]
+  });
 
-  const receipt = await tx.wait();
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
   console.log('Redemption successful!');
 
   return receipt;
@@ -385,14 +458,32 @@ async function redeemFromVault(termId, curveId, shares) {
 The current share price reflects the vault's exchange rate:
 
 ```javascript
-// Get current price
-const sharePrice = await multiVault.currentSharePrice(termId, curveId);
+import { formatEther } from 'viem';
 
-console.log(`1 share = ${ethers.formatEther(sharePrice)} ETH`);
+// Get current price
+const sharePrice = await publicClient.readContract({
+  address: multiVaultAddress,
+  abi: multiVaultABI,
+  functionName: 'currentSharePrice',
+  args: [termId, curveId]
+});
+
+console.log(`1 share = ${formatEther(sharePrice)} ETH`);
 
 // For different curves, prices will vary
-const linearPrice = await multiVault.currentSharePrice(atomId, 0);
-const progressivePrice = await multiVault.currentSharePrice(atomId, 1);
+const linearPrice = await publicClient.readContract({
+  address: multiVaultAddress,
+  abi: multiVaultABI,
+  functionName: 'currentSharePrice',
+  args: [atomId, 0]
+});
+
+const progressivePrice = await publicClient.readContract({
+  address: multiVaultAddress,
+  abi: multiVaultABI,
+  functionName: 'currentSharePrice',
+  args: [atomId, 1]
+});
 
 if (progressivePrice > linearPrice) {
   console.log('Progressive curve has higher price due to supply');
@@ -406,17 +497,34 @@ if (progressivePrice > linearPrice) {
 Multiple vaults enable market-driven price discovery:
 
 ```javascript
+import { formatEther } from 'viem';
+
 // Same atom, different curves = different prices
 const prices = await Promise.all([
-  multiVault.currentSharePrice(atomId, 0),
-  multiVault.currentSharePrice(atomId, 1),
-  multiVault.currentSharePrice(atomId, 2)
+  publicClient.readContract({
+    address: multiVaultAddress,
+    abi: multiVaultABI,
+    functionName: 'currentSharePrice',
+    args: [atomId, 0]
+  }),
+  publicClient.readContract({
+    address: multiVaultAddress,
+    abi: multiVaultABI,
+    functionName: 'currentSharePrice',
+    args: [atomId, 1]
+  }),
+  publicClient.readContract({
+    address: multiVaultAddress,
+    abi: multiVaultABI,
+    functionName: 'currentSharePrice',
+    args: [atomId, 2]
+  })
 ]);
 
 // Users can choose based on their needs
-console.log('Linear price:', ethers.formatEther(prices[0]));
-console.log('Progressive price:', ethers.formatEther(prices[1]));
-console.log('Custom price:', ethers.formatEther(prices[2]));
+console.log('Linear price:', formatEther(prices[0]));
+console.log('Progressive price:', formatEther(prices[1]));
+console.log('Custom price:', formatEther(prices[2]));
 
 // Arbitrage opportunities may exist
 if (prices[1] > prices[0] * 120n / 100n) {
@@ -446,7 +554,12 @@ class VaultAggregator {
     let maxShares = 0n;
 
     for (const curveId of curves) {
-      const [shares] = await multiVault.previewDeposit(termId, curveId, assets);
+      const [shares] = await publicClient.readContract({
+        address: multiVaultAddress,
+        abi: multiVaultABI,
+        functionName: 'previewDeposit',
+        args: [termId, curveId, assets]
+      });
 
       if (shares > maxShares) {
         maxShares = shares;
@@ -458,17 +571,26 @@ class VaultAggregator {
   }
 
   async getBestRedemptionVault(termId, shares) {
-    const userAddress = await signer.getAddress();
     const curves = [0, 1, 2];
 
     let bestVault = null;
     let maxAssets = 0n;
 
     for (const curveId of curves) {
-      const userShares = await multiVault.getShares(userAddress, termId, curveId);
+      const userShares = await publicClient.readContract({
+        address: multiVaultAddress,
+        abi: multiVaultABI,
+        functionName: 'getShares',
+        args: [userAddress, termId, curveId]
+      });
 
       if (userShares >= shares) {
-        const [assets] = await multiVault.previewRedeem(termId, curveId, shares);
+        const [assets] = await publicClient.readContract({
+          address: multiVaultAddress,
+          abi: multiVaultABI,
+          functionName: 'previewRedeem',
+          args: [termId, curveId, shares]
+        });
 
         if (assets > maxAssets) {
           maxAssets = assets;
@@ -493,7 +615,7 @@ Vaults accumulate value through:
 
 ```javascript
 // When depositing to a triple:
-const tripleDeposit = ethers.parseEther('100');
+const tripleDeposit = parseEther('100');
 
 // Main deposit goes to triple vault
 const tripleVaultDeposit = tripleDeposit * (10000n - atomDepositFraction) / 10000n;
@@ -521,12 +643,12 @@ const devAtom = await createAtom('verified-developer-alice');
 // Vault 1: Linear (voting weight)
 // - Simple staking for governance
 // - 1 share = 1 vote
-await depositToVault(devAtom, 0, ethers.parseEther('10'));
+await depositToVault(devAtom, 0, parseEther('10'));
 
 // Vault 2: Progressive (premium reputation)
 // - Higher cost shows stronger commitment
 // - Price increases with supply (scarcity)
-await depositToVault(devAtom, 1, ethers.parseEther('5'));
+await depositToVault(devAtom, 1, parseEther('5'));
 
 // Applications can choose which vault to query
 async function getVotingPower(address, atomId) {
@@ -719,14 +841,20 @@ Always check vault state before operations:
 ```javascript
 async function safeDeposit(termId, curveId, assets) {
   // Check if vault is initialized
-  const [totalAssets, totalShares] = await multiVault.getVault(termId, curveId);
+  const [totalAssets, totalShares] = await publicClient.readContract({
+    address: multiVaultAddress,
+    abi: multiVaultABI,
+    functionName: 'getVault',
+    args: [termId, curveId]
+  });
 
   // Preview operation
-  const [expectedShares, assetsAfterFees] = await multiVault.previewDeposit(
-    termId,
-    curveId,
-    assets
-  );
+  const [expectedShares, assetsAfterFees] = await publicClient.readContract({
+    address: multiVaultAddress,
+    abi: multiVaultABI,
+    functionName: 'previewDeposit',
+    args: [termId, curveId, assets]
+  });
 
   if (expectedShares === 0n) {
     throw new Error('Deposit would result in zero shares');
@@ -795,8 +923,19 @@ Track vault metrics for informed decisions:
 
 ```javascript
 async function getVaultMetrics(termId, curveId) {
-  const [totalAssets, totalShares] = await multiVault.getVault(termId, curveId);
-  const sharePrice = await multiVault.currentSharePrice(termId, curveId);
+  const [totalAssets, totalShares] = await publicClient.readContract({
+    address: multiVaultAddress,
+    abi: multiVaultABI,
+    functionName: 'getVault',
+    args: [termId, curveId]
+  });
+
+  const sharePrice = await publicClient.readContract({
+    address: multiVaultAddress,
+    abi: multiVaultABI,
+    functionName: 'currentSharePrice',
+    args: [termId, curveId]
+  });
 
   // Calculate metrics
   const tvl = totalAssets;
@@ -821,13 +960,20 @@ async function getVaultMetrics(termId, curveId) {
 Combine multiple vaults for unified liquidity:
 
 ```javascript
+import { parseEther } from 'viem';
+
 class MultiVaultAggregator {
   async getTotalLiquidity(termId) {
     const curves = [0, 1, 2];
     let totalLiquidity = 0n;
 
     for (const curveId of curves) {
-      const [totalAssets] = await multiVault.getVault(termId, curveId);
+      const [totalAssets] = await publicClient.readContract({
+        address: multiVaultAddress,
+        abi: multiVaultABI,
+        functionName: 'getVault',
+        args: [termId, curveId]
+      });
       totalLiquidity += totalAssets;
     }
 
@@ -839,9 +985,21 @@ class MultiVaultAggregator {
     let totalValue = 0n;
 
     for (const curveId of curves) {
-      const shares = await multiVault.getShares(userAddress, termId, curveId);
-      const price = await multiVault.currentSharePrice(termId, curveId);
-      totalValue += shares * price / ethers.parseEther('1');
+      const shares = await publicClient.readContract({
+        address: multiVaultAddress,
+        abi: multiVaultABI,
+        functionName: 'getShares',
+        args: [userAddress, termId, curveId]
+      });
+
+      const price = await publicClient.readContract({
+        address: multiVaultAddress,
+        abi: multiVaultABI,
+        functionName: 'currentSharePrice',
+        args: [termId, curveId]
+      });
+
+      totalValue += shares * price / parseEther('1');
     }
 
     return totalValue;
@@ -861,8 +1019,19 @@ class DynamicRouter {
     let maxShares = 0n;
 
     for (const curveId of curves) {
-      const [shares] = await multiVault.previewDeposit(termId, curveId, assets);
-      const [totalAssets] = await multiVault.getVault(termId, curveId);
+      const [shares] = await publicClient.readContract({
+        address: multiVaultAddress,
+        abi: multiVaultABI,
+        functionName: 'previewDeposit',
+        args: [termId, curveId, assets]
+      });
+
+      const [totalAssets] = await publicClient.readContract({
+        address: multiVaultAddress,
+        abi: multiVaultABI,
+        functionName: 'getVault',
+        args: [termId, curveId]
+      });
 
       // Consider both share count and vault size
       const score = shares * 100n / (totalAssets + 1n);
@@ -885,8 +1054,19 @@ Profit from price differences between vaults:
 
 ```javascript
 async function arbitrageOpportunity(termId) {
-  const linearPrice = await multiVault.currentSharePrice(termId, 0);
-  const progressivePrice = await multiVault.currentSharePrice(termId, 1);
+  const linearPrice = await publicClient.readContract({
+    address: multiVaultAddress,
+    abi: multiVaultABI,
+    functionName: 'currentSharePrice',
+    args: [termId, 0]
+  });
+
+  const progressivePrice = await publicClient.readContract({
+    address: multiVaultAddress,
+    abi: multiVaultABI,
+    functionName: 'currentSharePrice',
+    args: [termId, 1]
+  });
 
   const priceDiff = progressivePrice > linearPrice
     ? (progressivePrice - linearPrice) * 100n / linearPrice

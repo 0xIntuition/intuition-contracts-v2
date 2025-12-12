@@ -102,20 +102,40 @@ Intuition Testnet hosts the full protocol for testing all features before mainne
 
 ## Usage Examples
 
-### TypeScript (ethers.js v6)
+### TypeScript (viem)
 
 ```typescript
-import { ethers } from 'ethers';
+import { createPublicClient, http } from 'viem';
+import { base } from 'viem/chains';
 
 // Base Mainnet
-const baseProvider = new ethers.JsonRpcProvider('https://mainnet.base.org');
+const basePublicClient = createPublicClient({
+  chain: base,
+  transport: http('https://mainnet.base.org')
+});
 const trustAddress = '0x6cd905dF2Ed214b22e0d48FF17CD4200C1C6d8A3';
-const trustContract = new ethers.Contract(trustAddress, TRUST_ABI, baseProvider);
 
-// Intuition Mainnet
-const intuitionProvider = new ethers.JsonRpcProvider('YOUR_INTUITION_RPC');
+// Read from Trust contract
+const trustData = await basePublicClient.readContract({
+  address: trustAddress,
+  abi: TRUST_ABI,
+  functionName: 'balanceOf',
+  args: [userAddress]
+});
+
+// Intuition Mainnet (custom chain)
+const intuitionPublicClient = createPublicClient({
+  transport: http('YOUR_INTUITION_RPC')
+});
 const multiVaultAddress = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e';
-const multiVault = new ethers.Contract(multiVaultAddress, MULTIVAULT_ABI, intuitionProvider);
+
+// Read from MultiVault contract
+const vaultData = await intuitionPublicClient.readContract({
+  address: multiVaultAddress,
+  abi: MULTIVAULT_ABI,
+  functionName: 'getVault',
+  args: [termId, curveId]
+});
 ```
 
 ### Python (web3.py)

@@ -138,7 +138,7 @@ function validateDepositParams(
   curveId: number,
   assets: bigint
 ): void {
-  if (!termId || !ethers.isHexString(termId, 32)) {
+  if (!termId || !isHex(termId, 32)) {
     throw new ValidationError(
       'Invalid term ID format',
       'termId',
@@ -242,9 +242,11 @@ function parseMultiVaultError(error: any): string {
 function extractErrorName(error: any): string | null {
   try {
     if (error.data) {
-      const iface = new ethers.Interface(MULTIVAULT_ABI);
-      const decoded = iface.parseError(error.data);
-      return decoded?.name || null;
+      const decoded = decodeErrorResult({
+        abi: MULTIVAULT_ABI,
+        data: error.data,
+      });
+      return decoded?.errorName || null;
     }
   } catch {
     // Failed to decode
@@ -306,17 +308,37 @@ function parseERC20Error(error: any): string {
 Catch errors before submitting transactions:
 
 ```typescript
+import {
+  createPublicClient,
+  formatEther,
+  http,
+  decodeErrorResult,
+  type Address,
+  isHex
+} from 'viem';
+
 async function validateDeposit(
   termId: string,
   curveId: number,
   assets: bigint,
   minShares: bigint
 ): Promise<void> {
+  const publicClient = createPublicClient({
+    chain: mainnet,
+    transport: http()
+  });
+
   // 1. Validate inputs
   validateDepositParams(termId, curveId, assets);
 
   // 2. Check term exists
-  const exists = await multiVault.isTermCreated(termId);
+  const exists = await publicClient.readContract({
+    address: multiVaultAddress,
+    abi: multiVaultAbi,
+    functionName: 'isTermCreated',
+    args: [termId],
+  });
+
   if (!exists) {
     throw new ValidationError(
       'Term does not exist. Please create it first.',
@@ -326,8 +348,12 @@ async function validateDeposit(
   }
 
   // 3. Check user balance
-  const userAddress = await signer.getAddress();
-  const balance = await trustToken.balanceOf(userAddress);
+  const balance = await publicClient.readContract({
+    address: trustTokenAddress,
+    abi: erc20Abi,
+    functionName: 'balanceOf',
+    args: [userAddress],
+  });
 
   if (balance < assets) {
     throw new InsufficientBalanceError(
@@ -338,11 +364,16 @@ async function validateDeposit(
   }
 
   // 4. Check allowance
-  const allowance = await trustToken.allowance(userAddress, multiVault.address);
+  const allowance = await publicClient.readContract({
+    address: trustTokenAddress,
+    abi: erc20Abi,
+    functionName: 'allowance',
+    args: [userAddress, multiVaultAddress],
+  });
 
   if (allowance < assets) {
     throw new InsufficientAllowanceError(
-      `Please approve ${multiVault.address} to spend ${formatEther(assets)} TRUST`,
+      `Please approve ${multiVaultAddress} to spend ${formatEther(assets)} TRUST`,
       assets,
       allowance
     );
@@ -350,13 +381,13 @@ async function validateDeposit(
 
   // 5. Simulate transaction
   try {
-    await multiVault.deposit.staticCall(
-      userAddress,
-      termId,
-      curveId,
-      assets,
-      minShares
-    );
+    await publicClient.simulateContract({
+      address: multiVaultAddress,
+      abi: multiVaultAbi,
+      functionName: 'deposit',
+      args: [userAddress, termId, curveId, assets, minShares],
+      account: userAddress,
+    });
   } catch (error: any) {
     throw new TransactionError(
       `Transaction would fail: ${parseMultiVaultError(error)}`,
@@ -394,17 +425,19 @@ class InsufficientAllowanceError extends Error {
 Detect failures from transaction receipts:
 
 ```typescript
+import { createPublicClient, http, hexToString, type Hash } from 'viem';
+
 async function analyzeTransactionReceipt(
-  receipt: ethers.TransactionReceipt
+  receipt: any
 ): Promise<void> {
   if (!receipt) {
     throw new TransactionError('Transaction receipt not found');
   }
 
-  if (receipt.status === 0) {
+  if (receipt.status === 'reverted') {
     // Transaction failed, try to get revert reason
-    const reason = await getRevertReason(receipt.hash);
-    throw new TransactionRevertedError(reason, receipt.hash);
+    const reason = await getRevertReason(receipt.transactionHash);
+    throw new TransactionRevertedError(reason, receipt.transactionHash);
   }
 
   // Check for expected events
@@ -415,14 +448,30 @@ async function analyzeTransactionReceipt(
   }
 }
 
-async function getRevertReason(txHash: string): Promise<string> {
+async function getRevertReason(txHash: Hash): Promise<string> {
   try {
-    const tx = await provider.getTransaction(txHash);
-    const code = await provider.call(tx!, tx!.blockNumber);
+    const publicClient = createPublicClient({
+      chain: mainnet,
+      transport: http()
+    });
+
+    const tx = await publicClient.getTransaction({ hash: txHash });
+    if (!tx) {
+      return 'Transaction not found';
+    }
+
+    const result = await publicClient.call({
+      to: tx.to,
+      data: tx.input,
+      blockNumber: tx.blockNumber,
+    });
 
     // Decode revert reason
-    const reason = ethers.toUtf8String('0x' + code.slice(138));
-    return reason;
+    if (result.data && result.data.length > 138) {
+      const reason = hexToString(('0x' + result.data.slice(138)) as `0x${string}`);
+      return reason;
+    }
+    return 'Unknown revert reason';
   } catch (error) {
     return 'Unknown revert reason';
   }
@@ -436,11 +485,20 @@ async function getRevertReason(txHash: string): Promise<string> {
 Automatically request approval when needed:
 
 ```typescript
+import {
+  createWalletClient,
+  createPublicClient,
+  http,
+  maxUint256,
+  type Address
+} from 'viem';
+
 async function depositWithAutoApproval(
   termId: string,
   curveId: number,
   assets: bigint,
-  minShares: bigint
+  minShares: bigint,
+  account: Address
 ): Promise<TransactionResult> {
   try {
     // Try deposit
@@ -449,12 +507,26 @@ async function depositWithAutoApproval(
     if (error instanceof InsufficientAllowanceError) {
       console.log('Insufficient allowance, requesting approval...');
 
+      const walletClient = createWalletClient({
+        chain: mainnet,
+        transport: http(),
+        account
+      });
+
+      const publicClient = createPublicClient({
+        chain: mainnet,
+        transport: http()
+      });
+
       // Request approval
-      const approveTx = await trustToken.approve(
-        multiVault.address,
-        ethers.MaxUint256
-      );
-      await approveTx.wait();
+      const hash = await walletClient.writeContract({
+        address: trustTokenAddress,
+        abi: erc20Abi,
+        functionName: 'approve',
+        args: [multiVaultAddress, maxUint256],
+      });
+
+      await publicClient.waitForTransactionReceipt({ hash });
 
       console.log('Approval granted, retrying deposit...');
 
@@ -472,21 +544,29 @@ async function depositWithAutoApproval(
 Automatically adjust slippage on failure:
 
 ```typescript
+import { createPublicClient, http } from 'viem';
+
 async function depositWithSlippageRetry(
   termId: string,
   curveId: number,
   assets: bigint,
   initialSlippage: number = 50 // 0.5%
 ): Promise<TransactionResult> {
+  const publicClient = createPublicClient({
+    chain: mainnet,
+    transport: http()
+  });
+
   let slippage = initialSlippage;
 
   while (slippage <= 500) { // Max 5% slippage
     try {
-      const [expectedShares] = await multiVault.previewDeposit(
-        termId,
-        curveId,
-        assets
-      );
+      const [expectedShares] = await publicClient.readContract({
+        address: multiVaultAddress,
+        abi: multiVaultAbi,
+        functionName: 'previewDeposit',
+        args: [termId, curveId, assets],
+      });
 
       const minShares = (expectedShares * BigInt(10000 - slippage)) / 10000n;
 
@@ -512,16 +592,17 @@ Retry with higher gas price:
 
 ```typescript
 async function executeWithGasRetry(
-  fn: () => Promise<ethers.TransactionResponse>,
+  fn: () => Promise<string>,
   maxRetries: number = 3
-): Promise<ethers.TransactionResponse> {
+): Promise<string> {
   let gasMultiplier = 1.0;
 
   for (let i = 0; i < maxRetries; i++) {
     try {
       return await fn();
     } catch (error: any) {
-      if (error.code === 'REPLACEMENT_UNDERPRICED') {
+      if (error.name === 'TransactionExecutionError' &&
+          error.message.includes('replacement transaction underpriced')) {
         gasMultiplier += 0.2; // Increase by 20%
         console.log(`Increasing gas price by ${(gasMultiplier - 1) * 100}%...`);
         continue;

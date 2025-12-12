@@ -10,16 +10,31 @@ Common issues, error messages, and solutions for integrating with Intuition Prot
 
 **Solution:**
 ```typescript
-const trust = new ethers.Contract(TRUST_ADDRESS, TRUST_ABI, signer);
+import { maxUint256 } from 'viem';
 
 // Approve sufficient amount
-await trust.approve(MULTIVAULT_ADDRESS, assets);
+await walletClient.writeContract({
+  address: TRUST_ADDRESS,
+  abi: TRUST_ABI,
+  functionName: 'approve',
+  args: [MULTIVAULT_ADDRESS, assets]
+});
 
 // Or approve unlimited (use with caution)
-await trust.approve(MULTIVAULT_ADDRESS, ethers.MaxUint256);
+await walletClient.writeContract({
+  address: TRUST_ADDRESS,
+  abi: TRUST_ABI,
+  functionName: 'approve',
+  args: [MULTIVAULT_ADDRESS, maxUint256]
+});
 
 // Then retry deposit
-await multiVault.deposit(termId, curveId, assets, receiver);
+await walletClient.writeContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'deposit',
+  args: [termId, curveId, assets, receiver]
+});
 ```
 
 ### Error: `Pausable: paused`
@@ -29,7 +44,11 @@ await multiVault.deposit(termId, curveId, assets, receiver);
 **Solution:**
 ```typescript
 // Check pause status
-const isPaused = await multiVault.paused();
+const isPaused = await publicClient.readContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'paused'
+});
 
 if (isPaused) {
   console.log('Contract is paused. Wait for unpause announcement.');
@@ -45,15 +64,30 @@ if (isPaused) {
 ```typescript
 // Check if atom exists before creating
 const atomId = calculateAtomId(atomData);
-const exists = await multiVault.atomExists(atomId);
+const exists = await publicClient.readContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'atomExists',
+  args: [atomId]
+});
 
 if (exists) {
   console.log('Atom already exists, use existing atomId');
   // Just deposit into existing vault instead
-  await multiVault.deposit(atomId, curveId, assets, receiver);
+  await walletClient.writeContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'deposit',
+    args: [atomId, curveId, assets, receiver]
+  });
 } else {
   // Create new atom
-  await multiVault.createAtom(atomData, curveId, initialDeposit);
+  await walletClient.writeContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'createAtom',
+    args: [atomData, curveId, initialDeposit]
+  });
 }
 ```
 
@@ -64,11 +98,21 @@ if (exists) {
 **Solution:**
 ```typescript
 // Verify atom exists
-const exists = await multiVault.atomExists(atomId);
+const exists = await publicClient.readContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'atomExists',
+  args: [atomId]
+});
 
 if (!exists) {
   console.log('Atom does not exist. Create it first.');
-  await multiVault.createAtom(atomData, curveId, initialDeposit);
+  await walletClient.writeContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'createAtom',
+    args: [atomData, curveId, initialDeposit]
+  });
 }
 ```
 
@@ -78,16 +122,17 @@ if (!exists) {
 
 **Solution:**
 ```typescript
+import { zeroAddress } from 'viem';
+
 // Get valid curve IDs
-const registry = new ethers.Contract(
-  BONDING_CURVE_REGISTRY_ADDRESS,
-  REGISTRY_ABI,
-  provider
-);
+const curveAddress = await publicClient.readContract({
+  address: BONDING_CURVE_REGISTRY_ADDRESS,
+  abi: REGISTRY_ABI,
+  functionName: 'getCurve',
+  args: [curveId]
+});
 
-const curveAddress = await registry.getCurve(curveId);
-
-if (curveAddress === ethers.ZeroAddress) {
+if (curveAddress === zeroAddress) {
   console.error('Invalid curveId');
   // Use valid curveId (typically 1 for LinearCurve)
   curveId = 1;
@@ -107,7 +152,12 @@ if (assets < minAssets) {
 }
 
 // For redemptions: Check available balance
-const balance = await multiVault.balanceOf(user, termId, curveId);
+const balance = await publicClient.readContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'balanceOf',
+  args: [user, termId, curveId]
+});
 if (shares > balance) {
   shares = balance; // Redeem all available
 }
@@ -147,18 +197,20 @@ This should not happen in normal usage. If you encounter this:
 console.log('MultiVault address:', MULTIVAULT_ADDRESS);
 
 // Ensure provider is connected
-const code = await provider.getCode(MULTIVAULT_ADDRESS);
+const code = await publicClient.getCode({
+  address: MULTIVAULT_ADDRESS
+});
 if (code === '0x') {
   console.error('No contract at address');
   // Verify network and address
 }
 
-// Initialize contract correctly
-const multiVault = new ethers.Contract(
-  MULTIVAULT_ADDRESS,
-  MULTIVAULT_ABI,
-  providerOrSigner
-);
+// Verify contract using readContract
+const isPaused = await publicClient.readContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'paused'
+});
 ```
 
 ### Invalid address format
@@ -167,8 +219,13 @@ const multiVault = new ethers.Contract(
 
 **Solution:**
 ```typescript
+import { getAddress, isAddress } from 'viem';
+
 // Validate and format address
-const validAddress = ethers.getAddress(addressString); // Validates checksum
+if (!isAddress(addressString)) {
+  throw new Error('Invalid address format');
+}
+const validAddress = getAddress(addressString); // Validates checksum
 
 // Or use lowercase
 const lowercaseAddress = addressString.toLowerCase();
@@ -181,13 +238,13 @@ const lowercaseAddress = addressString.toLowerCase();
 **Solution:**
 ```typescript
 // Check network
-const network = await provider.getNetwork();
-console.log('Connected to:', network.chainId);
+const chainId = await publicClient.getChainId();
+console.log('Connected to:', chainId);
 
 // Verify expected network
 const EXPECTED_CHAIN_ID = 8453; // Base Mainnet
-if (network.chainId !== EXPECTED_CHAIN_ID) {
-  throw new Error(`Wrong network. Expected ${EXPECTED_CHAIN_ID}, got ${network.chainId}`);
+if (chainId !== EXPECTED_CHAIN_ID) {
+  throw new Error(`Wrong network. Expected ${EXPECTED_CHAIN_ID}, got ${chainId}`);
 }
 ```
 
@@ -199,9 +256,16 @@ if (network.chainId !== EXPECTED_CHAIN_ID) {
 
 **Solution:**
 ```typescript
+import { formatEther } from 'viem';
+
 // Preview deposit to see exact shares
-const previewedShares = await multiVault.previewDeposit(termId, curveId, assets);
-console.log('Expected shares:', ethers.formatEther(previewedShares));
+const previewedShares = await publicClient.readContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'previewDeposit',
+  args: [termId, curveId, assets]
+});
+console.log('Expected shares:', formatEther(previewedShares));
 
 // Account for fees in calculation
 const fees = await calculateTotalFees(assets, termId, curveId);
@@ -215,9 +279,16 @@ const shares = await calculateShares(assetsAfterFees, termId, curveId);
 
 **Solution:**
 ```typescript
+import { formatEther } from 'viem';
+
 // Preview redemption
-const previewedAssets = await multiVault.previewRedeem(termId, curveId, shares);
-console.log('Expected assets:', ethers.formatEther(previewedAssets));
+const previewedAssets = await publicClient.readContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'previewRedeem',
+  args: [termId, curveId, shares]
+});
+console.log('Expected assets:', formatEther(previewedAssets));
 
 // Set minimum acceptable (slippage tolerance)
 const minAssets = previewedAssets * 95n / 100n; // 5% slippage
@@ -234,25 +305,31 @@ if (receivedAssets < minAssets) {
 
 **Solution:**
 ```typescript
-// Check all reward factors
-const trustBonding = new ethers.Contract(
-  TRUSTBONDING_ADDRESS,
-  TRUSTBONDING_ABI,
-  provider
-);
+import { formatEther } from 'viem';
 
-const userInfo = await trustBonding.getUserInfo(userAddress, epochId);
+// Check all reward factors
+const userInfo = await publicClient.readContract({
+  address: TRUSTBONDING_ADDRESS,
+  abi: TRUSTBONDING_ABI,
+  functionName: 'getUserInfo',
+  args: [userAddress, epochId]
+});
 
 console.log('User Info:');
 console.log('  Personal Utilization:', userInfo.personalUtilization);
-console.log('  Eligible Rewards:', ethers.formatEther(userInfo.eligibleRewards));
-console.log('  Max Rewards:', ethers.formatEther(userInfo.maxRewards));
-console.log('  Bonded Balance:', ethers.formatEther(userInfo.bondedBalance));
+console.log('  Eligible Rewards:', formatEther(userInfo.eligibleRewards));
+console.log('  Max Rewards:', formatEther(userInfo.maxRewards));
+console.log('  Bonded Balance:', formatEther(userInfo.bondedBalance));
 
 // Check epoch info
-const epochInfo = await trustBonding.epochInfo(epochId);
+const epochInfo = await publicClient.readContract({
+  address: TRUSTBONDING_ADDRESS,
+  abi: TRUSTBONDING_ABI,
+  functionName: 'epochInfo',
+  args: [epochId]
+});
 console.log('Epoch Info:');
-console.log('  Total Bonded:', ethers.formatEther(epochInfo.totalBonded));
+console.log('  Total Bonded:', formatEther(epochInfo.totalBonded));
 console.log('  Total Utilization:', epochInfo.totalUtilization);
 ```
 
@@ -264,33 +341,41 @@ console.log('  Total Utilization:', epochInfo.totalUtilization);
 
 **Solution:**
 ```typescript
-// Verify event exists
-console.log('Available events:', Object.keys(multiVault.interface.events));
+```typescript
+import { parseAbiItem, formatEther } from 'viem';
 
-// Set up filter correctly
-const filter = multiVault.filters.Deposited(
-  null, // sender (any)
-  userAddress, // receiver (specific user)
-  null, // termId (any)
-  null, // curveId (any)
-);
-
-// Listen for events
-multiVault.on(filter, (sender, receiver, termId, curveId, assets, shares, event) => {
-  console.log('Deposit event:', {
-    sender,
-    receiver,
-    termId,
-    assets: ethers.formatEther(assets),
-    shares: ethers.formatEther(shares),
-    txHash: event.transactionHash
-  });
+// Set up event watching
+const unwatch = publicClient.watchEvent({
+  address: MULTIVAULT_ADDRESS,
+  event: parseAbiItem('event Deposited(address indexed sender, address indexed receiver, bytes32 indexed termId, uint256 curveId, uint256 assets, uint256 shares)'),
+  args: {
+    receiver: userAddress // Filter by specific receiver
+  },
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      console.log('Deposit event:', {
+        sender: log.args.sender,
+        receiver: log.args.receiver,
+        termId: log.args.termId,
+        curveId: log.args.curveId,
+        assets: formatEther(log.args.assets),
+        shares: formatEther(log.args.shares),
+        txHash: log.transactionHash
+      });
+    });
+  }
 });
 
 // Or query historical events
-const events = await multiVault.queryFilter(filter, -10000); // Last 10k blocks
-console.log('Found', events.length, 'events');
+const logs = await publicClient.getLogs({
+  address: MULTIVAULT_ADDRESS,
+  event: parseAbiItem('event Deposited(address indexed sender, address indexed receiver, bytes32 indexed termId, uint256 curveId, uint256 assets, uint256 shares)'),
+  fromBlock: 'earliest',
+  toBlock: 'latest'
+});
+console.log('Found', logs.length, 'events');
 ```
+
 
 ### Missing recent events
 
@@ -298,14 +383,31 @@ console.log('Found', events.length, 'events');
 
 **Solution:**
 ```typescript
+import { decodeEventLog } from 'viem';
+
 // Wait for transaction to be mined
-const tx = await multiVault.deposit(termId, curveId, assets, receiver);
-const receipt = await tx.wait();
+const hash = await walletClient.writeContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'deposit',
+  args: [termId, curveId, assets, receiver]
+});
+const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
 // Get events from receipt
 const depositEvents = receipt.logs
-  .filter(log => log.topics[0] === multiVault.interface.getEvent('Deposited').topicHash)
-  .map(log => multiVault.interface.parseLog(log));
+  .map(log => {
+    try {
+      return decodeEventLog({
+        abi: MULTIVAULT_ABI,
+        data: log.data,
+        topics: log.topics
+      });
+    } catch {
+      return null;
+    }
+  })
+  .filter(event => event && event.eventName === 'Deposited');
 
 console.log('Deposit events:', depositEvents);
 ```
@@ -318,21 +420,27 @@ console.log('Deposit events:', depositEvents);
 
 **Solution:**
 ```typescript
-// Use batch requests
-const multicall = new ethers.Contract(MULTICALL3_ADDRESS, MULTICALL_ABI, provider);
+import { encodeFunctionData } from 'viem';
 
+// Use batch requests with multicall
 const calls = [
   {
-    target: MULTIVAULT_ADDRESS,
-    callData: multiVault.interface.encodeFunctionData('balanceOf', [user, termId1, curveId])
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'balanceOf',
+    args: [user, termId1, curveId]
   },
   {
-    target: MULTIVAULT_ADDRESS,
-    callData: multiVault.interface.encodeFunctionData('balanceOf', [user, termId2, curveId])
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'balanceOf',
+    args: [user, termId2, curveId]
   }
 ];
 
-const results = await multicall.aggregate(calls);
+const results = await publicClient.multicall({
+  contracts: calls
+});
 
 // Add delay between requests
 async function sleep(ms) {
@@ -352,15 +460,21 @@ for (const item of items) {
 **Solution:**
 ```typescript
 // Get correct nonce
-const nonce = await signer.getNonce();
+const nonce = await publicClient.getTransactionCount({
+  address: account.address
+});
 
 // Send transaction with explicit nonce
-const tx = await multiVault.deposit(termId, curveId, assets, receiver, {
+const hash = await walletClient.writeContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'deposit',
+  args: [termId, curveId, assets, receiver],
   nonce: nonce
 });
 
 // For replacement, increase gas price
-const replacementTx = await signer.sendTransaction({
+const replacementHash = await walletClient.sendTransaction({
   ...originalTx,
   nonce: originalTx.nonce,
   gasPrice: originalTx.gasPrice * 110n / 100n // 10% higher
@@ -375,12 +489,13 @@ const replacementTx = await signer.sendTransaction({
 ```typescript
 try {
   // Estimate gas
-  const estimatedGas = await multiVault.deposit.estimateGas(
-    termId,
-    curveId,
-    assets,
-    receiver
-  );
+  const estimatedGas = await publicClient.estimateContractGas({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'deposit',
+    args: [termId, curveId, assets, receiver],
+    account
+  });
 
   console.log('Estimated gas:', estimatedGas.toString());
 
@@ -388,16 +503,26 @@ try {
   const gasLimit = estimatedGas * 110n / 100n;
 
   // Send with gas limit
-  const tx = await multiVault.deposit(termId, curveId, assets, receiver, {
-    gasLimit
+  const hash = await walletClient.writeContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'deposit',
+    args: [termId, curveId, assets, receiver],
+    gas: gasLimit
   });
 } catch (error) {
   console.error('Gas estimation failed. Transaction would revert.');
   console.error('Error:', error.message);
 
-  // Call statically to see revert reason
+  // Simulate to see revert reason
   try {
-    await multiVault.deposit.staticCall(termId, curveId, assets, receiver);
+    await publicClient.simulateContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: MULTIVAULT_ABI,
+      functionName: 'deposit',
+      args: [termId, curveId, assets, receiver],
+      account
+    });
   } catch (revertError) {
     console.error('Revert reason:', revertError.message);
   }
@@ -464,7 +589,7 @@ await network.provider.request({
 // Fund account with ETH
 await network.provider.send("hardhat_setBalance", [
   accountAddress,
-  ethers.toQuantity(ethers.parseEther("10"))
+  numberToHex(parseEther("10"))
 ]);
 
 // Use impersonated signer
@@ -522,19 +647,33 @@ cast call $PROXY_ADMIN_ADDRESS "owner()(address)" --rpc-url $RPC_URL
 
 **Solution:**
 ```typescript
+import { formatGwei } from 'viem';
+
 // Check current gas price
-const feeData = await provider.getFeeData();
-console.log('Current gas price:', ethers.formatUnits(feeData.gasPrice, 'gwei'), 'gwei');
+const gasPrice = await publicClient.getGasPrice();
+console.log('Current gas price:', formatGwei(gasPrice), 'gwei');
 
 // Increase gas price
-const tx = await multiVault.deposit(termId, curveId, assets, receiver, {
-  gasPrice: feeData.gasPrice * 120n / 100n // 20% higher
+const hash = await walletClient.writeContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'deposit',
+  args: [termId, curveId, assets, receiver],
+  gasPrice: gasPrice * 120n / 100n // 20% higher
 });
 
 // Or use EIP-1559
-const tx = await multiVault.deposit(termId, curveId, assets, receiver, {
-  maxFeePerGas: feeData.maxFeePerGas * 120n / 100n,
-  maxPriorityFeePerGas: feeData.maxPriorityFeePerGas * 120n / 100n
+const block = await publicClient.getBlock();
+const baseFee = block.baseFeePerGas || 0n;
+const maxPriorityFee = parseGwei('2'); // 2 gwei priority
+
+const hash = await walletClient.writeContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'deposit',
+  args: [termId, curveId, assets, receiver],
+  maxFeePerGas: baseFee * 120n / 100n + maxPriorityFee,
+  maxPriorityFeePerGas: maxPriorityFee
 });
 ```
 

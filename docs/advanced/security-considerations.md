@@ -334,7 +334,7 @@ try {
 // Sanitize atom data
 function sanitizeAtomData(input: string): Uint8Array {
   // Validate length
-  const bytes = ethers.toUtf8Bytes(input);
+  const bytes = toBytes(input);
   if (bytes.length > 256) {
     throw new Error('Atom data too long');
   }

@@ -70,25 +70,32 @@ stateDiagram-v2
 ### Epoch Queries
 
 ```javascript
+import { getContract } from 'viem';
+
 const TRUST_BONDING_ADDRESS = '0x2B0c2700BB0E9Ea294c7c6Ea5C5c42cC0dba3583';
-const trustBonding = new ethers.Contract(TRUST_BONDING_ADDRESS, TRUST_BONDING_ABI, provider);
+
+const trustBonding = getContract({
+  address: TRUST_BONDING_ADDRESS,
+  abi: TRUST_BONDING_ABI,
+  client: publicClient
+});
 
 // Get current epoch
-const currentEpoch = await trustBonding.currentEpoch();
+const currentEpoch = await trustBonding.read.currentEpoch();
 console.log(`Current epoch: ${currentEpoch}`);
 
 // Get epoch length
-const epochLength = await trustBonding.epochLength();
+const epochLength = await trustBonding.read.epochLength();
 console.log(`Epoch length: ${epochLength} seconds`);
 
 // Get epoch end time
-const epochEnd = await trustBonding.epochTimestampEnd(currentEpoch);
-const timeRemaining = epochEnd - Math.floor(Date.now() / 1000);
+const epochEnd = await trustBonding.read.epochTimestampEnd([currentEpoch]);
+const timeRemaining = Number(epochEnd) - Math.floor(Date.now() / 1000);
 console.log(`Time until epoch end: ${timeRemaining} seconds`);
 
 // Get epoch from timestamp
 const timestamp = Math.floor(Date.now() / 1000);
-const epochAtTime = await trustBonding.epochAtTimestamp(timestamp);
+const epochAtTime = await trustBonding.read.epochAtTimestamp([BigInt(timestamp)]);
 ```
 
 ## Vote-Escrowed TRUST (veTRUST)
@@ -137,45 +144,83 @@ veTRUST Balance
 **Creating a Lock**:
 
 ```javascript
+import { formatEther } from 'viem';
+
 // Approve TRUST spending
-await trustToken.approve(TRUST_BONDING_ADDRESS, lockAmount);
+const approveHash = await walletClient.writeContract({
+  address: trustTokenAddress,
+  abi: ERC20_ABI,
+  functionName: 'approve',
+  args: [TRUST_BONDING_ADDRESS, lockAmount]
+});
+await publicClient.waitForTransactionReceipt({ hash: approveHash });
 
 // Lock for 2 years (maximum veTRUST)
 const twoYears = 2 * 365 * 24 * 60 * 60;
-const unlockTime = Math.floor(Date.now() / 1000) + twoYears;
+const unlockTime = BigInt(Math.floor(Date.now() / 1000) + twoYears);
 
-await trustBonding.create_lock(lockAmount, unlockTime);
+const lockHash = await walletClient.writeContract({
+  address: TRUST_BONDING_ADDRESS,
+  abi: TRUST_BONDING_ABI,
+  functionName: 'create_lock',
+  args: [lockAmount, unlockTime]
+});
+await publicClient.waitForTransactionReceipt({ hash: lockHash });
 
 // Query veTRUST balance
-const veTrustBalance = await trustBonding.balanceOf(userAddress);
-console.log(`veTRUST balance: ${ethers.formatEther(veTrustBalance)}`);
+const veTrustBalance = await trustBonding.read.balanceOf([userAddress]);
+console.log(`veTRUST balance: ${formatEther(veTrustBalance)}`);
 ```
 
 **Increasing Lock Amount**:
 
 ```javascript
 // Add more TRUST to existing lock
-await trustToken.approve(TRUST_BONDING_ADDRESS, additionalAmount);
-await trustBonding.increase_amount(additionalAmount);
+const approveHash = await walletClient.writeContract({
+  address: trustTokenAddress,
+  abi: ERC20_ABI,
+  functionName: 'approve',
+  args: [TRUST_BONDING_ADDRESS, additionalAmount]
+});
+await publicClient.waitForTransactionReceipt({ hash: approveHash });
+
+const increaseHash = await walletClient.writeContract({
+  address: TRUST_BONDING_ADDRESS,
+  abi: TRUST_BONDING_ABI,
+  functionName: 'increase_amount',
+  args: [additionalAmount]
+});
+await publicClient.waitForTransactionReceipt({ hash: increaseHash });
 ```
 
 **Extending Lock Time**:
 
 ```javascript
 // Extend unlock time (up to MAXTIME from now)
-const newUnlockTime = Math.floor(Date.now() / 1000) + (2 * 365 * 24 * 60 * 60);
-await trustBonding.increase_unlock_time(newUnlockTime);
+const newUnlockTime = BigInt(Math.floor(Date.now() / 1000) + (2 * 365 * 24 * 60 * 60));
+const extendHash = await walletClient.writeContract({
+  address: TRUST_BONDING_ADDRESS,
+  abi: TRUST_BONDING_ABI,
+  functionName: 'increase_unlock_time',
+  args: [newUnlockTime]
+});
+await publicClient.waitForTransactionReceipt({ hash: extendHash });
 ```
 
 **Withdrawing After Expiry**:
 
 ```javascript
 // Check if lock has expired
-const lockEnd = await trustBonding.locked__end(userAddress);
+const lockEnd = await trustBonding.read.locked__end([userAddress]);
 const now = Math.floor(Date.now() / 1000);
 
-if (now >= lockEnd) {
-  await trustBonding.withdraw();
+if (now >= Number(lockEnd)) {
+  const withdrawHash = await walletClient.writeContract({
+    address: TRUST_BONDING_ADDRESS,
+    abi: TRUST_BONDING_ABI,
+    functionName: 'withdraw'
+  });
+  await publicClient.waitForTransactionReceipt({ hash: withdrawHash });
   console.log('TRUST withdrawn successfully');
 }
 ```
@@ -193,9 +238,11 @@ Maximum TRUST Supply: 1,000,000,000 (1 billion)
 Emissions per epoch are determined by:
 
 ```javascript
+import { formatEther } from 'viem';
+
 // Get emissions for specific epoch
-const emissions = await trustBonding.emissionsForEpoch(epochNumber);
-console.log(`Epoch ${epochNumber} emissions: ${ethers.formatEther(emissions)} TRUST`);
+const emissions = await trustBonding.read.emissionsForEpoch([epochNumber]);
+console.log(`Epoch ${epochNumber} emissions: ${formatEther(emissions)} TRUST`);
 
 // Emissions are calculated by BaseEmissionsController
 // Formula varies based on:
@@ -223,54 +270,60 @@ userRewards = (userBondedBalance / totalBondedBalance) × epochEmissions
 ### Base Rewards
 
 ```javascript
+import { formatEther } from 'viem';
+
 // Get user's bonded balance at epoch end
-const userBonded = await trustBonding.userBondedBalanceAtEpochEnd(
+const userBonded = await trustBonding.read.userBondedBalanceAtEpochEnd([
   userAddress,
   previousEpoch
-);
+]);
 
 // Get total bonded balance
-const totalBonded = await trustBonding.totalBondedBalanceAtEpochEnd(previousEpoch);
+const totalBonded = await trustBonding.read.totalBondedBalanceAtEpochEnd([previousEpoch]);
 
 // Get epoch emissions
-const emissions = await trustBonding.emissionsForEpoch(previousEpoch);
+const emissions = await trustBonding.read.emissionsForEpoch([previousEpoch]);
 
 // Calculate base rewards
 const baseRewards = (userBonded * emissions) / totalBonded;
-console.log(`Base rewards: ${ethers.formatEther(baseRewards)} TRUST`);
+console.log(`Base rewards: ${formatEther(baseRewards)} TRUST`);
 ```
 
 ### Adjusted Rewards
 
 ```javascript
+import { formatEther } from 'viem';
+
 // Get utilization ratios
-const systemRatio = await trustBonding.getSystemUtilizationRatio(previousEpoch);
-const personalRatio = await trustBonding.getPersonalUtilizationRatio(
+const systemRatio = await trustBonding.read.getSystemUtilizationRatio([previousEpoch]);
+const personalRatio = await trustBonding.read.getPersonalUtilizationRatio([
   userAddress,
   previousEpoch
-);
+]);
 
 // Calculate final rewards
 const finalRewards = baseRewards
   * systemRatio / 10000n    // System adjustment
   * personalRatio / 10000n; // Personal adjustment
 
-console.log(`Final eligible rewards: ${ethers.formatEther(finalRewards)} TRUST`);
+console.log(`Final eligible rewards: ${formatEther(finalRewards)} TRUST`);
 ```
 
 ### User Info Query
 
 ```javascript
+import { formatEther } from 'viem';
+
 // Get comprehensive user information
-const userInfo = await trustBonding.getUserInfo(userAddress, previousEpoch);
+const userInfo = await trustBonding.read.getUserInfo([userAddress, previousEpoch]);
 
 console.log('User Info:');
 console.log(`  Personal Utilization: ${userInfo.personalUtilization}`);
-console.log(`  Eligible Rewards: ${ethers.formatEther(userInfo.eligibleRewards)}`);
-console.log(`  Max Rewards: ${ethers.formatEther(userInfo.maxRewards)}`);
-console.log(`  Locked Amount: ${ethers.formatEther(userInfo.lockedAmount)}`);
+console.log(`  Eligible Rewards: ${formatEther(userInfo.eligibleRewards)}`);
+console.log(`  Max Rewards: ${formatEther(userInfo.maxRewards)}`);
+console.log(`  Locked Amount: ${formatEther(userInfo.lockedAmount)}`);
 console.log(`  Lock End: ${new Date(Number(userInfo.lockEnd) * 1000)}`);
-console.log(`  Bonded Balance: ${ethers.formatEther(userInfo.bondedBalance)}`);
+console.log(`  Bonded Balance: ${formatEther(userInfo.bondedBalance)}`);
 ```
 
 ## Utilization Ratios
@@ -338,12 +391,14 @@ Rewards for epoch N are claimable during epoch N+1
 ### Claiming Process
 
 ```javascript
+import { formatEther, decodeEventLog } from 'viem';
+
 async function claimRewards() {
-  const currentEpoch = await trustBonding.currentEpoch();
+  const currentEpoch = await trustBonding.read.currentEpoch();
   const previousEpoch = currentEpoch - 1n;
 
   // Check if rewards available
-  const hasClaimedRewardsForEpoch(userAddress, previousEpoch);
+  const alreadyClaimed = await trustBonding.read.hasClaimedRewardsForEpoch([userAddress, previousEpoch]);
 
   if (alreadyClaimed) {
     console.log('Rewards already claimed for this epoch');
@@ -351,35 +406,49 @@ async function claimRewards() {
   }
 
   // Query eligible rewards
-  const eligibleRewards = await trustBonding.userEligibleRewardsForEpoch(
+  const eligibleRewards = await trustBonding.read.userEligibleRewardsForEpoch([
     userAddress,
     previousEpoch
-  );
+  ]);
 
   if (eligibleRewards === 0n) {
     console.log('No rewards to claim');
     return;
   }
 
-  console.log(`Eligible rewards: ${ethers.formatEther(eligibleRewards)} TRUST`);
+  console.log(`Eligible rewards: ${formatEther(eligibleRewards)} TRUST`);
 
   // Claim rewards
-  const tx = await trustBonding.claimRewards(userAddress); // recipient
-  const receipt = await tx.wait();
+  const hash = await walletClient.writeContract({
+    address: TRUST_BONDING_ADDRESS,
+    abi: TRUST_BONDING_ABI,
+    functionName: 'claimRewards',
+    args: [userAddress] // recipient
+  });
+
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
   // Parse RewardsClaimed event
-  const claimedEvent = receipt.logs.find(log => {
+  const claimedLog = receipt.logs.find(log => {
     try {
-      const parsed = trustBonding.interface.parseLog(log);
-      return parsed.name === 'RewardsClaimed';
+      const decoded = decodeEventLog({
+        abi: TRUST_BONDING_ABI,
+        data: log.data,
+        topics: log.topics
+      });
+      return decoded.eventName === 'RewardsClaimed';
     } catch {
       return false;
     }
   });
 
-  if (claimedEvent) {
-    const { amount } = trustBonding.interface.parseLog(claimedEvent).args;
-    console.log(`Claimed ${ethers.formatEther(amount)} TRUST!`);
+  if (claimedLog) {
+    const { amount } = decodeEventLog({
+      abi: TRUST_BONDING_ABI,
+      data: claimedLog.data,
+      topics: claimedLog.topics
+    }).args;
+    console.log(`Claimed ${formatEther(amount)} TRUST!`);
   }
 }
 ```
@@ -391,19 +460,19 @@ class RewardsClaimer {
   async autoClaim() {
     // Check rewards every hour
     setInterval(async () => {
-      const currentEpoch = await trustBonding.currentEpoch();
+      const currentEpoch = await trustBonding.read.currentEpoch();
       const previousEpoch = currentEpoch - 1n;
 
-      const alreadyClaimed = await trustBonding.hasClaimedRewardsForEpoch(
+      const alreadyClaimed = await trustBonding.read.hasClaimedRewardsForEpoch([
         userAddress,
         previousEpoch
-      );
+      ]);
 
       if (!alreadyClaimed) {
-        const rewards = await trustBonding.userEligibleRewardsForEpoch(
+        const rewards = await trustBonding.read.userEligibleRewardsForEpoch([
           userAddress,
           previousEpoch
-        );
+        ]);
 
         if (rewards > 0n) {
           console.log('Auto-claiming rewards...');
@@ -414,10 +483,10 @@ class RewardsClaimer {
   }
 
   async claimBeforeEpochEnd() {
-    const currentEpoch = await trustBonding.currentEpoch();
-    const epochEnd = await trustBonding.epochTimestampEnd(currentEpoch);
+    const currentEpoch = await trustBonding.read.currentEpoch();
+    const epochEnd = await trustBonding.read.epochTimestampEnd([currentEpoch]);
     const now = Math.floor(Date.now() / 1000);
-    const timeUntilEnd = epochEnd - now;
+    const timeUntilEnd = Number(epochEnd) - now;
 
     // Claim 1 hour before epoch ends
     if (timeUntilEnd <= 3600) {
@@ -468,9 +537,15 @@ See [Cross-Chain Architecture](./cross-chain-architecture.md) for details.
 ```javascript
 // Maximum veTRUST: Lock for 2 years
 const twoYears = 2 * 365 * 24 * 60 * 60;
-const unlockTime = Math.floor(Date.now() / 1000) + twoYears;
+const unlockTime = BigInt(Math.floor(Date.now() / 1000) + twoYears);
 
-await trustBonding.create_lock(lockAmount, unlockTime);
+const hash = await walletClient.writeContract({
+  address: TRUST_BONDING_ADDRESS,
+  abi: TRUST_BONDING_ABI,
+  functionName: 'create_lock',
+  args: [lockAmount, unlockTime]
+});
+await publicClient.waitForTransactionReceipt({ hash });
 
 // This gives you 1:1 veTRUST to TRUST ratio
 ```
@@ -480,15 +555,15 @@ await trustBonding.create_lock(lockAmount, unlockTime);
 ```javascript
 // Track your utilization ratio
 async function checkUtilization() {
-  const currentEpoch = await trustBonding.currentEpoch();
-  const ratio = await trustBonding.getPersonalUtilizationRatio(
+  const currentEpoch = await trustBonding.read.currentEpoch();
+  const ratio = await trustBonding.read.getPersonalUtilizationRatio([
     userAddress,
     currentEpoch
-  );
+  ]);
 
-  console.log(`Your utilization ratio: ${ratio / 100}%`);
+  console.log(`Your utilization ratio: ${Number(ratio) / 100}%`);
 
-  if (ratio < 5000) { // Less than 50%
+  if (ratio < 5000n) { // Less than 50%
     console.log('Consider increasing protocol engagement for higher rewards');
   }
 }
@@ -513,17 +588,23 @@ async function claimEarly() {
 
 ```javascript
 async function monitorLock() {
-  const lockEnd = await trustBonding.locked__end(userAddress);
+  const lockEnd = await trustBonding.read.locked__end([userAddress]);
   const now = Math.floor(Date.now() / 1000);
-  const daysUntilExpiry = (lockEnd - now) / 86400;
+  const daysUntilExpiry = (Number(lockEnd) - now) / 86400;
 
   if (daysUntilExpiry < 30) {
     console.log(`Lock expires in ${daysUntilExpiry.toFixed(1)} days`);
     console.log('Consider extending your lock to maintain veTRUST');
 
     // Auto-extend if desired
-    const newUnlockTime = Math.floor(Date.now() / 1000) + (2 * 365 * 24 * 60 * 60);
-    await trustBonding.increase_unlock_time(newUnlockTime);
+    const newUnlockTime = BigInt(Math.floor(Date.now() / 1000) + (2 * 365 * 24 * 60 * 60));
+    const hash = await walletClient.writeContract({
+      address: TRUST_BONDING_ADDRESS,
+      abi: TRUST_BONDING_ABI,
+      functionName: 'increase_unlock_time',
+      args: [newUnlockTime]
+    });
+    await publicClient.waitForTransactionReceipt({ hash });
   }
 }
 ```
@@ -532,26 +613,26 @@ async function monitorLock() {
 
 ```javascript
 async function estimateAPY() {
-  const currentEpoch = await trustBonding.currentEpoch();
+  const currentEpoch = await trustBonding.read.currentEpoch();
 
   // Get emissions per epoch
-  const emissions = await trustBonding.emissionsForEpoch(currentEpoch);
+  const emissions = await trustBonding.read.emissionsForEpoch([currentEpoch]);
 
   // Get total bonded balance
-  const totalBonded = await trustBonding.totalBondedBalanceAtEpochEnd(currentEpoch);
+  const totalBonded = await trustBonding.read.totalBondedBalanceAtEpochEnd([currentEpoch]);
 
   // Get user bonded balance
-  const userBonded = await trustBonding.userBondedBalanceAtEpochEnd(
+  const userBonded = await trustBonding.read.userBondedBalanceAtEpochEnd([
     userAddress,
     currentEpoch
-  );
+  ]);
 
   // Get epochs per year
-  const epochsPerYear = await trustBonding.epochsPerYear();
+  const epochsPerYear = await trustBonding.read.epochsPerYear();
 
   // Calculate APY (assuming 100% utilization)
   const userRewardsPerEpoch = (userBonded * emissions) / totalBonded;
-  const annualRewards = userRewardsPerEpoch * BigInt(epochsPerYear);
+  const annualRewards = userRewardsPerEpoch * epochsPerYear;
   const apy = (annualRewards * 10000n) / userBonded; // Basis points
 
   console.log(`Estimated APY: ${Number(apy) / 100}%`);

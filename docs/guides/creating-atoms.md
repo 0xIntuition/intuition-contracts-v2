@@ -48,13 +48,13 @@ Encode your data as bytes. The atom ID will be computed as `keccak256(SALT + kec
 **Example data types**:
 ```typescript
 // String data
-const atomData = ethers.toUtf8Bytes("verified-developer");
+const atomData = toBytes("verified-developer");
 
 // Address data
-const atomData = ethers.getBytes("0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb");
+const atomData = getBytes("0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb");
 
 // JSON data
-const atomData = ethers.toUtf8Bytes(JSON.stringify({
+const atomData = toBytes(JSON.stringify({
   type: "person",
   name: "Alice"
 }));
@@ -109,19 +109,21 @@ const atomWallet = atomCreatedEvent.args.atomWallet;
 
 ## Code Examples
 
-### TypeScript (ethers.js v6)
+### TypeScript (viem)
 
 Complete example with error handling and event monitoring:
 
 ```typescript
-import { ethers } from 'ethers';
+import { createPublicClient, createWalletClient, http, parseEther, formatEther, toBytes } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { base } from 'viem/chains';
 
 // Contract ABIs (import from your ABI files)
 import MultiVaultABI from './abis/IMultiVault.json';
 import ERC20ABI from './abis/ERC20.json';
 
 // Configuration
-const MULTIVAULT_ADDRESS = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e';
+const MULTIVAULT_ADDRESS = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e' as `0x${string}`;
 const RPC_URL = 'YOUR_INTUITION_RPC_URL';
 
 /**
@@ -130,27 +132,30 @@ const RPC_URL = 'YOUR_INTUITION_RPC_URL';
 async function createAtom(
   atomDataString: string,
   depositAmount: bigint,
-  privateKey: string
+  privateKey: `0x${string}`
 ): Promise<{
   atomId: string;
   atomWallet: string;
   sharesMinted: bigint;
   txHash: string;
 }> {
-  // Setup provider and signer
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
-  const wallet = new ethers.Wallet(privateKey, provider);
+  // Setup account and clients
+  const account = privateKeyToAccount(privateKey);
 
-  // Contract instances
-  const multiVault = new ethers.Contract(
-    MULTIVAULT_ADDRESS,
-    MultiVaultABI,
-    wallet
-  );
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http(RPC_URL)
+  });
+
+  const walletClient = createWalletClient({
+    account,
+    chain: base,
+    transport: http(RPC_URL)
+  });
 
   try {
     // Step 1: Encode atom data
-    const atomData = ethers.toUtf8Bytes(atomDataString);
+    const atomData = toBytes(atomDataString);
 
     // Validate data length
     if (atomData.length > 256) {
@@ -158,105 +163,119 @@ async function createAtom(
     }
 
     // Step 2: Calculate atom ID (deterministic)
-    const atomId = await multiVault.calculateAtomId(atomData);
+    const atomId = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: MultiVaultABI,
+      functionName: 'calculateAtomId',
+      args: [atomData]
+    }) as `0x${string}`;
     console.log('Computed Atom ID:', atomId);
 
     // Step 3: Check if atom already exists
-    const isCreated = await multiVault.isTermCreated(atomId);
+    const isCreated = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: MultiVaultABI,
+      functionName: 'isTermCreated',
+      args: [atomId]
+    }) as boolean;
+
     if (isCreated) {
       throw new Error(`Atom already exists with ID: ${atomId}`);
     }
 
     // Step 4: Get atom creation costs
-    const atomConfig = await multiVault.getAtomConfig();
-    const generalConfig = await multiVault.getGeneralConfig();
+    const atomCost = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: MultiVaultABI,
+      functionName: 'getAtomCost'
+    }) as bigint;
 
-    const atomCost = await multiVault.getAtomCost();
-    const minDeposit = generalConfig.minDeposit;
+    const generalConfig = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: MultiVaultABI,
+      functionName: 'getGeneralConfig'
+    }) as any;
+
+    const minDeposit = generalConfig.minDeposit || generalConfig[4];
     const minimumRequired = atomCost + minDeposit;
 
-    console.log('Atom creation cost:', ethers.formatEther(atomCost), 'TRUST');
-    console.log('Minimum deposit:', ethers.formatEther(minDeposit), 'TRUST');
-    console.log('Total minimum:', ethers.formatEther(minimumRequired), 'TRUST');
+    console.log('Atom creation cost:', formatEther(atomCost), 'TRUST');
+    console.log('Minimum deposit:', formatEther(minDeposit), 'TRUST');
+    console.log('Total minimum:', formatEther(minimumRequired), 'TRUST');
 
     // Validate deposit amount
     if (depositAmount < minimumRequired) {
       throw new Error(
-        `Deposit amount ${ethers.formatEther(depositAmount)} is below minimum ` +
-        `${ethers.formatEther(minimumRequired)} TRUST`
+        `Deposit amount ${formatEther(depositAmount)} is below minimum ` +
+        `${formatEther(minimumRequired)} TRUST`
       );
     }
 
     // Step 5: Preview the creation
     const [expectedShares, assetsAfterFixedFees, assetsAfterAllFees] =
-      await multiVault.previewAtomCreate(atomId, depositAmount);
+      await publicClient.readContract({
+        address: MULTIVAULT_ADDRESS,
+        abi: MultiVaultABI,
+        functionName: 'previewAtomCreate',
+        args: [atomId, depositAmount]
+      }) as [bigint, bigint, bigint];
 
-    console.log('Expected shares:', ethers.formatEther(expectedShares));
-    console.log('Assets after fixed fees:', ethers.formatEther(assetsAfterFixedFees));
-    console.log('Assets after all fees:', ethers.formatEther(assetsAfterAllFees));
+    console.log('Expected shares:', formatEther(expectedShares));
+    console.log('Assets after fixed fees:', formatEther(assetsAfterFixedFees));
+    console.log('Assets after all fees:', formatEther(assetsAfterAllFees));
 
     // Step 6: Create the atom
     console.log('Creating atom...');
-    const createTx = await multiVault.createAtoms(
-      [atomData],
-      [depositAmount],
-      {
-        value: depositAmount,
-        gasLimit: 500000n // Explicit gas limit for safety
-      }
-    );
+    const createHash = await walletClient.writeContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: MultiVaultABI,
+      functionName: 'createAtoms',
+      args: [[atomData], [depositAmount]],
+      value: depositAmount,
+      gas: 500000n
+    });
 
-    console.log('Transaction sent:', createTx.hash);
-    const receipt = await createTx.wait();
+    console.log('Transaction sent:', createHash);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: createHash });
     console.log('Transaction confirmed in block:', receipt.blockNumber);
 
-    // Step 9: Parse events
-    let atomCreatedEvent = null;
-    let depositedEvent = null;
-    let sharesMinted = 0n;
-    let atomWalletAddress = '';
+    // Step 7: Parse events
+    const atomCreatedEvents = publicClient.parseEventLogs({
+      abi: MultiVaultABI,
+      logs: receipt.logs,
+      eventName: 'AtomCreated'
+    });
 
-    for (const log of receipt.logs) {
-      try {
-        const parsed = multiVault.interface.parseLog({
-          topics: log.topics,
-          data: log.data
-        });
+    const depositedEvents = publicClient.parseEventLogs({
+      abi: MultiVaultABI,
+      logs: receipt.logs,
+      eventName: 'Deposited'
+    });
 
-        if (parsed.name === 'AtomCreated') {
-          atomCreatedEvent = parsed;
-          atomWalletAddress = parsed.args.atomWallet;
-          console.log('Atom created:', parsed.args.termId);
-          console.log('Atom wallet:', atomWalletAddress);
-        } else if (parsed.name === 'Deposited') {
-          depositedEvent = parsed;
-          sharesMinted = parsed.args.shares;
-          console.log('Shares minted:', ethers.formatEther(sharesMinted));
-        }
-      } catch (e) {
-        // Not a MultiVault event, skip
-      }
-    }
-
-    if (!atomCreatedEvent) {
+    if (atomCreatedEvents.length === 0) {
       throw new Error('AtomCreated event not found in receipt');
     }
+
+    const atomWalletAddress = atomCreatedEvents[0].args.atomWallet as string;
+    const sharesMinted = depositedEvents.length > 0 ? depositedEvents[0].args.shares as bigint : 0n;
+
+    console.log('Atom created:', atomCreatedEvents[0].args.termId);
+    console.log('Atom wallet:', atomWalletAddress);
+    console.log('Shares minted:', formatEther(sharesMinted));
 
     return {
       atomId: atomId,
       atomWallet: atomWalletAddress,
       sharesMinted: sharesMinted,
-      txHash: receipt.hash
+      txHash: createHash
     };
 
   } catch (error) {
     // Handle specific errors
-    if (error.code === 'INSUFFICIENT_FUNDS') {
+    if (error.message?.includes('insufficient funds')) {
       throw new Error('Insufficient ETH for gas fees');
-    } else if (error.code === 'CALL_EXCEPTION') {
-      throw new Error(`Contract call failed: ${error.reason || error.message}`);
-    } else if (error.code === 'NETWORK_ERROR') {
-      throw new Error('Network connection error. Please check RPC endpoint.');
+    } else if (error.message?.includes('execution reverted')) {
+      throw new Error(`Contract call failed: ${error.message}`);
     }
 
     throw error;
@@ -268,14 +287,14 @@ async function main() {
   try {
     const result = await createAtom(
       "verified-developer",
-      ethers.parseEther("10"), // 10 TRUST
-      "YOUR_PRIVATE_KEY"
+      parseEther("10"), // 10 TRUST
+      "0xYourPrivateKey" as `0x${string}`
     );
 
     console.log('\nAtom creation successful!');
     console.log('Atom ID:', result.atomId);
     console.log('Atom Wallet:', result.atomWallet);
-    console.log('Shares Minted:', ethers.formatEther(result.sharesMinted));
+    console.log('Shares Minted:', formatEther(result.sharesMinted));
     console.log('Transaction:', result.txHash);
   } catch (error) {
     console.error('Error creating atom:', error.message);
@@ -283,10 +302,7 @@ async function main() {
   }
 }
 
-// Run if executed directly
-if (require.main === module) {
-  main();
-}
+main();
 ```
 
 ### Python (web3.py)
@@ -863,12 +879,12 @@ Each atom needs minimum initial deposit:
 
 ```typescript
 // WRONG: Hardcoded deposit might be too low
-await createAtom(data, ethers.parseEther("1"));
+await createAtom(data, parseEther("1"));
 
 // CORRECT: Query minimum and ensure compliance
 const min = await multiVault.getAtomCost() +
             await multiVault.getGeneralConfig().then(c => c.minDeposit);
-const deposit = min > ethers.parseEther("1") ? min : ethers.parseEther("1");
+const deposit = min > parseEther("1") ? min : parseEther("1");
 await createAtom(data, deposit);
 ```
 

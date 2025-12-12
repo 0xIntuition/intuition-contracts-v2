@@ -265,13 +265,17 @@ await multiVault.deposit(receiver, termId, curveId, assets, expectedShares * 99n
 
 **Bad** (large calldata):
 ```typescript
-const atomData = ethers.toUtf8Bytes('Very long atom data string that wastes calldata space...');
+import { toBytes } from 'viem';
+
+const atomData = toBytes('Very long atom data string that wastes calldata space...');
 // Calldata: ~100 bytes × 16 gas = 1,600 gas
 ```
 
 **Good** (compact calldata):
 ```typescript
-const atomData = ethers.randomBytes(32); // Compact representation
+import { randomBytes } from 'viem';
+
+const atomData = randomBytes(32); // Compact representation
 // Calldata: 32 bytes × 16 gas = 512 gas (savings: ~1,088 gas)
 ```
 

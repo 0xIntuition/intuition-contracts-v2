@@ -57,6 +57,18 @@ sequenceDiagram
 ### TypeScript Implementation
 
 ```typescript
+import {
+  createPublicClient,
+  createWalletClient,
+  http,
+  type PublicClient,
+  type WalletClient,
+  type Hash,
+  type Address,
+  decodeEventLog,
+  decodeErrorResult
+} from 'viem';
+
 interface TransactionOptions {
   gasLimit?: bigint;
   gasPrice?: bigint;
@@ -67,8 +79,8 @@ interface TransactionOptions {
 }
 
 interface TransactionResult {
-  hash: string;
-  receipt: ethers.TransactionReceipt;
+  hash: Hash;
+  receipt: any;
   events: any[];
   gasUsed: bigint;
   effectiveGasPrice: bigint;
@@ -76,63 +88,83 @@ interface TransactionResult {
 
 class TransactionManager {
   constructor(
-    private contract: ethers.Contract,
-    private signer: ethers.Signer
+    private contractAddress: Address,
+    private abi: any,
+    private publicClient: PublicClient,
+    private walletClient: WalletClient,
+    private account: Address
   ) {}
 
   async executeTransaction(
-    method: string,
-    params: any[],
+    functionName: string,
+    args: any[],
     options: TransactionOptions = {}
   ): Promise<TransactionResult> {
     // 1. Validate inputs
-    this.validateInputs(method, params);
+    this.validateInputs(functionName, args);
 
     // 2. Simulate transaction
-    const simulationResult = await this.simulate(method, params);
+    const simulationResult = await this.simulate(functionName, args);
     console.log('Simulation successful:', simulationResult);
 
     // 3. Estimate gas
-    const gasEstimate = await this.estimateGas(method, params);
+    const gasEstimate = await this.estimateGas(functionName, args);
     const gasLimit = options.gasLimit || this.addGasBuffer(gasEstimate);
 
     // 4. Get gas price
     const feeData = await this.getFeeData(options);
 
     // 5. Submit transaction
-    const tx = await this.contract[method](...params, {
-      gasLimit,
+    const hash = await this.walletClient.writeContract({
+      address: this.contractAddress,
+      abi: this.abi,
+      functionName,
+      args,
+      gas: gasLimit,
       ...feeData,
+      account: this.account,
     });
 
-    console.log(`Transaction submitted: ${tx.hash}`);
+    console.log(`Transaction submitted: ${hash}`);
 
     // 6. Wait for confirmation
-    const receipt = await this.waitForConfirmation(tx);
+    const receipt = await this.waitForConfirmation(hash);
 
     // 7. Parse events
     const events = this.parseEvents(receipt);
 
     return {
-      hash: tx.hash,
+      hash,
       receipt,
       events,
       gasUsed: receipt.gasUsed,
-      effectiveGasPrice: receipt.gasPrice,
+      effectiveGasPrice: receipt.effectiveGasPrice,
     };
   }
 
-  private async simulate(method: string, params: any[]): Promise<any> {
+  private async simulate(functionName: string, args: any[]): Promise<any> {
     try {
-      return await this.contract[method].staticCall(...params);
+      return await this.publicClient.simulateContract({
+        address: this.contractAddress,
+        abi: this.abi,
+        functionName,
+        args,
+        account: this.account,
+      });
     } catch (error: any) {
       throw new Error(`Simulation failed: ${this.parseRevertReason(error)}`);
     }
   }
 
-  private async estimateGas(method: string, params: any[]): Promise<bigint> {
+  private async estimateGas(functionName: string, args: any[]): Promise<bigint> {
     try {
-      return await this.contract[method].estimateGas(...params);
+      return await this.publicClient.estimateContractGas({
+        address: this.contractAddress,
+        abi: this.abi,
+        functionName,
+        args,
+        account: this.account,
+      });
     } catch (error: any) {
       throw new Error(`Gas estimation failed: ${this.parseRevertReason(error)}`);
     }
@@ -156,22 +188,33 @@ class TransactionManager {
     }
 
     // Fetch current fee data
-    const feeData = await this.signer.provider!.getFeeData();
+    const feeHistory = await this.publicClient.getFeeHistory({
+      blockCount: 1,
+      rewardPercentiles: [50],
+    });
+
+    const maxPriorityFeePerGas = feeHistory.reward?.[0]?.[0] || 0n;
+    const baseFeePerGas = feeHistory.baseFeePerGas[0] || 0n;
+    const maxFeePerGas = baseFeePerGas * 2n + maxPriorityFeePerGas;
+
     return {
-      maxFeePerGas: feeData.maxFeePerGas,
-      maxPriorityFeePerGas: feeData.maxPriorityFeePerGas,
+      maxFeePerGas,
+      maxPriorityFeePerGas,
     };
   }
 
   private async waitForConfirmation(
-    tx: ethers.TransactionResponse,
+    hash: Hash,
     confirmations: number = 1
-  ): Promise<ethers.TransactionReceipt> {
+  ): Promise<any> {
     console.log(`Waiting for ${confirmations} confirmations...`);
 
-    const receipt = await tx.wait(confirmations);
+    const receipt = await this.publicClient.waitForTransactionReceipt({
+      hash,
+      confirmations,
+    });
 
-    if (!receipt || receipt.status === 0) {
+    if (receipt.status === 'reverted') {
       throw new Error('Transaction failed');
     }
 
@@ -179,28 +222,39 @@ class TransactionManager {
     return receipt;
   }
 
-  private parseEvents(receipt: ethers.TransactionReceipt): any[] {
+  private parseEvents(receipt: any): any[] {
     return receipt.logs
-      .map(log => {
+      .map((log: any) => {
         try {
-          return this.contract.interface.parseLog(log);
+          return decodeEventLog({
+            abi: this.abi,
+            data: log.data,
+            topics: log.topics,
+          });
         } catch {
           return null;
         }
       })
-      .filter(event => event !== null);
+      .filter((event: any) => event !== null);
   }
 
   private parseRevertReason(error: any): string {
     if (error.data) {
       try {
-        const decoded = this.contract.interface.parseError(error.data);
-        return decoded?.name || 'Unknown error';
+        const decoded = decodeErrorResult({
+          abi: this.abi,
+          data: error.data,
+        });
+        return decoded?.errorName || 'Unknown error';
       } catch {
         return error.message;
       }
     }
     return error.message;
+  }
+
+  private validateInputs(functionName: string, args: any[]): void {
+    // Validation logic here
   }
 }
 ```
@@ -210,14 +264,26 @@ class TransactionManager {
 ### Deposit Flow with Slippage Protection
 
 ```typescript
+import { formatUnits, createPublicClient, http } from 'viem';
+
 async function depositWithSlippage(
   termId: string,
   curveId: number,
   assets: bigint,
   slippageTolerance: number = 50 // 0.5%
 ): Promise<TransactionResult> {
+  const publicClient = createPublicClient({
+    chain: mainnet,
+    transport: http()
+  });
+
   // 1. Preview deposit to get expected shares
-  const [expectedShares] = await multiVault.previewDeposit(termId, curveId, assets);
+  const [expectedShares] = await publicClient.readContract({
+    address: multiVaultAddress,
+    abi: multiVaultAbi,
+    functionName: 'previewDeposit',
+    args: [termId, curveId, assets],
+  });
 
   // 2. Calculate minimum acceptable shares (with slippage)
   const minShares = (expectedShares * BigInt(10000 - slippageTolerance)) / 10000n;
@@ -226,13 +292,19 @@ async function depositWithSlippage(
   console.log(`Minimum shares: ${formatUnits(minShares, 18)}`);
 
   // 3. Execute deposit with minShares protection
-  const txManager = new TransactionManager(multiVault, signer);
+  const txManager = new TransactionManager(
+    multiVaultAddress,
+    multiVaultAbi,
+    publicClient,
+    walletClient,
+    account
+  );
 
   try {
     const result = await txManager.executeTransaction(
       'deposit',
       [
-        await signer.getAddress(), // receiver
+        account, // receiver
         termId,
         curveId,
         assets,
@@ -240,7 +312,7 @@ async function depositWithSlippage(
       ]
     );
 
-    const depositEvent = result.events.find(e => e.name === 'Deposited');
+    const depositEvent = result.events.find(e => e.eventName === 'Deposited');
     console.log(`Received ${formatUnits(depositEvent.args.shares, 18)} shares`);
 
     return result;
@@ -259,6 +331,8 @@ async function depositWithSlippage(
 ### Redemption Flow with Minimum Assets
 
 ```typescript
+import { formatEther } from 'viem';
+
 async function redeemWithMinAssets(
   termId: string,
   curveId: number,
@@ -266,7 +340,12 @@ async function redeemWithMinAssets(
   slippageTolerance: number = 50
 ): Promise<TransactionResult> {
   // 1. Preview redemption to get expected assets
-  const [expectedAssets] = await multiVault.previewRedeem(termId, curveId, shares);
+  const [expectedAssets] = await publicClient.readContract({
+    address: multiVaultAddress,
+    abi: multiVaultAbi,
+    functionName: 'previewRedeem',
+    args: [termId, curveId, shares],
+  });
 
   // 2. Calculate minimum acceptable assets
   const minAssets = (expectedAssets * BigInt(10000 - slippageTolerance)) / 10000n;
@@ -275,12 +354,18 @@ async function redeemWithMinAssets(
   console.log(`Minimum assets: ${formatEther(minAssets)}`);
 
   // 3. Execute redemption with minAssets protection
-  const txManager = new TransactionManager(multiVault, signer);
+  const txManager = new TransactionManager(
+    multiVaultAddress,
+    multiVaultAbi,
+    publicClient,
+    walletClient,
+    account
+  );
 
   return await txManager.executeTransaction(
     'redeem',
     [
-      await signer.getAddress(), // receiver
+      account, // receiver
       termId,
       curveId,
       shares,
@@ -293,6 +378,8 @@ async function redeemWithMinAssets(
 ### Atom Creation Flow
 
 ```typescript
+import { keccak256, concat } from 'viem';
+
 async function createAtomWithDeposit(
   atomData: string,
   depositAmount: bigint,
@@ -302,12 +389,17 @@ async function createAtomWithDeposit(
   const atomId = await computeAtomId(atomData);
 
   // 2. Check if atom already exists
-  const exists = await multiVault.isTermCreated(atomId);
+  const exists = await publicClient.readContract({
+    address: multiVaultAddress,
+    abi: multiVaultAbi,
+    functionName: 'isTermCreated',
+    args: [atomId],
+  });
 
   if (exists) {
     console.log(`Atom ${atomId} already exists, depositing instead`);
     const result = await depositWithSlippage(atomId, curveId, depositAmount);
-    const depositEvent = result.events.find(e => e.name === 'Deposited');
+    const depositEvent = result.events.find(e => e.eventName === 'Deposited');
     return {
       atomId,
       shares: depositEvent.args.shares,
@@ -316,25 +408,36 @@ async function createAtomWithDeposit(
   }
 
   // 3. Preview atom creation
-  const [expectedShares] = await multiVault.previewAtomCreate(atomId, depositAmount);
+  const [expectedShares] = await publicClient.readContract({
+    address: multiVaultAddress,
+    abi: multiVaultAbi,
+    functionName: 'previewAtomCreate',
+    args: [atomId, depositAmount],
+  });
   const minShares = (expectedShares * 9950n) / 10000n; // 0.5% slippage
 
   // 4. Create atom with initial deposit
-  const txManager = new TransactionManager(multiVault, signer);
+  const txManager = new TransactionManager(
+    multiVaultAddress,
+    multiVaultAbi,
+    publicClient,
+    walletClient,
+    account
+  );
   const result = await txManager.executeTransaction(
     'createAtoms',
     [
       [atomData], // atomDatas array
       [depositAmount], // assets array
       curveId,
-      await signer.getAddress(), // receiver
+      account, // receiver
       minShares,
     ]
   );
 
   // 5. Extract atom ID from event
-  const atomEvent = result.events.find(e => e.name === 'AtomCreated');
-  const depositEvent = result.events.find(e => e.name === 'Deposited');
+  const atomEvent = result.events.find(e => e.eventName === 'AtomCreated');
+  const depositEvent = result.events.find(e => e.eventName === 'Deposited');
 
   return {
     atomId: atomEvent.args.termId,
@@ -345,8 +448,8 @@ async function createAtomWithDeposit(
 
 function computeAtomId(atomData: string): string {
   const SALT = '0x...'; // Get from contract
-  const dataHash = ethers.keccak256(atomData);
-  return ethers.keccak256(ethers.concat([SALT, dataHash]));
+  const dataHash = keccak256(atomData);
+  return keccak256(concat([SALT, dataHash]));
 }
 ```
 
@@ -362,9 +465,24 @@ async function createTripleWithDeposit(
 ): Promise<{ tripleId: string; shares: bigint; result: TransactionResult }> {
   // 1. Verify all atoms exist
   const [subjectExists, predicateExists, objectExists] = await Promise.all([
-    multiVault.isTermCreated(subjectId),
-    multiVault.isTermCreated(predicateId),
-    multiVault.isTermCreated(objectId),
+    publicClient.readContract({
+      address: multiVaultAddress,
+      abi: multiVaultAbi,
+      functionName: 'isTermCreated',
+      args: [subjectId],
+    }),
+    publicClient.readContract({
+      address: multiVaultAddress,
+      abi: multiVaultAbi,
+      functionName: 'isTermCreated',
+      args: [predicateId],
+    }),
+    publicClient.readContract({
+      address: multiVaultAddress,
+      abi: multiVaultAbi,
+      functionName: 'isTermCreated',
+      args: [objectId],
+    }),
   ]);
 
   if (!subjectExists) throw new Error(`Subject atom ${subjectId} does not exist`);
@@ -372,17 +490,22 @@ async function createTripleWithDeposit(
   if (!objectExists) throw new Error(`Object atom ${objectId} does not exist`);
 
   // 2. Compute triple ID
-  const tripleId = ethers.keccak256(
-    ethers.concat([subjectId, predicateId, objectId])
+  const tripleId = keccak256(
+    concat([subjectId, predicateId, objectId])
   );
 
   // 3. Check if triple already exists
-  const exists = await multiVault.isTermCreated(tripleId);
+  const exists = await publicClient.readContract({
+    address: multiVaultAddress,
+    abi: multiVaultAbi,
+    functionName: 'isTermCreated',
+    args: [tripleId],
+  });
 
   if (exists) {
     console.log(`Triple ${tripleId} already exists, depositing instead`);
     const result = await depositWithSlippage(tripleId, curveId, depositAmount);
-    const depositEvent = result.events.find(e => e.name === 'Deposited');
+    const depositEvent = result.events.find(e => e.eventName === 'Deposited');
     return {
       tripleId,
       shares: depositEvent.args.shares,
@@ -391,11 +514,22 @@ async function createTripleWithDeposit(
   }
 
   // 4. Preview triple creation
-  const [expectedShares] = await multiVault.previewTripleCreate(tripleId, depositAmount);
+  const [expectedShares] = await publicClient.readContract({
+    address: multiVaultAddress,
+    abi: multiVaultAbi,
+    functionName: 'previewTripleCreate',
+    args: [tripleId, depositAmount],
+  });
   const minShares = (expectedShares * 9950n) / 10000n; // 0.5% slippage
 
   // 5. Create triple with initial deposit
-  const txManager = new TransactionManager(multiVault, signer);
+  const txManager = new TransactionManager(
+    multiVaultAddress,
+    multiVaultAbi,
+    publicClient,
+    walletClient,
+    account
+  );
   const result = await txManager.executeTransaction(
     'createTriples',
     [
@@ -404,14 +538,14 @@ async function createTripleWithDeposit(
       [objectId], // objectIds array
       [depositAmount], // assets array
       curveId,
-      await signer.getAddress(), // receiver
+      account, // receiver
       minShares,
     ]
   );
 
   // 6. Extract events
-  const tripleEvent = result.events.find(e => e.name === 'TripleCreated');
-  const depositEvent = result.events.find(e => e.name === 'Deposited');
+  const tripleEvent = result.events.find(e => e.eventName === 'TripleCreated');
+  const depositEvent = result.events.find(e => e.eventName === 'Deposited');
 
   return {
     tripleId: tripleEvent.args.termId,
@@ -426,8 +560,10 @@ async function createTripleWithDeposit(
 ### Dynamic Gas Pricing
 
 ```typescript
+import { type PublicClient, formatEther } from 'viem';
+
 class GasManager {
-  constructor(private provider: ethers.Provider) {}
+  constructor(private publicClient: PublicClient) {}
 
   async getOptimalGasPrice(
     urgency: 'low' | 'medium' | 'high' = 'medium'
@@ -435,9 +571,12 @@ class GasManager {
     maxFeePerGas: bigint;
     maxPriorityFeePerGas: bigint;
   }> {
-    const feeData = await this.provider.getFeeData();
+    const feeHistory = await this.publicClient.getFeeHistory({
+      blockCount: 4,
+      rewardPercentiles: [25, 50, 75],
+    });
 
-    const baseFee = feeData.gasPrice || 0n;
+    const baseFee = feeHistory.baseFeePerGas[0] || 0n;
     const priorityFeeMultipliers = {
       low: 1.0,
       medium: 1.2,
@@ -445,10 +584,11 @@ class GasManager {
     };
 
     const multiplier = priorityFeeMultipliers[urgency];
-    const priorityFee = BigInt(Math.floor(Number(baseFee) * multiplier * 0.1));
+    const basePriorityFee = feeHistory.reward?.[0]?.[1] || baseFee / 10n;
+    const priorityFee = BigInt(Math.floor(Number(basePriorityFee) * multiplier));
 
     return {
-      maxFeePerGas: baseFee + priorityFee,
+      maxFeePerGas: baseFee * 2n + priorityFee,
       maxPriorityFeePerGas: priorityFee,
     };
   }
@@ -472,13 +612,22 @@ class GasManager {
 
 ```typescript
 async function estimateGasWithFallback(
-  contract: ethers.Contract,
-  method: string,
-  params: any[]
+  publicClient: PublicClient,
+  contractAddress: Address,
+  abi: any,
+  functionName: string,
+  args: any[],
+  account: Address
 ): Promise<bigint> {
   try {
     // Try contract estimation
-    const estimate = await contract[method].estimateGas(...params);
+    const estimate = await publicClient.estimateContractGas({
+      address: contractAddress,
+      abi,
+      functionName,
+      args,
+      account,
+    });
     return (estimate * 120n) / 100n; // Add 20% buffer
   } catch (error) {
     console.warn('Contract estimation failed, using fallback');
@@ -492,7 +641,7 @@ async function estimateGasWithFallback(
       claimRewards: 150000n,
     };
 
-    return fallbackLimits[method] || 300000n;
+    return fallbackLimits[functionName] || 300000n;
   }
 }
 ```
@@ -508,38 +657,50 @@ async function validateDeposit(
   assets: bigint
 ): Promise<void> {
   // 1. Check term exists
-  const termExists = await multiVault.isTermCreated(termId);
+  const termExists = await publicClient.readContract({
+    address: multiVaultAddress,
+    abi: multiVaultAbi,
+    functionName: 'isTermCreated',
+    args: [termId],
+  });
   if (!termExists) {
     throw new Error(`Term ${termId} does not exist`);
   }
 
   // 2. Check user balance
-  const balance = await trustToken.balanceOf(await signer.getAddress());
+  const balance = await publicClient.readContract({
+    address: trustTokenAddress,
+    abi: erc20Abi,
+    functionName: 'balanceOf',
+    args: [account],
+  });
   if (balance < assets) {
     throw new Error(`Insufficient balance: have ${balance}, need ${assets}`);
   }
 
   // 3. Check allowance
-  const allowance = await trustToken.allowance(
-    await signer.getAddress(),
-    multiVault.address
-  );
+  const allowance = await publicClient.readContract({
+    address: trustTokenAddress,
+    abi: erc20Abi,
+    functionName: 'allowance',
+    args: [account, multiVaultAddress],
+  });
   if (allowance < assets) {
     throw new Error(
       `Insufficient allowance: have ${allowance}, need ${assets}. ` +
-      `Please approve ${multiVault.address} to spend TRUST tokens.`
+      `Please approve ${multiVaultAddress} to spend TRUST tokens.`
     );
   }
 
   // 4. Simulate transaction
   try {
-    await multiVault.deposit.staticCall(
-      await signer.getAddress(),
-      termId,
-      curveId,
-      assets,
-      0n // minShares
-    );
+    await publicClient.simulateContract({
+      address: multiVaultAddress,
+      abi: multiVaultAbi,
+      functionName: 'deposit',
+      args: [account, termId, curveId, assets, 0n],
+      account,
+    });
   } catch (error: any) {
     throw new Error(`Transaction would fail: ${error.message}`);
   }
@@ -602,11 +763,16 @@ function sleep(ms: number): Promise<void> {
 ### Nonce Management
 
 ```typescript
+import { type PublicClient, type Address } from 'viem';
+
 class NonceManager {
   private pendingNonces = new Map<string, number>();
 
-  async getNextNonce(address: string, provider: ethers.Provider): Promise<number> {
-    const currentNonce = await provider.getTransactionCount(address, 'latest');
+  async getNextNonce(address: Address, publicClient: PublicClient): Promise<number> {
+    const currentNonce = await publicClient.getTransactionCount({
+      address,
+      blockTag: 'latest',
+    });
     const pendingNonce = this.pendingNonces.get(address) || currentNonce;
 
     const nextNonce = Math.max(currentNonce, pendingNonce);
@@ -709,39 +875,48 @@ class TransactionQueue {
 ### Transaction Monitoring
 
 ```typescript
+import { createPublicClient, http, type Hash } from 'viem';
+
 class TransactionMonitor {
   async monitorTransaction(
-    txHash: string,
+    txHash: Hash,
     onUpdate: (status: string) => void
-  ): Promise<ethers.TransactionReceipt> {
+  ): Promise<any> {
     onUpdate('pending');
 
-    const provider = new ethers.JsonRpcProvider('RPC_URL');
-    const tx = await provider.getTransaction(txHash);
+    const publicClient = createPublicClient({
+      chain: mainnet,
+      transport: http('RPC_URL')
+    });
+
+    const tx = await publicClient.getTransaction({ hash: txHash });
 
     if (!tx) {
       throw new Error('Transaction not found');
     }
 
     // Poll for receipt
-    const receipt = await this.pollForReceipt(provider, txHash, onUpdate);
+    const receipt = await this.pollForReceipt(publicClient, txHash, onUpdate);
 
-    onUpdate(receipt.status === 1 ? 'confirmed' : 'failed');
+    onUpdate(receipt.status === 'success' ? 'confirmed' : 'failed');
 
     return receipt;
   }
 
   private async pollForReceipt(
-    provider: ethers.Provider,
-    txHash: string,
+    publicClient: any,
+    txHash: Hash,
     onUpdate: (status: string) => void,
     interval: number = 2000
-  ): Promise<ethers.TransactionReceipt> {
+  ): Promise<any> {
     while (true) {
-      const receipt = await provider.getTransactionReceipt(txHash);
-
-      if (receipt) {
-        return receipt;
+      try {
+        const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
+        if (receipt) {
+          return receipt;
+        }
+      } catch (error) {
+        // Receipt not available yet
       }
 
       onUpdate('confirming');

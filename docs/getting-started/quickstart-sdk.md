@@ -1,22 +1,22 @@
 # Quick Start for SDK Builders
 
-Get started building an SDK for Intuition Protocol V2 with TypeScript and ethers.js v6. This guide covers the essential operations for integrating the protocol into your application.
+Get started building an SDK for Intuition Protocol V2 with TypeScript and viem. This guide covers the essential operations for integrating the protocol into your application.
 
 ## Prerequisites
 
 - Node.js 18+ and npm/yarn/pnpm
 - Basic understanding of Ethereum development
 - Familiarity with TypeScript
-- ethers.js v6 knowledge recommended
+- viem knowledge recommended
 
 ## Installation
 
 ```bash
-npm install ethers
+npm install viem
 # or
-yarn add ethers
+yarn add viem
 # or
-pnpm add ethers
+pnpm add viem
 ```
 
 ## Getting Contract ABIs
@@ -41,18 +41,36 @@ import TRUST_ABI from './abis/Trust.json';
 Intuition Protocol V2 operates on two chains:
 
 ```typescript
-import { ethers } from 'ethers';
+import { createPublicClient, createWalletClient, http, getContract } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { base, intuition } from 'viem/chains';
+
+// Create account from private key
+const account = privateKeyToAccount(process.env.PRIVATE_KEY as `0x${string}`);
 
 // Base Mainnet - For TRUST token minting and base emissions
-const baseProvider = new ethers.JsonRpcProvider('https://mainnet.base.org');
+const basePublicClient = createPublicClient({
+  chain: base,
+  transport: http('https://mainnet.base.org'),
+});
+
+const baseWalletClient = createWalletClient({
+  account,
+  chain: base,
+  transport: http('https://mainnet.base.org'),
+});
 
 // Intuition Mainnet - For vault operations and protocol interactions
-const intuitionProvider = new ethers.JsonRpcProvider('YOUR_INTUITION_RPC');
+const intuitionPublicClient = createPublicClient({
+  chain: intuition,
+  transport: http('YOUR_INTUITION_RPC'),
+});
 
-// Create a signer (use your preferred method)
-const privateKey = process.env.PRIVATE_KEY!;
-const baseSigner = new ethers.Wallet(privateKey, baseProvider);
-const intuitionSigner = new ethers.Wallet(privateKey, intuitionProvider);
+const intuitionWalletClient = createWalletClient({
+  account,
+  chain: intuition,
+  transport: http('YOUR_INTUITION_RPC'),
+});
 ```
 
 ### Initialize Contract Instances
@@ -60,19 +78,19 @@ const intuitionSigner = new ethers.Wallet(privateKey, intuitionProvider);
 ```typescript
 // MultiVault - The main protocol contract on Intuition Mainnet
 const MULTIVAULT_ADDRESS = '0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e';
-const multiVault = new ethers.Contract(
-  MULTIVAULT_ADDRESS,
-  MULTIVAULT_ABI,
-  intuitionSigner
-);
+const multiVault = getContract({
+  address: MULTIVAULT_ADDRESS as `0x${string}`,
+  abi: MULTIVAULT_ABI,
+  client: { public: intuitionPublicClient, wallet: intuitionWalletClient },
+});
 
 // TRUST token on Base Mainnet
 const TRUST_ADDRESS = '0x6cd905dF2Ed214b22e0d48FF17CD4200C1C6d8A3';
-const trustToken = new ethers.Contract(
-  TRUST_ADDRESS,
-  TRUST_ABI,
-  baseSigner
-);
+const trustToken = getContract({
+  address: TRUST_ADDRESS as `0x${string}`,
+  abi: TRUST_ABI,
+  client: { public: basePublicClient, wallet: baseWalletClient },
+});
 ```
 
 ## Core Operations
@@ -86,7 +104,7 @@ async function createAtom(atomData: string, depositAmount: bigint) {
   try {
     // atomData can be any bytes data ≤256 bytes
     // Common pattern: encode an address, hash, or small JSON
-    const atomDataBytes = ethers.toUtf8Bytes(atomData);
+    const atomDataBytes = toBytes(atomData);
 
     // Prepare transaction parameters
     const atomDatas = [atomDataBytes];
@@ -128,7 +146,7 @@ async function createAtom(atomData: string, depositAmount: bigint) {
 }
 
 // Example usage
-const depositAmount = ethers.parseEther('0.1'); // 0.1 ETH
+const depositAmount = parseEther('0.1'); // 0.1 ETH
 const atomId = await createAtom('MyFirstAtom', depositAmount);
 ```
 
@@ -203,7 +221,7 @@ const tripleId = await createTriple(
   '0x...subjectId',
   '0x...predicateId',
   '0x...objectId',
-  ethers.parseEther('0.1')
+  parseEther('0.1')
 );
 ```
 
@@ -226,8 +244,8 @@ async function depositToVault(
       assets
     );
 
-    console.log(`Expected shares: ${ethers.formatEther(expectedShares)}`);
-    console.log(`Assets after fees: ${ethers.formatEther(assetsAfterFees)}`);
+    console.log(`Expected shares: ${formatEther(expectedShares)}`);
+    console.log(`Assets after fees: ${formatEther(assetsAfterFees)}`);
 
     // Calculate minimum shares with slippage tolerance
     const minShares = expectedShares * BigInt(Math.floor((1 - slippageTolerance) * 10000)) / 10000n;
@@ -258,7 +276,7 @@ async function depositToVault(
 
     if (depositedEvent) {
       const actualShares = depositedEvent.args.shares;
-      console.log(`Received shares: ${ethers.formatEther(actualShares)}`);
+      console.log(`Received shares: ${formatEther(actualShares)}`);
       return actualShares;
     }
 
@@ -273,7 +291,7 @@ async function depositToVault(
 const shares = await depositToVault(
   atomId,
   0n, // curveId 0 = default curve
-  ethers.parseEther('1.0'),
+  parseEther('1.0'),
   0.01 // 1% slippage tolerance
 );
 ```
@@ -305,7 +323,7 @@ async function redeemFromVault(
       shares
     );
 
-    console.log(`Expected assets: ${ethers.formatEther(expectedAssets)}`);
+    console.log(`Expected assets: ${formatEther(expectedAssets)}`);
 
     // Calculate minimum assets with slippage tolerance
     const minAssets = expectedAssets * BigInt(Math.floor((1 - slippageTolerance) * 10000)) / 10000n;
@@ -336,7 +354,7 @@ async function redeemFromVault(
 
     if (redeemedEvent) {
       const actualAssets = redeemedEvent.args.assets;
-      console.log(`Received assets: ${ethers.formatEther(actualAssets)}`);
+      console.log(`Received assets: ${formatEther(actualAssets)}`);
       return actualAssets;
     }
 
@@ -351,7 +369,7 @@ async function redeemFromVault(
 const assets = await redeemFromVault(
   atomId,
   0n,
-  ethers.parseEther('0.5'), // Redeem 0.5 shares
+  parseEther('0.5'), // Redeem 0.5 shares
   0.01
 );
 ```
@@ -374,10 +392,10 @@ async function getVaultInfo(termId: string, curveId: bigint) {
     const userShares = await multiVault.getShares(userAddress, termId, curveId);
 
     console.log('Vault Info:');
-    console.log(`  Total Assets: ${ethers.formatEther(totalAssets)}`);
-    console.log(`  Total Shares: ${ethers.formatEther(totalShares)}`);
-    console.log(`  Share Price: ${ethers.formatEther(sharePrice)}`);
-    console.log(`  User Shares: ${ethers.formatEther(userShares)}`);
+    console.log(`  Total Assets: ${formatEther(totalAssets)}`);
+    console.log(`  Total Shares: ${formatEther(totalShares)}`);
+    console.log(`  Share Price: ${formatEther(sharePrice)}`);
+    console.log(`  User Shares: ${formatEther(userShares)}`);
 
     return {
       totalAssets,
@@ -413,7 +431,7 @@ multiVault.on('Deposited', (sender, receiver, termId, curveId, assets, assetsAft
   console.log('Deposit made:');
   console.log(`  Sender: ${sender}`);
   console.log(`  Term ID: ${termId}`);
-  console.log(`  Shares Minted: ${ethers.formatEther(shares)}`);
+  console.log(`  Shares Minted: ${formatEther(shares)}`);
 });
 
 // Listen for redemptions
@@ -421,7 +439,7 @@ multiVault.on('Redeemed', (sender, receiver, termId, curveId, shares, totalShare
   console.log('Redemption made:');
   console.log(`  Sender: ${sender}`);
   console.log(`  Term ID: ${termId}`);
-  console.log(`  Assets Returned: ${ethers.formatEther(assets)}`);
+  console.log(`  Assets Returned: ${formatEther(assets)}`);
 });
 
 // Query historical events
@@ -482,7 +500,7 @@ async function batchDeposit(
 await batchDeposit(
   ['0x...atom1', '0x...atom2', '0x...triple1'],
   [0n, 0n, 0n],
-  [ethers.parseEther('1'), ethers.parseEther('2'), ethers.parseEther('0.5')],
+  [parseEther('1'), parseEther('2'), parseEther('0.5')],
   [0n, 0n, 0n] // minShares - set appropriately in production
 );
 ```
@@ -506,7 +524,7 @@ async function safeDeposit(termId: string, curveId: bigint, assets: bigint) {
     // Check user balance
     const balance = await intuitionProvider.getBalance(await intuitionSigner.getAddress());
     if (balance < assets) {
-      throw new Error(`Insufficient balance. Have: ${ethers.formatEther(balance)}, Need: ${ethers.formatEther(assets)}`);
+      throw new Error(`Insufficient balance. Have: ${formatEther(balance)}, Need: ${formatEther(assets)}`);
     }
 
     // Perform the deposit
@@ -570,13 +588,13 @@ Now that you have the basics:
 
 ```typescript
 function calculateAtomId(atomData: Uint8Array): string {
-  const SALT = ethers.keccak256(ethers.toUtf8Bytes('SALT'));
-  const dataHash = ethers.keccak256(atomData);
-  return ethers.keccak256(ethers.concat([SALT, dataHash]));
+  const SALT = keccak256(toBytes('SALT'));
+  const dataHash = keccak256(atomData);
+  return keccak256(concat([SALT, dataHash]));
 }
 
 // Usage
-const atomData = ethers.toUtf8Bytes('MyAtom');
+const atomData = toBytes('MyAtom');
 const expectedAtomId = calculateAtomId(atomData);
 console.log(`Expected atom ID: ${expectedAtomId}`);
 ```
@@ -585,11 +603,11 @@ console.log(`Expected atom ID: ${expectedAtomId}`);
 
 ```typescript
 function calculateTripleId(subjectId: string, predicateId: string, objectId: string): string {
-  const encoded = ethers.solidityPacked(
+  const encoded = encodePacked(
     ['bytes32', 'bytes32', 'bytes32'],
     [subjectId, predicateId, objectId]
   );
-  return ethers.keccak256(encoded);
+  return keccak256(encoded);
 }
 
 // Usage

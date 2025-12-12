@@ -123,37 +123,56 @@ operationId = keccak256(
 ### Basic Schedule
 
 ```typescript
-import { ethers } from 'ethers';
+import { createPublicClient, createWalletClient, http, encodeFunctionData, parseEther, keccak256, zeroHash } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { base } from 'viem/chains';
 
-const timelock = new ethers.Contract(TIMELOCK_ADDRESS, TIMELOCK_ABI, proposer);
+const account = privateKeyToAccount(PROPOSER_PRIVATE_KEY);
+const walletClient = createWalletClient({
+  account,
+  chain: base,
+  transport: http()
+});
+
+const publicClient = createPublicClient({
+  chain: base,
+  transport: http()
+});
 
 // Prepare operation
 const target = MULTIVAULT_ADDRESS;
-const value = 0;
-const data = multiVault.interface.encodeFunctionData('setAtomCost', [
-  ethers.parseEther('1')
-]);
-const predecessor = ethers.ZeroHash; // No dependency
-const salt = ethers.id('set-atom-cost-v1'); // Unique identifier
-const delay = await timelock.getMinDelay(); // Minimum required delay
+const value = 0n;
+const data = encodeFunctionData({
+  abi: MULTIVAULT_ABI,
+  functionName: 'setAtomCost',
+  args: [parseEther('1')]
+});
+const predecessor = zeroHash; // No dependency
+const salt = keccak256('0x7365742d61746f6d2d636f73742d7631'); // 'set-atom-cost-v1'
+const delay = await publicClient.readContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'getMinDelay'
+});
 
 // Schedule operation
-const tx = await timelock.schedule(
-  target,
-  value,
-  data,
-  predecessor,
-  salt,
-  delay
-);
+const hash = await walletClient.writeContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'schedule',
+  args: [target, value, data, predecessor, salt, delay]
+});
 
-await tx.wait();
-console.log('Operation scheduled:', tx.hash);
+await publicClient.waitForTransactionReceipt({ hash });
+console.log('Operation scheduled:', hash);
 
 // Compute operation ID for tracking
-const operationId = await timelock.hashOperation(
-  target, value, data, predecessor, salt
-);
+const operationId = await publicClient.readContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'hashOperation',
+  args: [target, value, data, predecessor, salt]
+});
 console.log('Operation ID:', operationId);
 ```
 
@@ -162,23 +181,33 @@ console.log('Operation ID:', operationId);
 ```typescript
 // Schedule multiple operations atomically
 const targets = [CONTRACT_A, CONTRACT_B, CONTRACT_C];
-const values = [0, 0, 0];
+const values = [0n, 0n, 0n];
 const datas = [
-  contractA.interface.encodeFunctionData('functionA', [param1]),
-  contractB.interface.encodeFunctionData('functionB', [param2]),
-  contractC.interface.encodeFunctionData('functionC', [param3])
+  encodeFunctionData({
+    abi: CONTRACT_A_ABI,
+    functionName: 'functionA',
+    args: [param1]
+  }),
+  encodeFunctionData({
+    abi: CONTRACT_B_ABI,
+    functionName: 'functionB',
+    args: [param2]
+  }),
+  encodeFunctionData({
+    abi: CONTRACT_C_ABI,
+    functionName: 'functionC',
+    args: [param3]
+  })
 ];
 
-const tx = await timelock.scheduleBatch(
-  targets,
-  values,
-  datas,
-  predecessor,
-  salt,
-  delay
-);
+const hash = await walletClient.writeContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'scheduleBatch',
+  args: [targets, values, datas, predecessor, salt, delay]
+});
 
-await tx.wait();
+await publicClient.waitForTransactionReceipt({ hash });
 console.log('Batch scheduled');
 ```
 
@@ -188,36 +217,45 @@ Create dependencies between operations:
 
 ```typescript
 // Operation 1: Deploy new implementation
-const operation1Salt = ethers.id('deploy-impl-v2');
+const operation1Salt = keccak256('0x6465706c6f792d696d706c2d7632'); // 'deploy-impl-v2'
 const deployData = /* ... */;
 
-await timelock.schedule(
-  DEPLOYER_ADDRESS,
-  0,
-  deployData,
-  ethers.ZeroHash,
-  operation1Salt,
-  delay
-);
+const hash1 = await walletClient.writeContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'schedule',
+  args: [DEPLOYER_ADDRESS, 0n, deployData, zeroHash, operation1Salt, delay]
+});
+await publicClient.waitForTransactionReceipt({ hash: hash1 });
 
-const operation1Id = await timelock.hashOperation(
-  DEPLOYER_ADDRESS, 0, deployData, ethers.ZeroHash, operation1Salt
-);
+const operation1Id = await publicClient.readContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'hashOperation',
+  args: [DEPLOYER_ADDRESS, 0n, deployData, zeroHash, operation1Salt]
+});
 
 // Operation 2: Upgrade to new implementation (depends on operation 1)
-const upgradeData = proxyAdmin.interface.encodeFunctionData('upgrade', [
-  PROXY_ADDRESS,
-  NEW_IMPL_ADDRESS
-]);
+const upgradeData = encodeFunctionData({
+  abi: PROXY_ADMIN_ABI,
+  functionName: 'upgrade',
+  args: [PROXY_ADDRESS, NEW_IMPL_ADDRESS]
+});
 
-await timelock.schedule(
-  PROXY_ADMIN_ADDRESS,
-  0,
-  upgradeData,
-  operation1Id, // Must execute after operation 1
-  ethers.id('upgrade-to-v2'),
-  delay
-);
+const hash2 = await walletClient.writeContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'schedule',
+  args: [
+    PROXY_ADMIN_ADDRESS,
+    0n,
+    upgradeData,
+    operation1Id, // Must execute after operation 1
+    keccak256('0x757067726164652d746f2d7632'), // 'upgrade-to-v2'
+    delay
+  ]
+});
+await publicClient.waitForTransactionReceipt({ hash: hash2 });
 ```
 
 ## Executing Operations
@@ -225,15 +263,41 @@ await timelock.schedule(
 ### Check Readiness
 
 ```typescript
-const operationId = await timelock.hashOperation(
-  target, value, data, predecessor, salt
-);
+const operationId = await publicClient.readContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'hashOperation',
+  args: [target, value, data, predecessor, salt]
+});
 
 // Check operation state
-const isScheduled = await timelock.isOperation(operationId);
-const isReady = await timelock.isOperationReady(operationId);
-const isPending = await timelock.isOperationPending(operationId);
-const isDone = await timelock.isOperationDone(operationId);
+const isScheduled = await publicClient.readContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'isOperation',
+  args: [operationId]
+});
+
+const isReady = await publicClient.readContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'isOperationReady',
+  args: [operationId]
+});
+
+const isPending = await publicClient.readContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'isOperationPending',
+  args: [operationId]
+});
+
+const isDone = await publicClient.readContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'isOperationDone',
+  args: [operationId]
+});
 
 console.log('Scheduled:', isScheduled);
 console.log('Ready to execute:', isReady);
@@ -241,9 +305,15 @@ console.log('Pending:', isPending);
 console.log('Already executed:', isDone);
 
 // Get timestamp when ready
-const timestamp = await timelock.getTimestamp(operationId);
+const timestamp = await publicClient.readContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'getTimestamp',
+  args: [operationId]
+});
+
 const now = Math.floor(Date.now() / 1000);
-const secondsRemaining = timestamp - now;
+const secondsRemaining = Number(timestamp) - now;
 
 if (secondsRemaining > 0) {
   console.log(`Operation ready in ${secondsRemaining} seconds`);
@@ -256,36 +326,49 @@ if (secondsRemaining > 0) {
 
 ```typescript
 // Must wait for delay to pass
-const timelock = new ethers.Contract(TIMELOCK_ADDRESS, TIMELOCK_ABI, executor);
+const account = privateKeyToAccount(EXECUTOR_PRIVATE_KEY);
+const walletClient = createWalletClient({
+  account,
+  chain: base,
+  transport: http()
+});
 
-const tx = await timelock.execute(
-  target,
-  value,
-  data,
-  predecessor,
-  salt
-);
+const publicClient = createPublicClient({
+  chain: base,
+  transport: http()
+});
 
-const receipt = await tx.wait();
+const hash = await walletClient.writeContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'execute',
+  args: [target, value, data, predecessor, salt]
+});
+
+const receipt = await publicClient.waitForTransactionReceipt({ hash });
 console.log('Operation executed:', receipt.transactionHash);
 
 // Verify execution
-const isDone = await timelock.isOperationDone(operationId);
+const isDone = await publicClient.readContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'isOperationDone',
+  args: [operationId]
+});
 console.log('Operation completed:', isDone);
 ```
 
 ### Execute Batch
 
 ```typescript
-const tx = await timelock.executeBatch(
-  targets,
-  values,
-  datas,
-  predecessor,
-  salt
-);
+const hash = await walletClient.writeContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'executeBatch',
+  args: [targets, values, datas, predecessor, salt]
+});
 
-await tx.wait();
+await publicClient.waitForTransactionReceipt({ hash });
 console.log('Batch executed');
 ```
 
@@ -294,15 +377,35 @@ console.log('Batch executed');
 ### Cancel Single Operation
 
 ```typescript
-const timelock = new ethers.Contract(TIMELOCK_ADDRESS, TIMELOCK_ABI, canceller);
+const account = privateKeyToAccount(CANCELLER_PRIVATE_KEY);
+const walletClient = createWalletClient({
+  account,
+  chain: base,
+  transport: http()
+});
 
-const tx = await timelock.cancel(operationId);
-await tx.wait();
+const publicClient = createPublicClient({
+  chain: base,
+  transport: http()
+});
+
+const hash = await walletClient.writeContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'cancel',
+  args: [operationId]
+});
+await publicClient.waitForTransactionReceipt({ hash });
 
 console.log('Operation cancelled');
 
 // Verify cancellation
-const isScheduled = await timelock.isOperation(operationId);
+const isScheduled = await publicClient.readContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'isOperation',
+  args: [operationId]
+});
 console.log('Still scheduled:', isScheduled); // Should be false
 ```
 
@@ -310,17 +413,28 @@ console.log('Still scheduled:', isScheduled); // Should be false
 
 ```typescript
 // Quick cancellation in emergency
-async function emergencyCancel(operationId, reason) {
+async function emergencyCancel(operationId: string, reason: string) {
   console.log(`EMERGENCY CANCEL: ${reason}`);
 
-  const timelock = new ethers.Contract(
-    TIMELOCK_ADDRESS,
-    TIMELOCK_ABI,
-    emergencySigner
-  );
+  const account = privateKeyToAccount(EMERGENCY_PRIVATE_KEY);
+  const walletClient = createWalletClient({
+    account,
+    chain: base,
+    transport: http()
+  });
 
-  const tx = await timelock.cancel(operationId);
-  await tx.wait();
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http()
+  });
+
+  const hash = await walletClient.writeContract({
+    address: TIMELOCK_ADDRESS,
+    abi: TIMELOCK_ABI,
+    functionName: 'cancel',
+    args: [operationId]
+  });
+  await publicClient.waitForTransactionReceipt({ hash });
 
   // Send alerts
   await sendAlert({
@@ -341,51 +455,69 @@ async function emergencyCancel(operationId, reason) {
 Complete workflow for upgrading a contract:
 
 ```typescript
-import { ethers } from 'ethers';
+import { createPublicClient, createWalletClient, http, encodeFunctionData, keccak256, toHex, zeroHash } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { base } from 'viem/chains';
 
 async function scheduleContractUpgrade(
-  proxyAddress: string,
-  newImplementation: string,
-  initData: string = '0x'
+  proxyAddress: `0x${string}`,
+  newImplementation: `0x${string}`,
+  initData: `0x${string}` = '0x'
 ) {
-  const timelock = new ethers.Contract(TIMELOCK_ADDRESS, TIMELOCK_ABI, proposer);
-  const proxyAdmin = new ethers.Contract(PROXY_ADMIN_ADDRESS, PROXY_ADMIN_ABI, provider);
+  const account = privateKeyToAccount(PROPOSER_PRIVATE_KEY);
+  const walletClient = createWalletClient({
+    account,
+    chain: base,
+    transport: http()
+  });
+
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http()
+  });
 
   // 1. Prepare upgrade calldata
-  const upgradeCalldata = proxyAdmin.interface.encodeFunctionData('upgradeAndCall', [
-    proxyAddress,
-    newImplementation,
-    initData
-  ]);
+  const upgradeCalldata = encodeFunctionData({
+    abi: PROXY_ADMIN_ABI,
+    functionName: 'upgradeAndCall',
+    args: [proxyAddress, newImplementation, initData]
+  });
 
   // 2. Generate unique salt
-  const salt = ethers.id(`upgrade-${proxyAddress}-${Date.now()}`);
+  const salt = keccak256(toHex(`upgrade-${proxyAddress}-${Date.now()}`));
 
   // 3. Schedule operation
-  const delay = await timelock.getMinDelay();
-  const tx = await timelock.schedule(
-    PROXY_ADMIN_ADDRESS,
-    0,
-    upgradeCalldata,
-    ethers.ZeroHash,
-    salt,
-    delay
-  );
+  const delay = await publicClient.readContract({
+    address: TIMELOCK_ADDRESS,
+    abi: TIMELOCK_ABI,
+    functionName: 'getMinDelay'
+  });
 
-  await tx.wait();
+  const hash = await walletClient.writeContract({
+    address: TIMELOCK_ADDRESS,
+    abi: TIMELOCK_ABI,
+    functionName: 'schedule',
+    args: [PROXY_ADMIN_ADDRESS, 0n, upgradeCalldata, zeroHash, salt, delay]
+  });
+
+  await publicClient.waitForTransactionReceipt({ hash });
 
   // 4. Compute operation ID
-  const operationId = await timelock.hashOperation(
-    PROXY_ADMIN_ADDRESS,
-    0,
-    upgradeCalldata,
-    ethers.ZeroHash,
-    salt
-  );
+  const operationId = await publicClient.readContract({
+    address: TIMELOCK_ADDRESS,
+    abi: TIMELOCK_ABI,
+    functionName: 'hashOperation',
+    args: [PROXY_ADMIN_ADDRESS, 0n, upgradeCalldata, zeroHash, salt]
+  });
 
   // 5. Get execution timestamp
-  const timestamp = await timelock.getTimestamp(operationId);
-  const readyDate = new Date(timestamp * 1000);
+  const timestamp = await publicClient.readContract({
+    address: TIMELOCK_ADDRESS,
+    abi: TIMELOCK_ABI,
+    functionName: 'getTimestamp',
+    args: [operationId]
+  });
+  const readyDate = new Date(Number(timestamp) * 1000);
 
   console.log('Upgrade scheduled');
   console.log('Operation ID:', operationId);
@@ -402,37 +534,56 @@ async function scheduleContractUpgrade(
   };
 }
 
-async function executeContractUpgrade(operationInfo) {
-  const timelock = new ethers.Contract(TIMELOCK_ADDRESS, TIMELOCK_ABI, executor);
-  const proxyAdmin = new ethers.Contract(PROXY_ADMIN_ADDRESS, PROXY_ADMIN_ABI, provider);
+async function executeContractUpgrade(operationInfo: any) {
+  const account = privateKeyToAccount(EXECUTOR_PRIVATE_KEY);
+  const walletClient = createWalletClient({
+    account,
+    chain: base,
+    transport: http()
+  });
+
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http()
+  });
 
   // 1. Verify ready
-  const isReady = await timelock.isOperationReady(operationInfo.operationId);
+  const isReady = await publicClient.readContract({
+    address: TIMELOCK_ADDRESS,
+    abi: TIMELOCK_ABI,
+    functionName: 'isOperationReady',
+    args: [operationInfo.operationId]
+  });
+
   if (!isReady) {
     throw new Error('Operation not ready yet');
   }
 
   // 2. Reconstruct upgrade calldata
-  const upgradeCalldata = proxyAdmin.interface.encodeFunctionData('upgradeAndCall', [
-    operationInfo.proxyAddress,
-    operationInfo.newImplementation,
-    '0x'
-  ]);
+  const upgradeCalldata = encodeFunctionData({
+    abi: PROXY_ADMIN_ABI,
+    functionName: 'upgradeAndCall',
+    args: [operationInfo.proxyAddress, operationInfo.newImplementation, '0x']
+  });
 
   // 3. Execute
-  const tx = await timelock.execute(
-    PROXY_ADMIN_ADDRESS,
-    0,
-    upgradeCalldata,
-    ethers.ZeroHash,
-    operationInfo.salt
-  );
+  const hash = await walletClient.writeContract({
+    address: TIMELOCK_ADDRESS,
+    abi: TIMELOCK_ABI,
+    functionName: 'execute',
+    args: [PROXY_ADMIN_ADDRESS, 0n, upgradeCalldata, zeroHash, operationInfo.salt]
+  });
 
-  const receipt = await tx.wait();
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
   console.log('Upgrade executed:', receipt.transactionHash);
 
   // 4. Verify
-  const currentImpl = await proxyAdmin.getProxyImplementation(operationInfo.proxyAddress);
+  const currentImpl = await publicClient.readContract({
+    address: PROXY_ADMIN_ADDRESS,
+    abi: PROXY_ADMIN_ABI,
+    functionName: 'getProxyImplementation',
+    args: [operationInfo.proxyAddress]
+  });
   console.log('Current implementation:', currentImpl);
   console.log('Upgrade successful:', currentImpl === operationInfo.newImplementation);
 
@@ -444,35 +595,53 @@ async function executeContractUpgrade(operationInfo) {
 
 ```typescript
 async function scheduleParameterUpdate(
-  contractAddress: string,
+  contractAddress: `0x${string}`,
   functionName: string,
   params: any[]
 ) {
-  const timelock = new ethers.Contract(TIMELOCK_ADDRESS, TIMELOCK_ABI, proposer);
-  const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, provider);
+  const account = privateKeyToAccount(PROPOSER_PRIVATE_KEY);
+  const walletClient = createWalletClient({
+    account,
+    chain: base,
+    transport: http()
+  });
+
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http()
+  });
 
   // Encode function call
-  const data = contract.interface.encodeFunctionData(functionName, params);
+  const data = encodeFunctionData({
+    abi: CONTRACT_ABI,
+    functionName,
+    args: params
+  });
 
   // Schedule with shorter delay (parameters timelock)
-  const salt = ethers.id(`param-${functionName}-${Date.now()}`);
-  const delay = await timelock.getMinDelay();
+  const salt = keccak256(toHex(`param-${functionName}-${Date.now()}`));
+  const delay = await publicClient.readContract({
+    address: TIMELOCK_ADDRESS,
+    abi: TIMELOCK_ABI,
+    functionName: 'getMinDelay'
+  });
 
-  const tx = await timelock.schedule(
-    contractAddress,
-    0,
-    data,
-    ethers.ZeroHash,
-    salt,
-    delay
-  );
+  const hash = await walletClient.writeContract({
+    address: TIMELOCK_ADDRESS,
+    abi: TIMELOCK_ABI,
+    functionName: 'schedule',
+    args: [contractAddress, 0n, data, zeroHash, salt, delay]
+  });
 
-  await tx.wait();
+  await publicClient.waitForTransactionReceipt({ hash });
   console.log(`Parameter update scheduled: ${functionName}`);
 
-  return await timelock.hashOperation(
-    contractAddress, 0, data, ethers.ZeroHash, salt
-  );
+  return await publicClient.readContract({
+    address: TIMELOCK_ADDRESS,
+    abi: TIMELOCK_ABI,
+    functionName: 'hashOperation',
+    args: [contractAddress, 0n, data, zeroHash, salt]
+  });
 }
 ```
 
@@ -480,58 +649,83 @@ async function scheduleParameterUpdate(
 
 ```typescript
 async function scheduleComplexUpgrade() {
-  const timelock = new ethers.Contract(TIMELOCK_ADDRESS, TIMELOCK_ABI, proposer);
-  const delay = await timelock.getMinDelay();
+  const account = privateKeyToAccount(PROPOSER_PRIVATE_KEY);
+  const walletClient = createWalletClient({
+    account,
+    chain: base,
+    transport: http()
+  });
+
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http()
+  });
+
+  const delay = await publicClient.readContract({
+    address: TIMELOCK_ADDRESS,
+    abi: TIMELOCK_ABI,
+    functionName: 'getMinDelay'
+  });
 
   // Step 1: Pause contracts
-  const pauseData = multiVault.interface.encodeFunctionData('pause');
-  const pauseSalt = ethers.id('upgrade-pause');
+  const pauseData = encodeFunctionData({
+    abi: MULTIVAULT_ABI,
+    functionName: 'pause'
+  });
+  const pauseSalt = keccak256('0x757067726164652d7061757365'); // 'upgrade-pause'
 
-  await timelock.schedule(
-    MULTIVAULT_ADDRESS,
-    0,
-    pauseData,
-    ethers.ZeroHash,
-    pauseSalt,
-    delay
-  );
+  const pauseHash = await walletClient.writeContract({
+    address: TIMELOCK_ADDRESS,
+    abi: TIMELOCK_ABI,
+    functionName: 'schedule',
+    args: [MULTIVAULT_ADDRESS, 0n, pauseData, zeroHash, pauseSalt, delay]
+  });
+  await publicClient.waitForTransactionReceipt({ hash: pauseHash });
 
-  const pauseId = await timelock.hashOperation(
-    MULTIVAULT_ADDRESS, 0, pauseData, ethers.ZeroHash, pauseSalt
-  );
+  const pauseId = await publicClient.readContract({
+    address: TIMELOCK_ADDRESS,
+    abi: TIMELOCK_ABI,
+    functionName: 'hashOperation',
+    args: [MULTIVAULT_ADDRESS, 0n, pauseData, zeroHash, pauseSalt]
+  });
 
   // Step 2: Upgrade (depends on pause)
-  const upgradeData = proxyAdmin.interface.encodeFunctionData('upgrade', [
-    MULTIVAULT_ADDRESS,
-    NEW_IMPLEMENTATION
-  ]);
-  const upgradeSalt = ethers.id('upgrade-impl');
+  const upgradeData = encodeFunctionData({
+    abi: PROXY_ADMIN_ABI,
+    functionName: 'upgrade',
+    args: [MULTIVAULT_ADDRESS, NEW_IMPLEMENTATION]
+  });
+  const upgradeSalt = keccak256('0x757067726164652d696d706c'); // 'upgrade-impl'
 
-  await timelock.schedule(
-    PROXY_ADMIN_ADDRESS,
-    0,
-    upgradeData,
-    pauseId, // Depends on pause completing
-    upgradeSalt,
-    delay
-  );
+  const upgradeHash = await walletClient.writeContract({
+    address: TIMELOCK_ADDRESS,
+    abi: TIMELOCK_ABI,
+    functionName: 'schedule',
+    args: [PROXY_ADMIN_ADDRESS, 0n, upgradeData, pauseId, upgradeSalt, delay]
+  });
+  await publicClient.waitForTransactionReceipt({ hash: upgradeHash });
 
-  const upgradeId = await timelock.hashOperation(
-    PROXY_ADMIN_ADDRESS, 0, upgradeData, pauseId, upgradeSalt
-  );
+  const upgradeId = await publicClient.readContract({
+    address: TIMELOCK_ADDRESS,
+    abi: TIMELOCK_ABI,
+    functionName: 'hashOperation',
+    args: [PROXY_ADMIN_ADDRESS, 0n, upgradeData, pauseId, upgradeSalt]
+  });
 
   // Step 3: Unpause (depends on upgrade)
-  const unpauseData = multiVault.interface.encodeFunctionData('unpause');
-  const unpauseSalt = ethers.id('upgrade-unpause');
+  const unpauseData = encodeFunctionData({
+    abi: MULTIVAULT_ABI,
+    functionName: 'unpause'
+  });
+  const unpauseSalt = keccak256('0x757067726164652d756e7061757365'); // 'upgrade-unpause'
 
-  await timelock.schedule(
-    MULTIVAULT_ADDRESS,
-    0,
-    unpauseData,
-    upgradeId, // Depends on upgrade completing
-    unpauseSalt,
-    delay
-  );
+  const unpauseHash = await walletClient.writeContract({
+    address: TIMELOCK_ADDRESS,
+    abi: TIMELOCK_ABI,
+    functionName: 'schedule',
+    args: [MULTIVAULT_ADDRESS, 0n, unpauseData, upgradeId, unpauseSalt, delay]
+  });
+  await publicClient.waitForTransactionReceipt({ hash: unpauseHash });
 
   console.log('Multi-step upgrade scheduled');
   console.log('Steps: pause -> upgrade -> unpause');
@@ -544,25 +738,41 @@ async function scheduleComplexUpgrade() {
 
 ```typescript
 // Generate calldata for updating delay
-async function scheduleDelayUpdate(newDelay: number) {
-  const timelock = new ethers.Contract(TIMELOCK_ADDRESS, TIMELOCK_ABI, proposer);
+async function scheduleDelayUpdate(newDelay: bigint) {
+  const account = privateKeyToAccount(PROPOSER_PRIVATE_KEY);
+  const walletClient = createWalletClient({
+    account,
+    chain: base,
+    transport: http()
+  });
+
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http()
+  });
 
   // Timelock calls itself to update delay
-  const data = timelock.interface.encodeFunctionData('updateDelay', [newDelay]);
+  const data = encodeFunctionData({
+    abi: TIMELOCK_ABI,
+    functionName: 'updateDelay',
+    args: [newDelay]
+  });
 
-  const salt = ethers.id(`update-delay-${newDelay}`);
-  const currentDelay = await timelock.getMinDelay();
+  const salt = keccak256(toHex(`update-delay-${newDelay}`));
+  const currentDelay = await publicClient.readContract({
+    address: TIMELOCK_ADDRESS,
+    abi: TIMELOCK_ABI,
+    functionName: 'getMinDelay'
+  });
 
-  const tx = await timelock.schedule(
-    TIMELOCK_ADDRESS, // Target is timelock itself
-    0,
-    data,
-    ethers.ZeroHash,
-    salt,
-    currentDelay
-  );
+  const hash = await walletClient.writeContract({
+    address: TIMELOCK_ADDRESS,
+    abi: TIMELOCK_ABI,
+    functionName: 'schedule',
+    args: [TIMELOCK_ADDRESS, 0n, data, zeroHash, salt, currentDelay]
+  });
 
-  await tx.wait();
+  await publicClient.waitForTransactionReceipt({ hash });
   console.log(`Delay update scheduled: ${currentDelay}s -> ${newDelay}s`);
 }
 ```
@@ -579,30 +789,48 @@ npx tsx script/upgrades/generate-timelock-update-delay-calldata.ts \
 
 ```typescript
 // Grant proposer role
-async function grantProposerRole(account: string) {
-  const timelock = new ethers.Contract(TIMELOCK_ADDRESS, TIMELOCK_ABI, admin);
-  const PROPOSER_ROLE = await timelock.PROPOSER_ROLE();
+async function grantProposerRole(targetAccount: `0x${string}`) {
+  const account = privateKeyToAccount(ADMIN_PRIVATE_KEY);
+  const walletClient = createWalletClient({
+    account,
+    chain: base,
+    transport: http()
+  });
+
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http()
+  });
+
+  const PROPOSER_ROLE = await publicClient.readContract({
+    address: TIMELOCK_ADDRESS,
+    abi: TIMELOCK_ABI,
+    functionName: 'PROPOSER_ROLE'
+  });
 
   // Schedule role grant (timelock grants to itself)
-  const data = timelock.interface.encodeFunctionData('grantRole', [
-    PROPOSER_ROLE,
-    account
-  ]);
+  const data = encodeFunctionData({
+    abi: TIMELOCK_ABI,
+    functionName: 'grantRole',
+    args: [PROPOSER_ROLE, targetAccount]
+  });
 
-  const salt = ethers.id(`grant-proposer-${account}`);
-  const delay = await timelock.getMinDelay();
+  const salt = keccak256(toHex(`grant-proposer-${targetAccount}`));
+  const delay = await publicClient.readContract({
+    address: TIMELOCK_ADDRESS,
+    abi: TIMELOCK_ABI,
+    functionName: 'getMinDelay'
+  });
 
-  const tx = await timelock.schedule(
-    TIMELOCK_ADDRESS,
-    0,
-    data,
-    ethers.ZeroHash,
-    salt,
-    delay
-  );
+  const hash = await walletClient.writeContract({
+    address: TIMELOCK_ADDRESS,
+    abi: TIMELOCK_ABI,
+    functionName: 'schedule',
+    args: [TIMELOCK_ADDRESS, 0n, data, zeroHash, salt, delay]
+  });
 
-  await tx.wait();
-  console.log(`Proposer role grant scheduled for ${account}`);
+  await publicClient.waitForTransactionReceipt({ hash });
+  console.log(`Proposer role grant scheduled for ${targetAccount}`);
 }
 ```
 
@@ -611,51 +839,63 @@ async function grantProposerRole(account: string) {
 ### Listen for Scheduled Operations
 
 ```typescript
-const timelock = new ethers.Contract(TIMELOCK_ADDRESS, TIMELOCK_ABI, provider);
+const publicClient = createPublicClient({
+  chain: base,
+  transport: http()
+});
 
 // Monitor CallScheduled events
-timelock.on('CallScheduled', (
-  id,
-  index,
-  target,
-  value,
-  data,
-  predecessor,
-  delay,
-  event
-) => {
-  console.log('Operation scheduled:');
-  console.log('  ID:', id);
-  console.log('  Target:', target);
-  console.log('  Delay:', delay.toString(), 'seconds');
-  console.log('  Ready at:', new Date((Date.now() + delay * 1000)).toISOString());
+const unwatchScheduled = publicClient.watchEvent({
+  address: TIMELOCK_ADDRESS,
+  event: parseAbiItem('event CallScheduled(bytes32 indexed id, uint256 indexed index, address target, uint256 value, bytes data, bytes32 predecessor, uint256 delay)'),
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      console.log('Operation scheduled:');
+      console.log('  ID:', log.args.id);
+      console.log('  Target:', log.args.target);
+      console.log('  Delay:', log.args.delay.toString(), 'seconds');
+      console.log('  Ready at:', new Date((Date.now() + Number(log.args.delay) * 1000)).toISOString());
 
-  // Send notification
-  sendNotification({
-    type: 'OPERATION_SCHEDULED',
-    operationId: id,
-    target,
-    delay: delay.toString()
-  });
+      // Send notification
+      sendNotification({
+        type: 'OPERATION_SCHEDULED',
+        operationId: log.args.id,
+        target: log.args.target,
+        delay: log.args.delay.toString()
+      });
+    });
+  }
 });
 
 // Monitor CallExecuted events
-timelock.on('CallExecuted', (id, index, target, value, data, event) => {
-  console.log('Operation executed:');
-  console.log('  ID:', id);
-  console.log('  Target:', target);
-  console.log('  Tx:', event.transactionHash);
+const unwatchExecuted = publicClient.watchEvent({
+  address: TIMELOCK_ADDRESS,
+  event: parseAbiItem('event CallExecuted(bytes32 indexed id, uint256 indexed index, address target, uint256 value, bytes data)'),
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      console.log('Operation executed:');
+      console.log('  ID:', log.args.id);
+      console.log('  Target:', log.args.target);
+      console.log('  Tx:', log.transactionHash);
+    });
+  }
 });
 
 // Monitor Cancelled events
-timelock.on('Cancelled', (id, event) => {
-  console.log('Operation cancelled:', id);
+const unwatchCancelled = publicClient.watchEvent({
+  address: TIMELOCK_ADDRESS,
+  event: parseAbiItem('event Cancelled(bytes32 indexed id)'),
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      console.log('Operation cancelled:', log.args.id);
 
-  sendAlert({
-    type: 'OPERATION_CANCELLED',
-    operationId: id,
-    txHash: event.transactionHash
-  });
+      sendAlert({
+        type: 'OPERATION_CANCELLED',
+        operationId: log.args.id,
+        txHash: log.transactionHash
+      });
+    });
+  }
 });
 ```
 
@@ -663,11 +903,18 @@ timelock.on('Cancelled', (id, event) => {
 
 ```typescript
 async function listPendingOperations() {
-  const timelock = new ethers.Contract(TIMELOCK_ADDRESS, TIMELOCK_ABI, provider);
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http()
+  });
 
   // Get all CallScheduled events
-  const filter = timelock.filters.CallScheduled();
-  const events = await timelock.queryFilter(filter);
+  const events = await publicClient.getLogs({
+    address: TIMELOCK_ADDRESS,
+    event: parseAbiItem('event CallScheduled(bytes32 indexed id, uint256 indexed index, address target, uint256 value, bytes data, bytes32 predecessor, uint256 delay)'),
+    fromBlock: 0n,
+    toBlock: 'latest'
+  });
 
   const pending = [];
 
@@ -675,16 +922,33 @@ async function listPendingOperations() {
     const operationId = event.args.id;
 
     // Check if still pending
-    const isPending = await timelock.isOperationPending(operationId);
+    const isPending = await publicClient.readContract({
+      address: TIMELOCK_ADDRESS,
+      abi: TIMELOCK_ABI,
+      functionName: 'isOperationPending',
+      args: [operationId]
+    });
+
     if (!isPending) continue;
 
-    const timestamp = await timelock.getTimestamp(operationId);
-    const isReady = await timelock.isOperationReady(operationId);
+    const timestamp = await publicClient.readContract({
+      address: TIMELOCK_ADDRESS,
+      abi: TIMELOCK_ABI,
+      functionName: 'getTimestamp',
+      args: [operationId]
+    });
+
+    const isReady = await publicClient.readContract({
+      address: TIMELOCK_ADDRESS,
+      abi: TIMELOCK_ABI,
+      functionName: 'isOperationReady',
+      args: [operationId]
+    });
 
     pending.push({
       id: operationId,
       target: event.args.target,
-      timestamp: new Date(timestamp * 1000),
+      timestamp: new Date(Number(timestamp) * 1000),
       isReady,
       blockNumber: event.blockNumber
     });
@@ -727,22 +991,81 @@ const SECURITY_MULTISIG = '0x...'; // Can cancel
 const GOVERNANCE_MULTISIG = '0x...'; // Can propose
 const EXECUTOR_BOT = '0x...'; // Can execute
 
+const account = privateKeyToAccount(ADMIN_PRIVATE_KEY);
+const walletClient = createWalletClient({
+  account,
+  chain: base,
+  transport: http()
+});
+
+const publicClient = createPublicClient({
+  chain: base,
+  transport: http()
+});
+
+const PROPOSER_ROLE = await publicClient.readContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'PROPOSER_ROLE'
+});
+
+const EXECUTOR_ROLE = await publicClient.readContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'EXECUTOR_ROLE'
+});
+
+const CANCELLER_ROLE = await publicClient.readContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'CANCELLER_ROLE'
+});
+
 // Grant roles appropriately
-await timelock.grantRole(PROPOSER_ROLE, GOVERNANCE_MULTISIG);
-await timelock.grantRole(EXECUTOR_ROLE, EXECUTOR_BOT);
-await timelock.grantRole(CANCELLER_ROLE, SECURITY_MULTISIG);
+await walletClient.writeContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'grantRole',
+  args: [PROPOSER_ROLE, GOVERNANCE_MULTISIG]
+});
+
+await walletClient.writeContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'grantRole',
+  args: [EXECUTOR_ROLE, EXECUTOR_BOT]
+});
+
+await walletClient.writeContract({
+  address: TIMELOCK_ADDRESS,
+  abi: TIMELOCK_ABI,
+  functionName: 'grantRole',
+  args: [CANCELLER_ROLE, SECURITY_MULTISIG]
+});
 ```
 
 ### 3. Operation Verification
 
 ```typescript
+import { decodeFunctionData } from 'viem';
+
 // Always verify operation parameters before execution
-async function verifyOperation(operationId: string) {
-  const timelock = new ethers.Contract(TIMELOCK_ADDRESS, TIMELOCK_ABI, provider);
+async function verifyOperation(operationId: `0x${string}`) {
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http()
+  });
 
   // Get operation details from events
-  const filter = timelock.filters.CallScheduled(operationId);
-  const events = await timelock.queryFilter(filter);
+  const events = await publicClient.getLogs({
+    address: TIMELOCK_ADDRESS,
+    event: parseAbiItem('event CallScheduled(bytes32 indexed id, uint256 indexed index, address target, uint256 value, bytes data, bytes32 predecessor, uint256 delay)'),
+    args: {
+      id: operationId
+    },
+    fromBlock: 0n,
+    toBlock: 'latest'
+  });
 
   if (events.length === 0) {
     throw new Error('Operation not found');
@@ -759,9 +1082,11 @@ async function verifyOperation(operationId: string) {
   console.log('  Delay:', event.args.delay.toString());
 
   // Decode function call
-  const iface = new ethers.Interface(TARGET_ABI);
-  const decoded = iface.parseTransaction({ data: event.args.data });
-  console.log('  Function:', decoded.name);
+  const decoded = decodeFunctionData({
+    abi: TARGET_ABI,
+    data: event.args.data
+  });
+  console.log('  Function:', decoded.functionName);
   console.log('  Params:', decoded.args);
 
   return {

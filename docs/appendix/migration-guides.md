@@ -67,6 +67,8 @@ async function depositV1(termId: string, amount: bigint) {
 
 **V2 Code:**
 ```typescript
+import { decodeEventLog } from 'viem';
+
 // NEW - V2
 async function depositV2(
   termId: string,
@@ -75,27 +77,41 @@ async function depositV2(
   receiver: string
 ) {
   // 1. Approve TRUST
-  const trust = new ethers.Contract(TRUST_ADDRESS, TRUST_ABI, signer);
-  await trust.approve(MULTIVAULT_ADDRESS, assets);
+  const approveHash = await walletClient.writeContract({
+    address: TRUST_ADDRESS,
+    abi: TRUST_ABI,
+    functionName: 'approve',
+    args: [MULTIVAULT_ADDRESS, assets]
+  });
+  await publicClient.waitForTransactionReceipt({ hash: approveHash });
 
   // 2. Deposit with curve selection
-  const tx = await multiVault.deposit(termId, curveId, assets, receiver);
-  const receipt = await tx.wait();
+  const depositHash = await walletClient.writeContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'deposit',
+    args: [termId, curveId, assets, receiver]
+  });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash: depositHash });
 
   // 3. Parse deposit event for shares received
   const depositEvent = receipt.logs
     .map(log => {
       try {
-        return multiVault.interface.parseLog(log);
+        return decodeEventLog({
+          abi: MULTIVAULT_ABI,
+          data: log.data,
+          topics: log.topics
+        });
       } catch {
         return null;
       }
     })
-    .find(event => event && event.name === 'Deposited');
+    .find(event => event && event.eventName === 'Deposited');
 
   return {
     shares: depositEvent.args.shares,
-    txHash: receipt.hash
+    txHash: receipt.transactionHash
   };
 }
 ```
@@ -119,6 +135,8 @@ async function redeemV1(termId: string, shares: bigint) {
 
 **V2 Code:**
 ```typescript
+import { decodeEventLog } from 'viem';
+
 // NEW - V2
 async function redeemV2(
   termId: string,
@@ -126,24 +144,33 @@ async function redeemV2(
   shares: bigint,
   receiver: string
 ) {
-  const tx = await multiVault.redeem(termId, curveId, shares, receiver);
-  const receipt = await tx.wait();
+  const hash = await walletClient.writeContract({
+    address: MULTIVAULT_ADDRESS,
+    abi: MULTIVAULT_ABI,
+    functionName: 'redeem',
+    args: [termId, curveId, shares, receiver]
+  });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
   // Parse redemption event for assets received
   const redeemEvent = receipt.logs
     .map(log => {
       try {
-        return multiVault.interface.parseLog(log);
+        return decodeEventLog({
+          abi: MULTIVAULT_ABI,
+          data: log.data,
+          topics: log.topics
+        });
       } catch {
         return null;
       }
     })
-    .find(event => event && event.name === 'Redeemed');
+    .find(event => event && event.eventName === 'Redeemed');
 
   return {
     assets: redeemEvent.args.assets,
     fees: redeemEvent.args.fees,
-    txHash: receipt.hash
+    txHash: receipt.transactionHash
   };
 }
 ```
@@ -159,7 +186,12 @@ const balance = await multiVault.balanceOf(user, termId);
 **V2 Code:**
 ```typescript
 // NEW - V2
-const balance = await multiVault.balanceOf(user, termId, curveId);
+const balance = await publicClient.readContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'balanceOf',
+  args: [user, termId, curveId]
+});
 
 // Query across all curves
 async function getTotalBalanceAllCurves(user: string, termId: string) {
@@ -167,7 +199,12 @@ async function getTotalBalanceAllCurves(user: string, termId: string) {
   let total = 0n;
 
   for (const curveId of curveIds) {
-    const balance = await multiVault.balanceOf(user, termId, curveId);
+    const balance = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: MULTIVAULT_ABI,
+      functionName: 'balanceOf',
+      args: [user, termId, curveId]
+    });
     total += balance;
   }
 
@@ -187,33 +224,46 @@ await tx.wait();
 **V2 Code:**
 ```typescript
 // NEW - V2
-const trustBonding = new ethers.Contract(
-  TRUSTBONDING_ADDRESS,
-  TRUSTBONDING_ABI,
-  signer
-);
-
 // Claim rewards for specific epochs
 const epochIds = [1, 2, 3]; // Epochs to claim
-const tx = await trustBonding.batchClaimRewards(epochIds);
-await tx.wait();
+const hash = await walletClient.writeContract({
+  address: TRUSTBONDING_ADDRESS,
+  abi: TRUSTBONDING_ABI,
+  functionName: 'batchClaimRewards',
+  args: [epochIds]
+});
+await publicClient.waitForTransactionReceipt({ hash });
 
 // Or claim all available epochs
 async function claimAllRewards(user: string) {
-  const currentEpoch = await trustBonding.currentEpoch();
+  const currentEpoch = await publicClient.readContract({
+    address: TRUSTBONDING_ADDRESS,
+    abi: TRUSTBONDING_ABI,
+    functionName: 'currentEpoch'
+  });
   const epochsToClaim = [];
 
   // Check each epoch for unclaimed rewards
   for (let epoch = 1; epoch < currentEpoch; epoch++) {
-    const userInfo = await trustBonding.getUserInfo(user, epoch);
+    const userInfo = await publicClient.readContract({
+      address: TRUSTBONDING_ADDRESS,
+      abi: TRUSTBONDING_ABI,
+      functionName: 'getUserInfo',
+      args: [user, epoch]
+    });
     if (userInfo.eligibleRewards > 0n) {
       epochsToClaim.push(epoch);
     }
   }
 
   if (epochsToClaim.length > 0) {
-    const tx = await trustBonding.batchClaimRewards(epochsToClaim);
-    await tx.wait();
+    const hash = await walletClient.writeContract({
+      address: TRUSTBONDING_ADDRESS,
+      abi: TRUSTBONDING_ABI,
+      functionName: 'batchClaimRewards',
+      args: [epochsToClaim]
+    });
+    await publicClient.waitForTransactionReceipt({ hash });
   }
 }
 ```
@@ -230,40 +280,43 @@ multiVault.on('Deposit', (user, termId, amount) => {
 
 **V2 Events:**
 ```typescript
+import { parseAbiItem, formatEther } from 'viem';
+
 // NEW - V2
-multiVault.on('Deposited', (
-  sender,
-  receiver,
-  termId,
-  curveId,
-  assets,
-  assetsAfterFees,
-  shares,
-  totalShares,
-  vaultType
-) => {
-  console.log('Deposit:', {
-    sender,
-    receiver,
-    termId,
-    curveId,
-    assets: ethers.formatEther(assets),
-    shares: ethers.formatEther(shares),
-    vaultType: ['ATOM', 'TRIPLE', 'COUNTER_TRIPLE'][vaultType]
-  });
+const unwatch = publicClient.watchEvent({
+  address: MULTIVAULT_ADDRESS,
+  event: parseAbiItem('event Deposited(address indexed sender, address indexed receiver, bytes32 indexed termId, uint256 curveId, uint256 assets, uint256 assetsAfterFees, uint256 shares, uint256 totalShares, uint8 vaultType)'),
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      console.log('Deposit:', {
+        sender: log.args.sender,
+        receiver: log.args.receiver,
+        termId: log.args.termId,
+        curveId: log.args.curveId,
+        assets: formatEther(log.args.assets),
+        shares: formatEther(log.args.shares),
+        vaultType: ['ATOM', 'TRIPLE', 'COUNTER_TRIPLE'][log.args.vaultType]
+      });
+    });
+  }
 });
+
+// Stop watching when done
+// unwatch();
 ```
 
 ### Step 8: Test Migration
 
 ```typescript
+import { parseEther } from 'viem';
+
 // Migration testing checklist
 async function testMigration() {
   const tests = [];
 
   // 1. Test deposit
   try {
-    await depositV2(TEST_TERM_ID, 1, ethers.parseEther('1'), user);
+    await depositV2(TEST_TERM_ID, 1, parseEther('1'), user);
     tests.push({ name: 'Deposit', passed: true });
   } catch (error) {
     tests.push({ name: 'Deposit', passed: false, error });
@@ -271,7 +324,12 @@ async function testMigration() {
 
   // 2. Test balance query
   try {
-    const balance = await multiVault.balanceOf(user, TEST_TERM_ID, 1);
+    const balance = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: MULTIVAULT_ABI,
+      functionName: 'balanceOf',
+      args: [user, TEST_TERM_ID, 1]
+    });
     tests.push({ name: 'Balance Query', passed: balance > 0n });
   } catch (error) {
     tests.push({ name: 'Balance Query', passed: false, error });
@@ -279,7 +337,12 @@ async function testMigration() {
 
   // 3. Test redemption
   try {
-    const balance = await multiVault.balanceOf(user, TEST_TERM_ID, 1);
+    const balance = await publicClient.readContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: MULTIVAULT_ABI,
+      functionName: 'balanceOf',
+      args: [user, TEST_TERM_ID, 1]
+    });
     await redeemV2(TEST_TERM_ID, 1, balance / 2n, user);
     tests.push({ name: 'Redemption', passed: true });
   } catch (error) {
@@ -385,41 +448,62 @@ Trust(trustAddress).mint(recipient, amount); // Works in tests
 #### Step 1: Get Current Epoch
 
 ```typescript
-const baseEmissions = new ethers.Contract(
-  BASE_EMISSIONS_CONTROLLER_ADDRESS,
-  BASE_EMISSIONS_ABI,
-  provider
-);
+import { formatEther } from 'viem';
 
-const currentEpoch = await baseEmissions.currentEpoch();
-const epochInfo = await baseEmissions.epochInfo(currentEpoch);
+const currentEpoch = await publicClient.readContract({
+  address: BASE_EMISSIONS_CONTROLLER_ADDRESS,
+  abi: BASE_EMISSIONS_ABI,
+  functionName: 'currentEpoch'
+});
+
+const epochInfo = await publicClient.readContract({
+  address: BASE_EMISSIONS_CONTROLLER_ADDRESS,
+  abi: BASE_EMISSIONS_ABI,
+  functionName: 'epochInfo',
+  args: [currentEpoch]
+});
 
 console.log('Current Epoch:', currentEpoch);
-console.log('Emissions:', ethers.formatEther(epochInfo.emissions));
+console.log('Emissions:', formatEther(epochInfo.emissions));
 ```
 
 #### Step 2: Monitor Epoch Changes
 
 ```typescript
-baseEmissions.on('EpochAdvanced', (epochId, emissions, event) => {
-  console.log('New Epoch:', epochId);
-  console.log('Emissions:', ethers.formatEther(emissions));
+import { parseAbiItem, formatEther } from 'viem';
+
+const unwatch = publicClient.watchEvent({
+  address: BASE_EMISSIONS_CONTROLLER_ADDRESS,
+  event: parseAbiItem('event EpochAdvanced(uint256 indexed epochId, uint256 emissions)'),
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      console.log('New Epoch:', log.args.epochId);
+      console.log('Emissions:', formatEther(log.args.emissions));
+    });
+  }
 });
 ```
 
 #### Step 3: Query Emission Schedule
 
 ```typescript
+import { formatEther } from 'viem';
+
 async function getEmissionSchedule(numEpochs: number) {
   const schedule = [];
 
   for (let i = 0; i < numEpochs; i++) {
     const epochId = currentEpoch + i;
-    const emissions = await baseEmissions.calculateEpochEmissions(epochId);
+    const emissions = await publicClient.readContract({
+      address: BASE_EMISSIONS_CONTROLLER_ADDRESS,
+      abi: BASE_EMISSIONS_ABI,
+      functionName: 'calculateEpochEmissions',
+      args: [epochId]
+    });
 
     schedule.push({
       epoch: epochId,
-      emissions: ethers.formatEther(emissions)
+      emissions: formatEther(emissions)
     });
   }
 
@@ -468,7 +552,7 @@ contract MyContract {
         // Approve TRUST
         IERC20(trustToken).approve(address(multiVault), assets);
 
-        // Deposit
+        // Deposit and get shares
         uint256 sharesBefore = multiVault.balanceOf(receiver, termId, curveId);
         multiVault.deposit(termId, curveId, assets, receiver);
         uint256 sharesAfter = multiVault.balanceOf(receiver, termId, curveId);
@@ -531,17 +615,16 @@ If issues are discovered post-migration:
 // Only if critical issue discovered
 // Requires ProxyAdmin or Timelock control
 
-const proxyAdmin = new ethers.Contract(
-  PROXY_ADMIN_ADDRESS,
-  PROXY_ADMIN_ABI,
-  adminSigner
-);
-
 // Rollback to previous implementation
-await proxyAdmin.upgrade(
-  MULTIVAULT_PROXY_ADDRESS,
-  PREVIOUS_IMPLEMENTATION_ADDRESS
-);
+const hash = await walletClient.writeContract({
+  address: PROXY_ADMIN_ADDRESS,
+  abi: PROXY_ADMIN_ABI,
+  functionName: 'upgrade',
+  args: [MULTIVAULT_PROXY_ADDRESS, PREVIOUS_IMPLEMENTATION_ADDRESS],
+  account: adminAccount
+});
+
+await publicClient.waitForTransactionReceipt({ hash });
 ```
 
 **Note:** Rollbacks should only be performed by protocol governance and may require timelock delay.

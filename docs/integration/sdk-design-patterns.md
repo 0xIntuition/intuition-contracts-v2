@@ -161,8 +161,12 @@ Create factories for different network configurations:
 
 ```typescript
 // TypeScript Example
+import { createPublicClient, http, type PublicClient, type Chain } from 'viem';
+import { mainnet, sepolia } from 'viem/chains';
+
 interface NetworkConfig {
   chainId: number;
+  chain: Chain;
   rpcUrl: string;
   contracts: {
     multiVault: string;
@@ -172,7 +176,7 @@ interface NetworkConfig {
 }
 
 class IntuitionSDK {
-  private provider: Provider;
+  private publicClient: PublicClient;
   private contracts: ContractInstances;
 
   static forMainnet(rpcUrl?: string): IntuitionSDK {
@@ -188,7 +192,10 @@ class IntuitionSDK {
   }
 
   private constructor(config: NetworkConfig, rpcUrl?: string) {
-    this.provider = new ethers.JsonRpcProvider(rpcUrl || config.rpcUrl);
+    this.publicClient = createPublicClient({
+      chain: config.chain,
+      transport: http(rpcUrl || config.rpcUrl)
+    });
     this.contracts = this.initializeContracts(config);
   }
 }

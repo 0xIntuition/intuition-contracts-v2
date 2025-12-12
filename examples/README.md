@@ -14,13 +14,13 @@ All examples are:
 
 ```
 examples/
-├── typescript/     # 8 TypeScript examples using ethers.js v6
+├── typescript/     # 8 TypeScript examples using viem
 ├── python/         # 6 Python examples using web3.py
 ├── solidity/       # 3 Solidity integration examples
 └── README.md       # This file
 ```
 
-## TypeScript Examples (ethers.js v6)
+## TypeScript Examples (viem)
 
 Located in `typescript/` directory.
 
@@ -39,7 +39,7 @@ Located in `typescript/` directory.
 
 ```bash
 # Install dependencies
-npm install ethers@6
+npm install viem
 
 # Set environment variable
 export PRIVATE_KEY="your_private_key_here"
@@ -219,7 +219,7 @@ await wTrust.approve(multiVault, amount2);
 await multiVault.deposit(...);
 
 // ✅ Good: Approve once for max
-await wTrust.approve(multiVault, ethers.MaxUint256);
+await wTrust.approve(multiVault, maxUint256);
 // Now all future operations work without re-approval
 ```
 
@@ -235,11 +235,20 @@ const events = await multiVault.queryFilter(atomFilter, fromBlock, toBlock);
 ### Real-time Events
 ```typescript
 // WebSocket connection for live events
-const provider = new ethers.WebSocketProvider(WS_RPC_URL);
-const multiVault = new ethers.Contract(address, abi, provider);
+const publicClient = createPublicClient({
+  chain: intuition,
+  transport: webSocket(WS_RPC_URL),
+});
 
-multiVault.on('Deposited', (sender, receiver, termId, ...args) => {
-    console.log(`New deposit: ${ethers.formatEther(args[2])} WTRUST`);
+const unwatch = publicClient.watchContractEvent({
+  address: MULTIVAULT_ADDRESS,
+  abi: MultiVaultABI,
+  eventName: 'Deposited',
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      console.log(`New deposit: ${formatEther(log.args.assets)} WTRUST`);
+    });
+  },
 });
 ```
 

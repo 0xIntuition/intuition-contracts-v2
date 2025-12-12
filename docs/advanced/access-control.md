@@ -97,17 +97,37 @@ bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
 **Usage Example:**
 ```typescript
-import { ethers } from 'ethers';
+import { createWalletClient, createPublicClient, http } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 
 // Pause MultiVault in emergency
-const multiVault = new ethers.Contract(MULTIVAULT_ADDRESS, ABI, pauser);
-const tx = await multiVault.pause();
-await tx.wait();
+const account = privateKeyToAccount(PAUSER_PRIVATE_KEY);
+const walletClient = createWalletClient({
+  account,
+  chain,
+  transport: http()
+});
+
+const publicClient = createPublicClient({
+  chain,
+  transport: http()
+});
+
+const hash = await walletClient.writeContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: ABI,
+  functionName: 'pause'
+});
+await publicClient.waitForTransactionReceipt({ hash });
 console.log('MultiVault paused');
 
 // Later, unpause after issue resolved
-const unpauseTx = await multiVault.unpause();
-await unpauseTx.wait();
+const unpauseHash = await walletClient.writeContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: ABI,
+  functionName: 'unpause'
+});
+await publicClient.waitForTransactionReceipt({ hash: unpauseHash });
 console.log('MultiVault unpaused');
 ```
 
@@ -271,15 +291,26 @@ bytes32 adminRole = contract.getRoleAdmin(PAUSER_ROLE);
 
 **TypeScript Example:**
 ```typescript
-import { ethers } from 'ethers';
+import { createPublicClient, http } from 'viem';
 
-const contract = new ethers.Contract(ADDRESS, ABI, provider);
+const publicClient = createPublicClient({
+  chain,
+  transport: http()
+});
 
 // Check if address is admin
-const isAdmin = await contract.hasRole(
-  await contract.DEFAULT_ADMIN_ROLE(),
-  checkAddress
-);
+const adminRole = await publicClient.readContract({
+  address: ADDRESS,
+  abi: ABI,
+  functionName: 'DEFAULT_ADMIN_ROLE'
+});
+
+const isAdmin = await publicClient.readContract({
+  address: ADDRESS,
+  abi: ABI,
+  functionName: 'hasRole',
+  args: [adminRole, checkAddress]
+});
 
 console.log(`${checkAddress} is admin: ${isAdmin}`);
 ```
@@ -287,12 +318,31 @@ console.log(`${checkAddress} is admin: ${isAdmin}`);
 ### Granting Roles
 
 ```typescript
-// Grant role (must be called by role admin)
-const contract = new ethers.Contract(ADDRESS, ABI, adminSigner);
+import { createWalletClient, createPublicClient, http, keccak256, toHex } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 
-const PAUSER_ROLE = ethers.id('PAUSER_ROLE');
-const tx = await contract.grantRole(PAUSER_ROLE, newPauserAddress);
-await tx.wait();
+// Grant role (must be called by role admin)
+const account = privateKeyToAccount(ADMIN_PRIVATE_KEY);
+const walletClient = createWalletClient({
+  account,
+  chain,
+  transport: http()
+});
+
+const publicClient = createPublicClient({
+  chain,
+  transport: http()
+});
+
+const PAUSER_ROLE = keccak256(toHex('PAUSER_ROLE'));
+const hash = await walletClient.writeContract({
+  address: ADDRESS,
+  abi: ABI,
+  functionName: 'grantRole',
+  args: [PAUSER_ROLE, newPauserAddress]
+});
+
+await publicClient.waitForTransactionReceipt({ hash });
 
 console.log(`PAUSER_ROLE granted to ${newPauserAddress}`);
 ```
@@ -301,11 +351,22 @@ console.log(`PAUSER_ROLE granted to ${newPauserAddress}`);
 
 ```typescript
 // Revoke role
-const tx = await contract.revokeRole(PAUSER_ROLE, oldPauserAddress);
-await tx.wait();
+const hash = await walletClient.writeContract({
+  address: ADDRESS,
+  abi: ABI,
+  functionName: 'revokeRole',
+  args: [PAUSER_ROLE, oldPauserAddress]
+});
+
+await publicClient.waitForTransactionReceipt({ hash });
 
 // Verify revocation
-const stillHasRole = await contract.hasRole(PAUSER_ROLE, oldPauserAddress);
+const stillHasRole = await publicClient.readContract({
+  address: ADDRESS,
+  abi: ABI,
+  functionName: 'hasRole',
+  args: [PAUSER_ROLE, oldPauserAddress]
+});
 console.log(`Role revoked: ${!stillHasRole}`);
 ```
 
@@ -313,8 +374,26 @@ console.log(`Role revoked: ${!stillHasRole}`);
 
 ```typescript
 // Address can renounce its own role
-const tx = await contract.renounceRole(OPERATOR_ROLE, myAddress);
-await tx.wait();
+const account = privateKeyToAccount(MY_PRIVATE_KEY);
+const walletClient = createWalletClient({
+  account,
+  chain,
+  transport: http()
+});
+
+const publicClient = createPublicClient({
+  chain,
+  transport: http()
+});
+
+const hash = await walletClient.writeContract({
+  address: ADDRESS,
+  abi: ABI,
+  functionName: 'renounceRole',
+  args: [OPERATOR_ROLE, myAddress]
+});
+
+await publicClient.waitForTransactionReceipt({ hash });
 
 console.log('Role renounced');
 ```
@@ -441,22 +520,33 @@ contract.grantRole(OPERATOR_ROLE, operator); // APPROPRIATE
 ```typescript
 // Audit script to check all role assignments
 async function auditRoles() {
+  const publicClient = createPublicClient({
+    chain,
+    transport: http()
+  });
+
   const contracts = [MULTIVAULT, TRUST, BASE_EMISSIONS];
 
   for (const addr of contracts) {
-    const contract = new ethers.Contract(addr, ABI, provider);
-
     console.log(`\nContract: ${addr}`);
 
     // Check DEFAULT_ADMIN_ROLE
-    const adminRole = await contract.DEFAULT_ADMIN_ROLE();
-    const admins = await getRoleMembers(contract, adminRole);
+    const adminRole = await publicClient.readContract({
+      address: addr,
+      abi: ABI,
+      functionName: 'DEFAULT_ADMIN_ROLE'
+    });
+    const admins = await getRoleMembers(publicClient, addr, adminRole);
     console.log('Admins:', admins);
 
     // Check PAUSER_ROLE if exists
     try {
-      const pauserRole = await contract.PAUSER_ROLE();
-      const pausers = await getRoleMembers(contract, pauserRole);
+      const pauserRole = await publicClient.readContract({
+        address: addr,
+        abi: ABI,
+        functionName: 'PAUSER_ROLE'
+      });
+      const pausers = await getRoleMembers(publicClient, addr, pauserRole);
       console.log('Pausers:', pausers);
     } catch {}
   }
@@ -467,25 +557,44 @@ async function auditRoles() {
 
 ```typescript
 // Monitor role changes
-const contract = new ethers.Contract(ADDRESS, ABI, provider);
+const publicClient = createPublicClient({
+  chain,
+  transport: http()
+});
 
-contract.on('RoleGranted', (role, account, sender, event) => {
-  console.log(`Role ${role} granted to ${account} by ${sender}`);
+const unwatchGranted = publicClient.watchContractEvent({
+  address: ADDRESS,
+  abi: ABI,
+  eventName: 'RoleGranted',
+  onLogs: (logs) => {
+    for (const log of logs) {
+      const { role, account, sender } = log.args;
+      console.log(`Role ${role} granted to ${account} by ${sender}`);
 
-  // Send alert for critical role changes
-  if (role === DEFAULT_ADMIN_ROLE) {
-    sendSecurityAlert({
-      type: 'ROLE_GRANTED',
-      role: 'DEFAULT_ADMIN_ROLE',
-      account,
-      sender,
-      txHash: event.transactionHash
-    });
+      // Send alert for critical role changes
+      if (role === DEFAULT_ADMIN_ROLE) {
+        sendSecurityAlert({
+          type: 'ROLE_GRANTED',
+          role: 'DEFAULT_ADMIN_ROLE',
+          account,
+          sender,
+          txHash: log.transactionHash
+        });
+      }
+    }
   }
 });
 
-contract.on('RoleRevoked', (role, account, sender, event) => {
-  console.log(`Role ${role} revoked from ${account} by ${sender}`);
+const unwatchRevoked = publicClient.watchContractEvent({
+  address: ADDRESS,
+  abi: ABI,
+  eventName: 'RoleRevoked',
+  onLogs: (logs) => {
+    for (const log of logs) {
+      const { role, account, sender } = log.args;
+      console.log(`Role ${role} revoked from ${account} by ${sender}`);
+    }
+  }
 });
 ```
 
@@ -494,12 +603,20 @@ contract.on('RoleRevoked', (role, account, sender, event) => {
 ### Check All Role Members
 
 ```typescript
-import { ethers } from 'ethers';
+import { createPublicClient, http } from 'viem';
 
-async function getRoleMembers(contract, role) {
+async function getRoleMembers(publicClient, contractAddress, role) {
   // Note: This requires indexing role events
-  const filter = contract.filters.RoleGranted(role);
-  const grantEvents = await contract.queryFilter(filter);
+  const grantEvents = await publicClient.getContractEvents({
+    address: contractAddress,
+    abi: ABI,
+    eventName: 'RoleGranted',
+    args: {
+      role
+    },
+    fromBlock: 0n,
+    toBlock: 'latest'
+  });
 
   const members = new Set();
 
@@ -508,8 +625,16 @@ async function getRoleMembers(contract, role) {
   }
 
   // Remove any that were revoked
-  const revokeFilter = contract.filters.RoleRevoked(role);
-  const revokeEvents = await contract.queryFilter(revokeFilter);
+  const revokeEvents = await publicClient.getContractEvents({
+    address: contractAddress,
+    abi: ABI,
+    eventName: 'RoleRevoked',
+    args: {
+      role
+    },
+    fromBlock: 0n,
+    toBlock: 'latest'
+  });
 
   for (const event of revokeEvents) {
     members.delete(event.args.account);
@@ -522,14 +647,27 @@ async function getRoleMembers(contract, role) {
 ### Batch Role Operations
 
 ```typescript
+import { encodeFunctionData } from 'viem';
+
 // Grant multiple roles in single transaction
-async function grantRoleBatch(contract, role, accounts) {
+async function grantRoleBatch(walletClient, publicClient, contractAddress, role, accounts) {
   const calls = accounts.map(account =>
-    contract.interface.encodeFunctionData('grantRole', [role, account])
+    encodeFunctionData({
+      abi: ABI,
+      functionName: 'grantRole',
+      args: [role, account]
+    })
   );
 
   // Use multicall if available
-  await contract.multicall(calls);
+  const hash = await walletClient.writeContract({
+    address: contractAddress,
+    abi: ABI,
+    functionName: 'multicall',
+    args: [calls]
+  });
+
+  await publicClient.waitForTransactionReceipt({ hash });
 }
 ```
 
@@ -537,22 +675,48 @@ async function grantRoleBatch(contract, role, accounts) {
 
 ```typescript
 // Safely transfer admin role to new address
-async function transferAdminRole(contract, newAdmin) {
-  const adminRole = await contract.DEFAULT_ADMIN_ROLE();
-  const currentAdmin = await getCurrentAdmin(contract, adminRole);
+async function transferAdminRole(walletClient, publicClient, contractAddress, newAdmin) {
+  const adminRole = await publicClient.readContract({
+    address: contractAddress,
+    abi: ABI,
+    functionName: 'DEFAULT_ADMIN_ROLE'
+  });
+  const currentAdmin = await getCurrentAdmin(publicClient, contractAddress, adminRole);
 
   // 1. Grant to new admin
-  await contract.grantRole(adminRole, newAdmin);
+  let hash = await walletClient.writeContract({
+    address: contractAddress,
+    abi: ABI,
+    functionName: 'grantRole',
+    args: [adminRole, newAdmin]
+  });
+  await publicClient.waitForTransactionReceipt({ hash });
 
   // 2. Verify new admin has role
-  const hasRole = await contract.hasRole(adminRole, newAdmin);
+  const hasRole = await publicClient.readContract({
+    address: contractAddress,
+    abi: ABI,
+    functionName: 'hasRole',
+    args: [adminRole, newAdmin]
+  });
   if (!hasRole) throw new Error('Role grant failed');
 
   // 3. Revoke from old admin
-  await contract.revokeRole(adminRole, currentAdmin);
+  hash = await walletClient.writeContract({
+    address: contractAddress,
+    abi: ABI,
+    functionName: 'revokeRole',
+    args: [adminRole, currentAdmin]
+  });
+  await publicClient.waitForTransactionReceipt({ hash });
 
   // 4. Verify old admin doesn't have role
-  const stillHasRole = await contract.hasRole(adminRole, currentAdmin);
+  const stillHasRole = await publicClient.readContract({
+    address: contractAddress,
+    abi: ABI,
+    functionName: 'hasRole',
+    args: [adminRole, currentAdmin]
+  });
   if (stillHasRole) throw new Error('Role revoke failed');
 
   console.log(`Admin role transferred from ${currentAdmin} to ${newAdmin}`);
@@ -614,7 +778,18 @@ function testRoleTransfer() public {
 **Solution:**
 ```typescript
 // Check if account has role
-const hasRole = await contract.hasRole(requiredRole, accountAddress);
+const publicClient = createPublicClient({
+  chain,
+  transport: http()
+});
+
+const hasRole = await publicClient.readContract({
+  address: contractAddress,
+  abi: ABI,
+  functionName: 'hasRole',
+  args: [requiredRole, accountAddress]
+});
+
 if (!hasRole) {
   console.log('Account missing role, requesting grant from admin...');
   // Request admin to grant role

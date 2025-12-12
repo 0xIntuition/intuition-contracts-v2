@@ -100,42 +100,50 @@ forge script script/intuition/MultiVaultMigrationModeDeploy.s.sol \
 ### Phase 2: Extract V1 Data
 
 ```typescript
-import { ethers } from 'ethers';
+import { createPublicClient, http, parseAbiItem } from 'viem';
+import { base } from 'viem/chains';
 
 async function extractV1Data() {
-  const oldMultiVault = new ethers.Contract(
-    OLD_MULTIVAULT_ADDRESS,
-    OLD_ABI,
-    provider
-  );
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http()
+  });
 
   // Extract atoms
-  const atomFilter = oldMultiVault.filters.AtomCreated();
-  const atomEvents = await oldMultiVault.queryFilter(atomFilter);
+  const atomEvents = await publicClient.getLogs({
+    address: OLD_MULTIVAULT_ADDRESS,
+    event: parseAbiItem('event AtomCreated(address indexed creator, bytes32 indexed termId, bytes atomData, address atomWallet)'),
+    fromBlock: 0n,
+    toBlock: 'latest'
+  });
 
-  const atoms = atomEvents.map(event => ({
-    creator: event.args.creator,
-    atomId: event.args.termId,
-    atomData: event.args.atomData
+  const atoms = atomEvents.map(log => ({
+    creator: log.args.creator,
+    atomId: log.args.termId,
+    atomData: log.args.atomData
   }));
 
   // Extract triples
-  const tripleFilter = oldMultiVault.filters.TripleCreated();
-  const tripleEvents = await oldMultiVault.queryFilter(tripleFilter);
+  const tripleEvents = await publicClient.getLogs({
+    address: OLD_MULTIVAULT_ADDRESS,
+    event: parseAbiItem('event TripleCreated(address indexed creator, bytes32 indexed id, bytes32 subjectId, bytes32 predicateId, bytes32 objectId, address tripleWallet, address counterWallet)'),
+    fromBlock: 0n,
+    toBlock: 'latest'
+  });
 
-  const triples = tripleEvents.map(event => ({
-    creator: event.args.creator,
-    tripleId: event.args.id,
-    subjectId: event.args.subjectId,
-    predicateId: event.args.predicateId,
-    objectId: event.args.objectId
+  const triples = tripleEvents.map(log => ({
+    creator: log.args.creator,
+    tripleId: log.args.id,
+    subjectId: log.args.subjectId,
+    predicateId: log.args.predicateId,
+    objectId: log.args.objectId
   }));
 
   // Extract vault states
-  const vaultStates = await extractVaultStates(oldMultiVault);
+  const vaultStates = await extractVaultStates(publicClient);
 
   // Extract user balances
-  const userBalances = await extractUserBalances(oldMultiVault, vaultStates);
+  const userBalances = await extractUserBalances(publicClient, vaultStates);
 
   return {
     termCount: atoms.length + triples.length * 2, // includes counter triples
@@ -150,17 +158,32 @@ async function extractV1Data() {
 ### Phase 3: Migrate Data
 
 ```typescript
+import { createWalletClient, http } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { base } from 'viem/chains';
+
 async function migrateData(data: ExtractedData) {
-  const migrationMode = new ethers.Contract(
-    MIGRATION_MODE_ADDRESS,
-    MIGRATION_MODE_ABI,
-    migratorSigner
-  );
+  const account = privateKeyToAccount(MIGRATOR_PRIVATE_KEY);
+  const walletClient = createWalletClient({
+    account,
+    chain: base,
+    transport: http()
+  });
+
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http()
+  });
 
   // Step 1: Set term count
   console.log('Setting term count...');
-  const setCountTx = await migrationMode.setTermCount(data.termCount);
-  await setCountTx.wait();
+  const setCountHash = await walletClient.writeContract({
+    address: MIGRATION_MODE_ADDRESS,
+    abi: MIGRATION_MODE_ABI,
+    functionName: 'setTermCount',
+    args: [data.termCount]
+  });
+  await publicClient.waitForTransactionReceipt({ hash: setCountHash });
 
   // Step 2: Migrate atoms in batches
   console.log('Migrating atoms...');
@@ -172,8 +195,13 @@ async function migrateData(data: ExtractedData) {
     const creators = batch.map(a => a.creator);
     const atomDataArray = batch.map(a => a.atomData);
 
-    const tx = await migrationMode.batchSetAtomData(creators, atomDataArray);
-    await tx.wait();
+    const hash = await walletClient.writeContract({
+      address: MIGRATION_MODE_ADDRESS,
+      abi: MIGRATION_MODE_ABI,
+      functionName: 'batchSetAtomData',
+      args: [creators, atomDataArray]
+    });
+    await publicClient.waitForTransactionReceipt({ hash });
 
     console.log(`Migrated atoms ${i} to ${i + batch.length}`);
   }
@@ -187,8 +215,13 @@ async function migrateData(data: ExtractedData) {
     const creators = batch.map(t => t.creator);
     const atomIds = batch.map(t => [t.subjectId, t.predicateId, t.objectId]);
 
-    const tx = await migrationMode.batchSetTripleData(creators, atomIds);
-    await tx.wait();
+    const hash = await walletClient.writeContract({
+      address: MIGRATION_MODE_ADDRESS,
+      abi: MIGRATION_MODE_ABI,
+      functionName: 'batchSetTripleData',
+      args: [creators, atomIds]
+    });
+    await publicClient.waitForTransactionReceipt({ hash });
 
     console.log(`Migrated triples ${i} to ${i + batch.length}`);
   }
@@ -205,8 +238,13 @@ async function migrateData(data: ExtractedData) {
       totalShares: v.totalShares
     }));
 
-    const tx = await migrationMode.setVaultTotals(termIds, curveId, totals);
-    await tx.wait();
+    const hash = await walletClient.writeContract({
+      address: MIGRATION_MODE_ADDRESS,
+      abi: MIGRATION_MODE_ABI,
+      functionName: 'setVaultTotals',
+      args: [termIds, curveId, totals]
+    });
+    await publicClient.waitForTransactionReceipt({ hash });
 
     console.log(`Migrated vault totals for curve ${curveId}`);
   }
@@ -218,8 +256,13 @@ async function migrateData(data: ExtractedData) {
   const grouped = groupUserBalances(data.userBalances);
 
   for (const params of grouped) {
-    const tx = await migrationMode.batchSetUserBalances(params);
-    await tx.wait();
+    const hash = await walletClient.writeContract({
+      address: MIGRATION_MODE_ADDRESS,
+      abi: MIGRATION_MODE_ABI,
+      functionName: 'batchSetUserBalances',
+      args: [params]
+    });
+    await publicClient.waitForTransactionReceipt({ hash });
 
     console.log(`Migrated balances for ${params.users.length} users`);
   }
@@ -231,20 +274,42 @@ async function migrateData(data: ExtractedData) {
 ### Phase 4: Fund Migration Mode
 
 ```typescript
+import { formatEther } from 'viem';
+
 // Transfer TRUST to back the migrated shares
 async function fundMigrationMode(totalAssetsNeeded: bigint) {
-  const trust = new ethers.Contract(TRUST_ADDRESS, TRUST_ABI, funderSigner);
+  const account = privateKeyToAccount(FUNDER_PRIVATE_KEY);
+  const walletClient = createWalletClient({
+    account,
+    chain: base,
+    transport: http()
+  });
+
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http()
+  });
 
   // Calculate total assets needed across all vaults
-  console.log(`Total TRUST needed: ${ethers.formatEther(totalAssetsNeeded)}`);
+  console.log(`Total TRUST needed: ${formatEther(totalAssetsNeeded)}`);
 
   // Transfer TRUST to MigrationMode contract
-  const tx = await trust.transfer(MIGRATION_MODE_ADDRESS, totalAssetsNeeded);
-  await tx.wait();
+  const hash = await walletClient.writeContract({
+    address: TRUST_ADDRESS,
+    abi: TRUST_ABI,
+    functionName: 'transfer',
+    args: [MIGRATION_MODE_ADDRESS, totalAssetsNeeded]
+  });
+  await publicClient.waitForTransactionReceipt({ hash });
 
   // Verify balance
-  const balance = await trust.balanceOf(MIGRATION_MODE_ADDRESS);
-  console.log(`MigrationMode TRUST balance: ${ethers.formatEther(balance)}`);
+  const balance = await publicClient.readContract({
+    address: TRUST_ADDRESS,
+    abi: TRUST_ABI,
+    functionName: 'balanceOf',
+    args: [MIGRATION_MODE_ADDRESS]
+  });
+  console.log(`MigrationMode TRUST balance: ${formatEther(balance)}`);
 
   if (balance < totalAssetsNeeded) {
     throw new Error('Insufficient funds transferred');
@@ -350,14 +415,23 @@ async function validatePreMigration(data: ExtractedData) {
 
 ```typescript
 async function validatePostMigration(
-  oldContract: ethers.Contract,
-  newContract: ethers.Contract
+  oldContractAddress: string,
+  newContractAddress: string
 ) {
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http()
+  });
+
   const checks = [];
 
   // 1. Verify term count
-  const oldCount = await getTermCount(oldContract);
-  const newCount = await newContract.totalTermsCreated();
+  const oldCount = await getTermCount(publicClient, oldContractAddress);
+  const newCount = await publicClient.readContract({
+    address: newContractAddress,
+    abi: MULTIVAULT_ABI,
+    functionName: 'totalTermsCreated'
+  });
 
   checks.push({
     name: 'Term count matches',
@@ -367,11 +441,11 @@ async function validatePostMigration(
   });
 
   // 2. Sample vault states
-  const sampleVaults = await selectSampleVaults(oldContract);
+  const sampleVaults = await selectSampleVaults(publicClient, oldContractAddress);
 
   for (const vault of sampleVaults) {
-    const oldState = await getVaultState(oldContract, vault.termId, vault.curveId);
-    const newState = await getVaultState(newContract, vault.termId, vault.curveId);
+    const oldState = await getVaultState(publicClient, oldContractAddress, vault.termId, vault.curveId);
+    const newState = await getVaultState(publicClient, newContractAddress, vault.termId, vault.curveId);
 
     checks.push({
       name: `Vault ${vault.termId} total assets`,
@@ -389,20 +463,23 @@ async function validatePostMigration(
   }
 
   // 3. Sample user balances
-  const sampleUsers = await selectSampleUsers(oldContract);
+  const sampleUsers = await selectSampleUsers(publicClient, oldContractAddress);
 
   for (const user of sampleUsers) {
     for (const vault of user.vaults) {
-      const oldBalance = await oldContract.balanceOf(
-        user.address,
-        vault.termId,
-        vault.curveId
-      );
-      const newBalance = await newContract.balanceOf(
-        user.address,
-        vault.termId,
-        vault.curveId
-      );
+      const oldBalance = await publicClient.readContract({
+        address: oldContractAddress,
+        abi: MULTIVAULT_ABI,
+        functionName: 'balanceOf',
+        args: [user.address, vault.termId, vault.curveId]
+      });
+
+      const newBalance = await publicClient.readContract({
+        address: newContractAddress,
+        abi: MULTIVAULT_ABI,
+        functionName: 'balanceOf',
+        args: [user.address, vault.termId, vault.curveId]
+      });
 
       checks.push({
         name: `User ${user.address} balance in ${vault.termId}`,
@@ -414,7 +491,12 @@ async function validatePostMigration(
   }
 
   // 4. Verify MIGRATOR_ROLE revoked
-  const hasRole = await newContract.hasRole(MIGRATOR_ROLE, ADMIN);
+  const hasRole = await publicClient.readContract({
+    address: newContractAddress,
+    abi: MULTIVAULT_ABI,
+    functionName: 'hasRole',
+    args: [MIGRATOR_ROLE, ADMIN]
+  });
 
   checks.push({
     name: 'MIGRATOR_ROLE revoked',
@@ -454,18 +536,49 @@ async function checkMigrationDeadline() {
 ### 2. Atomic Batching
 
 ```typescript
+import { encodeFunctionData } from 'viem';
+
 // Ensure batch operations are atomic
 async function migrateBatchAtomic(batch: MigrationBatch) {
+  const account = privateKeyToAccount(MIGRATOR_PRIVATE_KEY);
+  const walletClient = createWalletClient({
+    account,
+    chain: base,
+    transport: http()
+  });
+
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http()
+  });
+
   try {
     // All operations in single transaction via multicall
     const calls = [
-      migrationMode.interface.encodeFunctionData('batchSetAtomData', [...]),
-      migrationMode.interface.encodeFunctionData('setVaultTotals', [...]),
-      migrationMode.interface.encodeFunctionData('batchSetUserBalances', [...])
+      encodeFunctionData({
+        abi: MIGRATION_MODE_ABI,
+        functionName: 'batchSetAtomData',
+        args: [...]
+      }),
+      encodeFunctionData({
+        abi: MIGRATION_MODE_ABI,
+        functionName: 'setVaultTotals',
+        args: [...]
+      }),
+      encodeFunctionData({
+        abi: MIGRATION_MODE_ABI,
+        functionName: 'batchSetUserBalances',
+        args: [...]
+      })
     ];
 
-    const tx = await migrationMode.multicall(calls);
-    await tx.wait();
+    const hash = await walletClient.writeContract({
+      address: MIGRATION_MODE_ADDRESS,
+      abi: MIGRATION_MODE_ABI,
+      functionName: 'multicall',
+      args: [calls]
+    });
+    await publicClient.waitForTransactionReceipt({ hash });
 
     console.log('Batch migrated atomically');
   } catch (error) {
@@ -480,15 +593,26 @@ async function migrateBatchAtomic(batch: MigrationBatch) {
 ```typescript
 // Verify MIGRATOR_ROLE cannot be regranted
 async function verifyMigratorRevoked() {
-  const newMultiVault = new ethers.Contract(
-    MULTIVAULT_ADDRESS,
-    MULTIVAULT_ABI,
-    provider
-  );
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http()
+  });
+
+  const account = privateKeyToAccount(ADMIN_PRIVATE_KEY);
+  const walletClient = createWalletClient({
+    account,
+    chain: base,
+    transport: http()
+  });
 
   // Try to grant (should fail)
   try {
-    await newMultiVault.grantRole(MIGRATOR_ROLE, ADMIN);
+    await walletClient.writeContract({
+      address: MULTIVAULT_ADDRESS,
+      abi: MULTIVAULT_ABI,
+      functionName: 'grantRole',
+      args: [MIGRATOR_ROLE, ADMIN]
+    });
     throw new Error('MIGRATOR_ROLE was regranted - SECURITY ISSUE');
   } catch (error) {
     // Expected to fail - MultiVault doesn't have MIGRATOR_ROLE
@@ -502,19 +626,23 @@ async function verifyMigratorRevoked() {
 ```typescript
 // Monitor migration progress
 async function monitorMigration() {
-  const migrationMode = new ethers.Contract(
-    MIGRATION_MODE_ADDRESS,
-    MIGRATION_MODE_ABI,
-    provider
-  );
-
-  // Listen for migration events
-  migrationMode.on('AtomCreated', (creator, termId, atomData, atomWallet) => {
-    console.log(`Atom migrated: ${termId}`);
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http()
   });
 
-  migrationMode.on('TripleCreated', (creator, id, subjectId, predicateId, objectId) => {
-    console.log(`Triple migrated: ${id}`);
+  // Listen for migration events
+  const unwatch = publicClient.watchEvent({
+    address: MIGRATION_MODE_ADDRESS,
+    onLogs: (logs) => {
+      logs.forEach((log) => {
+        if (log.eventName === 'AtomCreated') {
+          console.log(`Atom migrated: ${log.args.termId}`);
+        } else if (log.eventName === 'TripleCreated') {
+          console.log(`Triple migrated: ${log.args.id}`);
+        }
+      });
+    }
   });
 
   // Track progress
@@ -523,7 +651,11 @@ async function monitorMigration() {
   let migratedVaults = 0;
 
   setInterval(async () => {
-    const termCount = await migrationMode.totalTermsCreated();
+    const termCount = await publicClient.readContract({
+      address: MIGRATION_MODE_ADDRESS,
+      abi: MIGRATION_MODE_ABI,
+      functionName: 'totalTermsCreated'
+    });
 
     console.log(`Migration Progress:`);
     console.log(`  Terms: ${termCount}`);
@@ -562,14 +694,31 @@ const SAFE_BATCH_SIZE = 50; // Reduce from 100
 
 **Solution:**
 ```typescript
+const account = privateKeyToAccount(ADMIN_PRIVATE_KEY);
+const walletClient = createWalletClient({
+  account,
+  chain: base,
+  transport: http()
+});
+
+const publicClient = createPublicClient({
+  chain: base,
+  transport: http()
+});
+
 // Pause V1 contract before migration
-await oldMultiVault.pause();
+const hash = await walletClient.writeContract({
+  address: OLD_MULTIVAULT_ADDRESS,
+  abi: OLD_MULTIVAULT_ABI,
+  functionName: 'pause'
+});
+await publicClient.waitForTransactionReceipt({ hash });
 
 // Perform migration
 await migrateData(extractedData);
 
 // Validate
-await validatePostMigration(oldMultiVault, newMultiVault);
+await validatePostMigration(OLD_MULTIVAULT_ADDRESS, NEW_MULTIVAULT_ADDRESS);
 ```
 
 ### Issue: Insufficient TRUST balance

@@ -40,8 +40,10 @@ An Atom is a singular unit of data (≤256 bytes) stored on-chain. Each atom has
 
 **Example:**
 ```typescript
-const atomData = ethers.toUtf8Bytes("0x1234...5678"); // An Ethereum address
-const atomId = keccak256(SALT + keccak256(atomData));
+import { keccak256, concat, toBytes } from 'viem';
+
+const atomData = toBytes("0x1234...5678"); // An Ethereum address
+const atomId = keccak256(concat([SALT, keccak256(atomData)]));
 ```
 
 ### What is a Triple?
@@ -207,7 +209,12 @@ An ERC-4337 compatible smart contract wallet associated with each atom. Atom wal
 
 Atom wallets are created deterministically when atoms are created. The address is computed as:
 ```typescript
-const walletAddress = await atomWalletFactory.getWalletAddress(atomId);
+const walletAddress = await publicClient.readContract({
+  address: ATOM_WALLET_FACTORY_ADDRESS,
+  abi: ATOM_WALLET_FACTORY_ABI,
+  functionName: 'getWalletAddress',
+  args: [atomId]
+});
 ```
 
 ### Who owns Atom Wallets?
@@ -222,7 +229,12 @@ Initially, AtomWarden contract owns all atom wallets. Ownership can be claimed i
 Yes, if you're the atom wallet owner, you can claim accumulated atomWalletDepositFees:
 
 ```typescript
-await multiVault.claimAtomWalletDepositFees(atomId);
+await walletClient.writeContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'claimAtomWalletDepositFees',
+  args: [atomId]
+});
 ```
 
 ## Integration Questions
@@ -231,15 +243,24 @@ await multiVault.claimAtomWalletDepositFees(atomId);
 
 **Option 1: Direct ABI Integration**
 ```typescript
-import { ethers } from 'ethers';
+import { createWalletClient, http } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { base } from 'viem/chains';
 
-const multiVault = new ethers.Contract(
-  MULTIVAULT_ADDRESS,
-  MULTIVAULT_ABI,
-  signer
-);
+const account = privateKeyToAccount('0xPRIVATE_KEY');
 
-await multiVault.deposit(termId, curveId, assets, receiver);
+const walletClient = createWalletClient({
+  account,
+  chain: base,
+  transport: http()
+});
+
+await walletClient.writeContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'deposit',
+  args: [termId, curveId, assets, receiver]
+});
 ```
 
 **Option 2: Build/Use SDK**
@@ -250,8 +271,14 @@ await multiVault.deposit(termId, curveId, assets, receiver);
 Yes, you must approve MultiVault to spend your TRUST:
 
 ```typescript
-const trust = new ethers.Contract(TRUST_ADDRESS, TRUST_ABI, signer);
-await trust.approve(MULTIVAULT_ADDRESS, assets);
+const hash = await walletClient.writeContract({
+  address: TRUST_ADDRESS,
+  abi: TRUST_ABI,
+  functionName: 'approve',
+  args: [MULTIVAULT_ADDRESS, assets]
+});
+
+await publicClient.waitForTransactionReceipt({ hash });
 ```
 
 Or use permit (EIP-2612) if available.
@@ -261,18 +288,34 @@ Or use permit (EIP-2612) if available.
 Yes! MultiVault supports batching:
 
 ```typescript
-await multiVault.batchDeposit([
-  { termId: id1, curveId: 1, assets: amount1, receiver: user },
-  { termId: id2, curveId: 1, assets: amount2, receiver: user },
-]);
+await walletClient.writeContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'batchDeposit',
+  args: [[
+    { termId: id1, curveId: 1, assets: amount1, receiver: user },
+    { termId: id2, curveId: 1, assets: amount2, receiver: user },
+  ]]
+});
 ```
 
 ### How do I listen for events?
 
 ```typescript
-multiVault.on('Deposited', (sender, receiver, termId, curveId, assets, shares, event) => {
-  console.log(`Deposit: ${assets} assets for ${shares} shares`);
+import { parseAbiItem } from 'viem';
+
+const unwatch = publicClient.watchEvent({
+  address: MULTIVAULT_ADDRESS,
+  event: parseAbiItem('event Deposited(address indexed sender, address indexed receiver, bytes32 indexed termId, uint256 curveId, uint256 assets, uint256 shares)'),
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      console.log(`Deposit: ${log.args.assets} assets for ${log.args.shares} shares`);
+    });
+  }
 });
+
+// Stop watching
+// unwatch();
 ```
 
 ### What if the contract is paused?
@@ -346,7 +389,11 @@ Common causes:
 ### How do I check if a contract is paused?
 
 ```typescript
-const isPaused = await multiVault.paused();
+const isPaused = await publicClient.readContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'paused'
+});
 console.log('Paused:', isPaused);
 ```
 
@@ -358,7 +405,12 @@ Check:
 3. **Transaction succeeded**: Check transaction status
 
 ```typescript
-const balance = await multiVault.balanceOf(user, termId, curveId);
+const balance = await publicClient.readContract({
+  address: MULTIVAULT_ADDRESS,
+  abi: MULTIVAULT_ABI,
+  functionName: 'balanceOf',
+  args: [user, termId, curveId]
+});
 console.log('Shares:', balance);
 ```
 
@@ -376,19 +428,23 @@ console.log('Shares:', balance);
 
 **AtomId:**
 ```typescript
-const atomId = ethers.keccak256(
-  ethers.concat([
+import { keccak256, concat, encodeAbiParameters } from 'viem';
+
+const atomId = keccak256(
+  concat([
     SALT,
-    ethers.keccak256(atomData)
+    keccak256(atomData)
   ])
 );
 ```
 
 **TripleId:**
 ```typescript
-const tripleId = ethers.keccak256(
-  ethers.AbiCoder.defaultAbiCoder().encode(
-    ['bytes32', 'bytes32', 'bytes32'],
+import { keccak256, encodeAbiParameters } from 'viem';
+
+const tripleId = keccak256(
+  encodeAbiParameters(
+    [{ type: 'bytes32' }, { type: 'bytes32' }, { type: 'bytes32' }],
     [subjectId, predicateId, objectId]
   )
 );

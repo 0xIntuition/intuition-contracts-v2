@@ -93,8 +93,10 @@ stateDiagram-v2
 
 **Example 1: Address Atom**
 ```javascript
+import { getAddress, hexToBytes } from 'viem';
+
 // Representing an Ethereum address
-const addressData = ethers.getBytes('0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb9');
+const addressData = hexToBytes(getAddress('0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb9'));
 const atomId = calculateAtomId(addressData);
 
 // This atom represents the address itself
@@ -103,8 +105,10 @@ const atomId = calculateAtomId(addressData);
 
 **Example 2: Concept Atom**
 ```javascript
+import { stringToHex } from 'viem';
+
 // Representing a concept
-const conceptData = ethers.toUtf8Bytes('verified-developer');
+const conceptData = stringToHex('verified-developer');
 const atomId = calculateAtomId(conceptData);
 
 // This atom represents the concept of being a verified developer
@@ -112,8 +116,10 @@ const atomId = calculateAtomId(conceptData);
 
 **Example 3: Numeric Atom**
 ```javascript
+import { numberToHex } from 'viem';
+
 // Representing a number
-const numberData = ethers.toBeArray(1000);
+const numberData = numberToHex(1000);
 const atomId = calculateAtomId(numberData);
 
 // This atom represents the value 1000
@@ -195,11 +201,13 @@ sequenceDiagram
 
 **Example 1: Verification Triple**
 ```javascript
+import { stringToHex, hexToBytes, getAddress } from 'viem';
+
 // Claim: "Address 0x123... is a verified developer"
 
-const subjectId = calculateAtomId(ethers.getBytes('0x123...'));
-const predicateId = calculateAtomId(ethers.toUtf8Bytes('is'));
-const objectId = calculateAtomId(ethers.toUtf8Bytes('verified-developer'));
+const subjectId = calculateAtomId(hexToBytes(getAddress('0x123...')));
+const predicateId = calculateAtomId(stringToHex('is'));
+const objectId = calculateAtomId(stringToHex('verified-developer'));
 
 const tripleId = calculateTripleId(subjectId, predicateId, objectId);
 
@@ -214,11 +222,13 @@ await multiVault.createTriples(
 
 **Example 2: Relationship Triple**
 ```javascript
+import { stringToHex } from 'viem';
+
 // Claim: "Alice knows Bob"
 
-const aliceId = calculateAtomId(ethers.toUtf8Bytes('Alice'));
-const knowsId = calculateAtomId(ethers.toUtf8Bytes('knows'));
-const bobId = calculateAtomId(ethers.toUtf8Bytes('Bob'));
+const aliceId = calculateAtomId(stringToHex('Alice'));
+const knowsId = calculateAtomId(stringToHex('knows'));
+const bobId = calculateAtomId(stringToHex('Bob'));
 
 const tripleId = calculateTripleId(aliceId, knowsId, bobId);
 
@@ -227,11 +237,13 @@ const tripleId = calculateTripleId(aliceId, knowsId, bobId);
 
 **Example 3: Property Triple**
 ```javascript
+import { stringToHex, numberToHex } from 'viem';
+
 // Claim: "Token X has a supply of 1,000,000"
 
-const tokenId = calculateAtomId(ethers.toUtf8Bytes('TokenX'));
-const hasSupplyId = calculateAtomId(ethers.toUtf8Bytes('has-supply'));
-const millionId = calculateAtomId(ethers.toBeArray(1000000));
+const tokenId = calculateAtomId(stringToHex('TokenX'));
+const hasSupplyId = calculateAtomId(stringToHex('has-supply'));
+const millionId = calculateAtomId(numberToHex(1000000));
 
 const tripleId = calculateTripleId(tokenId, hasSupplyId, millionId);
 
@@ -350,42 +362,54 @@ graph TD
 
 **String Encoding**:
 ```javascript
+import { stringToHex, size } from 'viem';
+
 // Simple string
-const data = ethers.toUtf8Bytes('verified-developer');
+const data = stringToHex('verified-developer');
 
 // Fits within 256 bytes
-if (data.length > 256) {
+if (size(data) > 256) {
   throw new Error('Data too large');
 }
 ```
 
 **Address Encoding**:
 ```javascript
+import { getAddress, hexToBytes } from 'viem';
+
 // Ethereum address as atom data
 const address = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb9';
-const data = ethers.getBytes(address); // 20 bytes
+const data = hexToBytes(getAddress(address)); // 20 bytes
 ```
 
 **Number Encoding**:
 ```javascript
+import { numberToHex } from 'viem';
+
 // Encode a number
 const value = 1000000;
-const data = ethers.toBeArray(value);
+const data = numberToHex(value);
 ```
 
 **Structured Data**:
 ```javascript
+import { encodeAbiParameters, keccak256, hexToBytes } from 'viem';
+
 // ABI-encode a struct
-const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
-  ['string', 'uint256', 'address'],
-  ['Intuition', 1000, '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb9']
+const encoded = encodeAbiParameters(
+  [
+    { type: 'string' },
+    { type: 'uint256' },
+    { type: 'address' }
+  ],
+  ['Intuition', 1000n, '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb9']
 );
 
 // Ensure it fits
-if (encoded.length > 256) {
+if (size(encoded) > 256) {
   // Store hash instead and reference off-chain data
-  const hash = ethers.keccak256(encoded);
-  const data = ethers.getBytes(hash); // 32 bytes
+  const hash = keccak256(encoded);
+  const data = hexToBytes(hash); // 32 bytes
 }
 ```
 
@@ -394,17 +418,36 @@ if (encoded.length > 256) {
 Atom data is stored on-chain and emitted in events:
 
 ```javascript
+import { createPublicClient, http, parseAbiItem, hexToString } from 'viem';
+import { base } from 'viem/chains';
+
+const publicClient = createPublicClient({
+  chain: base,
+  transport: http()
+});
+
 // Listen for atom creation to get data
-multiVault.on('AtomCreated', (creator, termId, atomData, atomWallet) => {
-  // atomData contains the original bytes
-  const dataString = ethers.toUtf8String(atomData);
-  console.log('Atom Data:', dataString);
+const unwatch = publicClient.watchEvent({
+  address: multiVaultAddress,
+  event: parseAbiItem('event AtomCreated(address indexed creator, bytes32 indexed termId, bytes atomData, address atomWallet)'),
+  onLogs: (logs) => {
+    logs.forEach((log) => {
+      // atomData contains the original bytes
+      const dataString = hexToString(log.args.atomData);
+      console.log('Atom Data:', dataString);
+    });
+  }
 });
 
 // Or query historical events
-const filter = multiVault.filters.AtomCreated(null, atomId);
-const events = await multiVault.queryFilter(filter);
-const atomData = events[0].args.atomData;
+const logs = await publicClient.getLogs({
+  address: multiVaultAddress,
+  event: parseAbiItem('event AtomCreated(address indexed creator, bytes32 indexed termId, bytes atomData, address atomWallet)'),
+  args: {
+    termId: atomId
+  }
+});
+const atomData = logs[0]?.args.atomData;
 ```
 
 ## Use Cases
@@ -570,28 +613,48 @@ For applications building on Intuition:
 
 **1. Event-Based Indexing**:
 ```javascript
+import { createPublicClient, http, parseAbiItem } from 'viem';
+import { base } from 'viem/chains';
+
+const publicClient = createPublicClient({
+  chain: base,
+  transport: http()
+});
+
 // Index all atom creation
-multiVault.on('AtomCreated', async (creator, termId, atomData, atomWallet) => {
-  await database.insert('atoms', {
-    id: termId,
-    data: atomData,
-    creator: creator,
-    wallet: atomWallet,
-    timestamp: Date.now()
-  });
+publicClient.watchEvent({
+  address: multiVaultAddress,
+  event: parseAbiItem('event AtomCreated(address indexed creator, bytes32 indexed termId, bytes atomData, address atomWallet)'),
+  onLogs: async (logs) => {
+    for (const log of logs) {
+      await database.insert('atoms', {
+        id: log.args.termId,
+        data: log.args.atomData,
+        creator: log.args.creator,
+        wallet: log.args.atomWallet,
+        timestamp: Date.now()
+      });
+    }
+  }
 });
 
 // Index all triple creation
-multiVault.on('TripleCreated', async (creator, termId, subjectId, predicateId, objectId, counterTripleId) => {
-  await database.insert('triples', {
-    id: termId,
-    subject: subjectId,
-    predicate: predicateId,
-    object: objectId,
-    counterTriple: counterTripleId,
-    creator: creator,
-    timestamp: Date.now()
-  });
+publicClient.watchEvent({
+  address: multiVaultAddress,
+  event: parseAbiItem('event TripleCreated(address indexed creator, bytes32 indexed termId, bytes32 subjectId, bytes32 predicateId, bytes32 objectId, bytes32 counterTripleId)'),
+  onLogs: async (logs) => {
+    for (const log of logs) {
+      await database.insert('triples', {
+        id: log.args.termId,
+        subject: log.args.subjectId,
+        predicate: log.args.predicateId,
+        object: log.args.objectId,
+        counterTriple: log.args.counterTripleId,
+        creator: log.args.creator,
+        timestamp: Date.now()
+      });
+    }
+  }
 });
 ```
 
@@ -734,19 +797,19 @@ Use a type system for atoms:
 ```javascript
 class AtomFactory {
   static createAddressAtom(address) {
-    return createAtom(ethers.getBytes(address));
+    return createAtom(getBytes(address));
   }
 
   static createStringAtom(str) {
-    return createAtom(ethers.toUtf8Bytes(str));
+    return createAtom(toBytes(str));
   }
 
   static createNumberAtom(num) {
-    return createAtom(ethers.toBeArray(num));
+    return createAtom(toBeHex(num));
   }
 
   static createHashAtom(hash) {
-    return createAtom(ethers.getBytes(hash));
+    return createAtom(getBytes(hash));
   }
 }
 ```
@@ -760,7 +823,7 @@ Make triples into atoms for meta-statements:
 const triple1 = createTriple(subject, predicate, object);
 
 // Create an atom representing that triple
-const tripleAtom = createAtom(ethers.getBytes(triple1));
+const tripleAtom = createAtom(getBytes(triple1));
 
 // Make claims about the triple itself
 const confidenceAtom = createAtom('high-confidence');
@@ -776,7 +839,7 @@ Add timestamps to claims:
 ```javascript
 // Atoms
 const eventAtom = createAtom('price-above-1000');
-const timestampAtom = createAtom(ethers.toBeArray(Date.now()));
+const timestampAtom = createAtom(toBeHex(Date.now()));
 
 // Triple with time component
 const timeTriple = createTriple(eventAtom, 'valid-at', timestampAtom);

@@ -156,7 +156,7 @@ async function waitForNextEpoch() {
 const epoch = await trustBonding.currentEpoch();
 const emissions = await trustBonding.emissionsForEpoch(epoch);
 
-console.log('Emissions for epoch', epoch, ':', ethers.formatEther(emissions), 'TRUST');
+console.log('Emissions for epoch', epoch, ':', formatEther(emissions), 'TRUST');
 ```
 
 ### Step 9: Calculate Epoch Range
@@ -183,12 +183,23 @@ console.log('Last 10 epochs:', last10Epochs);
 
 ## Code Examples
 
-### TypeScript (ethers.js v6)
+### TypeScript (viem)
 
 Comprehensive epoch management utility:
 
 ```typescript
-import { ethers } from 'ethers';
+import {
+  createPublicClient,
+  http,
+  formatEther,
+  type Address,
+  type PublicClient
+} from 'viem';
+import { base } from 'viem/chains';
+
+// ABIs
+import { trustBondingAbi } from './abis/ITrustBonding';
+import { multiVaultAbi } from './abis/IMultiVault';
 
 interface EpochInfo {
   epochNumber: bigint;
@@ -202,44 +213,73 @@ interface EpochInfo {
 }
 
 class EpochManager {
-  private trustBonding: ethers.Contract;
-  private multiVault: ethers.Contract;
-  private epochLength: bigint;
-  private startTimestamp: bigint;
+  private publicClient: PublicClient;
+  private trustBondingAddress: Address;
+  private multiVaultAddress: Address;
+  private epochLength: bigint | null = null;
+  private startTimestamp: bigint | null = null;
 
   constructor(
-    trustBondingAddress: string,
-    multiVaultAddress: string,
-    provider: ethers.Provider
+    trustBondingAddress: Address,
+    multiVaultAddress: Address,
+    rpcUrl: string
   ) {
-    this.trustBonding = new ethers.Contract(
-      trustBondingAddress,
-      TrustBondingABI,
-      provider
-    );
-    this.multiVault = new ethers.Contract(
-      multiVaultAddress,
-      MultiVaultABI,
-      provider
-    );
+    this.trustBondingAddress = trustBondingAddress;
+    this.multiVaultAddress = multiVaultAddress;
+    this.publicClient = createPublicClient({
+      chain: base,
+      transport: http(rpcUrl)
+    });
   }
 
   async initialize() {
-    this.epochLength = await this.trustBonding.epochLength();
+    this.epochLength = await this.publicClient.readContract({
+      address: this.trustBondingAddress,
+      abi: trustBondingAbi,
+      functionName: 'epochLength'
+    });
 
     // Calculate start timestamp by working backwards from current epoch
-    const currentEpoch = await this.trustBonding.currentEpoch();
-    const currentEpochEnd = await this.trustBonding.epochTimestampEnd(currentEpoch);
+    const currentEpoch = await this.publicClient.readContract({
+      address: this.trustBondingAddress,
+      abi: trustBondingAbi,
+      functionName: 'currentEpoch'
+    });
+
+    const currentEpochEnd = await this.publicClient.readContract({
+      address: this.trustBondingAddress,
+      abi: trustBondingAbi,
+      functionName: 'epochTimestampEnd',
+      args: [currentEpoch]
+    });
 
     // startTimestamp = epochEnd - (epochNumber + 1) * epochLength
     this.startTimestamp = currentEpochEnd - (currentEpoch + 1n) * this.epochLength;
   }
 
   async getEpochInfo(epoch: bigint): Promise<EpochInfo> {
+    if (!this.epochLength) {
+      throw new Error('EpochManager not initialized. Call initialize() first.');
+    }
+
     const [currentEpoch, epochEnd, emissions] = await Promise.all([
-      this.trustBonding.currentEpoch(),
-      this.trustBonding.epochTimestampEnd(epoch),
-      this.trustBonding.emissionsForEpoch(epoch)
+      this.publicClient.readContract({
+        address: this.trustBondingAddress,
+        abi: trustBondingAbi,
+        functionName: 'currentEpoch'
+      }),
+      this.publicClient.readContract({
+        address: this.trustBondingAddress,
+        abi: trustBondingAbi,
+        functionName: 'epochTimestampEnd',
+        args: [epoch]
+      }),
+      this.publicClient.readContract({
+        address: this.trustBondingAddress,
+        abi: trustBondingAbi,
+        functionName: 'emissionsForEpoch',
+        args: [epoch]
+      })
     ]);
 
     const startTime = epochEnd - this.epochLength;
@@ -259,17 +299,30 @@ class EpochManager {
   }
 
   async getCurrentEpochInfo(): Promise<EpochInfo> {
-    const currentEpoch = await this.trustBonding.currentEpoch();
+    const currentEpoch = await this.publicClient.readContract({
+      address: this.trustBondingAddress,
+      abi: trustBondingAbi,
+      functionName: 'currentEpoch'
+    });
     return this.getEpochInfo(currentEpoch);
   }
 
   async getPreviousEpochInfo(): Promise<EpochInfo> {
-    const previousEpoch = await this.trustBonding.previousEpoch();
+    const previousEpoch = await this.publicClient.readContract({
+      address: this.trustBondingAddress,
+      abi: trustBondingAbi,
+      functionName: 'previousEpoch'
+    });
     return this.getEpochInfo(previousEpoch);
   }
 
   async getEpochHistory(count: number): Promise<EpochInfo[]> {
-    const currentEpoch = await this.trustBonding.currentEpoch();
+    const currentEpoch = await this.publicClient.readContract({
+      address: this.trustBondingAddress,
+      abi: trustBondingAbi,
+      functionName: 'currentEpoch'
+    });
+
     const startEpoch = currentEpoch >= BigInt(count)
       ? currentEpoch - BigInt(count) + 1n
       : 0n;
@@ -289,7 +342,7 @@ class EpochManager {
 === Epoch ${info.epochNumber} ===
 Start time: ${new Date(Number(info.startTime) * 1000).toISOString()}
 End time: ${new Date(Number(info.endTime) * 1000).toISOString()}
-Emissions: ${ethers.formatEther(info.emissions)} TRUST
+Emissions: ${formatEther(info.emissions)} TRUST
 Status: ${info.isCurrent ? 'Current' : info.isPrevious ? 'Previous' : 'Historical'}
 ${info.isCurrent ? `Time remaining: ${(info.secondsRemaining / 3600).toFixed(2)} hours` : ''}
 ${info.claimableForRewards ? '✓ Claimable for rewards' : ''}
@@ -305,7 +358,11 @@ ${info.claimableForRewards ? '✓ Claimable for rewards' : ''}
       setTimeout(resolve, currentInfo.secondsRemaining * 1000)
     );
 
-    const newEpoch = await this.trustBonding.currentEpoch();
+    const newEpoch = await this.publicClient.readContract({
+      address: this.trustBondingAddress,
+      abi: trustBondingAbi,
+      functionName: 'currentEpoch'
+    });
 
     if (callback) {
       callback(newEpoch);
@@ -330,16 +387,33 @@ ${info.claimableForRewards ? '✓ Claimable for rewards' : ''}
   }> {
     const [currentEpoch, epochLength, epochsPerYear, currentInfo] =
       await Promise.all([
-        this.trustBonding.currentEpoch(),
-        this.trustBonding.epochLength(),
-        this.trustBonding.epochsPerYear(),
+        this.publicClient.readContract({
+          address: this.trustBondingAddress,
+          abi: trustBondingAbi,
+          functionName: 'currentEpoch'
+        }),
+        this.publicClient.readContract({
+          address: this.trustBondingAddress,
+          abi: trustBondingAbi,
+          functionName: 'epochLength'
+        }),
+        this.publicClient.readContract({
+          address: this.trustBondingAddress,
+          abi: trustBondingAbi,
+          functionName: 'epochsPerYear'
+        }),
         this.getCurrentEpochInfo()
       ]);
 
     // Calculate total emissions to date
     let totalEmissions = 0n;
     for (let epoch = 0n; epoch <= currentEpoch; epoch++) {
-      const emissions = await this.trustBonding.emissionsForEpoch(epoch);
+      const emissions = await this.publicClient.readContract({
+        address: this.trustBondingAddress,
+        abi: trustBondingAbi,
+        functionName: 'emissionsForEpoch',
+        args: [epoch]
+      });
       totalEmissions += emissions;
     }
 
@@ -355,11 +429,14 @@ ${info.claimableForRewards ? '✓ Claimable for rewards' : ''}
 
 // Usage example
 async function main() {
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
+  const TRUST_BONDING_ADDRESS = '0x...' as Address;
+  const MULTIVAULT_ADDRESS = '0x...' as Address;
+  const RPC_URL = 'YOUR_INTUITION_RPC_URL';
+
   const manager = new EpochManager(
     TRUST_BONDING_ADDRESS,
     MULTIVAULT_ADDRESS,
-    provider
+    RPC_URL
   );
 
   await manager.initialize();
@@ -379,7 +456,7 @@ async function main() {
   console.log('Epoch length:', Number(stats.epochLength) / 86400, 'days');
   console.log('Epochs per year:', stats.epochsPerYear);
   console.log('Next epoch in:', (stats.nextEpochIn / 3600).toFixed(2), 'hours');
-  console.log('Total emissions to date:', ethers.formatEther(stats.totalEmissions), 'TRUST');
+  console.log('Total emissions to date:', formatEther(stats.totalEmissions), 'TRUST');
 
   // Schedule callback for next epoch
   await manager.scheduleEpochCallback((newEpoch) => {
@@ -387,6 +464,8 @@ async function main() {
     console.log('Time to claim rewards for previous epoch!');
   });
 }
+
+main().catch(console.error);
 ```
 
 ### Python (web3.py)
@@ -492,20 +571,40 @@ if __name__ == '__main__':
 ### 1. Epoch-Aware Reward Claiming
 
 ```typescript
-async function autoClaimRewards() {
+async function autoClaimRewards(
+  trustBondingAddress: Address,
+  walletAddress: Address,
+  publicClient: PublicClient,
+  walletClient: WalletClient
+) {
   while (true) {
-    const currentEpoch = await trustBonding.currentEpoch();
+    const currentEpoch = await publicClient.readContract({
+      address: trustBondingAddress,
+      abi: trustBondingAbi,
+      functionName: 'currentEpoch'
+    });
 
     // Wait for next epoch
     await manager.waitForNextEpoch();
 
     // Claim rewards for previous epoch
     const claimableEpoch = currentEpoch; // Now previous
-    const claimable = await trustBonding.getUserCurrentClaimableRewards(address);
+    const claimable = await publicClient.readContract({
+      address: trustBondingAddress,
+      abi: trustBondingAbi,
+      functionName: 'getUserCurrentClaimableRewards',
+      args: [walletAddress]
+    });
 
     if (claimable > 0n) {
       console.log(`Claiming rewards for epoch ${claimableEpoch}`);
-      await trustBonding.claimRewards(address);
+      const hash = await walletClient.writeContract({
+        address: trustBondingAddress,
+        abi: trustBondingAbi,
+        functionName: 'claimRewards',
+        args: [walletAddress]
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
     }
   }
 }
@@ -514,18 +613,30 @@ async function autoClaimRewards() {
 ### 2. Utilization Tracking Across Epochs
 
 ```typescript
-async function trackUtilizationHistory(address: string, epochCount: number) {
-  const currentEpoch = await multiVault.currentEpoch();
+async function trackUtilizationHistory(
+  multiVaultAddress: Address,
+  userAddress: Address,
+  epochCount: number,
+  publicClient: PublicClient
+) {
+  const currentEpoch = await publicClient.readContract({
+    address: multiVaultAddress,
+    abi: multiVaultAbi,
+    functionName: 'currentEpoch'
+  });
+
   const history = [];
 
   for (let i = 0; i < epochCount; i++) {
     const epoch = currentEpoch - BigInt(i);
     if (epoch < 0n) break;
 
-    const utilization = await multiVault.getUserUtilizationForEpoch(
-      address,
-      epoch
-    );
+    const utilization = await publicClient.readContract({
+      address: multiVaultAddress,
+      abi: multiVaultAbi,
+      functionName: 'getUserUtilizationForEpoch',
+      args: [userAddress, epoch]
+    });
 
     history.push({ epoch, utilization });
   }
@@ -537,11 +648,23 @@ async function trackUtilizationHistory(address: string, epochCount: number) {
 ### 3. Epoch Boundary Notifications
 
 ```typescript
-async function notifyOnEpochChange(callback: (epoch: bigint) => void) {
-  let lastEpoch = await trustBonding.currentEpoch();
+async function notifyOnEpochChange(
+  trustBondingAddress: Address,
+  publicClient: PublicClient,
+  callback: (epoch: bigint) => void
+) {
+  let lastEpoch = await publicClient.readContract({
+    address: trustBondingAddress,
+    abi: trustBondingAbi,
+    functionName: 'currentEpoch'
+  });
 
   setInterval(async () => {
-    const currentEpoch = await trustBonding.currentEpoch();
+    const currentEpoch = await publicClient.readContract({
+      address: trustBondingAddress,
+      abi: trustBondingAbi,
+      functionName: 'currentEpoch'
+    });
 
     if (currentEpoch !== lastEpoch) {
       callback(currentEpoch);
