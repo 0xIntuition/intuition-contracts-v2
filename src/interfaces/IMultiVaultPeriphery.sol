@@ -1,10 +1,21 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
+/**
+ * @title IMultiVaultPeriphery
+ * @author 0xIntuition
+ * @notice Interface for the MultiVaultPeriphery contract
+ */
 interface IMultiVaultPeriphery {
     /* =================================================== */
     /*                    EVENTS                           */
     /* =================================================== */
+
+    /**
+     * @notice Emitted when the MultiVault address is set
+     * @param multiVault The address of the new MultiVault contract
+     */
+    event MultiVaultSet(address indexed multiVault);
 
     /**
      * @notice Emitted when the periphery contract creates an atom on behalf of a user
@@ -13,7 +24,7 @@ interface IMultiVaultPeriphery {
      * @param termId id of the atom in MultiVault
      * @param atomData raw atom data
      */
-    event AtomCreatedFor(address indexed payer, address indexed creator, bytes32 indexed termId, bytes atomData);
+    event AtomCreatedBy(address indexed payer, address indexed creator, bytes32 indexed termId, bytes atomData);
 
     /**
      * @notice Emitted when the periphery contract creates a triple on behalf of a user
@@ -24,7 +35,7 @@ interface IMultiVaultPeriphery {
      * @param predicateId predicate atom id
      * @param objectId  object atom id
      */
-    event TripleCreatedFor(
+    event TripleCreatedBy(
         address indexed payer,
         address indexed creator,
         bytes32 indexed termId,
@@ -34,10 +45,24 @@ interface IMultiVaultPeriphery {
     );
 
     /**
-     * @notice Emitted when the MultiVault address is set
-     * @param multiVault The address of the new MultiVault contract
+     * @notice Emitted when a counter triple vault is bootstrapped (if needed) and a user deposit is made into it
+     * @param caller The address that initiated the periphery call
+     * @param receiver The final receiver of the counter triple shares
+     * @param tripleId The positive triple ID (termId)
+     * @param counterTripleId The corresponding counter triple ID
+     * @param curveId The non-default bonding curve ID used
+     * @param userAssets The amount of assets forwarded for the user deposit into the counter triple
+     * @param userShares The amount of shares minted for the receiver in the counter triple vault
      */
-    event MultiVaultSet(address indexed multiVault);
+    event CounterTripleVaultBootstrappedAndDeposited(
+        address indexed caller,
+        address indexed receiver,
+        bytes32 indexed tripleId,
+        bytes32 counterTripleId,
+        uint256 curveId,
+        uint256 userAssets,
+        uint256 userShares
+    );
 
     /* =================================================== */
     /*                    ERRORS                           */
@@ -46,20 +71,29 @@ interface IMultiVaultPeriphery {
     /// @notice Thrown when an invalid address is provided
     error MultiVaultPeriphery_InvalidAddress();
 
-    /// @notice Thrown when the creator address is invalid
-    error MultiVaultPeriphery_InvalidCreator();
-
     /// @notice Thrown when the msg.value provided is not enough to cover expected costs
     error MultiVaultPeriphery_InsufficientMsgValue(uint256 expected, uint256 provided);
 
-    /// @notice Thrown when the lengths of dependent arrays do not match
-    error MultiVaultPeriphery_InvalidArrayLength();
+    /// @notice Thrown when a zero-length array is provided where at least one element is required
+    error MultiVaultPeriphery_ZeroLengthArray();
 
-    /// @notice Thrown when either the predicate or object is invalid
-    error MultiVaultPeriphery_InvalidPredicateOrObject();
+    /// @notice Thrown when the lengths of dependent arrays do not match
+    error MultiVaultPeriphery_ArrayLengthMismatch();
 
     /// @notice Thrown when a refund of excess value fails
     error MultiVaultPeriphery_RefundFailed();
+
+    /// @notice Thrown when only triple terms are allowed
+    error MultiVaultPeriphery_OnlyTriplesAllowed();
+
+    /// @notice Thrown when the default curve ID is supplied where not allowed
+    error MultiVaultPeriphery_DefaultCurveIdNotAllowed();
+
+    /// @notice Thrown when user assets provided are invalid (e.g. zero assets)
+    error MultiVaultPeriphery_InvalidUserAssets();
+
+    /// @notice Thrown when attempting to initialize a vault that is already initialized
+    error MultiVaultPeriphery_VaultAlreadyInitialized(bytes32 tripleId, uint256 curveId);
 
     /* =================================================== */
     /*                    FUNCTIONS                        */
@@ -79,45 +113,38 @@ interface IMultiVaultPeriphery {
     function setMultiVault(address _multiVault) external;
 
     /**
-     * @notice Convenience wrapper for createTripleWithAtomsFor, using msg.sender as the creator
-     * @param subjectData Raw subject atom data
-     * @param predicateData Raw predicate atom data
-     * @param objectData Raw object atom data
-     * @return tripleId Created triple id
-     */
-    function createTripleWithAtoms(
-        bytes calldata subjectData,
-        bytes calldata predicateData,
-        bytes calldata objectData
-    )
-        external
-        payable
-        returns (bytes32 tripleId);
-
-    /**
-     * @notice Creates up to 3 atoms (subject / predicate / object) and then a triple with them,
-     *         charging only `atomCost` per new atom and `tripleCost` for the triple.
-     *
-     * msg.value must be at least:
-     *     (newAtomsCount * atomCost) + tripleCost --> Any excess msg.value is refunded to msg.sender
-     *
-     * This guarantees:
-     * - No extra ETH is left sitting on this periphery contract.
-     * - No extra shares are minted to this contract (we always pass exactly atomCost / tripleCost).
-     *
-     * @param subjectData Raw subject atom data
-     * @param predicateData Raw predicate atom data
-     * @param objectData Raw object atom data
+     * @notice Creates multiple atoms on behalf of a user
+     * @dev Each atom gets created with exactly `atomCost` in assets to avoid minting extra shares to this contract.
+     *      Excess msg.value is refunded to the sender to avoid any TRUST sitting in this contract.
+     * @param atomData Array of raw atom data
      * @param creator Logical/attributed creator address
-     * @return tripleId Created triple id
+     * @return atomIds Array of created atom ids
      */
-    function createTripleWithAtomsFor(
-        bytes calldata subjectData,
-        bytes calldata predicateData,
-        bytes calldata objectData,
+    function createAtomsFor(
+        bytes[] calldata atomData,
         address creator
     )
         external
         payable
-        returns (bytes32 tripleId);
+        returns (bytes32[] memory atomIds);
+
+    /**
+     * @notice Creates multiple triples on behalf of a user
+     * @dev Each atom gets created with exactly `tripleCost` in assets to avoid minting extra shares to this contract.
+     *      Excess msg.value is refunded to the sender to avoid any TRUST sitting in this contract.
+     * @param subjects Array of subject atom ids
+     * @param predicates Array of predicate atom ids
+     * @param objects Array of object atom ids
+     * @param creator Logical/attributed creator address
+     * @return tripleIds Array of created triple ids
+     */
+    function createTriplesFor(
+        bytes32[] calldata subjects,
+        bytes32[] calldata predicates,
+        bytes32[] calldata objects,
+        address creator
+    )
+        external
+        payable
+        returns (bytes32[] memory tripleIds);
 }

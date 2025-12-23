@@ -5,87 +5,102 @@ import { BaseTest } from "tests/BaseTest.t.sol";
 import { MultiVaultPeriphery } from "src/utils/MultiVaultPeriphery.sol";
 import { IMultiVaultPeriphery } from "src/interfaces/IMultiVaultPeriphery.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
+import { ApprovalTypes } from "src/interfaces/IMultiVault.sol";
+import { Multicall3 } from "src/external/multicall/Multicall3.sol";
 
-contract RevertOnReceive {
+contract RefundFailureMock {
     receive() external payable {
-        revert("Cannot receive ETH");
+        revert("RefundFailureMock: refund failed");
     }
 }
 
 contract MultiVaultPeripheryTest is BaseTest {
-    MultiVaultPeriphery public multiVaultPeripheryImpl;
-    TransparentUpgradeableProxy public multiVaultPeripheryProxy;
+    MultiVaultPeriphery public peripheryImpl;
+    TransparentUpgradeableProxy public peripheryProxy;
     MultiVaultPeriphery public periphery;
+
+    RefundFailureMock public refundFailureMock;
 
     function setUp() public override {
         super.setUp();
 
-        multiVaultPeripheryImpl = new MultiVaultPeriphery();
-        multiVaultPeripheryProxy = new TransparentUpgradeableProxy(address(multiVaultPeripheryImpl), users.admin, "");
-        periphery = MultiVaultPeriphery(address(multiVaultPeripheryProxy));
+        peripheryImpl = new MultiVaultPeriphery();
+        peripheryProxy = new TransparentUpgradeableProxy(address(peripheryImpl), users.admin, "");
+        periphery = MultiVaultPeriphery(address(peripheryProxy));
+
         periphery.initialize(users.admin, address(protocol.multiVault));
+
+        refundFailureMock = new RefundFailureMock();
+        vm.deal(address(refundFailureMock), 100 ether);
     }
 
     /* =================================================== */
-    /*                  CONSTRUCTOR TESTS                  */
-    /* =================================================== */
-
-    function test_constructor_disablesInitializers() external {
-        MultiVaultPeriphery newPeriphery = new MultiVaultPeriphery();
-
-        vm.expectRevert();
-        newPeriphery.initialize(users.admin, address(protocol.multiVault));
-    }
-
-    /* =================================================== */
-    /*                  INITIALIZER TESTS                  */
+    /*                 INITIALIZE TESTS                    */
     /* =================================================== */
 
     function test_initialize_successful() external {
-        MultiVaultPeriphery newPeripheryImpl = new MultiVaultPeriphery();
-        TransparentUpgradeableProxy newProxy =
-            new TransparentUpgradeableProxy(address(newPeripheryImpl), users.admin, "");
-        MultiVaultPeriphery newPeriphery = MultiVaultPeriphery(address(newProxy));
-
-        newPeriphery.initialize(users.admin, address(protocol.multiVault));
-
-        assertEq(address(newPeriphery.multiVault()), address(protocol.multiVault));
-        assertEq(address(newPeriphery.multiVaultCore()), address(protocol.multiVault));
-        assertTrue(newPeriphery.hasRole(newPeriphery.DEFAULT_ADMIN_ROLE(), users.admin));
-    }
-
-    function test_initialize_emitsMultiVaultSetEvent() external {
-        MultiVaultPeriphery newPeripheryImpl = new MultiVaultPeriphery();
-        TransparentUpgradeableProxy newProxy =
-            new TransparentUpgradeableProxy(address(newPeripheryImpl), users.admin, "");
-        MultiVaultPeriphery newPeriphery = MultiVaultPeriphery(address(newProxy));
+        MultiVaultPeriphery newPeriphery = new MultiVaultPeriphery();
+        TransparentUpgradeableProxy newProxy = new TransparentUpgradeableProxy(address(newPeriphery), users.admin, "");
+        MultiVaultPeriphery newPeripheryInstance = MultiVaultPeriphery(address(newProxy));
 
         vm.expectEmit(true, true, true, true);
         emit IMultiVaultPeriphery.MultiVaultSet(address(protocol.multiVault));
-        newPeriphery.initialize(users.admin, address(protocol.multiVault));
+
+        newPeripheryInstance.initialize(users.alice, address(protocol.multiVault));
+
+        assertEq(address(newPeripheryInstance.multiVault()), address(protocol.multiVault));
+        assertEq(address(newPeripheryInstance.multiVaultCore()), address(protocol.multiVault));
+        assertTrue(newPeripheryInstance.hasRole(newPeripheryInstance.DEFAULT_ADMIN_ROLE(), users.alice));
     }
 
-    function test_initialize_revertsWhenCalledTwice() external {
-        vm.expectRevert();
-        periphery.initialize(users.admin, address(protocol.multiVault));
+    function test_initialize_revertsOnZeroAddressAdmin() external {
+        MultiVaultPeriphery newPeriphery = new MultiVaultPeriphery();
+        TransparentUpgradeableProxy newProxy = new TransparentUpgradeableProxy(address(newPeriphery), users.admin, "");
+        MultiVaultPeriphery newPeripheryInstance = MultiVaultPeriphery(address(newProxy));
+
+        vm.expectRevert(abi.encodeWithSelector(IAccessControl.AccessControlBadConfirmation.selector));
+        newPeripheryInstance.initialize(address(0), address(protocol.multiVault));
     }
 
     function test_initialize_revertsOnZeroAddressMultiVault() external {
-        MultiVaultPeriphery newPeripheryImpl = new MultiVaultPeriphery();
-        TransparentUpgradeableProxy newProxy =
-            new TransparentUpgradeableProxy(address(newPeripheryImpl), users.admin, "");
-        MultiVaultPeriphery newPeriphery = MultiVaultPeriphery(address(newProxy));
+        MultiVaultPeriphery newPeriphery = new MultiVaultPeriphery();
+        TransparentUpgradeableProxy newProxy = new TransparentUpgradeableProxy(address(newPeriphery), users.admin, "");
+        MultiVaultPeriphery newPeripheryInstance = MultiVaultPeriphery(address(newProxy));
 
         vm.expectRevert(abi.encodeWithSelector(IMultiVaultPeriphery.MultiVaultPeriphery_InvalidAddress.selector));
-        newPeriphery.initialize(users.admin, address(0));
+        newPeripheryInstance.initialize(users.alice, address(0));
+    }
+
+    function test_initialize_revertsOnReinitialize() external {
+        vm.expectRevert();
+        periphery.initialize(users.alice, address(protocol.multiVault));
+    }
+
+    function testFuzz_initialize(address admin, address multiVault) external {
+        vm.assume(admin != address(0));
+        vm.assume(multiVault != address(0));
+
+        MultiVaultPeriphery newPeriphery = new MultiVaultPeriphery();
+        TransparentUpgradeableProxy newProxy = new TransparentUpgradeableProxy(address(newPeriphery), users.admin, "");
+        MultiVaultPeriphery newPeripheryInstance = MultiVaultPeriphery(address(newProxy));
+
+        newPeripheryInstance.initialize(admin, multiVault);
+
+        assertEq(address(newPeripheryInstance.multiVault()), multiVault);
+        assertEq(address(newPeripheryInstance.multiVaultCore()), multiVault);
+        assertTrue(newPeripheryInstance.hasRole(newPeripheryInstance.DEFAULT_ADMIN_ROLE(), admin));
     }
 
     /* =================================================== */
-    /*                 ADMIN FUNCTIONS TESTS               */
+    /*               SET MULTIVAULT TESTS                  */
     /* =================================================== */
 
     function test_setMultiVault_successful() external {
         address newMultiVault = makeAddr("newMultiVault");
+
+        vm.expectEmit(true, true, true, true);
+        emit IMultiVaultPeriphery.MultiVaultSet(newMultiVault);
 
         resetPrank(users.admin);
         periphery.setMultiVault(newMultiVault);
@@ -94,13 +109,15 @@ contract MultiVaultPeripheryTest is BaseTest {
         assertEq(address(periphery.multiVaultCore()), newMultiVault);
     }
 
-    function test_setMultiVault_emitsMultiVaultSetEvent() external {
+    function test_setMultiVault_revertsOnNonAdmin() external {
         address newMultiVault = makeAddr("newMultiVault");
 
-        vm.expectEmit(true, true, true, true);
-        emit IMultiVaultPeriphery.MultiVaultSet(newMultiVault);
-
-        resetPrank(users.admin);
+        resetPrank(users.alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, users.alice, periphery.DEFAULT_ADMIN_ROLE()
+            )
+        );
         periphery.setMultiVault(newMultiVault);
     }
 
@@ -110,549 +127,1039 @@ contract MultiVaultPeripheryTest is BaseTest {
         periphery.setMultiVault(address(0));
     }
 
-    function test_setMultiVault_revertsWhenCalledByNonAdmin() external {
-        address newMultiVault = makeAddr("newMultiVault");
+    function testFuzz_setMultiVault(address newMultiVault) external {
+        vm.assume(newMultiVault != address(0));
 
-        resetPrank(users.alice);
-        vm.expectRevert();
+        resetPrank(users.admin);
         periphery.setMultiVault(newMultiVault);
-    }
 
-    function testFuzz_setMultiVault_revertsWhenCalledByNonAdmin(address nonAdmin) external {
-        vm.assume(nonAdmin != users.admin);
-        vm.assume(nonAdmin != address(0));
-
-        address newMultiVault = makeAddr("newMultiVault");
-
-        resetPrank(nonAdmin);
-        vm.expectRevert();
-        periphery.setMultiVault(newMultiVault);
+        assertEq(address(periphery.multiVault()), newMultiVault);
+        assertEq(address(periphery.multiVaultCore()), newMultiVault);
     }
 
     /* =================================================== */
-    /*          CREATE TRIPLE WITH ATOMS TESTS             */
+    /*              CREATE ATOMS FOR TESTS                 */
     /* =================================================== */
 
-    function test_createTripleWithAtoms_allNewAtoms() external {
-        bytes memory subjectData = abi.encodePacked("subject");
-        bytes memory predicateData = abi.encodePacked("predicate");
-        bytes memory objectData = abi.encodePacked("object");
+    function test_createAtomsFor_singleAtom() external {
+        bytes[] memory atomData = new bytes[](1);
+        atomData[0] = abi.encodePacked("test atom");
 
         uint256 atomCost = protocol.multiVault.getAtomCost();
-        uint256 tripleCost = protocol.multiVault.getTripleCost();
-        uint256 totalCost = (atomCost * 3) + tripleCost;
+        uint256 aliceBalanceBefore = users.alice.balance;
 
-        bytes32 expectedSubjectId = protocol.multiVault.calculateAtomId(subjectData);
-        bytes32 expectedPredicateId = protocol.multiVault.calculateAtomId(predicateData);
-        bytes32 expectedObjectId = protocol.multiVault.calculateAtomId(objectData);
-        bytes32 expectedTripleId =
-            protocol.multiVault.calculateTripleId(expectedSubjectId, expectedPredicateId, expectedObjectId);
-
-        resetPrank(users.alice);
-        bytes32 tripleId = periphery.createTripleWithAtoms{ value: totalCost }(subjectData, predicateData, objectData);
-
-        assertEq(tripleId, expectedTripleId);
-        assertTrue(protocol.multiVault.isAtom(expectedSubjectId));
-        assertTrue(protocol.multiVault.isAtom(expectedPredicateId));
-        assertTrue(protocol.multiVault.isAtom(expectedObjectId));
-        assertTrue(protocol.multiVault.isTriple(tripleId));
-    }
-
-    function test_createTripleWithAtoms_someExistingAtoms() external {
-        bytes memory subjectData = abi.encodePacked("subject");
-        bytes memory predicateData = abi.encodePacked("predicate");
-        bytes memory objectData = abi.encodePacked("object");
-
-        uint256 atomCost = protocol.multiVault.getAtomCost();
-
-        createAtomWithDeposit(subjectData, atomCost, users.alice);
-        createAtomWithDeposit(predicateData, atomCost, users.alice);
-
-        uint256 tripleCost = protocol.multiVault.getTripleCost();
-        uint256 totalCost = atomCost + tripleCost;
-
-        bytes32 expectedSubjectId = protocol.multiVault.calculateAtomId(subjectData);
-        bytes32 expectedPredicateId = protocol.multiVault.calculateAtomId(predicateData);
-        bytes32 expectedObjectId = protocol.multiVault.calculateAtomId(objectData);
-        bytes32 expectedTripleId =
-            protocol.multiVault.calculateTripleId(expectedSubjectId, expectedPredicateId, expectedObjectId);
-
-        resetPrank(users.alice);
-        bytes32 tripleId = periphery.createTripleWithAtoms{ value: totalCost }(subjectData, predicateData, objectData);
-
-        assertEq(tripleId, expectedTripleId);
-        assertTrue(protocol.multiVault.isAtom(expectedObjectId));
-        assertTrue(protocol.multiVault.isTriple(tripleId));
-    }
-
-    function test_createTripleWithAtoms_allExistingAtoms() external {
-        bytes memory subjectData = abi.encodePacked("subject");
-        bytes memory predicateData = abi.encodePacked("predicate");
-        bytes memory objectData = abi.encodePacked("object");
-
-        uint256 atomCost = protocol.multiVault.getAtomCost();
-
-        createAtomWithDeposit(subjectData, atomCost, users.alice);
-        createAtomWithDeposit(predicateData, atomCost, users.alice);
-        createAtomWithDeposit(objectData, atomCost, users.alice);
-
-        uint256 tripleCost = protocol.multiVault.getTripleCost();
-
-        bytes32 expectedSubjectId = protocol.multiVault.calculateAtomId(subjectData);
-        bytes32 expectedPredicateId = protocol.multiVault.calculateAtomId(predicateData);
-        bytes32 expectedObjectId = protocol.multiVault.calculateAtomId(objectData);
-        bytes32 expectedTripleId =
-            protocol.multiVault.calculateTripleId(expectedSubjectId, expectedPredicateId, expectedObjectId);
-
-        resetPrank(users.alice);
-        bytes32 tripleId = periphery.createTripleWithAtoms{ value: tripleCost }(subjectData, predicateData, objectData);
-
-        assertEq(tripleId, expectedTripleId);
-        assertTrue(protocol.multiVault.isTriple(tripleId));
-    }
-
-    function test_createTripleWithAtoms_emitsTripleCreatedForEvent() external {
-        bytes memory subjectData = abi.encodePacked("subject");
-        bytes memory predicateData = abi.encodePacked("predicate");
-        bytes memory objectData = abi.encodePacked("object");
-
-        uint256 atomCost = protocol.multiVault.getAtomCost();
-        uint256 tripleCost = protocol.multiVault.getTripleCost();
-        uint256 totalCost = (atomCost * 3) + tripleCost;
-
-        bytes32 expectedSubjectId = protocol.multiVault.calculateAtomId(subjectData);
-        bytes32 expectedPredicateId = protocol.multiVault.calculateAtomId(predicateData);
-        bytes32 expectedObjectId = protocol.multiVault.calculateAtomId(objectData);
-        bytes32 expectedTripleId =
-            protocol.multiVault.calculateTripleId(expectedSubjectId, expectedPredicateId, expectedObjectId);
+        bytes32 expectedAtomId = calculateAtomId(atomData[0]);
 
         vm.expectEmit(true, true, true, true);
-        emit IMultiVaultPeriphery.TripleCreatedFor(
-            users.alice, users.alice, expectedTripleId, expectedSubjectId, expectedPredicateId, expectedObjectId
-        );
+        emit IMultiVaultPeriphery.AtomCreatedBy(users.alice, users.bob, expectedAtomId, atomData[0]);
 
         resetPrank(users.alice);
-        periphery.createTripleWithAtoms{ value: totalCost }(subjectData, predicateData, objectData);
+        bytes32[] memory atomIds = periphery.createAtomsFor{ value: atomCost }(atomData, users.bob);
+
+        assertEq(atomIds.length, 1);
+        assertEq(atomIds[0], expectedAtomId);
+        assertEq(users.alice.balance, aliceBalanceBefore - atomCost);
     }
 
-    function test_createTripleWithAtoms_emitsAtomCreatedForEvents() external {
-        bytes memory subjectData = abi.encodePacked("subject");
-        bytes memory predicateData = abi.encodePacked("predicate");
-        bytes memory objectData = abi.encodePacked("object");
+    function test_createAtomsFor_multipleAtoms() external {
+        bytes[] memory atomData = new bytes[](3);
+        atomData[0] = abi.encodePacked("atom 1");
+        atomData[1] = abi.encodePacked("atom 2");
+        atomData[2] = abi.encodePacked("atom 3");
 
         uint256 atomCost = protocol.multiVault.getAtomCost();
-        uint256 tripleCost = protocol.multiVault.getTripleCost();
-        uint256 totalCost = (atomCost * 3) + tripleCost;
-
-        bytes32 expectedSubjectId = protocol.multiVault.calculateAtomId(subjectData);
-        bytes32 expectedPredicateId = protocol.multiVault.calculateAtomId(predicateData);
-        bytes32 expectedObjectId = protocol.multiVault.calculateAtomId(objectData);
-
-        vm.expectEmit(true, true, true, true);
-        emit IMultiVaultPeriphery.AtomCreatedFor(users.alice, users.alice, expectedSubjectId, subjectData);
-
-        vm.expectEmit(true, true, true, true);
-        emit IMultiVaultPeriphery.AtomCreatedFor(users.alice, users.alice, expectedPredicateId, predicateData);
-
-        vm.expectEmit(true, true, true, true);
-        emit IMultiVaultPeriphery.AtomCreatedFor(users.alice, users.alice, expectedObjectId, objectData);
+        uint256 totalCost = atomCost * 3;
 
         resetPrank(users.alice);
-        periphery.createTripleWithAtoms{ value: totalCost }(subjectData, predicateData, objectData);
+        bytes32[] memory atomIds = periphery.createAtomsFor{ value: totalCost }(atomData, users.bob);
+
+        assertEq(atomIds.length, 3);
+        for (uint256 i = 0; i < 3; i++) {
+            assertEq(atomIds[i], calculateAtomId(atomData[i]));
+        }
     }
 
-    function test_createTripleWithAtoms_refundsExcessValue() external {
-        bytes memory subjectData = abi.encodePacked("subject");
-        bytes memory predicateData = abi.encodePacked("predicate");
-        bytes memory objectData = abi.encodePacked("object");
+    function test_createAtomsFor_revertsOnZeroCreator() external {
+        bytes[] memory atomData = new bytes[](1);
+        atomData[0] = abi.encodePacked("test atom");
 
         uint256 atomCost = protocol.multiVault.getAtomCost();
-        uint256 tripleCost = protocol.multiVault.getTripleCost();
-        uint256 totalCost = (atomCost * 3) + tripleCost;
-        uint256 excessAmount = 1 ether;
-        uint256 sentAmount = totalCost + excessAmount;
-
-        uint256 balanceBefore = users.alice.balance;
 
         resetPrank(users.alice);
-        periphery.createTripleWithAtoms{ value: sentAmount }(subjectData, predicateData, objectData);
-
-        uint256 balanceAfter = users.alice.balance;
-        assertEq(balanceBefore - balanceAfter, totalCost);
+        vm.expectRevert(abi.encodeWithSelector(IMultiVaultPeriphery.MultiVaultPeriphery_InvalidAddress.selector));
+        periphery.createAtomsFor{ value: atomCost }(atomData, address(0));
     }
 
-    function test_createTripleWithAtoms_revertsOnInsufficientMsgValue() external {
-        bytes memory subjectData = abi.encodePacked("subject");
-        bytes memory predicateData = abi.encodePacked("predicate");
-        bytes memory objectData = abi.encodePacked("object");
+    function test_createAtomsFor_revertsOnZeroLengthArray() external {
+        bytes[] memory atomData = new bytes[](0);
+
+        resetPrank(users.alice);
+        vm.expectRevert(abi.encodeWithSelector(IMultiVaultPeriphery.MultiVaultPeriphery_ZeroLengthArray.selector));
+        periphery.createAtomsFor{ value: 1 ether }(atomData, users.bob);
+    }
+
+    function test_createAtomsFor_revertsOnInsufficientMsgValue() external {
+        bytes[] memory atomData = new bytes[](2);
+        atomData[0] = abi.encodePacked("atom 1");
+        atomData[1] = abi.encodePacked("atom 2");
 
         uint256 atomCost = protocol.multiVault.getAtomCost();
-        uint256 tripleCost = protocol.multiVault.getTripleCost();
-        uint256 totalCost = (atomCost * 3) + tripleCost;
-        uint256 insufficientAmount = totalCost - 1;
+        uint256 requiredValue = atomCost * 2;
+        uint256 insufficientValue = atomCost + (atomCost / 2);
 
         resetPrank(users.alice);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IMultiVaultPeriphery.MultiVaultPeriphery_InsufficientMsgValue.selector, totalCost, insufficientAmount
+                IMultiVaultPeriphery.MultiVaultPeriphery_InsufficientMsgValue.selector, requiredValue, insufficientValue
             )
         );
-        periphery.createTripleWithAtoms{ value: insufficientAmount }(subjectData, predicateData, objectData);
+        periphery.createAtomsFor{ value: insufficientValue }(atomData, users.bob);
     }
 
-    function testFuzz_createTripleWithAtoms_allNewAtoms(
-        bytes calldata subjectData,
-        bytes calldata predicateData,
-        bytes calldata objectData
-    )
-        external
-    {
-        vm.assume(subjectData.length > 0 && subjectData.length <= ATOM_DATA_MAX_LENGTH);
-        vm.assume(predicateData.length > 0 && predicateData.length <= ATOM_DATA_MAX_LENGTH);
-        vm.assume(objectData.length > 0 && objectData.length <= ATOM_DATA_MAX_LENGTH);
-
-        bytes32 subjectId = protocol.multiVault.calculateAtomId(subjectData);
-        bytes32 predicateId = protocol.multiVault.calculateAtomId(predicateData);
-        bytes32 objectId = protocol.multiVault.calculateAtomId(objectData);
-
-        vm.assume(!protocol.multiVault.isAtom(subjectId));
-        vm.assume(!protocol.multiVault.isAtom(predicateId));
-        vm.assume(!protocol.multiVault.isAtom(objectId));
+    function test_createAtomsFor_refundsExcessValue() external {
+        bytes[] memory atomData = new bytes[](1);
+        atomData[0] = abi.encodePacked("test atom");
 
         uint256 atomCost = protocol.multiVault.getAtomCost();
-        uint256 tripleCost = protocol.multiVault.getTripleCost();
-        uint256 totalCost = (atomCost * 3) + tripleCost;
-
-        resetPrank(users.alice);
-        bytes32 tripleId = periphery.createTripleWithAtoms{ value: totalCost }(subjectData, predicateData, objectData);
-
-        assertEq(tripleId, protocol.multiVault.calculateTripleId(subjectId, predicateId, objectId));
-        assertTrue(protocol.multiVault.isAtom(subjectId));
-        assertTrue(protocol.multiVault.isAtom(predicateId));
-        assertTrue(protocol.multiVault.isAtom(objectId));
-        assertTrue(protocol.multiVault.isTriple(tripleId));
-    }
-
-    function testFuzz_createTripleWithAtoms_refundsExcessValue(uint256 excessAmount) external {
-        excessAmount = bound(excessAmount, 0, 100 ether);
-
-        bytes memory subjectData = abi.encodePacked("subject");
-        bytes memory predicateData = abi.encodePacked("predicate");
-        bytes memory objectData = abi.encodePacked("object");
-
-        uint256 atomCost = protocol.multiVault.getAtomCost();
-        uint256 tripleCost = protocol.multiVault.getTripleCost();
-        uint256 totalCost = (atomCost * 3) + tripleCost;
-        uint256 sentAmount = totalCost + excessAmount;
-
-        uint256 balanceBefore = users.alice.balance;
-
-        resetPrank(users.alice);
-        periphery.createTripleWithAtoms{ value: sentAmount }(subjectData, predicateData, objectData);
-
-        uint256 balanceAfter = users.alice.balance;
-        assertEq(balanceBefore - balanceAfter, totalCost);
-    }
-
-    /* =================================================== */
-    /*       CREATE TRIPLE WITH ATOMS FOR TESTS            */
-    /* =================================================== */
-
-    function test_createTripleWithAtomsFor_successful() external {
-        bytes memory subjectData = abi.encodePacked("subject");
-        bytes memory predicateData = abi.encodePacked("predicate");
-        bytes memory objectData = abi.encodePacked("object");
-
-        uint256 atomCost = protocol.multiVault.getAtomCost();
-        uint256 tripleCost = protocol.multiVault.getTripleCost();
-        uint256 totalCost = (atomCost * 3) + tripleCost;
-
-        bytes32 expectedSubjectId = protocol.multiVault.calculateAtomId(subjectData);
-        bytes32 expectedPredicateId = protocol.multiVault.calculateAtomId(predicateData);
-        bytes32 expectedObjectId = protocol.multiVault.calculateAtomId(objectData);
-        bytes32 expectedTripleId =
-            protocol.multiVault.calculateTripleId(expectedSubjectId, expectedPredicateId, expectedObjectId);
-
-        resetPrank(users.alice);
-        bytes32 tripleId =
-            periphery.createTripleWithAtomsFor{ value: totalCost }(subjectData, predicateData, objectData, users.bob);
-
-        assertEq(tripleId, expectedTripleId);
-        assertTrue(protocol.multiVault.isAtom(expectedSubjectId));
-        assertTrue(protocol.multiVault.isAtom(expectedPredicateId));
-        assertTrue(protocol.multiVault.isAtom(expectedObjectId));
-        assertTrue(protocol.multiVault.isTriple(tripleId));
-    }
-
-    function test_createTripleWithAtomsFor_emitsEventsWithCorrectCreator() external {
-        bytes memory subjectData = abi.encodePacked("subject");
-        bytes memory predicateData = abi.encodePacked("predicate");
-        bytes memory objectData = abi.encodePacked("object");
-
-        uint256 atomCost = protocol.multiVault.getAtomCost();
-        uint256 tripleCost = protocol.multiVault.getTripleCost();
-        uint256 totalCost = (atomCost * 3) + tripleCost;
-
-        bytes32 expectedSubjectId = protocol.multiVault.calculateAtomId(subjectData);
-        bytes32 expectedPredicateId = protocol.multiVault.calculateAtomId(predicateData);
-        bytes32 expectedObjectId = protocol.multiVault.calculateAtomId(objectData);
-        bytes32 expectedTripleId =
-            protocol.multiVault.calculateTripleId(expectedSubjectId, expectedPredicateId, expectedObjectId);
-
-        vm.expectEmit(true, true, true, true);
-        emit IMultiVaultPeriphery.AtomCreatedFor(users.alice, users.bob, expectedSubjectId, subjectData);
-
-        vm.expectEmit(true, true, true, true);
-        emit IMultiVaultPeriphery.AtomCreatedFor(users.alice, users.bob, expectedPredicateId, predicateData);
-
-        vm.expectEmit(true, true, true, true);
-        emit IMultiVaultPeriphery.AtomCreatedFor(users.alice, users.bob, expectedObjectId, objectData);
-
-        vm.expectEmit(true, true, true, true);
-        emit IMultiVaultPeriphery.TripleCreatedFor(
-            users.alice, users.bob, expectedTripleId, expectedSubjectId, expectedPredicateId, expectedObjectId
-        );
-
-        resetPrank(users.alice);
-        periphery.createTripleWithAtomsFor{ value: totalCost }(subjectData, predicateData, objectData, users.bob);
-    }
-
-    function test_createTripleWithAtomsFor_revertsOnZeroAddressCreator() external {
-        bytes memory subjectData = abi.encodePacked("subject");
-        bytes memory predicateData = abi.encodePacked("predicate");
-        bytes memory objectData = abi.encodePacked("object");
-
-        uint256 atomCost = protocol.multiVault.getAtomCost();
-        uint256 tripleCost = protocol.multiVault.getTripleCost();
-        uint256 totalCost = (atomCost * 3) + tripleCost;
-
-        resetPrank(users.alice);
-        vm.expectRevert(abi.encodeWithSelector(IMultiVaultPeriphery.MultiVaultPeriphery_InvalidCreator.selector));
-        periphery.createTripleWithAtomsFor{ value: totalCost }(subjectData, predicateData, objectData, address(0));
-    }
-
-    function test_createTripleWithAtomsFor_withExistingAtomsRefundsCorrectly() external {
-        bytes memory subjectData = abi.encodePacked("subject");
-        bytes memory predicateData = abi.encodePacked("predicate");
-        bytes memory objectData = abi.encodePacked("object");
-
-        uint256 atomCost = protocol.multiVault.getAtomCost();
-
-        createAtomWithDeposit(subjectData, atomCost, users.alice);
-
-        uint256 tripleCost = protocol.multiVault.getTripleCost();
-        uint256 totalCost = (atomCost * 2) + tripleCost;
-
-        uint256 balanceBefore = users.alice.balance;
-
-        resetPrank(users.alice);
-        periphery.createTripleWithAtomsFor{ value: totalCost }(subjectData, predicateData, objectData, users.bob);
-
-        uint256 balanceAfter = users.alice.balance;
-        assertEq(balanceBefore - balanceAfter, totalCost);
-    }
-
-    function testFuzz_createTripleWithAtomsFor_successful(address creator) external {
-        vm.assume(creator != address(0));
-        _excludeReservedAddresses(creator);
-
-        bytes memory subjectData = abi.encodePacked("subject");
-        bytes memory predicateData = abi.encodePacked("predicate");
-        bytes memory objectData = abi.encodePacked("object");
-
-        uint256 atomCost = protocol.multiVault.getAtomCost();
-        uint256 tripleCost = protocol.multiVault.getTripleCost();
-        uint256 totalCost = (atomCost * 3) + tripleCost;
-
-        bytes32 expectedTripleId = protocol.multiVault
-            .calculateTripleId(
-                protocol.multiVault.calculateAtomId(subjectData), // expectedSubjectId
-                protocol.multiVault.calculateAtomId(predicateData), // expectedPredicateId
-                protocol.multiVault.calculateAtomId(objectData) // expectedObjectId
-            );
-
-        resetPrank(users.alice);
-        bytes32 tripleId =
-            periphery.createTripleWithAtomsFor{ value: totalCost }(subjectData, predicateData, objectData, creator);
-
-        assertEq(tripleId, expectedTripleId);
-        assertTrue(protocol.multiVault.isTriple(tripleId));
-    }
-
-    /* =================================================== */
-    /*              REFUND MECHANISM TESTS                 */
-    /* =================================================== */
-
-    function test_refund_failsGracefullyWithRevertingReceiver() external {
-        vm.stopPrank();
-        RevertOnReceive revertingContract = new RevertOnReceive();
-
-        bytes memory subjectData = abi.encodePacked("subject");
-        bytes memory predicateData = abi.encodePacked("predicate");
-        bytes memory objectData = abi.encodePacked("object");
-
-        uint256 atomCost = protocol.multiVault.getAtomCost();
-        uint256 tripleCost = protocol.multiVault.getTripleCost();
-        uint256 totalCost = (atomCost * 3) + tripleCost;
         uint256 excessAmount = 1 ether;
-
-        vm.deal(address(revertingContract), totalCost + excessAmount);
-
-        vm.prank(address(revertingContract));
-        vm.expectRevert("MultiVaultPeriphery: Refund failed");
-        periphery.createTripleWithAtoms{ value: totalCost + excessAmount }(subjectData, predicateData, objectData);
-    }
-
-    function test_refund_noRefundWhenExactAmountSent() external {
-        bytes memory subjectData = abi.encodePacked("subject");
-        bytes memory predicateData = abi.encodePacked("predicate");
-        bytes memory objectData = abi.encodePacked("object");
-
-        uint256 atomCost = protocol.multiVault.getAtomCost();
-        uint256 tripleCost = protocol.multiVault.getTripleCost();
-        uint256 totalCost = (atomCost * 3) + tripleCost;
-
-        uint256 balanceBefore = users.alice.balance;
+        uint256 totalSent = atomCost + excessAmount;
+        uint256 aliceBalanceBefore = users.alice.balance;
 
         resetPrank(users.alice);
-        periphery.createTripleWithAtoms{ value: totalCost }(subjectData, predicateData, objectData);
+        periphery.createAtomsFor{ value: totalSent }(atomData, users.bob);
 
-        uint256 balanceAfter = users.alice.balance;
-        assertEq(balanceBefore - balanceAfter, totalCost);
+        assertEq(users.alice.balance, aliceBalanceBefore - atomCost);
     }
 
-    /* =================================================== */
-    /*                    EDGE CASES                       */
-    /* =================================================== */
+    function test_createAtomsFor_revertsOnRefundFailure() external {
+        bytes[] memory atomData = new bytes[](1);
+        atomData[0] = abi.encodePacked("test atom");
 
-    function test_createTripleWithAtoms_withMaxLengthAtomData() external {
-        bytes memory subjectData = new bytes(ATOM_DATA_MAX_LENGTH);
-        bytes memory predicateData = new bytes(ATOM_DATA_MAX_LENGTH);
-        bytes memory objectData = new bytes(ATOM_DATA_MAX_LENGTH);
+        uint256 atomCost = protocol.multiVault.getAtomCost();
+        uint256 excessAmount = 1 ether;
+        uint256 totalSent = atomCost + excessAmount;
 
-        for (uint256 i = 0; i < ATOM_DATA_MAX_LENGTH; i++) {
-            subjectData[i] = bytes1(uint8(i % 256));
-            predicateData[i] = bytes1(uint8((i + 1) % 256));
-            objectData[i] = bytes1(uint8((i + 2) % 256));
+        resetPrank(address(refundFailureMock));
+        vm.expectRevert(abi.encodeWithSelector(IMultiVaultPeriphery.MultiVaultPeriphery_RefundFailed.selector));
+        periphery.createAtomsFor{ value: totalSent }(atomData, users.bob);
+    }
+
+    function test_createAtomsFor_emitsEventsForAllAtoms() external {
+        bytes[] memory atomData = new bytes[](2);
+        atomData[0] = abi.encodePacked("atom 1");
+        atomData[1] = abi.encodePacked("atom 2");
+
+        uint256 atomCost = protocol.multiVault.getAtomCost();
+        uint256 totalCost = atomCost * 2;
+
+        bytes32 expectedAtomId0 = calculateAtomId(atomData[0]);
+        bytes32 expectedAtomId1 = calculateAtomId(atomData[1]);
+
+        vm.expectEmit(true, true, true, true);
+        emit IMultiVaultPeriphery.AtomCreatedBy(users.alice, users.bob, expectedAtomId0, atomData[0]);
+
+        vm.expectEmit(true, true, true, true);
+        emit IMultiVaultPeriphery.AtomCreatedBy(users.alice, users.bob, expectedAtomId1, atomData[1]);
+
+        resetPrank(users.alice);
+        periphery.createAtomsFor{ value: totalCost }(atomData, users.bob);
+    }
+
+    function testFuzz_createAtomsFor(uint8 atomCount, uint256 excessValue) external {
+        atomCount = uint8(bound(atomCount, 1, 20));
+        excessValue = bound(excessValue, 0, 10 ether);
+
+        bytes[] memory atomData = new bytes[](atomCount);
+        for (uint256 i = 0; i < atomCount; i++) {
+            atomData[i] = abi.encodePacked("atom ", i);
         }
 
         uint256 atomCost = protocol.multiVault.getAtomCost();
-        uint256 tripleCost = protocol.multiVault.getTripleCost();
-        uint256 totalCost = (atomCost * 3) + tripleCost;
+        uint256 requiredValue = atomCost * atomCount;
+        uint256 totalValue = requiredValue + excessValue;
 
-        bytes32 expectedSubjectId = protocol.multiVault.calculateAtomId(subjectData);
-        bytes32 expectedPredicateId = protocol.multiVault.calculateAtomId(predicateData);
-        bytes32 expectedObjectId = protocol.multiVault.calculateAtomId(objectData);
-        bytes32 expectedTripleId =
-            protocol.multiVault.calculateTripleId(expectedSubjectId, expectedPredicateId, expectedObjectId);
+        uint256 aliceBalanceBefore = users.alice.balance;
 
         resetPrank(users.alice);
-        bytes32 tripleId = periphery.createTripleWithAtoms{ value: totalCost }(subjectData, predicateData, objectData);
+        bytes32[] memory atomIds = periphery.createAtomsFor{ value: totalValue }(atomData, users.bob);
 
-        assertEq(tripleId, expectedTripleId);
-        assertTrue(protocol.multiVault.isTriple(tripleId));
-    }
-
-    function test_createTripleWithAtoms_withIdenticalAtomData() external {
-        bytes memory atomData = abi.encodePacked("identical");
-
-        uint256 atomCost = protocol.multiVault.getAtomCost();
-        uint256 tripleCost = protocol.multiVault.getTripleCost();
-        uint256 totalCost = atomCost + tripleCost;
-
-        bytes32 atomId = protocol.multiVault.calculateAtomId(atomData);
-        bytes32 expectedTripleId = protocol.multiVault.calculateTripleId(atomId, atomId, atomId);
-
-        resetPrank(users.alice);
-        bytes32 tripleId = periphery.createTripleWithAtoms{ value: totalCost }(atomData, atomData, atomData);
-
-        assertEq(tripleId, expectedTripleId);
-        assertTrue(protocol.multiVault.isAtom(atomId));
-        assertTrue(protocol.multiVault.isTriple(tripleId));
-    }
-
-    function test_createTripleWithAtoms_multipleCallsWithSameData() external {
-        bytes memory subjectData = abi.encodePacked("subject");
-        bytes memory predicateData = abi.encodePacked("predicate");
-        bytes memory objectData = abi.encodePacked("object");
-
-        uint256 atomCost = protocol.multiVault.getAtomCost();
-        uint256 tripleCost = protocol.multiVault.getTripleCost();
-        uint256 totalCostFirst = (atomCost * 3) + tripleCost;
-        uint256 totalCostSecond = tripleCost;
-
-        bytes32 expectedSubjectId = protocol.multiVault.calculateAtomId(subjectData);
-        bytes32 expectedPredicateId = protocol.multiVault.calculateAtomId(predicateData);
-        bytes32 expectedObjectId = protocol.multiVault.calculateAtomId(objectData);
-        bytes32 expectedTripleId =
-            protocol.multiVault.calculateTripleId(expectedSubjectId, expectedPredicateId, expectedObjectId);
-
-        resetPrank(users.alice);
-        bytes32 tripleId1 =
-            periphery.createTripleWithAtoms{ value: totalCostFirst }(subjectData, predicateData, objectData);
-
-        vm.expectRevert();
-        periphery.createTripleWithAtoms{ value: totalCostSecond }(subjectData, predicateData, objectData);
-
-        assertEq(tripleId1, expectedTripleId);
-    }
-
-    function test_createTripleWithAtomsFor_multipleUsersCreatingForSameCreator() external {
-        bytes memory subjectData = abi.encodePacked("subject");
-        bytes memory predicateData = abi.encodePacked("predicate");
-        bytes memory objectData = abi.encodePacked("object");
-
-        uint256 atomCost = protocol.multiVault.getAtomCost();
-        uint256 tripleCost = protocol.multiVault.getTripleCost();
-        uint256 totalCost = (atomCost * 3) + tripleCost;
-
-        bytes32 expectedSubjectId = protocol.multiVault.calculateAtomId(subjectData);
-        bytes32 expectedPredicateId = protocol.multiVault.calculateAtomId(predicateData);
-        bytes32 expectedObjectId = protocol.multiVault.calculateAtomId(objectData);
-        bytes32 expectedTripleId =
-            protocol.multiVault.calculateTripleId(expectedSubjectId, expectedPredicateId, expectedObjectId);
-
-        resetPrank(users.alice);
-        bytes32 tripleId = periphery.createTripleWithAtomsFor{ value: totalCost }(
-            subjectData, predicateData, objectData, users.charlie
-        );
-
-        assertEq(tripleId, expectedTripleId);
-
-        bytes memory subject2Data = abi.encodePacked("subject2");
-        bytes memory predicate2Data = abi.encodePacked("predicate2");
-        bytes memory object2Data = abi.encodePacked("object2");
-
-        bytes32 expectedSubject2Id = protocol.multiVault.calculateAtomId(subject2Data);
-        bytes32 expectedPredicate2Id = protocol.multiVault.calculateAtomId(predicate2Data);
-        bytes32 expectedObject2Id = protocol.multiVault.calculateAtomId(object2Data);
-        bytes32 expectedTriple2Id =
-            protocol.multiVault.calculateTripleId(expectedSubject2Id, expectedPredicate2Id, expectedObject2Id);
-
-        resetPrank(users.bob);
-        bytes32 tripleId2 = periphery.createTripleWithAtomsFor{ value: totalCost }(
-            subject2Data, predicate2Data, object2Data, users.charlie
-        );
-
-        assertEq(tripleId2, expectedTriple2Id);
-        assertTrue(tripleId != tripleId2);
+        assertEq(atomIds.length, atomCount);
+        assertEq(users.alice.balance, aliceBalanceBefore - requiredValue);
     }
 
     /* =================================================== */
-    /*                  STATE VERIFICATION                 */
+    /*             CREATE TRIPLES FOR TESTS                */
     /* =================================================== */
 
-    function test_stateVerification_multiVaultAddressSetCorrectly() external view {
-        assertEq(address(periphery.multiVault()), address(protocol.multiVault));
-        assertEq(address(periphery.multiVaultCore()), address(protocol.multiVault));
+    function test_createTriplesFor_singleTriple() external {
+        bytes32 subjectId = createSimpleAtom("subject", getAtomCreationCost(), users.alice);
+        bytes32 predicateId = createSimpleAtom("predicate", getAtomCreationCost(), users.alice);
+        bytes32 objectId = createSimpleAtom("object", getAtomCreationCost(), users.alice);
+
+        bytes32[] memory subjects = new bytes32[](1);
+        bytes32[] memory predicates = new bytes32[](1);
+        bytes32[] memory objects = new bytes32[](1);
+
+        subjects[0] = subjectId;
+        predicates[0] = predicateId;
+        objects[0] = objectId;
+
+        uint256 tripleCost = protocol.multiVault.getTripleCost();
+        uint256 aliceBalanceBefore = users.alice.balance;
+
+        vm.expectEmit(true, true, true, true);
+        emit IMultiVaultPeriphery.TripleCreatedBy(users.alice, users.bob, bytes32(0), subjectId, predicateId, objectId);
+
+        resetPrank(users.alice);
+        bytes32[] memory tripleIds =
+            periphery.createTriplesFor{ value: tripleCost }(subjects, predicates, objects, users.bob);
+
+        assertEq(tripleIds.length, 1);
+        assertEq(users.alice.balance, aliceBalanceBefore - tripleCost);
     }
 
-    function test_stateVerification_adminRoleGrantedCorrectly() external view {
-        assertTrue(periphery.hasRole(periphery.DEFAULT_ADMIN_ROLE(), users.admin));
+    function test_createTriplesFor_multipleTriples() external {
+        bytes32[] memory subjects = new bytes32[](3);
+        bytes32[] memory predicates = new bytes32[](3);
+        bytes32[] memory objects = new bytes32[](3);
+
+        for (uint256 i = 0; i < 3; i++) {
+            subjects[i] = createSimpleAtom(string(abi.encodePacked("subject", i)), getAtomCreationCost(), users.alice);
+            predicates[i] =
+                createSimpleAtom(string(abi.encodePacked("predicate", i)), getAtomCreationCost(), users.alice);
+            objects[i] = createSimpleAtom(string(abi.encodePacked("object", i)), getAtomCreationCost(), users.alice);
+        }
+
+        uint256 tripleCost = protocol.multiVault.getTripleCost();
+        uint256 totalCost = tripleCost * 3;
+
+        resetPrank(users.alice);
+        bytes32[] memory tripleIds =
+            periphery.createTriplesFor{ value: totalCost }(subjects, predicates, objects, users.bob);
+
+        assertEq(tripleIds.length, 3);
     }
 
-    function test_stateVerification_nonAdminDoesNotHaveRole() external view {
-        assertFalse(periphery.hasRole(periphery.DEFAULT_ADMIN_ROLE(), users.alice));
-        assertFalse(periphery.hasRole(periphery.DEFAULT_ADMIN_ROLE(), users.bob));
+    function test_createTriplesFor_revertsOnZeroCreator() external {
+        bytes32 subjectId = createSimpleAtom("subject", getAtomCreationCost(), users.alice);
+        bytes32 predicateId = createSimpleAtom("predicate", getAtomCreationCost(), users.alice);
+        bytes32 objectId = createSimpleAtom("object", getAtomCreationCost(), users.alice);
+
+        bytes32[] memory subjects = new bytes32[](1);
+        bytes32[] memory predicates = new bytes32[](1);
+        bytes32[] memory objects = new bytes32[](1);
+
+        subjects[0] = subjectId;
+        predicates[0] = predicateId;
+        objects[0] = objectId;
+
+        uint256 tripleCost = protocol.multiVault.getTripleCost();
+
+        resetPrank(users.alice);
+        vm.expectRevert(abi.encodeWithSelector(IMultiVaultPeriphery.MultiVaultPeriphery_InvalidAddress.selector));
+        periphery.createTriplesFor{ value: tripleCost }(subjects, predicates, objects, address(0));
+    }
+
+    function test_createTriplesFor_revertsOnZeroLengthArray() external {
+        bytes32[] memory subjects = new bytes32[](0);
+        bytes32[] memory predicates = new bytes32[](0);
+        bytes32[] memory objects = new bytes32[](0);
+
+        resetPrank(users.alice);
+        vm.expectRevert(abi.encodeWithSelector(IMultiVaultPeriphery.MultiVaultPeriphery_ZeroLengthArray.selector));
+        periphery.createTriplesFor{ value: 1 ether }(subjects, predicates, objects, users.bob);
+    }
+
+    function test_createTriplesFor_revertsOnArrayLengthMismatchPredicates() external {
+        bytes32[] memory subjects = new bytes32[](2);
+        bytes32[] memory predicates = new bytes32[](1);
+        bytes32[] memory objects = new bytes32[](2);
+
+        resetPrank(users.alice);
+        vm.expectRevert(abi.encodeWithSelector(IMultiVaultPeriphery.MultiVaultPeriphery_ArrayLengthMismatch.selector));
+        periphery.createTriplesFor{ value: 1 ether }(subjects, predicates, objects, users.bob);
+    }
+
+    function test_createTriplesFor_revertsOnArrayLengthMismatchObjects() external {
+        bytes32[] memory subjects = new bytes32[](2);
+        bytes32[] memory predicates = new bytes32[](2);
+        bytes32[] memory objects = new bytes32[](1);
+
+        resetPrank(users.alice);
+        vm.expectRevert(abi.encodeWithSelector(IMultiVaultPeriphery.MultiVaultPeriphery_ArrayLengthMismatch.selector));
+        periphery.createTriplesFor{ value: 1 ether }(subjects, predicates, objects, users.bob);
+    }
+
+    function test_createTriplesFor_revertsOnInsufficientMsgValue() external {
+        bytes32 subjectId = createSimpleAtom("subject", getAtomCreationCost(), users.alice);
+        bytes32 predicateId = createSimpleAtom("predicate", getAtomCreationCost(), users.alice);
+        bytes32 objectId = createSimpleAtom("object", getAtomCreationCost(), users.alice);
+
+        bytes32[] memory subjects = new bytes32[](2);
+        bytes32[] memory predicates = new bytes32[](2);
+        bytes32[] memory objects = new bytes32[](2);
+
+        subjects[0] = subjectId;
+        subjects[1] = subjectId;
+        predicates[0] = predicateId;
+        predicates[1] = predicateId;
+        objects[0] = objectId;
+        objects[1] = objectId;
+
+        uint256 tripleCost = protocol.multiVault.getTripleCost();
+        uint256 requiredValue = tripleCost * 2;
+        uint256 insufficientValue = tripleCost + (tripleCost / 2);
+
+        resetPrank(users.alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IMultiVaultPeriphery.MultiVaultPeriphery_InsufficientMsgValue.selector, requiredValue, insufficientValue
+            )
+        );
+        periphery.createTriplesFor{ value: insufficientValue }(subjects, predicates, objects, users.bob);
+    }
+
+    function test_createTriplesFor_refundsExcessValue() external {
+        bytes32 subjectId = createSimpleAtom("subject", getAtomCreationCost(), users.alice);
+        bytes32 predicateId = createSimpleAtom("predicate", getAtomCreationCost(), users.alice);
+        bytes32 objectId = createSimpleAtom("object", getAtomCreationCost(), users.alice);
+
+        bytes32[] memory subjects = new bytes32[](1);
+        bytes32[] memory predicates = new bytes32[](1);
+        bytes32[] memory objects = new bytes32[](1);
+
+        subjects[0] = subjectId;
+        predicates[0] = predicateId;
+        objects[0] = objectId;
+
+        uint256 tripleCost = protocol.multiVault.getTripleCost();
+        uint256 excessAmount = 1 ether;
+        uint256 totalSent = tripleCost + excessAmount;
+        uint256 aliceBalanceBefore = users.alice.balance;
+
+        resetPrank(users.alice);
+        periphery.createTriplesFor{ value: totalSent }(subjects, predicates, objects, users.bob);
+
+        assertEq(users.alice.balance, aliceBalanceBefore - tripleCost);
+    }
+
+    function test_createTriplesFor_revertsOnRefundFailure() external {
+        bytes32 subjectId = createSimpleAtom("subject", getAtomCreationCost(), users.alice);
+        bytes32 predicateId = createSimpleAtom("predicate", getAtomCreationCost(), users.alice);
+        bytes32 objectId = createSimpleAtom("object", getAtomCreationCost(), users.alice);
+
+        bytes32[] memory subjects = new bytes32[](1);
+        bytes32[] memory predicates = new bytes32[](1);
+        bytes32[] memory objects = new bytes32[](1);
+
+        subjects[0] = subjectId;
+        predicates[0] = predicateId;
+        objects[0] = objectId;
+
+        uint256 tripleCost = protocol.multiVault.getTripleCost();
+        uint256 excessAmount = 1 ether;
+        uint256 totalSent = tripleCost + excessAmount;
+
+        resetPrank(address(refundFailureMock));
+        vm.expectRevert(abi.encodeWithSelector(IMultiVaultPeriphery.MultiVaultPeriphery_RefundFailed.selector));
+        periphery.createTriplesFor{ value: totalSent }(subjects, predicates, objects, users.bob);
+    }
+
+    function test_createTriplesFor_emitsEventsForAllTriples() external {
+        bytes32[] memory subjects = new bytes32[](2);
+        bytes32[] memory predicates = new bytes32[](2);
+        bytes32[] memory objects = new bytes32[](2);
+
+        for (uint256 i = 0; i < 2; i++) {
+            subjects[i] = createSimpleAtom(string(abi.encodePacked("subject", i)), getAtomCreationCost(), users.alice);
+            predicates[i] =
+                createSimpleAtom(string(abi.encodePacked("predicate", i)), getAtomCreationCost(), users.alice);
+            objects[i] = createSimpleAtom(string(abi.encodePacked("object", i)), getAtomCreationCost(), users.alice);
+        }
+
+        uint256 tripleCost = protocol.multiVault.getTripleCost();
+        uint256 totalCost = tripleCost * 2;
+
+        resetPrank(users.alice);
+        bytes32[] memory tripleIds =
+            periphery.createTriplesFor{ value: totalCost }(subjects, predicates, objects, users.bob);
+
+        assertEq(tripleIds.length, 2);
+    }
+
+    function testFuzz_createTriplesFor(uint8 tripleCount, uint256 excessValue) external {
+        tripleCount = uint8(bound(tripleCount, 1, 10));
+        excessValue = bound(excessValue, 0, 10 ether);
+
+        bytes32[] memory subjects = new bytes32[](tripleCount);
+        bytes32[] memory predicates = new bytes32[](tripleCount);
+        bytes32[] memory objects = new bytes32[](tripleCount);
+
+        for (uint256 i = 0; i < tripleCount; i++) {
+            subjects[i] = createSimpleAtom(string(abi.encodePacked("subject", i)), getAtomCreationCost(), users.alice);
+            predicates[i] =
+                createSimpleAtom(string(abi.encodePacked("predicate", i)), getAtomCreationCost(), users.alice);
+            objects[i] = createSimpleAtom(string(abi.encodePacked("object", i)), getAtomCreationCost(), users.alice);
+        }
+
+        uint256 tripleCost = protocol.multiVault.getTripleCost();
+        uint256 requiredValue = tripleCost * tripleCount;
+        uint256 totalValue = requiredValue + excessValue;
+
+        uint256 aliceBalanceBefore = users.alice.balance;
+
+        resetPrank(users.alice);
+        bytes32[] memory tripleIds =
+            periphery.createTriplesFor{ value: totalValue }(subjects, predicates, objects, users.bob);
+
+        assertEq(tripleIds.length, tripleCount);
+        assertEq(users.alice.balance, aliceBalanceBefore - requiredValue);
+    }
+
+    /* =================================================== */
+    /*      BOOTSTRAP COUNTER TRIPLE VAULT TESTS           */
+    /* =================================================== */
+
+    function test_bootstrapCounterTripleVaultAndDepositFor_successful() external {
+        bytes32 subjectId = createSimpleAtom("subject", getAtomCreationCost(), users.alice);
+        bytes32 predicateId = createSimpleAtom("predicate", getAtomCreationCost(), users.alice);
+        bytes32 objectId = createSimpleAtom("object", getAtomCreationCost(), users.alice);
+
+        bytes32[] memory subjects = new bytes32[](1);
+        bytes32[] memory predicates = new bytes32[](1);
+        bytes32[] memory objects = new bytes32[](1);
+        uint256[] memory assets = new uint256[](1);
+
+        subjects[0] = subjectId;
+        predicates[0] = predicateId;
+        objects[0] = objectId;
+        assets[0] = protocol.multiVault.getTripleCost();
+
+        resetPrank(users.alice);
+        bytes32[] memory tripleIds =
+            protocol.multiVault.createTriples{ value: assets[0] }(subjects, predicates, objects, assets);
+        bytes32 tripleId = tripleIds[0];
+
+        uint256 curveId = 2;
+        uint256 userAssets = 1 ether;
+        uint256 minSharesForUser = 0;
+
+        setupApproval(users.bob, address(periphery), ApprovalTypes.DEPOSIT);
+
+        uint256 minDeposit = protocol.multiVault.getGeneralConfig().minDeposit;
+        uint256 requiredValue = minDeposit + userAssets;
+
+        bytes32 counterTripleId = protocol.multiVault.getCounterIdFromTripleId(tripleId);
+
+        vm.expectEmit(true, true, true, true);
+        emit IMultiVaultPeriphery.CounterTripleVaultBootstrappedAndDeposited(
+            users.alice, users.bob, tripleId, counterTripleId, curveId, userAssets, 0
+        );
+
+        resetPrank(users.alice);
+        uint256 userShares = periphery.bootstrapCounterTripleVaultAndDepositFor{ value: requiredValue }(
+            tripleId, curveId, userAssets, minSharesForUser, users.bob
+        );
+
+        assertGt(userShares, 0);
+        (uint256 bobAssets, uint256 bobShares) = protocol.multiVault.getVault(counterTripleId, curveId);
+        assertGt(bobShares, 0);
+    }
+
+    function test_bootstrapCounterTripleVaultAndDepositFor_revertsOnZeroReceiver() external {
+        bytes32 subjectId = createSimpleAtom("subject", getAtomCreationCost(), users.alice);
+        bytes32 predicateId = createSimpleAtom("predicate", getAtomCreationCost(), users.alice);
+        bytes32 objectId = createSimpleAtom("object", getAtomCreationCost(), users.alice);
+
+        bytes32[] memory subjects = new bytes32[](1);
+        bytes32[] memory predicates = new bytes32[](1);
+        bytes32[] memory objects = new bytes32[](1);
+        uint256[] memory assets = new uint256[](1);
+
+        subjects[0] = subjectId;
+        predicates[0] = predicateId;
+        objects[0] = objectId;
+        assets[0] = protocol.multiVault.getTripleCost();
+
+        resetPrank(users.alice);
+        bytes32[] memory tripleIds =
+            protocol.multiVault.createTriples{ value: assets[0] }(subjects, predicates, objects, assets);
+        bytes32 tripleId = tripleIds[0];
+
+        uint256 curveId = 2;
+        uint256 userAssets = 1 ether;
+        uint256 minSharesForUser = 0;
+
+        uint256 minDeposit = protocol.multiVault.getGeneralConfig().minDeposit;
+        uint256 requiredValue = minDeposit + userAssets;
+
+        resetPrank(users.alice);
+        vm.expectRevert(abi.encodeWithSelector(IMultiVaultPeriphery.MultiVaultPeriphery_InvalidAddress.selector));
+        periphery.bootstrapCounterTripleVaultAndDepositFor{ value: requiredValue }(
+            tripleId, curveId, userAssets, minSharesForUser, address(0)
+        );
+    }
+
+    function test_bootstrapCounterTripleVaultAndDepositFor_revertsOnZeroUserAssets() external {
+        bytes32 subjectId = createSimpleAtom("subject", getAtomCreationCost(), users.alice);
+        bytes32 predicateId = createSimpleAtom("predicate", getAtomCreationCost(), users.alice);
+        bytes32 objectId = createSimpleAtom("object", getAtomCreationCost(), users.alice);
+
+        bytes32[] memory subjects = new bytes32[](1);
+        bytes32[] memory predicates = new bytes32[](1);
+        bytes32[] memory objects = new bytes32[](1);
+        uint256[] memory assets = new uint256[](1);
+
+        subjects[0] = subjectId;
+        predicates[0] = predicateId;
+        objects[0] = objectId;
+        assets[0] = protocol.multiVault.getTripleCost();
+
+        resetPrank(users.alice);
+        bytes32[] memory tripleIds =
+            protocol.multiVault.createTriples{ value: assets[0] }(subjects, predicates, objects, assets);
+        bytes32 tripleId = tripleIds[0];
+
+        uint256 curveId = 2;
+        uint256 userAssets = 0;
+        uint256 minSharesForUser = 0;
+
+        uint256 minDeposit = protocol.multiVault.getGeneralConfig().minDeposit;
+        uint256 requiredValue = minDeposit + userAssets;
+
+        resetPrank(users.alice);
+        vm.expectRevert(abi.encodeWithSelector(IMultiVaultPeriphery.MultiVaultPeriphery_InvalidUserAssets.selector));
+        periphery.bootstrapCounterTripleVaultAndDepositFor{ value: requiredValue }(
+            tripleId, curveId, userAssets, minSharesForUser, users.bob
+        );
+    }
+
+    function test_bootstrapCounterTripleVaultAndDepositFor_revertsOnNonTriple() external {
+        bytes32 atomId = createSimpleAtom("atom", getAtomCreationCost(), users.alice);
+
+        uint256 curveId = 2;
+        uint256 userAssets = 1 ether;
+        uint256 minSharesForUser = 0;
+
+        uint256 minDeposit = protocol.multiVault.getGeneralConfig().minDeposit;
+        uint256 requiredValue = minDeposit + userAssets;
+
+        resetPrank(users.alice);
+        vm.expectRevert(abi.encodeWithSelector(IMultiVaultPeriphery.MultiVaultPeriphery_OnlyTriplesAllowed.selector));
+        periphery.bootstrapCounterTripleVaultAndDepositFor{ value: requiredValue }(
+            atomId, curveId, userAssets, minSharesForUser, users.bob
+        );
+    }
+
+    function test_bootstrapCounterTripleVaultAndDepositFor_revertsOnDefaultCurve() external {
+        bytes32 subjectId = createSimpleAtom("subject", getAtomCreationCost(), users.alice);
+        bytes32 predicateId = createSimpleAtom("predicate", getAtomCreationCost(), users.alice);
+        bytes32 objectId = createSimpleAtom("object", getAtomCreationCost(), users.alice);
+
+        bytes32[] memory subjects = new bytes32[](1);
+        bytes32[] memory predicates = new bytes32[](1);
+        bytes32[] memory objects = new bytes32[](1);
+        uint256[] memory assets = new uint256[](1);
+
+        subjects[0] = subjectId;
+        predicates[0] = predicateId;
+        objects[0] = objectId;
+        assets[0] = protocol.multiVault.getTripleCost();
+
+        resetPrank(users.alice);
+        bytes32[] memory tripleIds =
+            protocol.multiVault.createTriples{ value: assets[0] }(subjects, predicates, objects, assets);
+        bytes32 tripleId = tripleIds[0];
+
+        uint256 defaultCurveId = getDefaultCurveId();
+        uint256 userAssets = 1 ether;
+        uint256 minSharesForUser = 0;
+
+        uint256 minDeposit = protocol.multiVault.getGeneralConfig().minDeposit;
+        uint256 requiredValue = minDeposit + userAssets;
+
+        resetPrank(users.alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(IMultiVaultPeriphery.MultiVaultPeriphery_DefaultCurveIdNotAllowed.selector)
+        );
+        periphery.bootstrapCounterTripleVaultAndDepositFor{ value: requiredValue }(
+            tripleId, defaultCurveId, userAssets, minSharesForUser, users.bob
+        );
+    }
+
+    function test_bootstrapCounterTripleVaultAndDepositFor_revertsOnAlreadyInitialized() external {
+        bytes32 subjectId = createSimpleAtom("subject", getAtomCreationCost(), users.alice);
+        bytes32 predicateId = createSimpleAtom("predicate", getAtomCreationCost(), users.alice);
+        bytes32 objectId = createSimpleAtom("object", getAtomCreationCost(), users.alice);
+
+        bytes32[] memory subjects = new bytes32[](1);
+        bytes32[] memory predicates = new bytes32[](1);
+        bytes32[] memory objects = new bytes32[](1);
+        uint256[] memory assets = new uint256[](1);
+
+        subjects[0] = subjectId;
+        predicates[0] = predicateId;
+        objects[0] = objectId;
+        assets[0] = protocol.multiVault.getTripleCost();
+
+        resetPrank(users.alice);
+        bytes32[] memory tripleIds =
+            protocol.multiVault.createTriples{ value: assets[0] }(subjects, predicates, objects, assets);
+        bytes32 tripleId = tripleIds[0];
+
+        uint256 curveId = 2;
+        uint256 depositAmount = 1 ether;
+
+        resetPrank(users.alice);
+        protocol.multiVault.deposit{ value: depositAmount }(users.alice, tripleId, curveId, 0);
+
+        uint256 userAssets = 1 ether;
+        uint256 minSharesForUser = 0;
+
+        uint256 minDeposit = protocol.multiVault.getGeneralConfig().minDeposit;
+        uint256 requiredValue = minDeposit + userAssets;
+
+        resetPrank(users.alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IMultiVaultPeriphery.MultiVaultPeriphery_VaultAlreadyInitialized.selector, tripleId, curveId
+            )
+        );
+        periphery.bootstrapCounterTripleVaultAndDepositFor{ value: requiredValue }(
+            tripleId, curveId, userAssets, minSharesForUser, users.bob
+        );
+    }
+
+    function test_bootstrapCounterTripleVaultAndDepositFor_revertsOnInsufficientMsgValue() external {
+        bytes32 subjectId = createSimpleAtom("subject", getAtomCreationCost(), users.alice);
+        bytes32 predicateId = createSimpleAtom("predicate", getAtomCreationCost(), users.alice);
+        bytes32 objectId = createSimpleAtom("object", getAtomCreationCost(), users.alice);
+
+        bytes32[] memory subjects = new bytes32[](1);
+        bytes32[] memory predicates = new bytes32[](1);
+        bytes32[] memory objects = new bytes32[](1);
+        uint256[] memory assets = new uint256[](1);
+
+        subjects[0] = subjectId;
+        predicates[0] = predicateId;
+        objects[0] = objectId;
+        assets[0] = protocol.multiVault.getTripleCost();
+
+        resetPrank(users.alice);
+        bytes32[] memory tripleIds =
+            protocol.multiVault.createTriples{ value: assets[0] }(subjects, predicates, objects, assets);
+        bytes32 tripleId = tripleIds[0];
+
+        uint256 curveId = 2;
+        uint256 userAssets = 1 ether;
+        uint256 minSharesForUser = 0;
+
+        uint256 minDeposit = protocol.multiVault.getGeneralConfig().minDeposit;
+        uint256 requiredValue = minDeposit + userAssets;
+        uint256 insufficientValue = requiredValue - 1;
+
+        resetPrank(users.alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IMultiVaultPeriphery.MultiVaultPeriphery_InsufficientMsgValue.selector, requiredValue, insufficientValue
+            )
+        );
+        periphery.bootstrapCounterTripleVaultAndDepositFor{ value: insufficientValue }(
+            tripleId, curveId, userAssets, minSharesForUser, users.bob
+        );
+    }
+
+    function test_bootstrapCounterTripleVaultAndDepositFor_refundsExcessValue() external {
+        bytes32 subjectId = createSimpleAtom("subject", getAtomCreationCost(), users.alice);
+        bytes32 predicateId = createSimpleAtom("predicate", getAtomCreationCost(), users.alice);
+        bytes32 objectId = createSimpleAtom("object", getAtomCreationCost(), users.alice);
+
+        bytes32[] memory subjects = new bytes32[](1);
+        bytes32[] memory predicates = new bytes32[](1);
+        bytes32[] memory objects = new bytes32[](1);
+        uint256[] memory assets = new uint256[](1);
+
+        subjects[0] = subjectId;
+        predicates[0] = predicateId;
+        objects[0] = objectId;
+        assets[0] = protocol.multiVault.getTripleCost();
+
+        resetPrank(users.alice);
+        bytes32[] memory tripleIds =
+            protocol.multiVault.createTriples{ value: assets[0] }(subjects, predicates, objects, assets);
+        bytes32 tripleId = tripleIds[0];
+
+        uint256 curveId = 2;
+        uint256 userAssets = 1 ether;
+        uint256 minSharesForUser = 0;
+
+        setupApproval(users.bob, address(periphery), ApprovalTypes.DEPOSIT);
+
+        uint256 minDeposit = protocol.multiVault.getGeneralConfig().minDeposit;
+        uint256 requiredValue = minDeposit + userAssets;
+        uint256 excessAmount = 1 ether;
+        uint256 totalSent = requiredValue + excessAmount;
+        uint256 aliceBalanceBefore = users.alice.balance;
+
+        resetPrank(users.alice);
+        periphery.bootstrapCounterTripleVaultAndDepositFor{ value: totalSent }(
+            tripleId, curveId, userAssets, minSharesForUser, users.bob
+        );
+
+        assertEq(users.alice.balance, aliceBalanceBefore - requiredValue);
+    }
+
+    function test_bootstrapCounterTripleVaultAndDepositFor_peripheryHoldsNoShares() external {
+        bytes32 subjectId = createSimpleAtom("subject", getAtomCreationCost(), users.alice);
+        bytes32 predicateId = createSimpleAtom("predicate", getAtomCreationCost(), users.alice);
+        bytes32 objectId = createSimpleAtom("object", getAtomCreationCost(), users.alice);
+
+        bytes32[] memory subjects = new bytes32[](1);
+        bytes32[] memory predicates = new bytes32[](1);
+        bytes32[] memory objects = new bytes32[](1);
+        uint256[] memory assets = new uint256[](1);
+
+        subjects[0] = subjectId;
+        predicates[0] = predicateId;
+        objects[0] = objectId;
+        assets[0] = protocol.multiVault.getTripleCost();
+
+        resetPrank(users.alice);
+        bytes32[] memory tripleIds =
+            protocol.multiVault.createTriples{ value: assets[0] }(subjects, predicates, objects, assets);
+        bytes32 tripleId = tripleIds[0];
+
+        uint256 curveId = 2;
+        uint256 userAssets = 1 ether;
+        uint256 minSharesForUser = 0;
+
+        setupApproval(users.bob, address(periphery), ApprovalTypes.DEPOSIT);
+
+        uint256 minDeposit = protocol.multiVault.getGeneralConfig().minDeposit;
+        uint256 requiredValue = minDeposit + userAssets;
+
+        bytes32 counterTripleId = protocol.multiVault.getCounterIdFromTripleId(tripleId);
+
+        resetPrank(users.alice);
+        periphery.bootstrapCounterTripleVaultAndDepositFor{ value: requiredValue }(
+            tripleId, curveId, userAssets, minSharesForUser, users.bob
+        );
+
+        uint256 peripherySharesInPositiveVault = protocol.multiVault.getShares(address(periphery), tripleId, curveId);
+        uint256 peripherySharesInCounterVault =
+            protocol.multiVault.getShares(address(periphery), counterTripleId, curveId);
+
+        assertEq(peripherySharesInPositiveVault, 0);
+        assertEq(peripherySharesInCounterVault, 0);
+    }
+
+    // function testFuzz_bootstrapCounterTripleVaultAndDepositFor(uint256 userAssets, uint256 excessValue) external {
+    //     userAssets = bound(userAssets, MIN_DEPOSIT, 100 ether);
+    //     excessValue = bound(excessValue, 0, 10 ether);
+
+    //     bytes32 subjectId = createSimpleAtom("subject", getAtomCreationCost(), users.alice);
+    //     bytes32 predicateId = createSimpleAtom("predicate", getAtomCreationCost(), users.alice);
+    //     bytes32 objectId = createSimpleAtom("object", getAtomCreationCost(), users.alice);
+
+    //     bytes32[] memory subjects = new bytes32[](1);
+    //     bytes32[] memory predicates = new bytes32[](1);
+    //     bytes32[] memory objects = new bytes32[](1);
+    //     uint256[] memory assets = new uint256[](1);
+
+    //     subjects[0] = subjectId;
+    //     predicates[0] = predicateId;
+    //     objects[0] = objectId;
+    //     assets[0] = protocol.multiVault.getTripleCost();
+
+    //     resetPrank(users.alice);
+    //     bytes32[] memory tripleIds =
+    //         protocol.multiVault.createTriples{ value: assets[0] }(subjects, predicates, objects, assets);
+    //     bytes32 tripleId = tripleIds[0];
+
+    //     uint256 curveId = 2;
+    //     uint256 minSharesForUser = 0;
+
+    //     setupApproval(users.bob, address(periphery), ApprovalTypes.DEPOSIT);
+
+    //     uint256 minDeposit = protocol.multiVault.getGeneralConfig().minDeposit;
+    //     uint256 requiredValue = minDeposit + userAssets;
+    //     uint256 totalValue = requiredValue + excessValue;
+
+    //     uint256 aliceBalanceBefore = users.alice.balance;
+
+    //     resetPrank(users.alice);
+    //     uint256 userShares = periphery.bootstrapCounterTripleVaultAndDepositFor{ value: totalValue }(
+    //         tripleId, curveId, userAssets, minSharesForUser, users.bob
+    //     );
+
+    //     assertGt(userShares, 0);
+    //     assertEq(users.alice.balance, aliceBalanceBefore - requiredValue);
+
+    //     uint256 peripherySharesInPositiveVault = protocol.multiVault.getShares(address(periphery), tripleId,
+    // curveId); assertEq(peripherySharesInPositiveVault, 0);
+    // }
+
+    /* =================================================== */
+    /*              MULTICALL3 TESTS                       */
+    /* =================================================== */
+
+    function test_multicall_aggregate() external {
+        bytes[] memory atomData = new bytes[](2);
+        atomData[0] = abi.encodePacked("atom1");
+        atomData[1] = abi.encodePacked("atom2");
+
+        uint256 atomCost = protocol.multiVault.getAtomCost();
+
+        Multicall3.Call[] memory calls = new Multicall3.Call[](1);
+        calls[0] = Multicall3.Call({
+            target: address(periphery),
+            callData: abi.encodeWithSelector(periphery.createAtomsFor.selector, atomData, users.bob)
+        });
+
+        resetPrank(users.alice);
+        (uint256 blockNumber, bytes[] memory returnData) = periphery.aggregate{ value: atomCost * 2 }(calls);
+
+        assertEq(blockNumber, block.number);
+        assertEq(returnData.length, 1);
+    }
+
+    function test_multicall_getBlockNumber() external view {
+        uint256 blockNumber = periphery.getBlockNumber();
+        assertEq(blockNumber, block.number);
+    }
+
+    function test_multicall_getBlockHash() external {
+        vm.roll(100);
+        bytes32 blockHash = periphery.getBlockHash(99);
+        assertEq(blockHash, blockhash(99));
+    }
+
+    function test_multicall_getCurrentBlockTimestamp() external view {
+        uint256 timestamp = periphery.getCurrentBlockTimestamp();
+        assertEq(timestamp, block.timestamp);
+    }
+
+    function test_multicall_getEthBalance() external view {
+        uint256 balance = periphery.getEthBalance(users.alice);
+        assertEq(balance, users.alice.balance);
+    }
+
+    function test_multicall_getChainId() external view {
+        uint256 chainId = periphery.getChainId();
+        assertEq(chainId, block.chainid);
+    }
+
+    /* =================================================== */
+    /*                 REENTRANCY TESTS                    */
+    /* =================================================== */
+
+    function test_createAtomsFor_reentrancyGuard() external {
+        bytes[] memory atomData = new bytes[](1);
+        atomData[0] = abi.encodePacked("test atom");
+
+        uint256 atomCost = protocol.multiVault.getAtomCost();
+
+        resetPrank(users.alice);
+        periphery.createAtomsFor{ value: atomCost }(atomData, users.bob);
+    }
+
+    function test_createTriplesFor_reentrancyGuard() external {
+        bytes32 subjectId = createSimpleAtom("subject", getAtomCreationCost(), users.alice);
+        bytes32 predicateId = createSimpleAtom("predicate", getAtomCreationCost(), users.alice);
+        bytes32 objectId = createSimpleAtom("object", getAtomCreationCost(), users.alice);
+
+        bytes32[] memory subjects = new bytes32[](1);
+        bytes32[] memory predicates = new bytes32[](1);
+        bytes32[] memory objects = new bytes32[](1);
+
+        subjects[0] = subjectId;
+        predicates[0] = predicateId;
+        objects[0] = objectId;
+
+        uint256 tripleCost = protocol.multiVault.getTripleCost();
+
+        resetPrank(users.alice);
+        periphery.createTriplesFor{ value: tripleCost }(subjects, predicates, objects, users.bob);
+    }
+
+    function test_bootstrapCounterTripleVaultAndDepositFor_reentrancyGuard() external {
+        bytes32 subjectId = createSimpleAtom("subject", getAtomCreationCost(), users.alice);
+        bytes32 predicateId = createSimpleAtom("predicate", getAtomCreationCost(), users.alice);
+        bytes32 objectId = createSimpleAtom("object", getAtomCreationCost(), users.alice);
+
+        bytes32[] memory subjects = new bytes32[](1);
+        bytes32[] memory predicates = new bytes32[](1);
+        bytes32[] memory objects = new bytes32[](1);
+        uint256[] memory assets = new uint256[](1);
+
+        subjects[0] = subjectId;
+        predicates[0] = predicateId;
+        objects[0] = objectId;
+        assets[0] = protocol.multiVault.getTripleCost();
+
+        resetPrank(users.alice);
+        bytes32[] memory tripleIds =
+            protocol.multiVault.createTriples{ value: assets[0] }(subjects, predicates, objects, assets);
+        bytes32 tripleId = tripleIds[0];
+
+        uint256 curveId = 2;
+        uint256 userAssets = 1 ether;
+        uint256 minSharesForUser = 0;
+
+        setupApproval(users.bob, address(periphery), ApprovalTypes.DEPOSIT);
+
+        uint256 minDeposit = protocol.multiVault.getGeneralConfig().minDeposit;
+        uint256 requiredValue = minDeposit + userAssets;
+
+        resetPrank(users.alice);
+        periphery.bootstrapCounterTripleVaultAndDepositFor{ value: requiredValue }(
+            tripleId, curveId, userAssets, minSharesForUser, users.bob
+        );
+    }
+
+    /* =================================================== */
+    /*                   EDGE CASE TESTS                   */
+    /* =================================================== */
+
+    function test_createAtomsFor_exactValue() external {
+        bytes[] memory atomData = new bytes[](3);
+        atomData[0] = abi.encodePacked("atom1");
+        atomData[1] = abi.encodePacked("atom2");
+        atomData[2] = abi.encodePacked("atom3");
+
+        uint256 atomCost = protocol.multiVault.getAtomCost();
+        uint256 exactValue = atomCost * 3;
+        uint256 aliceBalanceBefore = users.alice.balance;
+
+        resetPrank(users.alice);
+        periphery.createAtomsFor{ value: exactValue }(atomData, users.bob);
+
+        assertEq(users.alice.balance, aliceBalanceBefore - exactValue);
+    }
+
+    function test_createTriplesFor_exactValue() external {
+        bytes32[] memory subjects = new bytes32[](2);
+        bytes32[] memory predicates = new bytes32[](2);
+        bytes32[] memory objects = new bytes32[](2);
+
+        for (uint256 i = 0; i < 2; i++) {
+            subjects[i] = createSimpleAtom(string(abi.encodePacked("subject", i)), getAtomCreationCost(), users.alice);
+            predicates[i] =
+                createSimpleAtom(string(abi.encodePacked("predicate", i)), getAtomCreationCost(), users.alice);
+            objects[i] = createSimpleAtom(string(abi.encodePacked("object", i)), getAtomCreationCost(), users.alice);
+        }
+
+        uint256 tripleCost = protocol.multiVault.getTripleCost();
+        uint256 exactValue = tripleCost * 2;
+        uint256 aliceBalanceBefore = users.alice.balance;
+
+        resetPrank(users.alice);
+        periphery.createTriplesFor{ value: exactValue }(subjects, predicates, objects, users.bob);
+
+        assertEq(users.alice.balance, aliceBalanceBefore - exactValue);
+    }
+
+    function test_bootstrapCounterTripleVaultAndDepositFor_exactValue() external {
+        bytes32 subjectId = createSimpleAtom("subject", getAtomCreationCost(), users.alice);
+        bytes32 predicateId = createSimpleAtom("predicate", getAtomCreationCost(), users.alice);
+        bytes32 objectId = createSimpleAtom("object", getAtomCreationCost(), users.alice);
+
+        bytes32[] memory subjects = new bytes32[](1);
+        bytes32[] memory predicates = new bytes32[](1);
+        bytes32[] memory objects = new bytes32[](1);
+        uint256[] memory assets = new uint256[](1);
+
+        subjects[0] = subjectId;
+        predicates[0] = predicateId;
+        objects[0] = objectId;
+        assets[0] = protocol.multiVault.getTripleCost();
+
+        resetPrank(users.alice);
+        bytes32[] memory tripleIds =
+            protocol.multiVault.createTriples{ value: assets[0] }(subjects, predicates, objects, assets);
+        bytes32 tripleId = tripleIds[0];
+
+        uint256 curveId = 2;
+        uint256 userAssets = 1 ether;
+        uint256 minSharesForUser = 0;
+
+        setupApproval(users.bob, address(periphery), ApprovalTypes.DEPOSIT);
+
+        uint256 minDeposit = protocol.multiVault.getGeneralConfig().minDeposit;
+        uint256 exactValue = minDeposit + userAssets;
+        uint256 aliceBalanceBefore = users.alice.balance;
+
+        resetPrank(users.alice);
+        periphery.bootstrapCounterTripleVaultAndDepositFor{ value: exactValue }(
+            tripleId, curveId, userAssets, minSharesForUser, users.bob
+        );
+
+        assertEq(users.alice.balance, aliceBalanceBefore - exactValue);
+    }
+
+    function test_createAtomsFor_largeArray() external {
+        uint256 atomCount = 50;
+        bytes[] memory atomData = new bytes[](atomCount);
+
+        for (uint256 i = 0; i < atomCount; i++) {
+            atomData[i] = abi.encodePacked("atom", i);
+        }
+
+        uint256 atomCost = protocol.multiVault.getAtomCost();
+        uint256 totalCost = atomCost * atomCount;
+
+        resetPrank(users.alice);
+        bytes32[] memory atomIds = periphery.createAtomsFor{ value: totalCost }(atomData, users.bob);
+
+        assertEq(atomIds.length, atomCount);
+    }
+
+    function test_bootstrapCounterTripleVaultAndDepositFor_minUserAssets() external {
+        bytes32 subjectId = createSimpleAtom("subject", getAtomCreationCost(), users.alice);
+        bytes32 predicateId = createSimpleAtom("predicate", getAtomCreationCost(), users.alice);
+        bytes32 objectId = createSimpleAtom("object", getAtomCreationCost(), users.alice);
+
+        bytes32[] memory subjects = new bytes32[](1);
+        bytes32[] memory predicates = new bytes32[](1);
+        bytes32[] memory objects = new bytes32[](1);
+        uint256[] memory assets = new uint256[](1);
+
+        subjects[0] = subjectId;
+        predicates[0] = predicateId;
+        objects[0] = objectId;
+        assets[0] = protocol.multiVault.getTripleCost();
+
+        resetPrank(users.alice);
+        bytes32[] memory tripleIds =
+            protocol.multiVault.createTriples{ value: assets[0] }(subjects, predicates, objects, assets);
+        bytes32 tripleId = tripleIds[0];
+
+        uint256 curveId = 2;
+        uint256 userAssets = 1;
+        uint256 minSharesForUser = 0;
+
+        setupApproval(users.bob, address(periphery), ApprovalTypes.DEPOSIT);
+
+        uint256 minDeposit = protocol.multiVault.getGeneralConfig().minDeposit;
+        uint256 requiredValue = minDeposit + userAssets;
+
+        resetPrank(users.alice);
+        uint256 userShares = periphery.bootstrapCounterTripleVaultAndDepositFor{ value: requiredValue }(
+            tripleId, curveId, userAssets, minSharesForUser, users.bob
+        );
+
+        assertGt(userShares, 0);
+    }
+
+    function test_setMultiVault_multipleChanges() external {
+        address newMultiVault1 = makeAddr("newMultiVault1");
+        address newMultiVault2 = makeAddr("newMultiVault2");
+
+        resetPrank(users.admin);
+        periphery.setMultiVault(newMultiVault1);
+        assertEq(address(periphery.multiVault()), newMultiVault1);
+
+        periphery.setMultiVault(newMultiVault2);
+        assertEq(address(periphery.multiVault()), newMultiVault2);
     }
 }
