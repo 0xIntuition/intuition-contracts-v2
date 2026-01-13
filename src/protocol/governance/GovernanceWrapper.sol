@@ -2,108 +2,249 @@
 pragma solidity 0.8.29;
 
 import { IGovernanceWrapper } from "src/interfaces/IGovernanceWrapper.sol";
-import { ITrustBonding } from "src/interfaces/ITrustBonding.sol";
-import { VotesERC20V1 } from "src/external/decent/VotesERC20V1.sol";
+import { VotesERC20, ERC20Upgradeable, IERC20Upgradeable } from "src/external/decent/VotesERC20.sol";
 import { VotingEscrow } from "src/external/curve/VotingEscrow.sol";
 
 /**
- * @title GovernanceWrapper
+ * @title  GovernanceWrapper
  * @author 0xIntuition
- * @notice A wrapper contract around TrustBonding to conform to the IVotesERC20V1 interface
+ * @notice GovernanceWrapper is a “token-like” wrapper around TrustBonding. It exposes the voting power
+ *         of TrustBonding via standard VotesERC20-compatible interface, allowing it to be used in governance systems.
+ * @dev    Key features:
+ *         - Reads vote power from VotingEscrow (TrustBonding), including both current and historical balances
+ *         - Uses block.number-based clock mode for compatibility with onchain governance systems
+ *         - Delegations are overridden to set msg.sender as their own delegate
+ *         - Disables transfers, approvals, minting, burning, and permit functionality to ensure it is non-transferable
  */
-contract GovernanceWrapper is IGovernanceWrapper, VotesERC20V1 {
+contract GovernanceWrapper is IGovernanceWrapper, VotesERC20 {
     /*//////////////////////////////////////////////////////////////
                                 STATE
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice The TrustBonding contract that this GovernanceWrapper interacts with
+    /// @notice TrustBonding contract (casted as VotingEscrow to expose the necessary methods)
     VotingEscrow public trustBonding;
+
+    /// @notice Mapping of account to its delegate
+    mapping(address account => address delegate) internal _delegates;
 
     /// @dev Gap for upgrade safety
     uint256[50] private __gap;
+
+    /*//////////////////////////////////////////////////////////////
+                            CONSTRUCTOR
+    //////////////////////////////////////////////////////////////*/
+
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                          INITIALIZER
+    //////////////////////////////////////////////////////////////*/
+
+    /// @inheritdoc IGovernanceWrapper
+    function initialize(address owner_, address trustBonding_) external initializer {
+        if (owner_ == address(0)) revert GovernanceWrapper_InvalidAddress();
+        _transferOwnership(owner_);
+        _setTrustBonding(trustBonding_);
+    }
 
     /*//////////////////////////////////////////////////////////////
                             ADMIN FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc IGovernanceWrapper
-    function setTrustBonding(address _trustBonding) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setTrustBonding(address _trustBonding) external onlyOwner {
         _setTrustBonding(_trustBonding);
     }
 
-    /*//////////////////////////////////////////////////////////////
-                           INTERNAL FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    /**
-     * @notice Internal function to set the TrustBonding contract address
-     * @param _trustBonding The address of the TrustBonding contract
-     */
+    /// @dev Internal function to set the TrustBonding contract address
     function _setTrustBonding(address _trustBonding) internal {
-        if (_trustBonding == address(0)) {
-            revert GovernanceWrapper_InvalidAddress();
-        }
+        if (_trustBonding == address(0)) revert GovernanceWrapper_InvalidAddress();
         trustBonding = VotingEscrow(_trustBonding);
         emit TrustBondingSet(_trustBonding);
     }
 
     /*//////////////////////////////////////////////////////////////
-                        VotesERC20V1 OVERRIDES
+                    ERC20 OVERRIDES TO DISABLE ACTIONS
     //////////////////////////////////////////////////////////////*/
 
-    function totalSupply() public view override returns (uint256) {
-        // veTRUST total voting power
-        return trustBonding.totalSupply();
+    /// @dev Overrides ERC20 `transfer` to always revert
+    function transfer(address, uint256) public virtual override(ERC20Upgradeable, IERC20Upgradeable) returns (bool) {
+        revert GovernanceWrapper_TransfersDisabled();
     }
 
-    function balanceOf(address account) public view override returns (uint256) {
-        // current veTRUST voting power
-        return trustBonding.balanceOf(account);
+    /// @dev Overrides ERC20 `transferFrom` to always revert
+    function transferFrom(
+        address,
+        address,
+        uint256
+    )
+        public
+        virtual
+        override(ERC20Upgradeable, IERC20Upgradeable)
+        returns (bool)
+    {
+        revert GovernanceWrapper_TransfersDisabled();
     }
 
-    /* --------- IVotes views => delegate to TrustBonding / VotingEscrow --------- */
-
-    function getVotes(address account) public view override returns (uint256) {
-        return trustBonding.balanceOf(account);
+    /// @dev Overrides ERC20 `approve` to always revert
+    function approve(address, uint256) public virtual override(ERC20Upgradeable, IERC20Upgradeable) returns (bool) {
+        revert GovernanceWrapper_ApprovalsDisabled();
     }
 
-    function getPastVotes(address account, uint256 timepoint) public view override returns (uint256) {
-        // timepoint is timestamp because CLOCK_MODE() = "mode=timestamp"
-        return trustBonding.balanceOfAtT(account, timepoint);
+    /// @dev Overrides internal `_transfer` to always revert
+    function _transfer(address, address, uint256) internal virtual override {
+        revert GovernanceWrapper_TransfersDisabled();
     }
 
-    function getPastTotalSupply(uint256 timepoint) public view override returns (uint256) {
-        return trustBonding.totalSupplyAtT(timepoint);
+    /// @dev Overrides internal `_mint` to always revert
+    function _mint(address, uint256) internal virtual override {
+        revert GovernanceWrapper_MintingDisabled();
     }
 
-    function mint(address, uint256) public override {
-        revert MintingDisabled();
-    }
-
-    function burn(uint256) public override {
+    /// @dev Overrides internal `_burn` to always revert
+    function _burn(address, uint256) internal virtual override {
         revert GovernanceWrapper_BurningDisabled();
     }
 
-    // optional but recommended: nuke real transfers/minting
-    function _update(address from, address to, uint256 value)
-        internal
-        override
-        // override(ERC20Upgradeable, ERC20VotesUpgradeable)
+    /// @dev Overrides internal `_approve` to always revert
+    function _approve(address, address, uint256) internal virtual override {
+        revert GovernanceWrapper_ApprovalsDisabled();
+    }
 
+    /// @dev Overrides internal `_delegate` to always revert
+    function permit(address, address, uint256, uint256, uint8, bytes32, bytes32) public virtual override {
+        revert GovernanceWrapper_PermitDisabled();
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                        ERC20 VIEW OVERRIDES
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice ERC20 `name` override to match TrustBonding
+    function name() public view override returns (string memory) {
+        return trustBonding.name();
+    }
+
+    /// @notice ERC20 `symbol` override to match TrustBonding
+    function symbol() public view override returns (string memory) {
+        return trustBonding.symbol();
+    }
+
+    /// @notice ERC20 `decimals` override to match TrustBonding
+    function decimals() public view override returns (uint8) {
+        return trustBonding.decimals();
+    }
+
+    /**
+     * @notice ERC20 `totalSupply` override to match TrustBonding
+     * @dev Represents the current total voting power in the system
+     * @return The total supply
+     */
+    function totalSupply() public view virtual override(ERC20Upgradeable, IERC20Upgradeable) returns (uint256) {
+        return trustBonding.totalSupply();
+    }
+
+    /**
+     * @notice ERC20 `balanceOf` override to match TrustBonding
+     * @dev Represents the current voting power of `account`
+     * @param account The address of the account to get the balance for
+     * @return The balance of the account
+     */
+    function balanceOf(address account)
+        public
+        view
+        virtual
+        override(ERC20Upgradeable, IERC20Upgradeable)
+        returns (uint256)
     {
-        // you can be stricter if you want, but this keeps the token effectively “shadow-only”
-        if (from != address(0) || to != address(0) || value != 0) {
-            revert IsLocked(); // already defined in the interface
-        }
+        return trustBonding.balanceOf(account);
     }
 
-    /// Debugging trials
+    /*//////////////////////////////////////////////////////////////
+                        ERC6372 CLOCK OVERRIDES
+    //////////////////////////////////////////////////////////////*/
 
-    function governanceToken() external view returns (address) {
-        return address(this);
+    /**
+     * @notice Overrides to use blocknumber clock mode
+     * @return The current block number as uint48
+     */
+    function clock() public view virtual returns (uint48) {
+        return uint48(block.number);
     }
 
-    function token() external view returns (address) {
-        return address(this);
+    /**
+     * @notice Indicates that this contract uses blocknumber clock mode
+     * @return A string indicating blocknumber mode
+     */
+    function CLOCK_MODE() public pure virtual returns (string memory) {
+        return "mode=blocknumber";
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                        VotesERC20 OVERRIDES
+    //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @notice Returns the current voting power for `account`
+     * @param account The address of the account to get the voting power for
+     * @return The current voting power of the account
+     */
+    function getVotes(address account) public view virtual override returns (uint256) {
+        return trustBonding.balanceOf(account);
+    }
+
+    /**
+     * @notice Returns the past voting power for `account` at a specific block number
+     * @param account The address of the account to get the voting power for
+     * @param blockNumber The block number to get the voting power at
+     * @return The voting power of the account at the specified block number
+     */
+    function getPastVotes(address account, uint256 blockNumber) public view override returns (uint256) {
+        return trustBonding.balanceOfAt(account, blockNumber);
+    }
+
+    /**
+     * @notice Returns the past total supply at a specific block number
+     * @param blockNumber The block number to get the total supply at
+     * @return The total supply at the specified block number
+     */
+    function getPastTotalSupply(uint256 blockNumber) public view override returns (uint256) {
+        return trustBonding.totalSupplyAt(blockNumber);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                          DELEGATION
+    //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @notice Returns the delegatee for `account`
+     * @param account The address of the account to get the delegatee for
+     * @return The address of the delegatee
+     */
+    function delegates(address account) public view virtual override returns (address) {
+        return _delegates[account];
+    }
+
+    /**
+     * @notice Sets `msg.sender` as their own delegate
+     * @dev The provided address parameter is ignored
+     */
+    function delegate(address) public virtual override {
+        address oldDelegate = _delegates[msg.sender];
+        _delegates[msg.sender] = msg.sender;
+        emit DelegateChanged(msg.sender, oldDelegate, msg.sender);
+    }
+
+    /**
+     * @notice Sets `msg.sender` as their own delegate
+     * @dev The provided address and signature parameters are ignored
+     */
+    function delegateBySig(address, uint256, uint256, uint8, bytes32, bytes32) public virtual override {
+        address oldDelegate = _delegates[msg.sender];
+        _delegates[msg.sender] = msg.sender;
+        emit DelegateChanged(msg.sender, oldDelegate, msg.sender);
     }
 }

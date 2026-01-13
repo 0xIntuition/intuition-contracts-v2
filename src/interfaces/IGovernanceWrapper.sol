@@ -21,13 +21,23 @@ interface IGovernanceWrapper {
     /*                       ERRORS                        */
     /* =================================================== */
 
-    error GovernanceWrapper_InvalidAddress();
-
+    error GovernanceWrapper_ApprovalsDisabled();
     error GovernanceWrapper_BurningDisabled();
+    error GovernanceWrapper_InvalidAddress();
+    error GovernanceWrapper_MintingDisabled();
+    error GovernanceWrapper_PermitDisabled();
+    error GovernanceWrapper_TransfersDisabled();
 
     /* =================================================== */
     /*                     FUNCTIONS                       */
     /* =================================================== */
+
+    /**
+     * @notice Initializes the GovernanceWrapper contract
+     * @param owner_ The address of the contract owner
+     * @param trustBonding_ The address of the TrustBonding contract
+     */
+    function initialize(address owner_, address trustBonding_) external;
 
     /**
      * @notice Sets the TrustBonding contract address

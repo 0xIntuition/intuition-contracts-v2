@@ -11,19 +11,19 @@ import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 import { ITrustBonding } from "src/interfaces/ITrustBonding.sol";
 import { GovernanceWrapper } from "src/protocol/governance/GovernanceWrapper.sol";
 import { IGovernanceWrapper } from "src/interfaces/IGovernanceWrapper.sol";
-import { IVotesERC20V1 } from "src/external/decent/VotesERC20V1.sol";
+// import { IVotesERC20V1 } from "src/external/decent/VotesERC20V1.sol";
 
 /*
-ETH SEPOLIA
-forge script script/intuition/DeployGovernanceSetupToSepolia.s.sol:DeployGovernanceSetupToSepolia \
-  --optimizer-runs 10000 \
-  --rpc-url sepolia \
-  --broadcast \
-  --slow \
-  --verify \
-  --chain 11155111 \
-  --verifier etherscan \
-  --verifier-url "https://api.etherscan.io/v2/api?chainid=11155111"
+  ETH SEPOLIA
+  forge script script/intuition/DeployGovernanceSetupToSepolia.s.sol:DeployGovernanceSetupToSepolia \
+    --optimizer-runs 10000 \
+    --rpc-url sepolia \
+    --broadcast \
+    --slow \
+    --verify \
+    --chain 11155111 \
+    --verifier etherscan \
+   --verifier-url "https://api.etherscan.io/v2/api?chainid=11155111"
 */
 
 contract DeployGovernanceSetupToSepolia is Script {
@@ -123,16 +123,21 @@ contract DeployGovernanceSetupToSepolia is Script {
         // 1. Deploy implementation
         governanceWrapperImplementation = new GovernanceWrapper();
 
-        // 2. Prepare initializer calldata
-        IVotesERC20V1.Metadata memory metadata = IVotesERC20V1.Metadata({ name: "veTRUST Votes", symbol: "veTRUST" });
-        IVotesERC20V1.Allocation[] memory allocations; // length 0
+        // // 2. Prepare initializer calldata
+        // IVotesERC20V1.Metadata memory metadata = IVotesERC20V1.Metadata({ name: "veTRUST Votes", symbol: "veTRUST"
+        // }); IVotesERC20V1.Allocation[] memory allocations; // length 0
+        // bytes memory initData = abi.encodeWithSelector(
+        //     IVotesERC20V1.initialize.selector,
+        //     metadata, // _metadata
+        //     allocations, // _allocations
+        //     ADMIN, // _owner
+        //     true, // _locked
+        //     type(uint256).max // _maxTotalSupply
+        // );
         bytes memory initData = abi.encodeWithSelector(
-            IVotesERC20V1.initialize.selector,
-            metadata, // _metadata
-            allocations, // _allocations
-            ADMIN, // _owner
-            true, // _locked
-            type(uint256).max // _maxTotalSupply
+            IGovernanceWrapper.initialize.selector,
+            ADMIN, // owner_
+            address(trustBondingContract) // trustBonding_
         );
 
         // 3. Deploy proxy with deployer as proxy admin owner
@@ -144,10 +149,10 @@ contract DeployGovernanceSetupToSepolia is Script {
         info("GovernanceWrapper Proxy", address(governanceWrapperProxy));
 
         // 4. Renounce minting rights
-        governanceWrapper.renounceMinting();
+        // governanceWrapper.renounceMinting();
 
         // 5. Set TrustBonding address in GovernanceWrapper
-        governanceWrapper.setTrustBonding(address(trustBondingContract));
+        // governanceWrapper.setTrustBonding(address(trustBondingContract));
     }
 
     function _mintAndCreateLock() internal {
