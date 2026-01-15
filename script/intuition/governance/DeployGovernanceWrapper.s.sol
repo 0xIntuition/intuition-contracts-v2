@@ -8,43 +8,43 @@ import { GovernanceWrapper } from "src/protocol/governance/GovernanceWrapper.sol
 import { IGovernanceWrapper } from "src/interfaces/IGovernanceWrapper.sol";
 import { SetupScript } from "script/SetupScript.s.sol";
 
-// /*
-// LOCAL
-// script/intuition/DeployGovernanceWrapper.s.sol:DeployGovernanceWrapper \
-// --optimizer-runs 10000 \
-// --rpc-url anvil \
-// --broadcast \
-// --slow
+/*
+LOCAL
+script/intuition/governance/DeployGovernanceWrapper.s.sol:DeployGovernanceWrapper \
+--optimizer-runs 10000 \
+--rpc-url anvil \
+--broadcast \
+--slow
 
-// TESTNET
-// forge script script/intuition/DeployGovernanceWrapper.s.sol:DeployGovernanceWrapper \
-// --optimizer-runs 10000 \
-// --rpc-url intuition_sepolia \
-// --broadcast \
-// --slow \
-// --verify \
-// --chain 13579 \
-// --verifier blockscout \
-// --verifier-url 'https://intuition-testnet.explorer.caldera.xyz/api/'
+TESTNET
+forge script script/intuition/governance/DeployGovernanceWrapper.s.sol:DeployGovernanceWrapper \
+--optimizer-runs 10000 \
+--rpc-url intuition_sepolia \
+--broadcast \
+--slow \
+--verify \
+--chain 13579 \
+--verifier blockscout \
+--verifier-url 'https://intuition-testnet.explorer.caldera.xyz/api/'
 
-// MAINNET
-// forge script script/intuition/DeployGovernanceWrapper.s.sol:DeployGovernanceWrapper \
-// --optimizer-runs 10000 \
-// --rpc-url intuition \
-// --broadcast \
-// --slow \
-// --verify \
-// --chain 1155 \
-// --verifier blockscout \
-// --verifier-url 'https://intuition.calderaexplorer.xyz/api/'
-// */
+MAINNET
+forge script script/intuition/governance/DeployGovernanceWrapper.s.sol:DeployGovernanceWrapper \
+--optimizer-runs 10000 \
+--rpc-url intuition \
+--broadcast \
+--slow \
+--verify \
+--chain 1155 \
+--verifier blockscout \
+--verifier-url 'https://intuition.calderaexplorer.xyz/api/'
+*/
 
 contract DeployGovernanceWrapper is SetupScript {
     GovernanceWrapper public governanceWrapperImpl;
     TransparentUpgradeableProxy public governanceWrapperProxy;
 
     address public UPGRADES_TIMELOCK_CONTROLLER;
-    address public TRUST_BONDING = 0x5FbDB2315678afecb367f032d93F642f64180aa3; // Placeholder, set in setUp()
+    address public TRUST_BONDING;
 
     function setUp() public override {
         super.setUp();

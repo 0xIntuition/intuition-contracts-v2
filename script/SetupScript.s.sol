@@ -27,6 +27,7 @@ abstract contract SetupScript is Script {
     /* =================================================== */
     uint256 public constant NETWORK_BASE = 8453;
     uint256 public constant NETWORK_BASE_SEPOLIA = 84_532;
+    uint256 public constant NETWORK_ETHEREUM_SEPOLIA = 11_155_111;
     uint256 public constant NETWORK_INTUITION = 1155;
     uint256 public constant NETWORK_INTUITION_SEPOLIA = 13_579;
     uint256 public constant NETWORK_ANVIL = 31_337;
@@ -135,6 +136,9 @@ abstract contract SetupScript is Script {
             uint256 deployerKey = vm.envUint("DEPLOYER_MAINNET");
             broadcaster = vm.rememberKey(deployerKey);
         } else if (block.chainid == NETWORK_BASE_SEPOLIA) {
+            uint256 deployerKey = vm.envUint("DEPLOYER_TESTNET");
+            broadcaster = vm.rememberKey(deployerKey);
+        } else if (block.chainid == NETWORK_ETHEREUM_SEPOLIA) {
             uint256 deployerKey = vm.envUint("DEPLOYER_TESTNET");
             broadcaster = vm.rememberKey(deployerKey);
         } else if (block.chainid == NETWORK_INTUITION_SEPOLIA) {
@@ -300,6 +304,9 @@ abstract contract SetupScript is Script {
             EMISSIONS_REDUCTION_BASIS_POINTS = 1000; // 10%
             EMISSIONS_REDUCTION_CLIFF = 4; // 1 epoch
             EMISSIONS_PER_EPOCH = 1000 ether;
+        } else if (block.chainid == NETWORK_ETHEREUM_SEPOLIA) {
+            TRUST_TOKEN = 0x7BAd626D371Bf1de3Ac77C1FB4e9d8dC8236621C; // Mock Trust Token
+            ADMIN = vm.envAddress("INTUITION_SEPOLIA_ADMIN_ADDRESS");
         } else {
             revert("Unsupported chain for broadcasting");
         }

@@ -11,11 +11,10 @@ import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 import { ITrustBonding } from "src/interfaces/ITrustBonding.sol";
 import { GovernanceWrapper } from "src/protocol/governance/GovernanceWrapper.sol";
 import { IGovernanceWrapper } from "src/interfaces/IGovernanceWrapper.sol";
-// import { IVotesERC20V1 } from "src/external/decent/VotesERC20V1.sol";
 
 /*
   ETH SEPOLIA
-  forge script script/intuition/DeployGovernanceSetupToSepolia.s.sol:DeployGovernanceSetupToSepolia \
+  forge script script/intuition/governance/DeployGovernanceSetupToSepolia.s.sol:DeployGovernanceSetupToSepolia \
     --optimizer-runs 10000 \
     --rpc-url sepolia \
     --broadcast \
