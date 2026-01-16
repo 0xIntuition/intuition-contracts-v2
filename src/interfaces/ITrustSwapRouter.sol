@@ -64,9 +64,6 @@ interface ITrustSwapRouter {
     /// @dev Thrown when attempting to swap with zero amount
     error TrustSwapRouter_AmountInZero();
 
-    /// @dev Thrown when the output amount is less than the minimum required
-    error TrustSwapRouter_InsufficientOutputAmount();
-
     /// @dev Thrown when an invalid deadline (zero) is provided
     error TrustSwapRouter_InvalidDeadline();
 
@@ -131,7 +128,7 @@ interface ITrustSwapRouter {
 
     /**
      * @notice Swaps `amountIn` USDC for TRUST tokens, sending them to the caller
-     * @dev Caller must approve this contract to spend `amountIn` USDC first.
+     * @dev Caller must approve this contract to spend `amountIn` USDC first
      * @param amountIn Amount of USDC to swap
      * @param minAmountOut Minimum acceptable amount of TRUST to receive (slippage protection)
      * @return amountOut Actual amount of TRUST received
@@ -139,15 +136,15 @@ interface ITrustSwapRouter {
     function swapToTrust(uint256 amountIn, uint256 minAmountOut) external returns (uint256 amountOut);
 
     /**
-     * @notice Swaps `amountIn` USDC for TRUST tokens using EIP-2612 permit for gasless approval
-     * @dev Uses permit to approve USDC spending in the same transaction as the swap
+     * @notice Swaps `amountIn` USDC for TRUST using EIP-2612 permit (approve + swap in one tx)
+     * @dev If `permit()` fails, proceeds only if the caller already granted sufficient USDC allowance
      * @param amountIn Amount of USDC to swap
      * @param minAmountOut Minimum acceptable amount of TRUST to receive (slippage protection)
      * @param deadline Deadline for the permit signature
      * @param v ECDSA signature component
      * @param r ECDSA signature component
      * @param s ECDSA signature component
-     * @return amountOut Actual amount of TRUST received
+     * @return amountOut Amount of TRUST received
      */
     function swapToTrustWithPermit(
         uint256 amountIn,

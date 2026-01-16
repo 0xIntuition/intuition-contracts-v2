@@ -38,18 +38,6 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
     /// @notice Default deadline (in seconds) for swaps
     uint256 public defaultSwapDeadline;
 
-    /// THINGS TO USE FOR THE DEPLOY SCRIPT
-    // // ===== Base token addresses =====
-    // address public constant USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
-    // address public constant TRUST = 0x6cd905dF2Ed214b22e0d48FF17CD4200C1C6d8A3;
-
-    // // ===== Aerodrome V2 Router / Factory (Base) =====
-    // address public constant AERODROME_ROUTER = 0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43;
-    // address public constant POOL_FACTORY = 0x420DD381b31aEf6683db6B902084cB0FFECe40Da;
-
-    // IAerodromeRouter public constant router = IAerodromeRouter(AERODROME_ROUTER);
-    // IERC20 public constant usdc = IERC20(USDC);
-
     /*//////////////////////////////////////////////////////////////
                             CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
@@ -63,15 +51,7 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
                           INITIALIZER
     //////////////////////////////////////////////////////////////*/
 
-    /**
-     * @notice Initializes the TrustSwapRouter contract
-     * @param _owner Owner address for the Ownable2StepUpgradeable
-     * @param usdcAddress Address of the USDC token contract
-     * @param trustAddress Address of the TRUST token contract
-     * @param aerodromeRouterAddress Address of the Aerodrome Router contract
-     * @param poolFactoryAddress Address of the Aerodrome Pool Factory contract
-     * @param _defaultSwapDeadline Default deadline (in seconds) for swaps
-     */
+    /// @inheritdoc ITrustSwapRouter
     function initialize(
         address _owner,
         address usdcAddress,
@@ -97,42 +77,27 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
                         ADMIN FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    /**
-     * @notice Updates the USDC token contract address
-     * @param newUSDC Address of the new USDC token contract
-     */
+    /// @inheritdoc ITrustSwapRouter
     function setUSDCAddress(address newUSDC) external onlyOwner {
         _setUSDCAddress(newUSDC);
     }
 
-    /**
-     * @notice Updates the TRUST token contract address
-     * @param newTRUST Address of the new TRUST token contract
-     */
+    /// @inheritdoc ITrustSwapRouter
     function setTRUSTAddress(address newTRUST) external onlyOwner {
         _setTRUSTAddress(newTRUST);
     }
 
-    /**
-     * @notice Updates the Aerodrome Router contract address
-     * @param newRouter Address of the new Aerodrome Router contract
-     */
+    /// @inheritdoc ITrustSwapRouter
     function setAerodromeRouter(address newRouter) external onlyOwner {
         _setAerodromeRouter(newRouter);
     }
 
-    /**
-     * @notice Updates the Aerodrome Pool Factory contract address
-     * @param newFactory Address of the new Aerodrome Pool Factory contract
-     */
+    /// @inheritdoc ITrustSwapRouter
     function setPoolFactory(address newFactory) external onlyOwner {
         _setPoolFactory(newFactory);
     }
 
-    /**
-     * @notice Updates the default swap deadline
-     * @param newDeadline New default deadline (in seconds) for swaps
-     */
+    /// @inheritdoc ITrustSwapRouter
     function setDefaultSwapDeadline(uint256 newDeadline) external onlyOwner {
         _setDefaultSwapDeadline(newDeadline);
     }
@@ -141,56 +106,54 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
                         SWAP FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    /**
-     * @notice Swaps `amountIn` USDC for TRUST tokens, sending them to the caller
-     * @dev Caller must approve this contract to spend `amountIn` USDC first.
-     * @param amountIn Amount of USDC to swap
-     * @param minAmountOut Minimum acceptable amount of TRUST to receive (slippage protection)
-     * @return amountOut Actual amount of TRUST received
-     */
-    function swapToTrust(uint256 amountIn, uint256 minAmountOut) external returns (uint256 amountOut) {
+    /// @inheritdoc ITrustSwapRouter
+    function swapToTrust(uint256 amountIn, uint256 minAmountOut) external nonReentrant returns (uint256 amountOut) {
         if (amountIn == 0) revert TrustSwapRouter_AmountInZero();
 
         // Pull USDC from user
         usdcToken.safeTransferFrom(msg.sender, address(this), amountIn);
 
-        // Approve router to spend USDC using a safe pattern
-        usdcToken.safeIncreaseAllowance(address(aerodromeRouter), amountIn);
+        return _executeSwap(amountIn, minAmountOut);
+    }
 
-        // Build the single-hop route
-        IAerodromeRouter.Route[] memory routes = new IAerodromeRouter.Route[](1);
-        routes[0] = IAerodromeRouter.Route({
-            from: address(usdcToken),
-            to: address(trustToken),
-            stable: false, // volatile pool
-            factory: poolFactory
-        });
+    /// @inheritdoc ITrustSwapRouter
+    function swapToTrustWithPermit(
+        uint256 amountIn,
+        uint256 minAmountOut,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    )
+        external
+        nonReentrant
+        returns (uint256 amountOut)
+    {
+        if (amountIn == 0) revert TrustSwapRouter_AmountInZero();
+        if (deadline < block.timestamp) revert TrustSwapRouter_PermitExpired();
 
-        // Deadline for the swap: current time + defaultSwapDeadline
-        uint256 deadline = block.timestamp + defaultSwapDeadline;
-
-        uint256[] memory amounts =
-            aerodromeRouter.swapExactTokensForTokens(amountIn, minAmountOut, routes, msg.sender, deadline);
-
-        amountOut = amounts[amounts.length - 1];
-
-        if (amountOut < minAmountOut) {
-            revert TrustSwapRouter_InsufficientOutputAmount();
+        // Execute permit to approve this contract to spend user's USDC
+        // Using try/catch to handle potential permit failures gracefully
+        try IERC20Permit(address(usdcToken)).permit(msg.sender, address(this), amountIn, deadline, v, r, s) { }
+        catch {
+            // Check if allowance is already sufficient (permit may have been front-run or already approved)
+            uint256 currentAllowance = usdcToken.allowance(msg.sender, address(this));
+            if (currentAllowance < amountIn) {
+                revert TrustSwapRouter_PermitFailed();
+            }
         }
 
-        emit SwappedToTrust(msg.sender, amountIn, amountOut);
+        // Pull USDC from user
+        usdcToken.safeTransferFrom(msg.sender, address(this), amountIn);
+
+        return _executeSwap(amountIn, minAmountOut);
     }
 
     /*//////////////////////////////////////////////////////////////
                           VIEW FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    /**
-     * @notice Quotes expected TRUST out for `amountIn` USDC (USDC has 6 decimals)
-     * @dev Assumes the USDC/TRUST pool is a volatile pool (stable=false)
-     * @param amountIn Amount of USDC to quote
-     * @return amountOut Expected amount of TRUST out
-     */
+    /// @inheritdoc ITrustSwapRouter
     function quoteSwapToTrust(uint256 amountIn) external view returns (uint256 amountOut) {
         if (amountIn == 0) return 0;
 
@@ -209,6 +172,36 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
     /*//////////////////////////////////////////////////////////////
                           INTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @dev Internal function to execute the swap after USDC has been transferred to this contract
+     * @param amountIn Amount of USDC to swap
+     * @param minAmountOut Minimum acceptable amount of TRUST to receive
+     * @return amountOut Actual amount of TRUST received
+     */
+    function _executeSwap(uint256 amountIn, uint256 minAmountOut) internal returns (uint256 amountOut) {
+        // Approve router to spend USDC using a safe pattern
+        usdcToken.safeIncreaseAllowance(address(aerodromeRouter), amountIn);
+
+        // Build the single-hop route
+        IAerodromeRouter.Route[] memory routes = new IAerodromeRouter.Route[](1);
+        routes[0] = IAerodromeRouter.Route({
+            from: address(usdcToken),
+            to: address(trustToken),
+            stable: false, // volatile pool
+            factory: poolFactory
+        });
+
+        // Deadline for the swap: current time + defaultSwapDeadline
+        uint256 swapDeadline = block.timestamp + defaultSwapDeadline;
+
+        uint256[] memory amounts =
+            aerodromeRouter.swapExactTokensForTokens(amountIn, minAmountOut, routes, msg.sender, swapDeadline);
+
+        amountOut = amounts[amounts.length - 1];
+
+        emit SwappedToTrust(msg.sender, amountIn, amountOut);
+    }
 
     /// @dev Internal function to set the USDC address
     function _setUSDCAddress(address newUSDC) internal {

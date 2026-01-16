@@ -57,7 +57,7 @@
 
 [rpc_endpoints]
   arbitrum = "https://arb-mainnet.g.alchemy.com/v2/${API_KEY_ALCHEMY}"
-  base = "https://mainnet.base.org"
+  base = "https://base-mainnet.g.alchemy.com/v2/${API_KEY_ALCHEMY}"
   base_sepolia = "https://sepolia.base.org"
   intuition = "https://rpc.intuition.systems/http"
   intuition_sepolia = "https://testnet.rpc.intuition.systems/http"

@@ -5,8 +5,10 @@ import { Test } from "forge-std/src/Test.sol";
 import { console2 } from "forge-std/src/console2.sol";
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IERC20Permit } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { MessageHashUtils } from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
 import { TrustSwapRouter } from "src/utils/TrustSwapRouter.sol";
 import { ITrustSwapRouter } from "src/interfaces/ITrustSwapRouter.sol";
@@ -52,6 +54,91 @@ contract MockERC20 {
         balanceOf[from] -= amount;
         balanceOf[to] += amount;
         return true;
+    }
+}
+
+/// @dev Mock ERC20 with EIP-2612 permit support for testing
+contract MockERC20Permit {
+    string public name;
+    string public symbol;
+    uint8 public decimals;
+    uint256 public totalSupply;
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
+    mapping(address => uint256) public nonces;
+
+    bytes32 public DOMAIN_SEPARATOR;
+    bytes32 public constant PERMIT_TYPEHASH =
+        keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
+
+    constructor(string memory _name, string memory _symbol, uint8 _decimals) {
+        name = _name;
+        symbol = _symbol;
+        decimals = _decimals;
+
+        DOMAIN_SEPARATOR = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes(_name)),
+                keccak256(bytes("2")),
+                block.chainid,
+                address(this)
+            )
+        );
+    }
+
+    function mint(address to, uint256 amount) external {
+        balanceOf[to] += amount;
+        totalSupply += amount;
+    }
+
+    function burn(address from, uint256 amount) external {
+        balanceOf[from] -= amount;
+        totalSupply -= amount;
+    }
+
+    function approve(address spender, uint256 amount) external returns (bool) {
+        allowance[msg.sender][spender] = amount;
+        return true;
+    }
+
+    function transfer(address to, uint256 amount) external returns (bool) {
+        balanceOf[msg.sender] -= amount;
+        balanceOf[to] += amount;
+        return true;
+    }
+
+    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
+        if (msg.sender != from) {
+            allowance[from][msg.sender] -= amount;
+        }
+        balanceOf[from] -= amount;
+        balanceOf[to] += amount;
+        return true;
+    }
+
+    function permit(
+        address permitOwner,
+        address spender,
+        uint256 value,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    )
+        external
+    {
+        require(deadline >= block.timestamp, "MockERC20Permit: EXPIRED");
+
+        bytes32 structHash =
+            keccak256(abi.encode(PERMIT_TYPEHASH, permitOwner, spender, value, nonces[permitOwner]++, deadline));
+
+        bytes32 hash = MessageHashUtils.toTypedDataHash(DOMAIN_SEPARATOR, structHash);
+
+        address recoveredAddress = ecrecover(hash, v, r, s);
+        require(recoveredAddress != address(0) && recoveredAddress == permitOwner, "MockERC20Permit: INVALID_SIGNATURE");
+
+        allowance[permitOwner][spender] = value;
     }
 }
 
@@ -813,5 +900,448 @@ contract TrustSwapRouterTest is Test {
         emit ITrustSwapRouter.DefaultSwapDeadlineSet(newDeadline);
 
         newRouter.initialize(newOwner, newUSDC, newTRUST, newAerodromeRouter, newPoolFactory, newDeadline);
+    }
+}
+
+/// @title TrustSwapRouterPermitTest
+/// @notice Tests for EIP-2612 permit functionality
+contract TrustSwapRouterPermitTest is Test {
+    TrustSwapRouter public trustSwapRouter;
+    TrustSwapRouter public trustSwapRouterImplementation;
+    TransparentUpgradeableProxy public trustSwapRouterProxy;
+
+    MockERC20Permit public usdcToken;
+    MockERC20 public trustToken;
+    MockAerodromeRouter public aerodromeRouter;
+    address public poolFactory;
+
+    address public owner;
+    uint256 public userPrivateKey;
+    address public user;
+
+    uint256 public constant DEFAULT_SWAP_DEADLINE = 30 minutes;
+    uint256 public constant USDC_DECIMALS = 6;
+    uint256 public constant TRUST_DECIMALS = 18;
+
+    bytes32 public constant PERMIT_TYPEHASH =
+        keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
+
+    function setUp() public {
+        owner = makeAddr("owner");
+        userPrivateKey = 0xA11CE;
+        user = vm.addr(userPrivateKey);
+        poolFactory = makeAddr("poolFactory");
+
+        usdcToken = new MockERC20Permit("USD Coin", "USDC", uint8(USDC_DECIMALS));
+        trustToken = new MockERC20("Trust Token", "TRUST", uint8(TRUST_DECIMALS));
+        aerodromeRouter = new MockAerodromeRouter();
+
+        trustSwapRouterImplementation = new TrustSwapRouter();
+
+        bytes memory initData = abi.encodeWithSelector(
+            TrustSwapRouter.initialize.selector,
+            owner,
+            address(usdcToken),
+            address(trustToken),
+            address(aerodromeRouter),
+            poolFactory,
+            DEFAULT_SWAP_DEADLINE
+        );
+
+        trustSwapRouterProxy = new TransparentUpgradeableProxy(address(trustSwapRouterImplementation), owner, initData);
+        trustSwapRouter = TrustSwapRouter(address(trustSwapRouterProxy));
+
+        usdcToken.mint(user, 1_000_000e6);
+
+        vm.label(address(trustSwapRouter), "TrustSwapRouter");
+        vm.label(address(usdcToken), "USDC");
+        vm.label(address(trustToken), "TRUST");
+        vm.label(address(aerodromeRouter), "AerodromeRouter");
+        vm.label(user, "user");
+    }
+
+    function _getPermitSignature(
+        uint256 privateKey,
+        address permitOwner,
+        address spender,
+        uint256 value,
+        uint256 nonce,
+        uint256 deadline
+    )
+        internal
+        view
+        returns (uint8 v, bytes32 r, bytes32 s)
+    {
+        bytes32 structHash = keccak256(abi.encode(PERMIT_TYPEHASH, permitOwner, spender, value, nonce, deadline));
+
+        bytes32 hash = MessageHashUtils.toTypedDataHash(usdcToken.DOMAIN_SEPARATOR(), structHash);
+
+        (v, r, s) = vm.sign(privateKey, hash);
+    }
+
+    /* =================================================== */
+    /*              PERMIT SWAP FUNCTION TESTS             */
+    /* =================================================== */
+
+    function test_swapToTrustWithPermit_successful() public {
+        uint256 amountIn = 100e6;
+        uint256 deadline = block.timestamp + 1 hours;
+        uint256 expectedOutput = amountIn * aerodromeRouter.outputMultiplier();
+
+        (uint8 v, bytes32 r, bytes32 s) =
+            _getPermitSignature(userPrivateKey, user, address(trustSwapRouter), amountIn, 0, deadline);
+
+        uint256 userUsdcBalanceBefore = usdcToken.balanceOf(user);
+        uint256 userTrustBalanceBefore = trustToken.balanceOf(user);
+
+        vm.expectEmit(true, true, true, true);
+        emit ITrustSwapRouter.SwappedToTrust(user, amountIn, expectedOutput);
+
+        vm.prank(user);
+        uint256 amountOut = trustSwapRouter.swapToTrustWithPermit(amountIn, 0, deadline, v, r, s);
+
+        assertEq(amountOut, expectedOutput);
+        assertEq(usdcToken.balanceOf(user), userUsdcBalanceBefore - amountIn);
+        assertEq(trustToken.balanceOf(user), userTrustBalanceBefore + expectedOutput);
+    }
+
+    function test_swapToTrustWithPermit_revertsOnZeroAmountIn() public {
+        uint256 deadline = block.timestamp + 1 hours;
+        (uint8 v, bytes32 r, bytes32 s) =
+            _getPermitSignature(userPrivateKey, user, address(trustSwapRouter), 0, 0, deadline);
+
+        vm.prank(user);
+        vm.expectRevert(abi.encodeWithSelector(ITrustSwapRouter.TrustSwapRouter_AmountInZero.selector));
+        trustSwapRouter.swapToTrustWithPermit(0, 0, deadline, v, r, s);
+    }
+
+    function test_swapToTrustWithPermit_revertsOnExpiredDeadline() public {
+        uint256 amountIn = 100e6;
+        uint256 deadline = block.timestamp - 1;
+
+        (uint8 v, bytes32 r, bytes32 s) =
+            _getPermitSignature(userPrivateKey, user, address(trustSwapRouter), amountIn, 0, deadline);
+
+        vm.prank(user);
+        vm.expectRevert(abi.encodeWithSelector(ITrustSwapRouter.TrustSwapRouter_PermitExpired.selector));
+        trustSwapRouter.swapToTrustWithPermit(amountIn, 0, deadline, v, r, s);
+    }
+
+    function test_swapToTrustWithPermit_revertsOnInvalidSignature() public {
+        uint256 amountIn = 100e6;
+        uint256 deadline = block.timestamp + 1 hours;
+
+        uint256 wrongPrivateKey = 0xBAD;
+        (uint8 v, bytes32 r, bytes32 s) =
+            _getPermitSignature(wrongPrivateKey, user, address(trustSwapRouter), amountIn, 0, deadline);
+
+        vm.prank(user);
+        vm.expectRevert(abi.encodeWithSelector(ITrustSwapRouter.TrustSwapRouter_PermitFailed.selector));
+        trustSwapRouter.swapToTrustWithPermit(amountIn, 0, deadline, v, r, s);
+    }
+
+    function test_swapToTrustWithPermit_succeedsWithExistingAllowance() public {
+        uint256 amountIn = 100e6;
+        uint256 deadline = block.timestamp + 1 hours;
+        uint256 expectedOutput = amountIn * aerodromeRouter.outputMultiplier();
+
+        vm.prank(user);
+        usdcToken.approve(address(trustSwapRouter), amountIn);
+
+        uint256 wrongPrivateKey = 0xBAD;
+        (uint8 v, bytes32 r, bytes32 s) =
+            _getPermitSignature(wrongPrivateKey, user, address(trustSwapRouter), amountIn, 0, deadline);
+
+        vm.prank(user);
+        uint256 amountOut = trustSwapRouter.swapToTrustWithPermit(amountIn, 0, deadline, v, r, s);
+
+        assertEq(amountOut, expectedOutput);
+    }
+
+    function test_swapToTrustWithPermit_revertsOnInsufficientOutput() public {
+        uint256 amountIn = 100e6;
+        uint256 deadline = block.timestamp + 1 hours;
+        uint256 expectedOutput = amountIn * aerodromeRouter.outputMultiplier();
+        uint256 minAmountOut = expectedOutput + 1;
+
+        (uint8 v, bytes32 r, bytes32 s) =
+            _getPermitSignature(userPrivateKey, user, address(trustSwapRouter), amountIn, 0, deadline);
+
+        vm.prank(user);
+        vm.expectRevert();
+        trustSwapRouter.swapToTrustWithPermit(amountIn, minAmountOut, deadline, v, r, s);
+    }
+
+    function test_swapToTrustWithPermit_incrementsNonce() public {
+        uint256 amountIn = 100e6;
+        uint256 deadline = block.timestamp + 1 hours;
+
+        assertEq(usdcToken.nonces(user), 0);
+
+        (uint8 v, bytes32 r, bytes32 s) =
+            _getPermitSignature(userPrivateKey, user, address(trustSwapRouter), amountIn, 0, deadline);
+
+        vm.prank(user);
+        trustSwapRouter.swapToTrustWithPermit(amountIn, 0, deadline, v, r, s);
+
+        assertEq(usdcToken.nonces(user), 1);
+    }
+
+    function test_swapToTrustWithPermit_multipleSwapsWithCorrectNonces() public {
+        uint256 amountIn = 100e6;
+        uint256 deadline = block.timestamp + 1 hours;
+
+        (uint8 v1, bytes32 r1, bytes32 s1) =
+            _getPermitSignature(userPrivateKey, user, address(trustSwapRouter), amountIn, 0, deadline);
+
+        vm.prank(user);
+        trustSwapRouter.swapToTrustWithPermit(amountIn, 0, deadline, v1, r1, s1);
+
+        (uint8 v2, bytes32 r2, bytes32 s2) =
+            _getPermitSignature(userPrivateKey, user, address(trustSwapRouter), amountIn, 1, deadline);
+
+        vm.prank(user);
+        trustSwapRouter.swapToTrustWithPermit(amountIn, 0, deadline, v2, r2, s2);
+
+        assertEq(usdcToken.nonces(user), 2);
+    }
+
+    function testFuzz_swapToTrustWithPermit_variousAmounts(uint256 amountIn) public {
+        amountIn = bound(amountIn, 1, 1_000_000e6);
+        uint256 deadline = block.timestamp + 1 hours;
+        uint256 expectedOutput = amountIn * aerodromeRouter.outputMultiplier();
+
+        usdcToken.mint(user, amountIn);
+
+        (uint8 v, bytes32 r, bytes32 s) =
+            _getPermitSignature(userPrivateKey, user, address(trustSwapRouter), amountIn, 0, deadline);
+
+        vm.prank(user);
+        uint256 amountOut = trustSwapRouter.swapToTrustWithPermit(amountIn, 0, deadline, v, r, s);
+
+        assertEq(amountOut, expectedOutput);
+    }
+
+    function testFuzz_swapToTrustWithPermit_variousDeadlines(uint256 deadlineOffset) public {
+        deadlineOffset = bound(deadlineOffset, 1, 365 days);
+        uint256 amountIn = 100e6;
+        uint256 deadline = block.timestamp + deadlineOffset;
+        uint256 expectedOutput = amountIn * aerodromeRouter.outputMultiplier();
+
+        (uint8 v, bytes32 r, bytes32 s) =
+            _getPermitSignature(userPrivateKey, user, address(trustSwapRouter), amountIn, 0, deadline);
+
+        vm.prank(user);
+        uint256 amountOut = trustSwapRouter.swapToTrustWithPermit(amountIn, 0, deadline, v, r, s);
+
+        assertEq(amountOut, expectedOutput);
+    }
+}
+
+/// @title TrustSwapRouterForkTest
+/// @notice Fork tests against Base mainnet for real-world swap testing
+contract TrustSwapRouterForkTest is Test {
+    TrustSwapRouter public trustSwapRouter;
+    TrustSwapRouter public trustSwapRouterImplementation;
+    TransparentUpgradeableProxy public trustSwapRouterProxy;
+
+    address public constant BASE_MAINNET_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+    address public constant BASE_MAINNET_TRUST = 0x6cd905dF2Ed214b22e0d48FF17CD4200C1C6d8A3;
+    address public constant BASE_MAINNET_AERODROME_ROUTER = 0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43;
+    address public constant BASE_MAINNET_POOL_FACTORY = 0x420DD381b31aEf6683db6B902084cB0FFECe40Da;
+
+    IERC20 public usdc;
+    IERC20 public trust;
+
+    address public owner;
+    uint256 public userPrivateKey;
+    address public user;
+
+    uint256 public constant DEFAULT_SWAP_DEADLINE = 30 minutes;
+
+    bytes32 public constant PERMIT_TYPEHASH =
+        keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
+
+    uint256 public baseFork;
+
+    function setUp() public {
+        vm.createSelectFork("base");
+
+        owner = makeAddr("owner");
+        userPrivateKey = 0xA11CE;
+        user = vm.addr(userPrivateKey);
+
+        usdc = IERC20(BASE_MAINNET_USDC);
+        trust = IERC20(BASE_MAINNET_TRUST);
+
+        trustSwapRouterImplementation = new TrustSwapRouter();
+
+        bytes memory initData = abi.encodeWithSelector(
+            TrustSwapRouter.initialize.selector,
+            owner,
+            BASE_MAINNET_USDC,
+            BASE_MAINNET_TRUST,
+            BASE_MAINNET_AERODROME_ROUTER,
+            BASE_MAINNET_POOL_FACTORY,
+            DEFAULT_SWAP_DEADLINE
+        );
+
+        trustSwapRouterProxy = new TransparentUpgradeableProxy(address(trustSwapRouterImplementation), owner, initData);
+        trustSwapRouter = TrustSwapRouter(address(trustSwapRouterProxy));
+
+        deal(address(usdc), user, 10_000e6);
+
+        vm.prank(user);
+        usdc.approve(address(trustSwapRouter), type(uint256).max);
+
+        vm.label(address(trustSwapRouter), "TrustSwapRouter");
+        vm.label(BASE_MAINNET_USDC, "USDC");
+        vm.label(BASE_MAINNET_TRUST, "TRUST");
+        vm.label(BASE_MAINNET_AERODROME_ROUTER, "AerodromeRouter");
+        vm.label(user, "user");
+    }
+
+    /* =================================================== */
+    /*                FORK TEST: QUOTE                     */
+    /* =================================================== */
+
+    function test_fork_quoteSwapToTrust_returnsNonZeroForValidAmount() public view {
+        uint256 amountIn = 100e6;
+
+        uint256 quotedOutput = trustSwapRouter.quoteSwapToTrust(amountIn);
+
+        console2.log("Quote for 100 USDC:");
+        console2.log("  USDC in:", amountIn);
+        console2.log("  TRUST out:", quotedOutput);
+        console2.log("  Rate (TRUST per USDC):", quotedOutput / amountIn);
+
+        assertGt(quotedOutput, 0, "Quote should return non-zero output");
+    }
+
+    function test_fork_quoteSwapToTrust_scalesWithInput() public view {
+        uint256 smallAmount = 10e6;
+        uint256 largeAmount = 1000e6;
+
+        uint256 smallQuote = trustSwapRouter.quoteSwapToTrust(smallAmount);
+        uint256 largeQuote = trustSwapRouter.quoteSwapToTrust(largeAmount);
+
+        console2.log("Quote comparison:");
+        console2.log("  10 USDC -> TRUST:", smallQuote);
+        console2.log("  1000 USDC -> TRUST:", largeQuote);
+
+        assertGt(largeQuote, smallQuote, "Larger input should yield larger output");
+    }
+
+    /* =================================================== */
+    /*                FORK TEST: SWAP                      */
+    /* =================================================== */
+
+    function test_fork_swapToTrust_executesSuccessfully() public {
+        uint256 amountIn = 100e6;
+
+        uint256 quotedOutput = trustSwapRouter.quoteSwapToTrust(amountIn);
+        uint256 minAmountOut = (quotedOutput * 95) / 100;
+
+        uint256 userUsdcBefore = usdc.balanceOf(user);
+        uint256 userTrustBefore = trust.balanceOf(user);
+
+        vm.prank(user);
+        uint256 amountOut = trustSwapRouter.swapToTrust(amountIn, minAmountOut);
+
+        uint256 userUsdcAfter = usdc.balanceOf(user);
+        uint256 userTrustAfter = trust.balanceOf(user);
+
+        console2.log("Swap executed:");
+        console2.log("  USDC spent:", userUsdcBefore - userUsdcAfter);
+        console2.log("  TRUST received:", userTrustAfter - userTrustBefore);
+        console2.log("  Quoted:", quotedOutput);
+        console2.log("  Actual:", amountOut);
+
+        assertEq(userUsdcBefore - userUsdcAfter, amountIn, "Should spend exact USDC amount");
+        assertGe(amountOut, minAmountOut, "Should receive at least minAmountOut");
+        assertEq(userTrustAfter - userTrustBefore, amountOut, "Trust balance should increase by amountOut");
+    }
+
+    function test_fork_swapToTrust_multipleSwapsWork() public {
+        uint256 amountIn = 50e6;
+
+        vm.prank(user);
+        uint256 firstSwapOut = trustSwapRouter.swapToTrust(amountIn, 0);
+
+        vm.prank(user);
+        uint256 secondSwapOut = trustSwapRouter.swapToTrust(amountIn, 0);
+
+        console2.log("Multiple swaps:");
+        console2.log("  First swap (50 USDC):", firstSwapOut);
+        console2.log("  Second swap (50 USDC):", secondSwapOut);
+
+        assertGt(firstSwapOut, 0, "First swap should return tokens");
+        assertGt(secondSwapOut, 0, "Second swap should return tokens");
+    }
+
+    /* =================================================== */
+    /*            FORK TEST: PERMIT SWAP                   */
+    /* =================================================== */
+
+    function test_fork_swapToTrustWithPermit_executesSuccessfully() public {
+        uint256 amountIn = 100e6;
+        uint256 deadline = block.timestamp + 1 hours;
+
+        bytes32 domainSeparator = _getUSDCDomainSeparator();
+        (uint8 v, bytes32 r, bytes32 s) = _getPermitSignatureForUSDC(
+            userPrivateKey, user, address(trustSwapRouter), amountIn, 0, deadline, domainSeparator
+        );
+
+        uint256 quotedOutput = trustSwapRouter.quoteSwapToTrust(amountIn);
+        uint256 minAmountOut = (quotedOutput * 95) / 100;
+
+        uint256 userUsdcBefore = usdc.balanceOf(user);
+        uint256 userTrustBefore = trust.balanceOf(user);
+
+        vm.prank(user);
+        uint256 amountOut = trustSwapRouter.swapToTrustWithPermit(amountIn, minAmountOut, deadline, v, r, s);
+
+        console2.log("Permit swap executed:");
+        console2.log("  USDC spent:", userUsdcBefore - usdc.balanceOf(user));
+        console2.log("  TRUST received:", trust.balanceOf(user) - userTrustBefore);
+        console2.log("  Amount out:", amountOut);
+
+        assertGe(amountOut, minAmountOut, "Should receive at least minAmountOut");
+    }
+
+    /* =================================================== */
+    /*                 HELPER FUNCTIONS                    */
+    /* =================================================== */
+
+    function _getUSDCDomainSeparator() internal view returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes("USD Coin")),
+                keccak256(bytes("2")),
+                block.chainid,
+                BASE_MAINNET_USDC
+            )
+        );
+    }
+
+    function _getPermitSignatureForUSDC(
+        uint256 privateKey,
+        address permitOwner,
+        address spender,
+        uint256 value,
+        uint256 nonce,
+        uint256 deadline,
+        bytes32 domainSeparator
+    )
+        internal
+        pure
+        returns (uint8 v, bytes32 r, bytes32 s)
+    {
+        bytes32 structHash = keccak256(abi.encode(PERMIT_TYPEHASH, permitOwner, spender, value, nonce, deadline));
+
+        bytes32 hash = MessageHashUtils.toTypedDataHash(domainSeparator, structHash);
+
+        (v, r, s) = vm.sign(privateKey, hash);
     }
 }
