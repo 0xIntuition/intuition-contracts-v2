@@ -67,7 +67,7 @@ struct VaultFees {
 
 /// @notice Bonding curve configuration struct
 struct BondingCurveConfig {
-    /// @dev The BondingCurveRegistry contract address (must not be changed after initialization)
+    /// @dev The BondingCurveRegistry contract address
     address registry;
     /// @dev The default bonding curve ID to use for new terms (ID '1' is suggested for the linear curve)
     uint256 defaultCurveId;
