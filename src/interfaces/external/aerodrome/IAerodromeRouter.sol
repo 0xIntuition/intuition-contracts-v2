@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.29;
+pragma solidity 0.8.29;
 
 interface IAerodromeRouter {
     /// @notice Struct representing a trade route between two tokens

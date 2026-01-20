@@ -13,6 +13,7 @@ import { MessageHashUtils } from "@openzeppelin/contracts/utils/cryptography/Mes
 import { TrustSwapRouter } from "src/utils/TrustSwapRouter.sol";
 import { ITrustSwapRouter } from "src/interfaces/ITrustSwapRouter.sol";
 import { IAerodromeRouter } from "src/interfaces/external/aerodrome/IAerodromeRouter.sol";
+import { FinalityState, IMetaERC20Hub } from "src/interfaces/external/metalayer/IMetaERC20Hub.sol";
 
 contract MockERC20 {
     string public name;
@@ -189,6 +190,56 @@ contract MockAerodromeRouter {
         MockERC20(routes[0].to).mint(to, amounts[1]);
 
         return amounts;
+    }
+}
+
+contract MockMetaERC20Hub {
+    uint256 public constant BRIDGE_FEE = 0.001 ether;
+    uint256 public transferRemoteCallCount;
+    bytes32 public lastTransferId;
+
+    struct TransferCall {
+        address caller;
+        uint32 recipientDomain;
+        bytes32 recipientAddress;
+        uint256 amount;
+        uint256 gasLimit;
+        uint256 msgValue;
+    }
+
+    TransferCall public lastTransferCall;
+
+    function transferRemote(
+        uint32 _recipientDomain,
+        bytes32 _recipientAddress,
+        uint256 _amount,
+        uint256 _gasLimit,
+        FinalityState
+    )
+        external
+        payable
+        returns (bytes32 transferId)
+    {
+        transferRemoteCallCount++;
+        transferId = keccak256(abi.encodePacked(block.timestamp, transferRemoteCallCount));
+        lastTransferId = transferId;
+
+        lastTransferCall = TransferCall({
+            caller: msg.sender,
+            recipientDomain: _recipientDomain,
+            recipientAddress: _recipientAddress,
+            amount: _amount,
+            gasLimit: _gasLimit,
+            msgValue: msg.value
+        });
+
+        MockERC20(msg.sender).burn(msg.sender, _amount);
+
+        return transferId;
+    }
+
+    function quoteTransferRemote(uint32, bytes32, uint256) external pure returns (uint256) {
+        return BRIDGE_FEE;
     }
 }
 

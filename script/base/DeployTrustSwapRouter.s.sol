@@ -5,6 +5,7 @@ import { console2 } from "forge-std/src/console2.sol";
 import { Script } from "forge-std/src/Script.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
+import { FinalityState } from "src/interfaces/external/metalayer/IMetaERC20Hub.sol";
 import { TrustSwapRouter } from "src/utils/TrustSwapRouter.sol";
 import { SetupScript } from "script/SetupScript.s.sol";
 
@@ -36,6 +37,14 @@ contract DeployTrustSwapRouter is SetupScript {
     // ===== Base Mainnet Aerodrome V2 Router / Factory =====
     address public constant BASE_MAINNET_AERODROME_ROUTER = 0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43;
     address public constant BASE_MAINNET_POOL_FACTORY = 0x420DD381b31aEf6683db6B902084cB0FFECe40Da;
+
+    // ===== Base Mainnet MetaERC20Hub for Bridging =====
+    address public constant BASE_MAINNET_META_ERC20_HUB = 0xE12aaF1529Ae21899029a9b51cca2F2Bc2cfC421;
+
+    // ===== Bridging Configuration =====
+    uint32 public constant INTUITION_MAINNET_DOMAIN = 1155;
+    uint256 public constant BRIDGE_GAS_LIMIT = 100_000;
+    FinalityState public constant BRIDGE_FINALITY_STATE = FinalityState.INSTANT;
 
     // ===== Default Swap Deadline =====
     uint256 public constant DEFAULT_SWAP_DEADLINE = 30 minutes;
@@ -77,6 +86,10 @@ contract DeployTrustSwapRouter is SetupScript {
             TRUST_TOKEN,
             BASE_MAINNET_AERODROME_ROUTER,
             BASE_MAINNET_POOL_FACTORY,
+            BASE_MAINNET_META_ERC20_HUB,
+            INTUITION_MAINNET_DOMAIN,
+            BRIDGE_GAS_LIMIT,
+            BRIDGE_FINALITY_STATE,
             DEFAULT_SWAP_DEADLINE
         );
 
