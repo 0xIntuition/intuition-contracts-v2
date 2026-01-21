@@ -245,7 +245,7 @@ contract GovernanceWrapperTest is BaseTest {
         vm.prank(owner);
         governanceWrapper.initialize(owner, address(protocol.trustBonding));
 
-        string memory expectedName = protocol.trustBonding.name();
+        string memory expectedName = string.concat("Gov ", protocol.trustBonding.name());
         string memory actualName = governanceWrapper.name();
 
         assertEq(actualName, expectedName);
@@ -255,7 +255,7 @@ contract GovernanceWrapperTest is BaseTest {
         vm.prank(owner);
         governanceWrapper.initialize(owner, address(protocol.trustBonding));
 
-        string memory expectedSymbol = protocol.trustBonding.symbol();
+        string memory expectedSymbol = string.concat("gov-", protocol.trustBonding.symbol());
         string memory actualSymbol = governanceWrapper.symbol();
 
         assertEq(actualSymbol, expectedSymbol);
@@ -556,6 +556,9 @@ contract GovernanceWrapperTest is BaseTest {
     }
 
     function testFuzz_delegates(address account) external {
+        address proxyAdminAddress = 0x04cf47d237A7e4358C874a9767f79bBFC62F8495;
+        vm.assume(account != proxyAdminAddress); // to avoid the proxied owner address
+
         vm.prank(owner);
         governanceWrapper.initialize(owner, address(protocol.trustBonding));
 
@@ -636,58 +639,12 @@ contract GovernanceWrapperTest is BaseTest {
     /*              DELEGATE BY SIG TESTS                  */
     /* =================================================== */
 
-    function test_delegateBySig_setsSenderAsOwnDelegate() external {
+    function test_delegateBySig_alwaysReverts() external {
         vm.prank(owner);
         governanceWrapper.initialize(owner, address(protocol.trustBonding));
 
-        vm.prank(users.alice);
+        vm.expectRevert(IGovernanceWrapper.GovernanceWrapper_DelegationBySigDisabled.selector);
         governanceWrapper.delegateBySig(users.bob, 0, 0, 0, bytes32(0), bytes32(0));
-
-        address delegatee = governanceWrapper.delegates(users.alice);
-        assertEq(delegatee, users.alice);
-    }
-
-    function test_delegateBySig_ignoresAllParameters() external {
-        vm.prank(owner);
-        governanceWrapper.initialize(owner, address(protocol.trustBonding));
-
-        vm.prank(users.alice);
-        governanceWrapper.delegateBySig(users.charlie, 12_345, 67_890, 27, bytes32(uint256(1)), bytes32(uint256(2)));
-
-        address delegatee = governanceWrapper.delegates(users.alice);
-        assertEq(delegatee, users.alice);
-        assertTrue(delegatee != users.charlie);
-    }
-
-    function test_delegateBySig_emitsDelegateChangedEvent() external {
-        vm.prank(owner);
-        governanceWrapper.initialize(owner, address(protocol.trustBonding));
-
-        vm.expectEmit(true, true, true, true);
-        emit DelegateChanged(users.alice, address(0), users.alice);
-
-        vm.prank(users.alice);
-        governanceWrapper.delegateBySig(users.bob, 0, 0, 0, bytes32(0), bytes32(0));
-    }
-
-    function testFuzz_delegateBySig(
-        address providedDelegatee,
-        uint256 nonce,
-        uint256 expiry,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    )
-        external
-    {
-        vm.prank(owner);
-        governanceWrapper.initialize(owner, address(protocol.trustBonding));
-
-        vm.prank(users.alice);
-        governanceWrapper.delegateBySig(providedDelegatee, nonce, expiry, v, r, s);
-
-        address actualDelegatee = governanceWrapper.delegates(users.alice);
-        assertEq(actualDelegatee, users.alice);
     }
 
     /* =================================================== */
@@ -702,8 +659,8 @@ contract GovernanceWrapperTest is BaseTest {
         assertEq(address(governanceWrapper.trustBonding()), address(protocol.trustBonding));
         assertEq(governanceWrapper.CLOCK_MODE(), "mode=blocknumber");
         assertEq(governanceWrapper.clock(), uint48(block.number));
-        assertEq(governanceWrapper.name(), protocol.trustBonding.name());
-        assertEq(governanceWrapper.symbol(), protocol.trustBonding.symbol());
+        assertEq(governanceWrapper.name(), string.concat("Gov ", protocol.trustBonding.name()));
+        assertEq(governanceWrapper.symbol(), string.concat("gov-", protocol.trustBonding.symbol()));
         assertEq(governanceWrapper.decimals(), protocol.trustBonding.decimals());
         assertEq(governanceWrapper.totalSupply(), protocol.trustBonding.totalSupply());
     }
@@ -785,12 +742,6 @@ contract GovernanceWrapperTest is BaseTest {
 
         address delegateAfter = governanceWrapper.delegates(users.alice);
         assertEq(delegateAfter, users.alice);
-
-        vm.prank(users.alice);
-        governanceWrapper.delegateBySig(users.charlie, 0, 0, 0, bytes32(0), bytes32(0));
-
-        address finalDelegate = governanceWrapper.delegates(users.alice);
-        assertEq(finalDelegate, users.alice);
     }
 
     function test_integration_historicalVotingPower() external {

@@ -23,6 +23,7 @@ interface IGovernanceWrapper {
 
     error GovernanceWrapper_ApprovalsDisabled();
     error GovernanceWrapper_BurningDisabled();
+    error GovernanceWrapper_DelegationBySigDisabled();
     error GovernanceWrapper_InvalidAddress();
     error GovernanceWrapper_MintingDisabled();
     error GovernanceWrapper_PermitDisabled();

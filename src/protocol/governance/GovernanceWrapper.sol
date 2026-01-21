@@ -125,12 +125,14 @@ contract GovernanceWrapper is IGovernanceWrapper, VotesERC20 {
 
     /// @notice ERC20 `name` override to match TrustBonding
     function name() public view override returns (string memory) {
-        return trustBonding.name();
+        string memory tokenName = trustBonding.name();
+        return string.concat("Gov ", tokenName);
     }
 
     /// @notice ERC20 `symbol` override to match TrustBonding
     function symbol() public view override returns (string memory) {
-        return trustBonding.symbol();
+        string memory tokenSymbol = trustBonding.symbol();
+        return string.concat("gov-", tokenSymbol);
     }
 
     /// @notice ERC20 `decimals` override to match TrustBonding
@@ -239,12 +241,9 @@ contract GovernanceWrapper is IGovernanceWrapper, VotesERC20 {
     }
 
     /**
-     * @notice Sets `msg.sender` as their own delegate
-     * @dev The provided address and signature parameters are ignored
+     * @notice Delegation by signature is disabled and always reverts
      */
     function delegateBySig(address, uint256, uint256, uint8, bytes32, bytes32) public virtual override {
-        address oldDelegate = _delegates[msg.sender];
-        _delegates[msg.sender] = msg.sender;
-        emit DelegateChanged(msg.sender, oldDelegate, msg.sender);
+        revert GovernanceWrapper_DelegationBySigDisabled();
     }
 }
