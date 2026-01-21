@@ -33,6 +33,7 @@ contract DeployTrustSwapRouter is SetupScript {
 
     // ===== Base Mainnet Token Addresses =====
     address public constant BASE_MAINNET_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+    // Note: WETH address (0x4200000000000000000000000000000000000006) is hardcoded in TrustSwapRouter constructor
 
     // ===== Base Mainnet Aerodrome V2 Router / Factory =====
     address public constant BASE_MAINNET_AERODROME_ROUTER = 0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43;

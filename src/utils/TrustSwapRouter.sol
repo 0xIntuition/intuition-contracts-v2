@@ -10,6 +10,7 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 
 import { IAerodromeRouter } from "src/interfaces/external/aerodrome/IAerodromeRouter.sol";
 import { FinalityState, IMetaERC20Hub } from "src/interfaces/external/metalayer/IMetaERC20Hub.sol";
+import { IWETH } from "src/interfaces/external/IWETH.sol";
 import { ITrustSwapRouter } from "src/interfaces/ITrustSwapRouter.sol";
 
 /**
@@ -30,6 +31,9 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
 
     /// @notice TRUST token contract on Base
     IERC20 public trustToken;
+
+    /// @notice WETH token contract on Base (canonical Base WETH)
+    address public immutable weth;
 
     /// @notice Aerodrome Router contract on Base
     IAerodromeRouter public aerodromeRouter;
@@ -58,6 +62,7 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
+        weth = 0x4200000000000000000000000000000000000006; // Base canonical WETH
         _disableInitializers();
     }
 
@@ -149,10 +154,10 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
     //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc ITrustSwapRouter
-    function swapToTrust(
+    function swapAndBridge(
         uint256 amountIn,
         uint256 minAmountOut,
-        bytes32 recipientAddress
+        address recipient
     )
         external
         payable
@@ -161,17 +166,16 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
     {
         if (amountIn == 0) revert TrustSwapRouter_AmountInZero();
 
-        // Pull USDC from user
         usdcToken.safeTransferFrom(msg.sender, address(this), amountIn);
 
-        return _executeSwapAndBridge(amountIn, minAmountOut, recipientAddress);
+        return _executeSwapAndBridge(amountIn, minAmountOut, bytes32(uint256(uint160(recipient))));
     }
 
     /// @inheritdoc ITrustSwapRouter
-    function swapToTrustWithPermit(
+    function swapAndBridgeWithPermit(
         uint256 amountIn,
         uint256 minAmountOut,
-        bytes32 recipientAddress,
+        address recipient,
         uint256 deadline,
         uint8 v,
         bytes32 r,
@@ -185,21 +189,43 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
         if (amountIn == 0) revert TrustSwapRouter_AmountInZero();
         if (deadline < block.timestamp) revert TrustSwapRouter_PermitExpired();
 
-        // Execute permit to approve this contract to spend user's USDC
-        // Using try/catch to handle potential permit failures gracefully
         try IERC20Permit(address(usdcToken)).permit(msg.sender, address(this), amountIn, deadline, v, r, s) { }
         catch {
-            // Check if allowance is already sufficient (permit may have been front-run or already approved)
             uint256 currentAllowance = usdcToken.allowance(msg.sender, address(this));
             if (currentAllowance < amountIn) {
                 revert TrustSwapRouter_PermitFailed();
             }
         }
 
-        // Pull USDC from user
         usdcToken.safeTransferFrom(msg.sender, address(this), amountIn);
 
-        return _executeSwapAndBridge(amountIn, minAmountOut, recipientAddress);
+        return _executeSwapAndBridge(amountIn, minAmountOut, bytes32(uint256(uint160(recipient))));
+    }
+
+    /// @inheritdoc ITrustSwapRouter
+    function swapAndBridgeWithETH(
+        uint256 minAmountOut,
+        address recipient
+    )
+        external
+        payable
+        nonReentrant
+        returns (uint256 amountOut, bytes32 transferId)
+    {
+        if (msg.value == 0) revert TrustSwapRouter_InsufficientETH();
+
+        bytes32 recipientAddress = bytes32(uint256(uint160(recipient)));
+
+        uint256 estimatedTrustOut = _quoteSwapFromETH(msg.value);
+        uint256 estimatedBridgeFee =
+            metaERC20Hub.quoteTransferRemote(recipientDomain, recipientAddress, estimatedTrustOut);
+
+        if (msg.value <= estimatedBridgeFee) {
+            revert TrustSwapRouter_InsufficientETH();
+        }
+        uint256 ethAmountForSwap = msg.value - estimatedBridgeFee;
+
+        return _executeSwapFromETHAndBridge(ethAmountForSwap, minAmountOut, recipientAddress);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -225,13 +251,12 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
     /// @inheritdoc ITrustSwapRouter
     function quoteSwapAndBridge(
         uint256 amountIn,
-        bytes32 recipientAddress
+        address recipient
     )
         external
         view
         returns (uint256 amountOut, uint256 bridgeFee)
     {
-        // Get swap quote
         if (amountIn == 0) {
             return (0, 0);
         }
@@ -244,8 +269,29 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
         uint256[] memory amounts = aerodromeRouter.getAmountsOut(amountIn, routes);
         amountOut = amounts[amounts.length - 1];
 
-        // Get bridge fee quote
-        bridgeFee = metaERC20Hub.quoteTransferRemote(recipientDomain, recipientAddress, amountOut);
+        bridgeFee = metaERC20Hub.quoteTransferRemote(recipientDomain, bytes32(uint256(uint160(recipient))), amountOut);
+    }
+
+    /// @inheritdoc ITrustSwapRouter
+    function quoteSwapFromETHToTrust(uint256 amountIn) external view returns (uint256 amountOut) {
+        return _quoteSwapFromETH(amountIn);
+    }
+
+    /// @inheritdoc ITrustSwapRouter
+    function quoteSwapAndBridgeWithETH(
+        uint256 amountIn,
+        address recipient
+    )
+        external
+        view
+        returns (uint256 amountOut, uint256 bridgeFee)
+    {
+        if (amountIn == 0) {
+            return (0, 0);
+        }
+
+        amountOut = _quoteSwapFromETH(amountIn);
+        bridgeFee = metaERC20Hub.quoteTransferRemote(recipientDomain, bytes32(uint256(uint160(recipient))), amountOut);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -312,6 +358,59 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
         emit SwappedAndBridged(msg.sender, amountIn, amountOut, recipientAddress, transferId);
     }
 
+    /**
+     * @dev Internal function to execute ETH→WETH→USDC→TRUST swap and bridge after ETH received
+     * @param ethAmountForSwap Amount of ETH to use for swap (msg.value minus bridge fee estimate)
+     * @param minAmountOut Minimum acceptable amount of TRUST to receive
+     * @param recipientAddress Recipient address on the destination chain
+     * @return amountOut Actual amount of TRUST received and bridged
+     * @return transferId Unique cross-chain transfer ID from Metalayer
+     */
+    function _executeSwapFromETHAndBridge(
+        uint256 ethAmountForSwap,
+        uint256 minAmountOut,
+        bytes32 recipientAddress
+    )
+        internal
+        returns (uint256 amountOut, bytes32 transferId)
+    {
+        IWETH(weth).deposit{ value: ethAmountForSwap }();
+
+        IAerodromeRouter.Route[] memory routes = new IAerodromeRouter.Route[](2);
+        routes[0] = IAerodromeRouter.Route({ from: weth, to: address(usdcToken), stable: false, factory: poolFactory });
+        routes[1] = IAerodromeRouter.Route({
+            from: address(usdcToken), to: address(trustToken), stable: false, factory: poolFactory
+        });
+
+        IWETH(weth).approve(address(aerodromeRouter), ethAmountForSwap);
+
+        uint256 swapDeadline = block.timestamp + defaultSwapDeadline;
+
+        uint256[] memory amounts = aerodromeRouter.swapExactTokensForTokens(
+            ethAmountForSwap, minAmountOut, routes, address(this), swapDeadline
+        );
+
+        amountOut = amounts[amounts.length - 1];
+
+        trustToken.safeIncreaseAllowance(address(metaERC20Hub), amountOut);
+
+        uint256 bridgeFee = metaERC20Hub.quoteTransferRemote(recipientDomain, recipientAddress, amountOut);
+
+        uint256 ethRemaining = address(this).balance;
+        if (ethRemaining < bridgeFee) revert TrustSwapRouter_InsufficientBridgeFee();
+
+        transferId = metaERC20Hub.transferRemote{ value: bridgeFee }(
+            recipientDomain, recipientAddress, amountOut, bridgeGasLimit, finalityState
+        );
+
+        if (ethRemaining > bridgeFee) {
+            (bool success,) = msg.sender.call{ value: ethRemaining - bridgeFee }("");
+            require(success, "ETH refund failed");
+        }
+
+        emit SwappedAndBridgedFromETH(msg.sender, ethAmountForSwap, amountOut, recipientAddress, transferId);
+    }
+
     /// @dev Internal function to set the USDC address
     function _setUSDCAddress(address newUSDC) internal {
         if (newUSDC == address(0)) revert TrustSwapRouter_InvalidAddress();
@@ -372,5 +471,23 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
     function _setFinalityState(FinalityState newFinalityState) internal {
         finalityState = newFinalityState;
         emit FinalityStateSet(newFinalityState);
+    }
+
+    /**
+     * @dev Internal function to quote ETH→WETH→USDC→TRUST swap
+     * @param amountIn Amount of ETH to quote
+     * @return amountOut Expected amount of TRUST out
+     */
+    function _quoteSwapFromETH(uint256 amountIn) internal view returns (uint256 amountOut) {
+        if (amountIn == 0) return 0;
+
+        IAerodromeRouter.Route[] memory routes = new IAerodromeRouter.Route[](2);
+        routes[0] = IAerodromeRouter.Route({ from: weth, to: address(usdcToken), stable: false, factory: poolFactory });
+        routes[1] = IAerodromeRouter.Route({
+            from: address(usdcToken), to: address(trustToken), stable: false, factory: poolFactory
+        });
+
+        uint256[] memory amounts = aerodromeRouter.getAmountsOut(amountIn, routes);
+        return amounts[amounts.length - 1];
     }
 }

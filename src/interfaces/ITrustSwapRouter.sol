@@ -91,6 +91,18 @@ interface ITrustSwapRouter {
         address indexed user, uint256 amountIn, uint256 amountOut, bytes32 recipientAddress, bytes32 transferId
     );
 
+    /**
+     * @notice Emitted when a user swaps ETH for TRUST and bridges to destination chain
+     * @param user The address of the user who performed the swap and bridge
+     * @param ethAmountIn The amount of ETH swapped (not including bridge fee)
+     * @param amountOut The amount of TRUST tokens received and bridged
+     * @param recipientAddress The recipient address on the destination chain
+     * @param transferId The unique cross-chain transfer ID from Metalayer
+     */
+    event SwappedAndBridgedFromETH(
+        address indexed user, uint256 ethAmountIn, uint256 amountOut, bytes32 recipientAddress, bytes32 transferId
+    );
+
     /* =================================================== */
     /*                       ERRORS                        */
     /* =================================================== */
@@ -118,6 +130,9 @@ interface ITrustSwapRouter {
 
     /// @dev Thrown when an invalid bridge gas limit is provided
     error TrustSwapRouter_InvalidBridgeGasLimit();
+
+    /// @dev Thrown when insufficient ETH is provided for swap and bridge
+    error TrustSwapRouter_InsufficientETH();
 
     /* =================================================== */
     /*                      FUNCTIONS                      */
@@ -209,14 +224,14 @@ interface ITrustSwapRouter {
      * @dev Caller must approve this contract to spend `amountIn` USDC first and provide sufficient ETH for bridge fees
      * @param amountIn Amount of USDC to swap
      * @param minAmountOut Minimum acceptable amount of TRUST to receive (slippage protection)
-     * @param recipientAddress Recipient address on the destination chain (bytes32 format)
+     * @param recipient Recipient address on the destination chain
      * @return amountOut Actual amount of TRUST received and bridged
      * @return transferId Unique cross-chain transfer ID from Metalayer
      */
-    function swapToTrust(
+    function swapAndBridge(
         uint256 amountIn,
         uint256 minAmountOut,
-        bytes32 recipientAddress
+        address recipient
     )
         external
         payable
@@ -227,7 +242,7 @@ interface ITrustSwapRouter {
      * @dev If `permit()` fails, proceeds only if the caller already granted sufficient USDC allowance
      * @param amountIn Amount of USDC to swap
      * @param minAmountOut Minimum acceptable amount of TRUST to receive (slippage protection)
-     * @param recipientAddress Recipient address on the destination chain (bytes32 format)
+     * @param recipient Recipient address on the destination chain
      * @param deadline Deadline for the permit signature
      * @param v ECDSA signature component
      * @param r ECDSA signature component
@@ -235,10 +250,10 @@ interface ITrustSwapRouter {
      * @return amountOut Amount of TRUST received and bridged
      * @return transferId Unique cross-chain transfer ID from Metalayer
      */
-    function swapToTrustWithPermit(
+    function swapAndBridgeWithPermit(
         uint256 amountIn,
         uint256 minAmountOut,
-        bytes32 recipientAddress,
+        address recipient,
         uint256 deadline,
         uint8 v,
         bytes32 r,
@@ -259,13 +274,52 @@ interface ITrustSwapRouter {
     /**
      * @notice Quotes the total cost (swap + bridge) for swapping and bridging USDC to TRUST
      * @param amountIn Amount of USDC to swap
-     * @param recipientAddress Recipient address on the destination chain
+     * @param recipient Recipient address on the destination chain
      * @return amountOut Expected amount of TRUST tokens to receive
      * @return bridgeFee Bridge fee in wei required for the transaction
      */
     function quoteSwapAndBridge(
         uint256 amountIn,
-        bytes32 recipientAddress
+        address recipient
+    )
+        external
+        view
+        returns (uint256 amountOut, uint256 bridgeFee);
+
+    /**
+     * @notice Swaps ETH for TRUST tokens via WETH→USDC→TRUST route and bridges to destination chain
+     * @dev User sends total ETH needed: some for swap, rest for bridge fee
+     *      Contract estimates bridge fee, uses remainder for swap, refunds any excess
+     * @param minAmountOut Minimum acceptable amount of TRUST to receive (slippage protection)
+     * @param recipient Recipient address on the destination chain
+     * @return amountOut Actual amount of TRUST received and bridged
+     * @return transferId Unique cross-chain transfer ID from Metalayer
+     */
+    function swapAndBridgeWithETH(
+        uint256 minAmountOut,
+        address recipient
+    )
+        external
+        payable
+        returns (uint256 amountOut, bytes32 transferId);
+
+    /**
+     * @notice Quotes expected TRUST out for `amountIn` ETH (via WETH→USDC→TRUST)
+     * @param amountIn Amount of ETH to quote (in wei)
+     * @return amountOut Expected amount of TRUST out
+     */
+    function quoteSwapFromETHToTrust(uint256 amountIn) external view returns (uint256 amountOut);
+
+    /**
+     * @notice Quotes the total cost (swap + bridge) for swapping and bridging ETH to TRUST
+     * @param amountIn Amount of ETH to use for swap (excludes bridge fee)
+     * @param recipient Recipient address on the destination chain
+     * @return amountOut Expected amount of TRUST tokens to receive
+     * @return bridgeFee Bridge fee in wei required for the transaction
+     */
+    function quoteSwapAndBridgeWithETH(
+        uint256 amountIn,
+        address recipient
     )
         external
         view
@@ -324,4 +378,10 @@ interface ITrustSwapRouter {
      * @return The finality state
      */
     function finalityState() external view returns (FinalityState);
+
+    /**
+     * @notice Returns the WETH token address
+     * @return The WETH token address
+     */
+    function weth() external view returns (address);
 }

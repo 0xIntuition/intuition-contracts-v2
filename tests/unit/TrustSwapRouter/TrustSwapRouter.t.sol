@@ -143,6 +143,25 @@ contract MockERC20Permit {
     }
 }
 
+contract MockWETH is MockERC20 {
+    constructor() MockERC20("Wrapped Ether", "WETH", 18) { }
+
+    function deposit() external payable {
+        balanceOf[msg.sender] += msg.value;
+        totalSupply += msg.value;
+    }
+
+    function withdraw(uint256 amount) external {
+        balanceOf[msg.sender] -= amount;
+        totalSupply -= amount;
+        payable(msg.sender).transfer(amount);
+    }
+
+    receive() external payable {
+        deposit();
+    }
+}
+
 contract MockAerodromeRouter {
     uint256 public outputMultiplier = 1e12;
     bool public shouldFail;
@@ -157,15 +176,18 @@ contract MockAerodromeRouter {
 
     function getAmountsOut(
         uint256 amountIn,
-        IAerodromeRouter.Route[] calldata
+        IAerodromeRouter.Route[] calldata routes
     )
         external
         view
         returns (uint256[] memory amounts)
     {
-        amounts = new uint256[](2);
+        uint256 routeLength = routes.length + 1;
+        amounts = new uint256[](routeLength);
         amounts[0] = amountIn;
-        amounts[1] = amountIn * outputMultiplier;
+        for (uint256 i = 1; i < routeLength; i++) {
+            amounts[i] = amounts[i - 1] * outputMultiplier;
+        }
     }
 
     function swapExactTokensForTokens(
@@ -180,14 +202,22 @@ contract MockAerodromeRouter {
     {
         require(!shouldFail, "MockAerodromeRouter: swap failed");
 
-        amounts = new uint256[](2);
+        uint256 routeLength = routes.length + 1;
+        amounts = new uint256[](routeLength);
         amounts[0] = amountIn;
-        amounts[1] = amountIn * outputMultiplier;
+        for (uint256 i = 1; i < routeLength; i++) {
+            amounts[i] = amounts[i - 1] * outputMultiplier;
+        }
 
-        require(amounts[1] >= amountOutMin, "MockAerodromeRouter: insufficient output");
+        uint256 finalAmount = amounts[routeLength - 1];
+        require(finalAmount >= amountOutMin, "MockAerodromeRouter: insufficient output");
 
         MockERC20(routes[0].from).burn(address(this), amountIn);
-        MockERC20(routes[0].to).mint(to, amounts[1]);
+        if (routes.length == 1) {
+            MockERC20(routes[0].to).mint(to, finalAmount);
+        } else {
+            MockERC20(routes[routes.length - 1].to).mint(to, finalAmount);
+        }
 
         return amounts;
     }
@@ -251,6 +281,7 @@ contract TrustSwapRouterTest is Test {
     MockERC20 public usdcToken;
     MockERC20 public trustToken;
     MockAerodromeRouter public aerodromeRouter;
+    MockMetaERC20Hub public metaERC20Hub;
     address public poolFactory;
 
     address public owner;
@@ -261,6 +292,9 @@ contract TrustSwapRouterTest is Test {
     uint256 public constant DEFAULT_SWAP_DEADLINE = 30 minutes;
     uint256 public constant USDC_DECIMALS = 6;
     uint256 public constant TRUST_DECIMALS = 18;
+    uint32 public constant RECIPIENT_DOMAIN = 1155;
+    uint256 public constant BRIDGE_GAS_LIMIT = 100_000;
+    FinalityState public constant FINALITY_STATE = FinalityState.INSTANT;
 
     function setUp() public {
         owner = makeAddr("owner");
@@ -272,6 +306,7 @@ contract TrustSwapRouterTest is Test {
         usdcToken = new MockERC20("USD Coin", "USDC", uint8(USDC_DECIMALS));
         trustToken = new MockERC20("Trust Token", "TRUST", uint8(TRUST_DECIMALS));
         aerodromeRouter = new MockAerodromeRouter();
+        metaERC20Hub = new MockMetaERC20Hub();
 
         trustSwapRouterImplementation = new TrustSwapRouter();
 
@@ -282,6 +317,10 @@ contract TrustSwapRouterTest is Test {
             address(trustToken),
             address(aerodromeRouter),
             poolFactory,
+            address(metaERC20Hub),
+            RECIPIENT_DOMAIN,
+            BRIDGE_GAS_LIMIT,
+            FINALITY_STATE,
             DEFAULT_SWAP_DEADLINE
         );
 
@@ -334,6 +373,10 @@ contract TrustSwapRouterTest is Test {
             address(trustToken),
             address(aerodromeRouter),
             poolFactory,
+            address(metaERC20Hub),
+            RECIPIENT_DOMAIN,
+            BRIDGE_GAS_LIMIT,
+            FINALITY_STATE,
             DEFAULT_SWAP_DEADLINE
         );
     }
@@ -346,7 +389,16 @@ contract TrustSwapRouterTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(ITrustSwapRouter.TrustSwapRouter_InvalidAddress.selector));
         newRouter.initialize(
-            owner, address(0), address(trustToken), address(aerodromeRouter), poolFactory, DEFAULT_SWAP_DEADLINE
+            owner,
+            address(0),
+            address(trustToken),
+            address(aerodromeRouter),
+            poolFactory,
+            address(metaERC20Hub),
+            RECIPIENT_DOMAIN,
+            BRIDGE_GAS_LIMIT,
+            FINALITY_STATE,
+            DEFAULT_SWAP_DEADLINE
         );
     }
 
@@ -358,7 +410,16 @@ contract TrustSwapRouterTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(ITrustSwapRouter.TrustSwapRouter_InvalidAddress.selector));
         newRouter.initialize(
-            owner, address(usdcToken), address(0), address(aerodromeRouter), poolFactory, DEFAULT_SWAP_DEADLINE
+            owner,
+            address(usdcToken),
+            address(0),
+            address(aerodromeRouter),
+            poolFactory,
+            address(metaERC20Hub),
+            RECIPIENT_DOMAIN,
+            BRIDGE_GAS_LIMIT,
+            FINALITY_STATE,
+            DEFAULT_SWAP_DEADLINE
         );
     }
 
@@ -370,7 +431,16 @@ contract TrustSwapRouterTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(ITrustSwapRouter.TrustSwapRouter_InvalidAddress.selector));
         newRouter.initialize(
-            owner, address(usdcToken), address(trustToken), address(0), poolFactory, DEFAULT_SWAP_DEADLINE
+            owner,
+            address(usdcToken),
+            address(trustToken),
+            address(0),
+            poolFactory,
+            address(metaERC20Hub),
+            RECIPIENT_DOMAIN,
+            BRIDGE_GAS_LIMIT,
+            FINALITY_STATE,
+            DEFAULT_SWAP_DEADLINE
         );
     }
 
@@ -382,7 +452,16 @@ contract TrustSwapRouterTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(ITrustSwapRouter.TrustSwapRouter_InvalidAddress.selector));
         newRouter.initialize(
-            owner, address(usdcToken), address(trustToken), address(aerodromeRouter), address(0), DEFAULT_SWAP_DEADLINE
+            owner,
+            address(usdcToken),
+            address(trustToken),
+            address(aerodromeRouter),
+            address(0),
+            address(metaERC20Hub),
+            RECIPIENT_DOMAIN,
+            BRIDGE_GAS_LIMIT,
+            FINALITY_STATE,
+            DEFAULT_SWAP_DEADLINE
         );
     }
 
@@ -393,13 +472,33 @@ contract TrustSwapRouterTest is Test {
         TrustSwapRouter newRouter = TrustSwapRouter(address(newProxy));
 
         vm.expectRevert(abi.encodeWithSelector(ITrustSwapRouter.TrustSwapRouter_InvalidDeadline.selector));
-        newRouter.initialize(owner, address(usdcToken), address(trustToken), address(aerodromeRouter), poolFactory, 0);
+        newRouter.initialize(
+            owner,
+            address(usdcToken),
+            address(trustToken),
+            address(aerodromeRouter),
+            poolFactory,
+            address(metaERC20Hub),
+            RECIPIENT_DOMAIN,
+            BRIDGE_GAS_LIMIT,
+            FINALITY_STATE,
+            0
+        );
     }
 
     function test_initialize_revertsOnDoubleInitialization() public {
         vm.expectRevert();
         trustSwapRouter.initialize(
-            owner, address(usdcToken), address(trustToken), address(aerodromeRouter), poolFactory, DEFAULT_SWAP_DEADLINE
+            owner,
+            address(usdcToken),
+            address(trustToken),
+            address(aerodromeRouter),
+            poolFactory,
+            address(metaERC20Hub),
+            RECIPIENT_DOMAIN,
+            BRIDGE_GAS_LIMIT,
+            FINALITY_STATE,
+            DEFAULT_SWAP_DEADLINE
         );
     }
 
@@ -537,23 +636,21 @@ contract TrustSwapRouterTest is Test {
         uint256 minAmountOut = expectedOutput;
 
         uint256 userUsdcBalanceBefore = usdcToken.balanceOf(user);
-        uint256 userTrustBalanceBefore = trustToken.balanceOf(user);
 
-        vm.expectEmit(true, true, true, true);
-        emit ITrustSwapRouter.SwappedToTrust(user, amountIn, expectedOutput);
+        vm.deal(user, 1 ether);
 
         vm.prank(user);
-        uint256 amountOut = trustSwapRouter.swapToTrust(amountIn, minAmountOut);
+        (uint256 amountOut,) =
+            trustSwapRouter.swapAndBridge{ value: metaERC20Hub.BRIDGE_FEE() }(amountIn, minAmountOut, user);
 
         assertEq(amountOut, expectedOutput);
         assertEq(usdcToken.balanceOf(user), userUsdcBalanceBefore - amountIn);
-        assertEq(trustToken.balanceOf(user), userTrustBalanceBefore + expectedOutput);
     }
 
     function test_swapToTrust_revertsOnZeroAmountIn() public {
         vm.prank(user);
         vm.expectRevert(abi.encodeWithSelector(ITrustSwapRouter.TrustSwapRouter_AmountInZero.selector));
-        trustSwapRouter.swapToTrust(0, 0);
+        trustSwapRouter.swapAndBridge(0, 0, user);
     }
 
     function test_swapToTrust_revertsOnInsufficientOutputAmount() public {
@@ -563,7 +660,7 @@ contract TrustSwapRouterTest is Test {
 
         vm.prank(user);
         vm.expectRevert();
-        trustSwapRouter.swapToTrust(amountIn, minAmountOut);
+        trustSwapRouter.swapAndBridge(amountIn, minAmountOut);
     }
 
     function test_swapToTrust_multipleUsersSequential() public {
@@ -572,10 +669,10 @@ contract TrustSwapRouterTest is Test {
         uint256 outputMultiplier = aerodromeRouter.outputMultiplier();
 
         vm.prank(alice);
-        uint256 aliceAmountOut = trustSwapRouter.swapToTrust(aliceAmountIn, 0);
+        uint256 aliceAmountOut = trustSwapRouter.swapAndBridge(aliceAmountIn, 0);
 
         vm.prank(bob);
-        uint256 bobAmountOut = trustSwapRouter.swapToTrust(bobAmountIn, 0);
+        uint256 bobAmountOut = trustSwapRouter.swapAndBridge(bobAmountIn, 0);
 
         assertEq(aliceAmountOut, aliceAmountIn * outputMultiplier);
         assertEq(bobAmountOut, bobAmountIn * outputMultiplier);
@@ -589,7 +686,7 @@ contract TrustSwapRouterTest is Test {
         vm.warp(1000);
 
         vm.prank(user);
-        trustSwapRouter.swapToTrust(amountIn, 0);
+        trustSwapRouter.swapAndBridge(amountIn, 0);
     }
 
     /* =================================================== */
@@ -617,7 +714,7 @@ contract TrustSwapRouterTest is Test {
         uint256 quotedOutput = trustSwapRouter.quoteSwapToTrust(amountIn);
 
         vm.prank(user);
-        uint256 actualOutput = trustSwapRouter.swapToTrust(amountIn, 0);
+        uint256 actualOutput = trustSwapRouter.swapAndBridge(amountIn, 0);
 
         assertEq(quotedOutput, actualOutput);
     }
@@ -690,7 +787,7 @@ contract TrustSwapRouterTest is Test {
         uint256 expectedOutput = amountIn * aerodromeRouter.outputMultiplier();
 
         vm.prank(user);
-        uint256 amountOut = trustSwapRouter.swapToTrust(amountIn, 0);
+        uint256 amountOut = trustSwapRouter.swapAndBridge(amountIn, 0);
 
         assertEq(amountOut, expectedOutput);
     }
@@ -763,7 +860,7 @@ contract TrustSwapRouterTest is Test {
         usdcToken.mint(user, amountIn);
 
         vm.prank(user);
-        uint256 amountOut = trustSwapRouter.swapToTrust(amountIn, 0);
+        uint256 amountOut = trustSwapRouter.swapAndBridge(amountIn, 0);
 
         assertEq(amountOut, expectedOutput);
     }
@@ -775,7 +872,7 @@ contract TrustSwapRouterTest is Test {
         usdcToken.mint(user, amountIn);
 
         vm.prank(user);
-        uint256 amountOut = trustSwapRouter.swapToTrust(amountIn, 0);
+        uint256 amountOut = trustSwapRouter.swapAndBridge(amountIn, 0);
 
         assertEq(amountOut, expectedOutput);
     }
@@ -785,7 +882,7 @@ contract TrustSwapRouterTest is Test {
         uint256 expectedOutput = amountIn * aerodromeRouter.outputMultiplier();
 
         vm.prank(user);
-        uint256 amountOut = trustSwapRouter.swapToTrust(amountIn, expectedOutput);
+        uint256 amountOut = trustSwapRouter.swapAndBridge(amountIn, expectedOutput);
 
         assertEq(amountOut, expectedOutput);
     }
@@ -915,7 +1012,7 @@ contract TrustSwapRouterTest is Test {
         emit ITrustSwapRouter.SwappedToTrust(user, amountIn, expectedOutput);
 
         vm.prank(user);
-        trustSwapRouter.swapToTrust(amountIn, 0);
+        trustSwapRouter.swapAndBridge(amountIn, 0);
     }
 
     /* =================================================== */
@@ -1049,7 +1146,7 @@ contract TrustSwapRouterPermitTest is Test {
         emit ITrustSwapRouter.SwappedToTrust(user, amountIn, expectedOutput);
 
         vm.prank(user);
-        uint256 amountOut = trustSwapRouter.swapToTrustWithPermit(amountIn, 0, deadline, v, r, s);
+        uint256 amountOut = trustSwapRouter.swapAndBridgeWithPermit(amountIn, 0, deadline, v, r, s);
 
         assertEq(amountOut, expectedOutput);
         assertEq(usdcToken.balanceOf(user), userUsdcBalanceBefore - amountIn);
@@ -1063,7 +1160,7 @@ contract TrustSwapRouterPermitTest is Test {
 
         vm.prank(user);
         vm.expectRevert(abi.encodeWithSelector(ITrustSwapRouter.TrustSwapRouter_AmountInZero.selector));
-        trustSwapRouter.swapToTrustWithPermit(0, 0, deadline, v, r, s);
+        trustSwapRouter.swapAndBridgeWithPermit(0, 0, deadline, v, r, s);
     }
 
     function test_swapToTrustWithPermit_revertsOnExpiredDeadline() public {
@@ -1075,7 +1172,7 @@ contract TrustSwapRouterPermitTest is Test {
 
         vm.prank(user);
         vm.expectRevert(abi.encodeWithSelector(ITrustSwapRouter.TrustSwapRouter_PermitExpired.selector));
-        trustSwapRouter.swapToTrustWithPermit(amountIn, 0, deadline, v, r, s);
+        trustSwapRouter.swapAndBridgeWithPermit(amountIn, 0, deadline, v, r, s);
     }
 
     function test_swapToTrustWithPermit_revertsOnInvalidSignature() public {
@@ -1088,7 +1185,7 @@ contract TrustSwapRouterPermitTest is Test {
 
         vm.prank(user);
         vm.expectRevert(abi.encodeWithSelector(ITrustSwapRouter.TrustSwapRouter_PermitFailed.selector));
-        trustSwapRouter.swapToTrustWithPermit(amountIn, 0, deadline, v, r, s);
+        trustSwapRouter.swapAndBridgeWithPermit(amountIn, 0, deadline, v, r, s);
     }
 
     function test_swapToTrustWithPermit_succeedsWithExistingAllowance() public {
@@ -1104,7 +1201,7 @@ contract TrustSwapRouterPermitTest is Test {
             _getPermitSignature(wrongPrivateKey, user, address(trustSwapRouter), amountIn, 0, deadline);
 
         vm.prank(user);
-        uint256 amountOut = trustSwapRouter.swapToTrustWithPermit(amountIn, 0, deadline, v, r, s);
+        uint256 amountOut = trustSwapRouter.swapAndBridgeWithPermit(amountIn, 0, deadline, v, r, s);
 
         assertEq(amountOut, expectedOutput);
     }
@@ -1120,7 +1217,7 @@ contract TrustSwapRouterPermitTest is Test {
 
         vm.prank(user);
         vm.expectRevert();
-        trustSwapRouter.swapToTrustWithPermit(amountIn, minAmountOut, deadline, v, r, s);
+        trustSwapRouter.swapAndBridgeWithPermit(amountIn, minAmountOut, deadline, v, r, s);
     }
 
     function test_swapToTrustWithPermit_incrementsNonce() public {
@@ -1133,7 +1230,7 @@ contract TrustSwapRouterPermitTest is Test {
             _getPermitSignature(userPrivateKey, user, address(trustSwapRouter), amountIn, 0, deadline);
 
         vm.prank(user);
-        trustSwapRouter.swapToTrustWithPermit(amountIn, 0, deadline, v, r, s);
+        trustSwapRouter.swapAndBridgeWithPermit(amountIn, 0, deadline, v, r, s);
 
         assertEq(usdcToken.nonces(user), 1);
     }
@@ -1146,13 +1243,13 @@ contract TrustSwapRouterPermitTest is Test {
             _getPermitSignature(userPrivateKey, user, address(trustSwapRouter), amountIn, 0, deadline);
 
         vm.prank(user);
-        trustSwapRouter.swapToTrustWithPermit(amountIn, 0, deadline, v1, r1, s1);
+        trustSwapRouter.swapAndBridgeWithPermit(amountIn, 0, deadline, v1, r1, s1);
 
         (uint8 v2, bytes32 r2, bytes32 s2) =
             _getPermitSignature(userPrivateKey, user, address(trustSwapRouter), amountIn, 1, deadline);
 
         vm.prank(user);
-        trustSwapRouter.swapToTrustWithPermit(amountIn, 0, deadline, v2, r2, s2);
+        trustSwapRouter.swapAndBridgeWithPermit(amountIn, 0, deadline, v2, r2, s2);
 
         assertEq(usdcToken.nonces(user), 2);
     }
@@ -1168,7 +1265,7 @@ contract TrustSwapRouterPermitTest is Test {
             _getPermitSignature(userPrivateKey, user, address(trustSwapRouter), amountIn, 0, deadline);
 
         vm.prank(user);
-        uint256 amountOut = trustSwapRouter.swapToTrustWithPermit(amountIn, 0, deadline, v, r, s);
+        uint256 amountOut = trustSwapRouter.swapAndBridgeWithPermit(amountIn, 0, deadline, v, r, s);
 
         assertEq(amountOut, expectedOutput);
     }
@@ -1183,7 +1280,7 @@ contract TrustSwapRouterPermitTest is Test {
             _getPermitSignature(userPrivateKey, user, address(trustSwapRouter), amountIn, 0, deadline);
 
         vm.prank(user);
-        uint256 amountOut = trustSwapRouter.swapToTrustWithPermit(amountIn, 0, deadline, v, r, s);
+        uint256 amountOut = trustSwapRouter.swapAndBridgeWithPermit(amountIn, 0, deadline, v, r, s);
 
         assertEq(amountOut, expectedOutput);
     }
@@ -1297,7 +1394,7 @@ contract TrustSwapRouterForkTest is Test {
         uint256 userTrustBefore = trust.balanceOf(user);
 
         vm.prank(user);
-        uint256 amountOut = trustSwapRouter.swapToTrust(amountIn, minAmountOut);
+        uint256 amountOut = trustSwapRouter.swapAndBridge(amountIn, minAmountOut);
 
         uint256 userUsdcAfter = usdc.balanceOf(user);
         uint256 userTrustAfter = trust.balanceOf(user);
@@ -1317,10 +1414,10 @@ contract TrustSwapRouterForkTest is Test {
         uint256 amountIn = 50e6;
 
         vm.prank(user);
-        uint256 firstSwapOut = trustSwapRouter.swapToTrust(amountIn, 0);
+        uint256 firstSwapOut = trustSwapRouter.swapAndBridge(amountIn, 0);
 
         vm.prank(user);
-        uint256 secondSwapOut = trustSwapRouter.swapToTrust(amountIn, 0);
+        uint256 secondSwapOut = trustSwapRouter.swapAndBridge(amountIn, 0);
 
         console2.log("Multiple swaps:");
         console2.log("  First swap (50 USDC):", firstSwapOut);
@@ -1350,7 +1447,7 @@ contract TrustSwapRouterForkTest is Test {
         uint256 userTrustBefore = trust.balanceOf(user);
 
         vm.prank(user);
-        uint256 amountOut = trustSwapRouter.swapToTrustWithPermit(amountIn, minAmountOut, deadline, v, r, s);
+        uint256 amountOut = trustSwapRouter.swapAndBridgeWithPermit(amountIn, minAmountOut, deadline, v, r, s);
 
         console2.log("Permit swap executed:");
         console2.log("  USDC spent:", userUsdcBefore - usdc.balanceOf(user));
