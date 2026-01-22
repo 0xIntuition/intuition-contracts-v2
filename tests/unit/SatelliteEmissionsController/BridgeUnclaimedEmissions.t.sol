@@ -96,7 +96,7 @@ contract BridgeUnclaimedEmissionsTest is TrustBondingBase {
         // Advance to epoch 4 so epoch 2 rewards are bridgeable
         _advanceToEpoch(4);
 
-        uint256 totalEpochRewards = protocol.trustBonding.emissionsForEpoch(2);
+        uint256 totalEpochRewards = protocol.satelliteEmissionsController.getEmissionsAtEpoch(2);
         uint256 unclaimedRewards = protocol.trustBonding.getUnclaimedRewardsForEpoch(2);
 
         assertEq(unclaimedRewards, totalEpochRewards, "All rewards should be unclaimed");
@@ -330,7 +330,7 @@ contract BridgeUnclaimedEmissionsTest is TrustBondingBase {
         _advanceToEpoch(4);
 
         // Calculate expected unclaimed rewards (Bob + Charlie's rewards)
-        uint256 totalEpoch2Rewards = protocol.trustBonding.emissionsForEpoch(2);
+        uint256 totalEpoch2Rewards = protocol.satelliteEmissionsController.getEmissionsAtEpoch(2);
         uint256 aliceClaimedRewards = protocol.trustBonding.userClaimedRewardsForEpoch(users.alice, 2);
         uint256 expectedUnclaimed = totalEpoch2Rewards - aliceClaimedRewards;
 
