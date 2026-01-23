@@ -8,6 +8,8 @@ import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/acc
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+import { IAerodromeFactory } from "src/interfaces/external/aerodrome/IAerodromeFactory.sol";
+import { IAerodromePool } from "src/interfaces/external/aerodrome/IAerodromePool.sol";
 import { IAerodromeRouter } from "src/interfaces/external/aerodrome/IAerodromeRouter.sol";
 import { FinalityState, IMetaERC20Hub } from "src/interfaces/external/metalayer/IMetaERC20Hub.sol";
 import { IWETH } from "src/interfaces/external/IWETH.sol";
@@ -26,14 +28,23 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
                                 STATE
     //////////////////////////////////////////////////////////////*/
 
+    /// @notice Base mainnet USDC address
+    address public constant USDC_ADDRESS = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+
+    /// @notice Base mainnet TRUST address
+    address public constant TRUST_ADDRESS = 0x6cd905dF2Ed214b22e0d48FF17CD4200C1C6d8A3;
+
+    /// @notice Base mainnet WETH address (canonical Base WETH)
+    address public constant WETH_ADDRESS = 0x4200000000000000000000000000000000000006;
+
     /// @notice USDC token contract on Base
-    IERC20 public usdcToken;
+    IERC20 public constant usdcToken = IERC20(USDC_ADDRESS);
 
     /// @notice TRUST token contract on Base
-    IERC20 public trustToken;
+    IERC20 public constant trustToken = IERC20(TRUST_ADDRESS);
 
     /// @notice WETH token contract on Base (canonical Base WETH)
-    address public immutable weth;
+    address public constant weth = WETH_ADDRESS;
 
     /// @notice Aerodrome Router contract on Base
     IAerodromeRouter public aerodromeRouter;
@@ -56,13 +67,18 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
     /// @notice Finality state for bridge transactions
     FinalityState public finalityState;
 
+    /// @notice Minimum TRUST output threshold for route viability
+    uint256 public minimumOutputThreshold;
+
+    /// @notice Maximum slippage tolerance in basis points (10000 = 100%)
+    uint256 public maxSlippageBps;
+
     /*//////////////////////////////////////////////////////////////
                             CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
-        weth = 0x4200000000000000000000000000000000000006; // Base canonical WETH
         _disableInitializers();
     }
 
@@ -73,15 +89,15 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
     /// @inheritdoc ITrustSwapRouter
     function initialize(
         address _owner,
-        address usdcAddress,
-        address trustAddress,
         address aerodromeRouterAddress,
         address poolFactoryAddress,
         address metaERC20HubAddress,
         uint32 _recipientDomain,
         uint256 _bridgeGasLimit,
         FinalityState _finalityState,
-        uint256 _defaultSwapDeadline
+        uint256 _defaultSwapDeadline,
+        uint256 _minimumOutputThreshold,
+        uint256 _maxSlippageBps
     )
         external
         initializer
@@ -89,8 +105,6 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
         __Ownable_init(_owner);
         __ReentrancyGuard_init();
 
-        _setUSDCAddress(usdcAddress);
-        _setTRUSTAddress(trustAddress);
         _setAerodromeRouter(aerodromeRouterAddress);
         _setPoolFactory(poolFactoryAddress);
         _setMetaERC20Hub(metaERC20HubAddress);
@@ -98,21 +112,13 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
         _setBridgeGasLimit(_bridgeGasLimit);
         _setFinalityState(_finalityState);
         _setDefaultSwapDeadline(_defaultSwapDeadline);
+        _setMinimumOutputThreshold(_minimumOutputThreshold);
+        _setMaxSlippageBps(_maxSlippageBps);
     }
 
     /*//////////////////////////////////////////////////////////////
                         ADMIN FUNCTIONS
     //////////////////////////////////////////////////////////////*/
-
-    /// @inheritdoc ITrustSwapRouter
-    function setUSDCAddress(address newUSDC) external onlyOwner {
-        _setUSDCAddress(newUSDC);
-    }
-
-    /// @inheritdoc ITrustSwapRouter
-    function setTRUSTAddress(address newTRUST) external onlyOwner {
-        _setTRUSTAddress(newTRUST);
-    }
 
     /// @inheritdoc ITrustSwapRouter
     function setAerodromeRouter(address newRouter) external onlyOwner {
@@ -147,6 +153,16 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
     /// @inheritdoc ITrustSwapRouter
     function setFinalityState(FinalityState newFinalityState) external onlyOwner {
         _setFinalityState(newFinalityState);
+    }
+
+    /// @inheritdoc ITrustSwapRouter
+    function setMinimumOutputThreshold(uint256 newThreshold) external onlyOwner {
+        _setMinimumOutputThreshold(newThreshold);
+    }
+
+    /// @inheritdoc ITrustSwapRouter
+    function setMaxSlippageBps(uint256 newMaxSlippageBps) external onlyOwner {
+        _setMaxSlippageBps(newMaxSlippageBps);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -228,6 +244,40 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
         return _executeSwapFromETHAndBridge(ethAmountForSwap, minAmountOut, recipientAddress);
     }
 
+    /// @inheritdoc ITrustSwapRouter
+    function swapArbitraryTokenAndBridge(
+        address tokenIn,
+        uint256 amountIn,
+        uint256 minAmountOut,
+        address recipient
+    )
+        external
+        payable
+        nonReentrant
+        returns (uint256 amountOut, bytes32 transferId)
+    {
+        if (amountIn == 0) revert TrustSwapRouter_AmountInZero();
+        if (tokenIn == address(0) || tokenIn == address(trustToken)) {
+            revert TrustSwapRouter_InvalidToken();
+        }
+
+        IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
+
+        bytes32 recipientAddress = bytes32(uint256(uint160(recipient)));
+
+        (IAerodromeRouter.Route[] memory routes, uint256 quotedOut) = _discoverRoute(tokenIn, amountIn);
+
+        uint256 minOutFromMaxSlippage = maxSlippageBps >= 10_000 ? 0 : (quotedOut * (10_000 - maxSlippageBps)) / 10_000;
+
+        if (minAmountOut == 0) {
+            minAmountOut = minOutFromMaxSlippage;
+        } else if (minAmountOut < minOutFromMaxSlippage) {
+            revert TrustSwapRouter_OutputBelowThreshold();
+        }
+
+        return _executeArbitrarySwapAndBridge(tokenIn, amountIn, minAmountOut, routes, recipientAddress);
+    }
+
     /*//////////////////////////////////////////////////////////////
                           VIEW FUNCTIONS
     //////////////////////////////////////////////////////////////*/
@@ -292,6 +342,26 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
 
         amountOut = _quoteSwapFromETH(amountIn);
         bridgeFee = metaERC20Hub.quoteTransferRemote(recipientDomain, bytes32(uint256(uint160(recipient))), amountOut);
+    }
+
+    /// @inheritdoc ITrustSwapRouter
+    function quoteArbitraryTokenSwap(
+        address tokenIn,
+        uint256 amountIn
+    )
+        external
+        view
+        returns (uint256 amountOut, uint256 routeHops)
+    {
+        if (amountIn == 0) {
+            return (0, 0);
+        }
+        if (tokenIn == address(0) || tokenIn == address(trustToken)) {
+            revert TrustSwapRouter_InvalidToken();
+        }
+
+        (IAerodromeRouter.Route[] memory routes, uint256 quotedOut) = _discoverRoute(tokenIn, amountIn);
+        return (quotedOut, routes.length);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -411,18 +481,234 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
         emit SwappedAndBridgedFromETH(msg.sender, ethAmountForSwap, amountOut, recipientAddress, transferId);
     }
 
-    /// @dev Internal function to set the USDC address
-    function _setUSDCAddress(address newUSDC) internal {
-        if (newUSDC == address(0)) revert TrustSwapRouter_InvalidAddress();
-        usdcToken = IERC20(newUSDC);
-        emit USDCAddressSet(newUSDC);
+    /**
+     * @dev Discovers a viable route from `tokenIn` to TRUST (1-3 hops)
+     */
+    function _discoverRoute(
+        address tokenIn,
+        uint256 amountIn
+    )
+        internal
+        view
+        returns (IAerodromeRouter.Route[] memory routes, uint256 amountOut)
+    {
+        bool hasRoute;
+
+        (routes, hasRoute) = _build1HopRoute(tokenIn);
+        if (hasRoute) {
+            amountOut = _quoteRoute(amountIn, routes);
+            if (_isViableOutput(amountOut)) {
+                return (routes, amountOut);
+            }
+        }
+
+        (routes, hasRoute) = _build2HopRoute(tokenIn);
+        if (hasRoute) {
+            amountOut = _quoteRoute(amountIn, routes);
+            if (_isViableOutput(amountOut)) {
+                return (routes, amountOut);
+            }
+        }
+
+        (routes, hasRoute) = _build3HopRoute(tokenIn);
+        if (hasRoute) {
+            amountOut = _quoteRoute(amountIn, routes);
+            if (_isViableOutput(amountOut)) {
+                return (routes, amountOut);
+            }
+        }
+
+        revert TrustSwapRouter_NoViableRoute();
     }
 
-    /// @dev Internal function to set the TRUST address
-    function _setTRUSTAddress(address newTRUST) internal {
-        if (newTRUST == address(0)) revert TrustSwapRouter_InvalidAddress();
-        trustToken = IERC20(newTRUST);
-        emit TRUSTAddressSet(newTRUST);
+    /**
+     * @dev Returns true if a pool exists for the given pair and has liquidity
+     */
+    function _poolExistsAndHasLiquidity(address tokenA, address tokenB, bool stable) internal view returns (bool) {
+        address pool = IAerodromeFactory(poolFactory).getPool(tokenA, tokenB, stable);
+        if (pool == address(0)) {
+            return false;
+        }
+        return _hasLiquidity(pool);
+    }
+
+    /**
+     * @dev Checks if a pool has non-zero reserves
+     */
+    function _hasLiquidity(address pool) internal view returns (bool) {
+        (uint256 reserve0, uint256 reserve1,) = IAerodromePool(pool).getReserves();
+        return reserve0 > 0 && reserve1 > 0;
+    }
+
+    /**
+     * @dev Determines whether the pool should be stable or volatile
+     */
+    function _determinePoolStability(address tokenA, address tokenB) internal view returns (bool stable, bool exists) {
+        if (_poolExistsAndHasLiquidity(tokenA, tokenB, true)) {
+            return (true, true);
+        }
+        if (_poolExistsAndHasLiquidity(tokenA, tokenB, false)) {
+            return (false, true);
+        }
+        return (false, false);
+    }
+
+    /**
+     * @dev Builds a 1-hop route (tokenIn → TRUST)
+     */
+    function _build1HopRoute(address tokenIn)
+        internal
+        view
+        returns (IAerodromeRouter.Route[] memory routes, bool exists)
+    {
+        (bool stable, bool poolExists) = _determinePoolStability(tokenIn, address(trustToken));
+        if (!poolExists) {
+            return (routes, false);
+        }
+
+        routes = new IAerodromeRouter.Route[](1);
+        routes[0] =
+            IAerodromeRouter.Route({ from: tokenIn, to: address(trustToken), stable: stable, factory: poolFactory });
+
+        return (routes, true);
+    }
+
+    /**
+     * @dev Builds a 2-hop route (tokenIn → USDC → TRUST)
+     */
+    function _build2HopRoute(address tokenIn)
+        internal
+        view
+        returns (IAerodromeRouter.Route[] memory routes, bool exists)
+    {
+        if (tokenIn == address(usdcToken)) {
+            return (routes, false);
+        }
+
+        (bool stableA, bool poolAExists) = _determinePoolStability(tokenIn, address(usdcToken));
+        if (!poolAExists) {
+            return (routes, false);
+        }
+
+        (bool stableB, bool poolBExists) = _determinePoolStability(address(usdcToken), address(trustToken));
+        if (!poolBExists) {
+            return (routes, false);
+        }
+
+        routes = new IAerodromeRouter.Route[](2);
+        routes[0] =
+            IAerodromeRouter.Route({ from: tokenIn, to: address(usdcToken), stable: stableA, factory: poolFactory });
+        routes[1] = IAerodromeRouter.Route({
+            from: address(usdcToken), to: address(trustToken), stable: stableB, factory: poolFactory
+        });
+
+        return (routes, true);
+    }
+
+    /**
+     * @dev Builds a 3-hop route (tokenIn → WETH → USDC → TRUST)
+     */
+    function _build3HopRoute(address tokenIn)
+        internal
+        view
+        returns (IAerodromeRouter.Route[] memory routes, bool exists)
+    {
+        if (tokenIn == weth || tokenIn == address(usdcToken)) {
+            return (routes, false);
+        }
+
+        (bool stableA, bool poolAExists) = _determinePoolStability(tokenIn, weth);
+        if (!poolAExists) {
+            return (routes, false);
+        }
+
+        (bool stableB, bool poolBExists) = _determinePoolStability(weth, address(usdcToken));
+        if (!poolBExists) {
+            return (routes, false);
+        }
+
+        (bool stableC, bool poolCExists) = _determinePoolStability(address(usdcToken), address(trustToken));
+        if (!poolCExists) {
+            return (routes, false);
+        }
+
+        routes = new IAerodromeRouter.Route[](3);
+        routes[0] = IAerodromeRouter.Route({ from: tokenIn, to: weth, stable: stableA, factory: poolFactory });
+        routes[1] =
+            IAerodromeRouter.Route({ from: weth, to: address(usdcToken), stable: stableB, factory: poolFactory });
+        routes[2] = IAerodromeRouter.Route({
+            from: address(usdcToken), to: address(trustToken), stable: stableC, factory: poolFactory
+        });
+
+        return (routes, true);
+    }
+
+    /**
+     * @dev Quotes output for a route
+     */
+    function _quoteRoute(
+        uint256 amountIn,
+        IAerodromeRouter.Route[] memory routes
+    )
+        internal
+        view
+        returns (uint256 amountOut)
+    {
+        if (amountIn == 0 || routes.length == 0) {
+            return 0;
+        }
+
+        uint256[] memory amounts = aerodromeRouter.getAmountsOut(amountIn, routes);
+        return amounts[amounts.length - 1];
+    }
+
+    /**
+     * @dev Checks if a quoted output meets the minimum threshold
+     */
+    function _isViableOutput(uint256 amountOut) internal view returns (bool) {
+        return amountOut >= minimumOutputThreshold && amountOut > 0;
+    }
+
+    /**
+     * @dev Executes the swap and bridge for an arbitrary route
+     */
+    function _executeArbitrarySwapAndBridge(
+        address tokenIn,
+        uint256 amountIn,
+        uint256 minAmountOut,
+        IAerodromeRouter.Route[] memory routes,
+        bytes32 recipientAddress
+    )
+        internal
+        returns (uint256 amountOut, bytes32 transferId)
+    {
+        IERC20(tokenIn).safeIncreaseAllowance(address(aerodromeRouter), amountIn);
+
+        uint256 swapDeadline = block.timestamp + defaultSwapDeadline;
+
+        uint256[] memory amounts =
+            aerodromeRouter.swapExactTokensForTokens(amountIn, minAmountOut, routes, address(this), swapDeadline);
+
+        amountOut = amounts[amounts.length - 1];
+
+        trustToken.safeIncreaseAllowance(address(metaERC20Hub), amountOut);
+
+        uint256 bridgeFee = metaERC20Hub.quoteTransferRemote(recipientDomain, recipientAddress, amountOut);
+
+        if (msg.value < bridgeFee) revert TrustSwapRouter_InsufficientBridgeFee();
+
+        transferId = metaERC20Hub.transferRemote{ value: bridgeFee }(
+            recipientDomain, recipientAddress, amountOut, bridgeGasLimit, finalityState
+        );
+
+        if (msg.value > bridgeFee) {
+            (bool success,) = msg.sender.call{ value: msg.value - bridgeFee }("");
+            require(success, "ETH refund failed");
+        }
+
+        emit SwappedArbitraryTokenAndBridged(
+            msg.sender, tokenIn, amountIn, amountOut, routes.length, recipientAddress, transferId
+        );
     }
 
     /// @dev Internal function to set the Aerodrome Router address
@@ -471,6 +757,18 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
     function _setFinalityState(FinalityState newFinalityState) internal {
         finalityState = newFinalityState;
         emit FinalityStateSet(newFinalityState);
+    }
+
+    /// @dev Internal function to set the minimum output threshold
+    function _setMinimumOutputThreshold(uint256 newThreshold) internal {
+        minimumOutputThreshold = newThreshold;
+        emit MinimumOutputThresholdSet(newThreshold);
+    }
+
+    /// @dev Internal function to set the maximum slippage in basis points
+    function _setMaxSlippageBps(uint256 newMaxSlippageBps) internal {
+        maxSlippageBps = newMaxSlippageBps;
+        emit MaxSlippageBpsSet(newMaxSlippageBps);
     }
 
     /**

@@ -31,10 +31,6 @@ contract DeployTrustSwapRouter is SetupScript {
     // ===== Upgrades TimelockController Address =====
     address public constant UPGRADES_TIMELOCK_CONTROLLER = 0x1E442BbB08c98100b18fa830a88E8A57b5dF9157;
 
-    // ===== Base Mainnet Token Addresses =====
-    address public constant BASE_MAINNET_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
-    // Note: WETH address (0x4200000000000000000000000000000000000006) is hardcoded in TrustSwapRouter constructor
-
     // ===== Base Mainnet Aerodrome V2 Router / Factory =====
     address public constant BASE_MAINNET_AERODROME_ROUTER = 0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43;
     address public constant BASE_MAINNET_POOL_FACTORY = 0x420DD381b31aEf6683db6B902084cB0FFECe40Da;
@@ -49,6 +45,10 @@ contract DeployTrustSwapRouter is SetupScript {
 
     // ===== Default Swap Deadline =====
     uint256 public constant DEFAULT_SWAP_DEADLINE = 30 minutes;
+
+    // ===== Route Viability / Slippage Defaults =====
+    uint256 public constant MINIMUM_OUTPUT_THRESHOLD = 0;
+    uint256 public constant MAX_SLIPPAGE_BPS = 10_000;
 
     /// @dev Deployed contracts
     TrustSwapRouter public trustSwapRouterImplementation;
@@ -83,15 +83,15 @@ contract DeployTrustSwapRouter is SetupScript {
         bytes memory initData = abi.encodeWithSelector(
             TrustSwapRouter.initialize.selector,
             ADMIN,
-            BASE_MAINNET_USDC,
-            TRUST_TOKEN,
             BASE_MAINNET_AERODROME_ROUTER,
             BASE_MAINNET_POOL_FACTORY,
             BASE_MAINNET_META_ERC20_HUB,
             INTUITION_MAINNET_DOMAIN,
             BRIDGE_GAS_LIMIT,
             BRIDGE_FINALITY_STATE,
-            DEFAULT_SWAP_DEADLINE
+            DEFAULT_SWAP_DEADLINE,
+            MINIMUM_OUTPUT_THRESHOLD,
+            MAX_SLIPPAGE_BPS
         );
 
         // Deploy TrustSwapRouter proxy

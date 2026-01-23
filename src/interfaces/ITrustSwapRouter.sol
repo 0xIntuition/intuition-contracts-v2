@@ -18,18 +18,6 @@ interface ITrustSwapRouter {
     /* =================================================== */
 
     /**
-     * @notice Emitted when the USDC token address is updated
-     * @param newUSDC The new USDC token address
-     */
-    event USDCAddressSet(address indexed newUSDC);
-
-    /**
-     * @notice Emitted when the TRUST token address is updated
-     * @param newTRUST The new TRUST token address
-     */
-    event TRUSTAddressSet(address indexed newTRUST);
-
-    /**
      * @notice Emitted when the Aerodrome Router address is updated
      * @param newRouter The new Aerodrome Router address
      */
@@ -103,6 +91,38 @@ interface ITrustSwapRouter {
         address indexed user, uint256 ethAmountIn, uint256 amountOut, bytes32 recipientAddress, bytes32 transferId
     );
 
+    /**
+     * @notice Emitted when an arbitrary token is swapped for TRUST and bridged
+     * @param user The address of the user who performed the swap
+     * @param tokenIn The input token address
+     * @param amountIn The amount of input token swapped
+     * @param amountOut The amount of TRUST received and bridged
+     * @param routeHops Number of hops used (1, 2, or 3)
+     * @param recipientAddress The recipient address on the destination chain
+     * @param transferId The unique cross-chain transfer ID from Metalayer
+     */
+    event SwappedArbitraryTokenAndBridged(
+        address indexed user,
+        address indexed tokenIn,
+        uint256 amountIn,
+        uint256 amountOut,
+        uint256 routeHops,
+        bytes32 recipientAddress,
+        bytes32 transferId
+    );
+
+    /**
+     * @notice Emitted when minimum output threshold is updated
+     * @param newThreshold The new minimum output threshold
+     */
+    event MinimumOutputThresholdSet(uint256 newThreshold);
+
+    /**
+     * @notice Emitted when maximum slippage is updated
+     * @param newMaxSlippageBps The new maximum slippage in basis points
+     */
+    event MaxSlippageBpsSet(uint256 newMaxSlippageBps);
+
     /* =================================================== */
     /*                       ERRORS                        */
     /* =================================================== */
@@ -134,6 +154,15 @@ interface ITrustSwapRouter {
     /// @dev Thrown when insufficient ETH is provided for swap and bridge
     error TrustSwapRouter_InsufficientETH();
 
+    /// @dev Thrown when no viable route exists from input token to TRUST
+    error TrustSwapRouter_NoViableRoute();
+
+    /// @dev Thrown when input token address is invalid
+    error TrustSwapRouter_InvalidToken();
+
+    /// @dev Thrown when route output doesn't meet minimum threshold
+    error TrustSwapRouter_OutputBelowThreshold();
+
     /* =================================================== */
     /*                      FUNCTIONS                      */
     /* =================================================== */
@@ -141,8 +170,6 @@ interface ITrustSwapRouter {
     /**
      * @notice Initializes the TrustSwapRouter contract
      * @param owner Owner address for the Ownable2StepUpgradeable
-     * @param usdcAddress Address of the USDC token contract
-     * @param trustAddress Address of the TRUST token contract
      * @param aerodromeRouterAddress Address of the Aerodrome Router contract
      * @param poolFactoryAddress Address of the Aerodrome Pool Factory contract
      * @param metaERC20HubAddress Address of the MetaERC20Hub contract for bridging
@@ -150,32 +177,22 @@ interface ITrustSwapRouter {
      * @param bridgeGasLimit Gas limit for bridge transactions
      * @param finalityState Desired finality state for bridge transactions
      * @param defaultSwapDeadline Default deadline (in seconds) for swaps
+     * @param minimumOutputThreshold Minimum TRUST output threshold for route viability (in TRUST wei, 18 decimals)
+     * @param maxSlippageBps Maximum slippage tolerance in basis points (10000 = 100%)
      */
     function initialize(
         address owner,
-        address usdcAddress,
-        address trustAddress,
         address aerodromeRouterAddress,
         address poolFactoryAddress,
         address metaERC20HubAddress,
         uint32 recipientDomain,
         uint256 bridgeGasLimit,
         FinalityState finalityState,
-        uint256 defaultSwapDeadline
+        uint256 defaultSwapDeadline,
+        uint256 minimumOutputThreshold,
+        uint256 maxSlippageBps
     )
         external;
-
-    /**
-     * @notice Updates the USDC token contract address
-     * @param newUSDC Address of the new USDC token contract
-     */
-    function setUSDCAddress(address newUSDC) external;
-
-    /**
-     * @notice Updates the TRUST token contract address
-     * @param newTRUST Address of the new TRUST token contract
-     */
-    function setTRUSTAddress(address newTRUST) external;
 
     /**
      * @notice Updates the Aerodrome Router contract address
@@ -218,6 +235,18 @@ interface ITrustSwapRouter {
      * @param newFinalityState New finality state
      */
     function setFinalityState(FinalityState newFinalityState) external;
+
+    /**
+     * @notice Updates the minimum output threshold for route viability
+     * @param newThreshold New threshold in TRUST wei (18 decimals)
+     */
+    function setMinimumOutputThreshold(uint256 newThreshold) external;
+
+    /**
+     * @notice Updates the maximum slippage tolerance
+     * @param newMaxSlippageBps New max slippage in basis points (10000 = 100%)
+     */
+    function setMaxSlippageBps(uint256 newMaxSlippageBps) external;
 
     /**
      * @notice Swaps `amountIn` USDC for TRUST tokens and bridges them to the destination chain
@@ -326,6 +355,42 @@ interface ITrustSwapRouter {
         returns (uint256 amountOut, uint256 bridgeFee);
 
     /**
+     * @notice Swaps arbitrary ERC20 token for TRUST and bridges to destination chain
+     * @dev Automatically discovers best route (1-3 hops) or reverts if no viable route exists
+     * @param tokenIn Address of input token (must be ERC20)
+     * @param amountIn Amount of input token to swap
+     * @param minAmountOut Minimum acceptable amount of TRUST to receive (slippage protection)
+     * @param recipient Recipient address on the destination chain
+     * @return amountOut Actual amount of TRUST received and bridged
+     * @return transferId Unique cross-chain transfer ID from Metalayer
+     */
+    function swapArbitraryTokenAndBridge(
+        address tokenIn,
+        uint256 amountIn,
+        uint256 minAmountOut,
+        address recipient
+    )
+        external
+        payable
+        returns (uint256 amountOut, bytes32 transferId);
+
+    /**
+     * @notice Quotes expected TRUST out for arbitrary token input
+     * @dev Discovers optimal route and returns quote, reverts if no viable route
+     * @param tokenIn Address of input token
+     * @param amountIn Amount of input token
+     * @return amountOut Expected amount of TRUST out
+     * @return routeHops Number of hops in the discovered route (1, 2, or 3)
+     */
+    function quoteArbitraryTokenSwap(
+        address tokenIn,
+        uint256 amountIn
+    )
+        external
+        view
+        returns (uint256 amountOut, uint256 routeHops);
+
+    /**
      * @notice Returns the USDC token contract
      * @return The USDC token contract
      */
@@ -384,4 +449,16 @@ interface ITrustSwapRouter {
      * @return The WETH token address
      */
     function weth() external view returns (address);
+
+    /**
+     * @notice Returns the minimum output threshold for route viability
+     * @return The minimum output threshold in TRUST wei (18 decimals)
+     */
+    function minimumOutputThreshold() external view returns (uint256);
+
+    /**
+     * @notice Returns the maximum slippage tolerance
+     * @return The maximum slippage in basis points (10000 = 100%)
+     */
+    function maxSlippageBps() external view returns (uint256);
 }
