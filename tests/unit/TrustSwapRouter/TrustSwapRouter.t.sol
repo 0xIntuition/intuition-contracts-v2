@@ -290,8 +290,6 @@ contract MockMetaERC20Hub {
             msgValue: msg.value
         });
 
-        MockERC20(msg.sender).burn(msg.sender, _amount);
-
         return transferId;
     }
 
@@ -594,9 +592,10 @@ contract TrustSwapRouterTest is Test {
 
         vm.deal(user, 1 ether);
 
-        vm.prank(user);
+        vm.startPrank(user);
         (uint256 amountOut,) =
             trustSwapRouter.swapAndBridge{ value: metaERC20Hub.BRIDGE_FEE() }(amountIn, minAmountOut, user);
+        vm.stopPrank();
 
         assertEq(amountOut, expectedOutput);
         assertEq(usdcToken.balanceOf(user), userUsdcBalanceBefore - amountIn);
@@ -615,9 +614,10 @@ contract TrustSwapRouterTest is Test {
 
         vm.deal(user, 1 ether);
 
-        vm.prank(user);
+        vm.startPrank(user);
         vm.expectRevert();
         trustSwapRouter.swapAndBridge{ value: metaERC20Hub.BRIDGE_FEE() }(amountIn, minAmountOut, user);
+        vm.stopPrank();
     }
 
     function test_swapToTrust_multipleUsersSequential() public {
@@ -628,12 +628,14 @@ contract TrustSwapRouterTest is Test {
         vm.deal(alice, 1 ether);
         vm.deal(bob, 1 ether);
 
-        vm.prank(alice);
+        vm.startPrank(alice);
         (uint256 aliceAmountOut,) =
             trustSwapRouter.swapAndBridge{ value: metaERC20Hub.BRIDGE_FEE() }(aliceAmountIn, 0, alice);
+        vm.stopPrank();
 
-        vm.prank(bob);
+        vm.startPrank(bob);
         (uint256 bobAmountOut,) = trustSwapRouter.swapAndBridge{ value: metaERC20Hub.BRIDGE_FEE() }(bobAmountIn, 0, bob);
+        vm.stopPrank();
 
         assertEq(aliceAmountOut, aliceAmountIn * outputMultiplier);
         assertEq(bobAmountOut, bobAmountIn * outputMultiplier);
@@ -645,8 +647,9 @@ contract TrustSwapRouterTest is Test {
         vm.warp(1000);
         vm.deal(user, 1 ether);
 
-        vm.prank(user);
+        vm.startPrank(user);
         trustSwapRouter.swapAndBridge{ value: metaERC20Hub.BRIDGE_FEE() }(amountIn, 0, user);
+        vm.stopPrank();
     }
 
     /* =================================================== */
@@ -675,8 +678,9 @@ contract TrustSwapRouterTest is Test {
 
         vm.deal(user, 1 ether);
 
-        vm.prank(user);
+        vm.startPrank(user);
         (uint256 actualOutput,) = trustSwapRouter.swapAndBridge{ value: metaERC20Hub.BRIDGE_FEE() }(amountIn, 0, user);
+        vm.stopPrank();
 
         assertEq(quotedOutput, actualOutput);
     }
@@ -749,8 +753,9 @@ contract TrustSwapRouterTest is Test {
 
         uint256 expectedOutput = amountIn * aerodromeRouter.outputMultiplier();
 
-        vm.prank(user);
+        vm.startPrank(user);
         (uint256 amountOut,) = trustSwapRouter.swapAndBridge{ value: metaERC20Hub.BRIDGE_FEE() }(amountIn, 0, user);
+        vm.stopPrank();
 
         assertEq(amountOut, expectedOutput);
     }
@@ -805,8 +810,9 @@ contract TrustSwapRouterTest is Test {
         usdcToken.mint(user, amountIn);
         vm.deal(user, 1 ether);
 
-        vm.prank(user);
+        vm.startPrank(user);
         (uint256 amountOut,) = trustSwapRouter.swapAndBridge{ value: metaERC20Hub.BRIDGE_FEE() }(amountIn, 0, user);
+        vm.stopPrank();
 
         assertEq(amountOut, expectedOutput);
     }
@@ -818,8 +824,9 @@ contract TrustSwapRouterTest is Test {
         usdcToken.mint(user, amountIn);
         vm.deal(user, 1 ether);
 
-        vm.prank(user);
+        vm.startPrank(user);
         (uint256 amountOut,) = trustSwapRouter.swapAndBridge{ value: metaERC20Hub.BRIDGE_FEE() }(amountIn, 0, user);
+        vm.stopPrank();
 
         assertEq(amountOut, expectedOutput);
     }
@@ -830,9 +837,10 @@ contract TrustSwapRouterTest is Test {
 
         vm.deal(user, 1 ether);
 
-        vm.prank(user);
+        vm.startPrank(user);
         (uint256 amountOut,) =
             trustSwapRouter.swapAndBridge{ value: metaERC20Hub.BRIDGE_FEE() }(amountIn, expectedOutput, user);
+        vm.stopPrank();
 
         assertEq(amountOut, expectedOutput);
     }
@@ -934,8 +942,9 @@ contract TrustSwapRouterTest is Test {
 
         vm.deal(user, 1 ether);
 
-        vm.prank(user);
+        vm.startPrank(user);
         trustSwapRouter.swapAndBridge{ value: metaERC20Hub.BRIDGE_FEE() }(amountIn, 0, user);
+        vm.stopPrank();
     }
 
     /* =================================================== */
@@ -1403,9 +1412,10 @@ contract TrustSwapRouterForkTest is Test {
 
         vm.deal(user, 1 ether);
 
-        vm.prank(user);
+        vm.startPrank(user);
         (uint256 amountOut,) =
             trustSwapRouter.swapAndBridge{ value: metaERC20Hub.BRIDGE_FEE() }(amountIn, minAmountOut, user);
+        vm.stopPrank();
 
         uint256 userUsdcAfter = usdc.balanceOf(user);
         uint256 userTrustAfter = trust.balanceOf(user);
@@ -1426,11 +1436,10 @@ contract TrustSwapRouterForkTest is Test {
 
         vm.deal(user, 2 ether);
 
-        vm.prank(user);
+        vm.startPrank(user);
         (uint256 firstSwapOut,) = trustSwapRouter.swapAndBridge{ value: metaERC20Hub.BRIDGE_FEE() }(amountIn, 0, user);
-
-        vm.prank(user);
         (uint256 secondSwapOut,) = trustSwapRouter.swapAndBridge{ value: metaERC20Hub.BRIDGE_FEE() }(amountIn, 0, user);
+        vm.stopPrank();
 
         console2.log("Multiple swaps:");
         console2.log("  First swap (50 USDC):", firstSwapOut);
@@ -1461,10 +1470,11 @@ contract TrustSwapRouterForkTest is Test {
 
         vm.deal(user, 1 ether);
 
-        vm.prank(user);
+        vm.startPrank(user);
         (uint256 amountOut,) = trustSwapRouter.swapAndBridgeWithPermit{ value: metaERC20Hub.BRIDGE_FEE() }(
             amountIn, minAmountOut, user, deadline, v, r, s
         );
+        vm.stopPrank();
 
         console2.log("Permit swap executed:");
         console2.log("  USDC spent:", userUsdcBefore - usdc.balanceOf(user));
