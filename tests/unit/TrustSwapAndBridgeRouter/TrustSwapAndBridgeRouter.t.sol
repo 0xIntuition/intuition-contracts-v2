@@ -506,7 +506,9 @@ contract TrustSwapAndBridgeRouterTest is Test {
             new TransparentUpgradeableProxy(address(newImplementation), address(this), "");
         TrustSwapAndBridgeRouter newRouter = TrustSwapAndBridgeRouter(address(newProxy));
 
-        vm.expectRevert(abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_InvalidAddress.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_InvalidAddress.selector)
+        );
         newRouter.initialize(
             owner,
             address(0),
@@ -527,7 +529,9 @@ contract TrustSwapAndBridgeRouterTest is Test {
             new TransparentUpgradeableProxy(address(newImplementation), address(this), "");
         TrustSwapAndBridgeRouter newRouter = TrustSwapAndBridgeRouter(address(newProxy));
 
-        vm.expectRevert(abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_InvalidAddress.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_InvalidAddress.selector)
+        );
         newRouter.initialize(
             owner,
             address(aerodromeRouter),
@@ -548,7 +552,9 @@ contract TrustSwapAndBridgeRouterTest is Test {
             new TransparentUpgradeableProxy(address(newImplementation), address(this), "");
         TrustSwapAndBridgeRouter newRouter = TrustSwapAndBridgeRouter(address(newProxy));
 
-        vm.expectRevert(abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_InvalidDeadline.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_InvalidDeadline.selector)
+        );
         newRouter.initialize(
             owner,
             address(aerodromeRouter),
@@ -597,7 +603,9 @@ contract TrustSwapAndBridgeRouterTest is Test {
 
     function test_setAerodromeRouter_revertsOnZeroAddress() public {
         vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_InvalidAddress.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_InvalidAddress.selector)
+        );
         trustSwapRouter.setAerodromeRouter(address(0));
     }
 
@@ -621,7 +629,9 @@ contract TrustSwapAndBridgeRouterTest is Test {
 
     function test_setPoolFactory_revertsOnZeroAddress() public {
         vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_InvalidAddress.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_InvalidAddress.selector)
+        );
         trustSwapRouter.setPoolFactory(address(0));
     }
 
@@ -645,7 +655,9 @@ contract TrustSwapAndBridgeRouterTest is Test {
 
     function test_setDefaultSwapDeadline_revertsOnZeroDeadline() public {
         vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_InvalidDeadline.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_InvalidDeadline.selector)
+        );
         trustSwapRouter.setDefaultSwapDeadline(0);
     }
 
@@ -679,7 +691,9 @@ contract TrustSwapAndBridgeRouterTest is Test {
 
     function test_swapToTrust_revertsOnZeroAmountIn() public {
         vm.prank(user);
-        vm.expectRevert(abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_AmountInZero.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_AmountInZero.selector)
+        );
         trustSwapRouter.swapAndBridge(0, 0, user);
     }
 
@@ -847,7 +861,8 @@ contract TrustSwapAndBridgeRouterTest is Test {
             assertEq(quotedOutput, 0);
         } else {
             uint256 expectedOutput = amountIn * clPool.outputMultiplier();
-            assertApproxEqAbs(quotedOutput, expectedOutput, 1_000_000);
+            assertApproxEqAbs(quotedOutput, expectedOutput, 1_000_000); // Allow small rounding errors (up to 1e6 wei
+            // TRUST)
         }
     }
 
@@ -1244,7 +1259,9 @@ contract TrustSwapAndBridgeRouterPermitTest is Test {
             _getPermitSignatureWithCurrentNonce(userPrivateKey, user, address(trustSwapRouter), 0, deadline);
 
         vm.prank(user);
-        vm.expectRevert(abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_AmountInZero.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_AmountInZero.selector)
+        );
         trustSwapRouter.swapAndBridgeWithPermit(0, 0, user, deadline, v, r, s);
     }
 
@@ -1256,7 +1273,9 @@ contract TrustSwapAndBridgeRouterPermitTest is Test {
             _getPermitSignatureWithCurrentNonce(userPrivateKey, user, address(trustSwapRouter), amountIn, deadline);
 
         vm.prank(user);
-        vm.expectRevert(abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_PermitExpired.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_PermitExpired.selector)
+        );
         trustSwapRouter.swapAndBridgeWithPermit(amountIn, 0, user, deadline, v, r, s);
     }
 
@@ -1269,7 +1288,9 @@ contract TrustSwapAndBridgeRouterPermitTest is Test {
             _getPermitSignatureWithCurrentNonce(wrongPrivateKey, user, address(trustSwapRouter), amountIn, deadline);
 
         vm.prank(user);
-        vm.expectRevert(abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_PermitFailed.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_PermitFailed.selector)
+        );
         trustSwapRouter.swapAndBridgeWithPermit(amountIn, 0, user, deadline, v, r, s);
     }
 
@@ -1311,9 +1332,7 @@ contract TrustSwapAndBridgeRouterPermitTest is Test {
 
         vm.startPrank(user);
         vm.expectRevert();
-        trustSwapRouter.swapAndBridgeWithPermit{ value: bridgeFee }(
-            amountIn, minAmountOut, user, deadline, v, r, s
-        );
+        trustSwapRouter.swapAndBridgeWithPermit{ value: bridgeFee }(amountIn, minAmountOut, user, deadline, v, r, s);
         vm.stopPrank();
     }
 
