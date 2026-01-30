@@ -7,26 +7,37 @@ import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/I
 import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import { IAerodromeFactory } from "src/interfaces/external/aerodrome/IAerodromeFactory.sol";
 import { IAerodromePool } from "src/interfaces/external/aerodrome/IAerodromePool.sol";
 import { IAerodromeRouter } from "src/interfaces/external/aerodrome/IAerodromeRouter.sol";
+import { ICLPool, ICLSwapCallback } from "src/interfaces/external/aerodrome/ICLPool.sol";
 import { FinalityState, IMetaERC20Hub } from "src/interfaces/external/metalayer/IMetaERC20Hub.sol";
 import { IWETH } from "src/interfaces/external/IWETH.sol";
-import { ITrustSwapRouter } from "src/interfaces/ITrustSwapRouter.sol";
+import { ITrustSwapAndBridgeRouter } from "src/interfaces/ITrustSwapAndBridgeRouter.sol";
 
 /**
- * @title TrustSwapRouter
+ * @title TrustSwapAndBridgeRouter
  * @author 0xIntuition
- * @notice TrustSwapRouter facilitates swapping USDC for TRUST tokens on the Base network using the Aerodrome DEX
- *         and bridging them to Intuition mainnet via Metalayer.
+ * @notice TrustSwapAndBridgeRouter facilitates swapping any token for TRUST on the Base network using the Aerodrome
+ *         DEX and bridging them to Intuition mainnet via Metalayer.
  */
-contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
+contract TrustSwapAndBridgeRouter is
+    ITrustSwapAndBridgeRouter,
+    Initializable,
+    Ownable2StepUpgradeable,
+    ReentrancyGuardUpgradeable,
+    ICLSwapCallback
+{
     using SafeERC20 for IERC20;
 
     /*//////////////////////////////////////////////////////////////
                                 STATE
     //////////////////////////////////////////////////////////////*/
+
+    /// @notice Base mainnet Aerodrome CL USDC/TRUST pool address
+    address public constant CL_USDC_TRUST_POOL = 0x17f707CF3EDBbd5d9251D4bCDF9Ad70a247D7B84;
 
     /// @notice Base mainnet USDC address
     address public constant USDC_ADDRESS = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
@@ -73,6 +84,10 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
     /// @notice Maximum slippage tolerance in basis points (10000 = 100%)
     uint256 public maxSlippageBps;
 
+    uint160 internal constant MIN_SQRT_RATIO = 4_295_128_739;
+    uint160 internal constant MAX_SQRT_RATIO = 1_461_446_703_485_210_103_287_273_052_203_988_822_378_723_970_342;
+    uint256 internal constant Q192 = 1 << 192;
+
     /*//////////////////////////////////////////////////////////////
                             CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
@@ -86,7 +101,7 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
                           INITIALIZER
     //////////////////////////////////////////////////////////////*/
 
-    /// @inheritdoc ITrustSwapRouter
+    /// @inheritdoc ITrustSwapAndBridgeRouter
     function initialize(
         address _owner,
         address aerodromeRouterAddress,
@@ -120,47 +135,47 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
                         ADMIN FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    /// @inheritdoc ITrustSwapRouter
+    /// @inheritdoc ITrustSwapAndBridgeRouter
     function setAerodromeRouter(address newRouter) external onlyOwner {
         _setAerodromeRouter(newRouter);
     }
 
-    /// @inheritdoc ITrustSwapRouter
+    /// @inheritdoc ITrustSwapAndBridgeRouter
     function setPoolFactory(address newFactory) external onlyOwner {
         _setPoolFactory(newFactory);
     }
 
-    /// @inheritdoc ITrustSwapRouter
+    /// @inheritdoc ITrustSwapAndBridgeRouter
     function setDefaultSwapDeadline(uint256 newDeadline) external onlyOwner {
         _setDefaultSwapDeadline(newDeadline);
     }
 
-    /// @inheritdoc ITrustSwapRouter
+    /// @inheritdoc ITrustSwapAndBridgeRouter
     function setMetaERC20Hub(address newMetaERC20Hub) external onlyOwner {
         _setMetaERC20Hub(newMetaERC20Hub);
     }
 
-    /// @inheritdoc ITrustSwapRouter
+    /// @inheritdoc ITrustSwapAndBridgeRouter
     function setRecipientDomain(uint32 newRecipientDomain) external onlyOwner {
         _setRecipientDomain(newRecipientDomain);
     }
 
-    /// @inheritdoc ITrustSwapRouter
+    /// @inheritdoc ITrustSwapAndBridgeRouter
     function setBridgeGasLimit(uint256 newBridgeGasLimit) external onlyOwner {
         _setBridgeGasLimit(newBridgeGasLimit);
     }
 
-    /// @inheritdoc ITrustSwapRouter
+    /// @inheritdoc ITrustSwapAndBridgeRouter
     function setFinalityState(FinalityState newFinalityState) external onlyOwner {
         _setFinalityState(newFinalityState);
     }
 
-    /// @inheritdoc ITrustSwapRouter
+    /// @inheritdoc ITrustSwapAndBridgeRouter
     function setMinimumOutputThreshold(uint256 newThreshold) external onlyOwner {
         _setMinimumOutputThreshold(newThreshold);
     }
 
-    /// @inheritdoc ITrustSwapRouter
+    /// @inheritdoc ITrustSwapAndBridgeRouter
     function setMaxSlippageBps(uint256 newMaxSlippageBps) external onlyOwner {
         _setMaxSlippageBps(newMaxSlippageBps);
     }
@@ -169,7 +184,7 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
                         SWAP FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    /// @inheritdoc ITrustSwapRouter
+    /// @inheritdoc ITrustSwapAndBridgeRouter
     function swapAndBridge(
         uint256 amountIn,
         uint256 minAmountOut,
@@ -180,14 +195,14 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
         nonReentrant
         returns (uint256 amountOut, bytes32 transferId)
     {
-        if (amountIn == 0) revert TrustSwapRouter_AmountInZero();
+        if (amountIn == 0) revert TrustSwapAndBridgeRouter_AmountInZero();
 
         usdcToken.safeTransferFrom(msg.sender, address(this), amountIn);
 
         return _executeSwapAndBridge(amountIn, minAmountOut, bytes32(uint256(uint160(recipient))));
     }
 
-    /// @inheritdoc ITrustSwapRouter
+    /// @inheritdoc ITrustSwapAndBridgeRouter
     function swapAndBridgeWithPermit(
         uint256 amountIn,
         uint256 minAmountOut,
@@ -202,14 +217,14 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
         nonReentrant
         returns (uint256 amountOut, bytes32 transferId)
     {
-        if (amountIn == 0) revert TrustSwapRouter_AmountInZero();
-        if (deadline < block.timestamp) revert TrustSwapRouter_PermitExpired();
+        if (amountIn == 0) revert TrustSwapAndBridgeRouter_AmountInZero();
+        if (deadline < block.timestamp) revert TrustSwapAndBridgeRouter_PermitExpired();
 
         try IERC20Permit(address(usdcToken)).permit(msg.sender, address(this), amountIn, deadline, v, r, s) { }
         catch {
             uint256 currentAllowance = usdcToken.allowance(msg.sender, address(this));
             if (currentAllowance < amountIn) {
-                revert TrustSwapRouter_PermitFailed();
+                revert TrustSwapAndBridgeRouter_PermitFailed();
             }
         }
 
@@ -218,7 +233,7 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
         return _executeSwapAndBridge(amountIn, minAmountOut, bytes32(uint256(uint160(recipient))));
     }
 
-    /// @inheritdoc ITrustSwapRouter
+    /// @inheritdoc ITrustSwapAndBridgeRouter
     function swapAndBridgeWithETH(
         uint256 minAmountOut,
         address recipient
@@ -228,7 +243,7 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
         nonReentrant
         returns (uint256 amountOut, bytes32 transferId)
     {
-        if (msg.value == 0) revert TrustSwapRouter_InsufficientETH();
+        if (msg.value == 0) revert TrustSwapAndBridgeRouter_InsufficientETH();
 
         bytes32 recipientAddress = bytes32(uint256(uint160(recipient)));
 
@@ -237,14 +252,14 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
             metaERC20Hub.quoteTransferRemote(recipientDomain, recipientAddress, estimatedTrustOut);
 
         if (msg.value <= estimatedBridgeFee) {
-            revert TrustSwapRouter_InsufficientETH();
+            revert TrustSwapAndBridgeRouter_InsufficientETH();
         }
         uint256 ethAmountForSwap = msg.value - estimatedBridgeFee;
 
         return _executeSwapFromETHAndBridge(ethAmountForSwap, minAmountOut, recipientAddress);
     }
 
-    /// @inheritdoc ITrustSwapRouter
+    /// @inheritdoc ITrustSwapAndBridgeRouter
     function swapArbitraryTokenAndBridge(
         address tokenIn,
         uint256 amountIn,
@@ -256,9 +271,9 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
         nonReentrant
         returns (uint256 amountOut, bytes32 transferId)
     {
-        if (amountIn == 0) revert TrustSwapRouter_AmountInZero();
+        if (amountIn == 0) revert TrustSwapAndBridgeRouter_AmountInZero();
         if (tokenIn == address(0) || tokenIn == address(trustToken)) {
-            revert TrustSwapRouter_InvalidToken();
+            revert TrustSwapAndBridgeRouter_InvalidToken();
         }
 
         IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
@@ -272,7 +287,7 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
         if (minAmountOut == 0) {
             minAmountOut = minOutFromMaxSlippage;
         } else if (minAmountOut < minOutFromMaxSlippage) {
-            revert TrustSwapRouter_OutputBelowThreshold();
+            revert TrustSwapAndBridgeRouter_OutputBelowThreshold();
         }
 
         return _executeArbitrarySwapAndBridge(tokenIn, amountIn, minAmountOut, routes, recipientAddress);
@@ -282,23 +297,14 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
                           VIEW FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    /// @inheritdoc ITrustSwapRouter
+    /// @inheritdoc ITrustSwapAndBridgeRouter
     function quoteSwapToTrust(uint256 amountIn) external view returns (uint256 amountOut) {
         if (amountIn == 0) return 0;
 
-        IAerodromeRouter.Route[] memory routes = new IAerodromeRouter.Route[](1);
-        routes[0] = IAerodromeRouter.Route({
-            from: address(usdcToken),
-            to: address(trustToken),
-            stable: false, // TRUST/USDC is a volatile pool
-            factory: poolFactory
-        });
-
-        uint256[] memory amounts = aerodromeRouter.getAmountsOut(amountIn, routes);
-        return amounts[amounts.length - 1];
+        return _quoteUSDCToTrustCL(amountIn);
     }
 
-    /// @inheritdoc ITrustSwapRouter
+    /// @inheritdoc ITrustSwapAndBridgeRouter
     function quoteSwapAndBridge(
         uint256 amountIn,
         address recipient
@@ -311,23 +317,17 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
             return (0, 0);
         }
 
-        IAerodromeRouter.Route[] memory routes = new IAerodromeRouter.Route[](1);
-        routes[0] = IAerodromeRouter.Route({
-            from: address(usdcToken), to: address(trustToken), stable: false, factory: poolFactory
-        });
-
-        uint256[] memory amounts = aerodromeRouter.getAmountsOut(amountIn, routes);
-        amountOut = amounts[amounts.length - 1];
+        amountOut = _quoteUSDCToTrustCL(amountIn);
 
         bridgeFee = metaERC20Hub.quoteTransferRemote(recipientDomain, bytes32(uint256(uint160(recipient))), amountOut);
     }
 
-    /// @inheritdoc ITrustSwapRouter
+    /// @inheritdoc ITrustSwapAndBridgeRouter
     function quoteSwapFromETHToTrust(uint256 amountIn) external view returns (uint256 amountOut) {
         return _quoteSwapFromETH(amountIn);
     }
 
-    /// @inheritdoc ITrustSwapRouter
+    /// @inheritdoc ITrustSwapAndBridgeRouter
     function quoteSwapAndBridgeWithETH(
         uint256 amountIn,
         address recipient
@@ -344,7 +344,7 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
         bridgeFee = metaERC20Hub.quoteTransferRemote(recipientDomain, bytes32(uint256(uint160(recipient))), amountOut);
     }
 
-    /// @inheritdoc ITrustSwapRouter
+    /// @inheritdoc ITrustSwapAndBridgeRouter
     function quoteArbitraryTokenSwap(
         address tokenIn,
         uint256 amountIn
@@ -357,7 +357,7 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
             return (0, 0);
         }
         if (tokenIn == address(0) || tokenIn == address(trustToken)) {
-            revert TrustSwapRouter_InvalidToken();
+            revert TrustSwapAndBridgeRouter_InvalidToken();
         }
 
         (IAerodromeRouter.Route[] memory routes, uint256 quotedOut) = _discoverRoute(tokenIn, amountIn);
@@ -384,26 +384,7 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
         internal
         returns (uint256 amountOut, bytes32 transferId)
     {
-        // Approve router to spend USDC using a safe pattern
-        usdcToken.safeIncreaseAllowance(address(aerodromeRouter), amountIn);
-
-        // Build the single-hop route
-        IAerodromeRouter.Route[] memory routes = new IAerodromeRouter.Route[](1);
-        routes[0] = IAerodromeRouter.Route({
-            from: address(usdcToken),
-            to: address(trustToken),
-            stable: false, // volatile pool
-            factory: poolFactory
-        });
-
-        // Deadline for the swap: current time + defaultSwapDeadline
-        uint256 swapDeadline = block.timestamp + defaultSwapDeadline;
-
-        // Execute swap and receive TRUST to this contract
-        uint256[] memory amounts =
-            aerodromeRouter.swapExactTokensForTokens(amountIn, minAmountOut, routes, address(this), swapDeadline);
-
-        amountOut = amounts[amounts.length - 1];
+        amountOut = _swapUSDCToTrustCL(amountIn, minAmountOut);
 
         // Approve MetaERC20Hub to spend TRUST
         trustToken.safeIncreaseAllowance(address(metaERC20Hub), amountOut);
@@ -412,7 +393,7 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
         uint256 bridgeFee = metaERC20Hub.quoteTransferRemote(recipientDomain, recipientAddress, amountOut);
 
         // Verify sufficient ETH provided for bridge fee
-        if (msg.value < bridgeFee) revert TrustSwapRouter_InsufficientBridgeFee();
+        if (msg.value < bridgeFee) revert TrustSwapAndBridgeRouter_InsufficientBridgeFee();
 
         // Bridge TRUST to destination chain
         transferId = metaERC20Hub.transferRemote{ value: bridgeFee }(
@@ -426,6 +407,71 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
         }
 
         emit SwappedAndBridged(msg.sender, amountIn, amountOut, recipientAddress, transferId);
+    }
+
+    function _swapUSDCToTrustCL(uint256 amountIn, uint256 minAmountOut) internal returns (uint256 amountOut) {
+        ICLPool pool = ICLPool(CL_USDC_TRUST_POOL);
+        address token0 = pool.token0();
+        address token1 = pool.token1();
+
+        bool zeroForOne;
+        if (token0 == address(usdcToken) && token1 == address(trustToken)) {
+            zeroForOne = true;
+        } else if (token0 == address(trustToken) && token1 == address(usdcToken)) {
+            zeroForOne = false;
+        } else {
+            revert TrustSwapAndBridgeRouter_InvalidToken();
+        }
+
+        uint160 sqrtPriceLimitX96 = zeroForOne ? (MIN_SQRT_RATIO + 1) : (MAX_SQRT_RATIO - 1);
+
+        (int256 amount0, int256 amount1) =
+            pool.swap(address(this), zeroForOne, int256(amountIn), sqrtPriceLimitX96, bytes(""));
+
+        if (amount1 <= 0 || amount0 >= 0) {
+            revert TrustSwapAndBridgeRouter_NoViableRoute();
+        }
+
+        amountOut = uint256(-amount0);
+        if (amountOut < minAmountOut) {
+            revert TrustSwapAndBridgeRouter_OutputBelowThreshold();
+        }
+    }
+
+    function _quoteUSDCToTrustCL(uint256 amountIn) internal view returns (uint256 amountOut) {
+        ICLPool pool = ICLPool(CL_USDC_TRUST_POOL);
+        address token0 = pool.token0();
+        address token1 = pool.token1();
+        if (token0 != address(usdcToken) && token1 != address(usdcToken)) {
+            revert TrustSwapAndBridgeRouter_InvalidToken();
+        }
+        if (token0 != address(trustToken) && token1 != address(trustToken)) {
+            revert TrustSwapAndBridgeRouter_InvalidToken();
+        }
+
+        (uint160 sqrtPriceX96,,,,,) = pool.slot0();
+        uint256 priceX192 = uint256(sqrtPriceX96) * uint256(sqrtPriceX96);
+
+        if (token0 == address(usdcToken)) {
+            // price = token1/token0 (TRUST per USDC)
+            return Math.mulDiv(amountIn, priceX192, Q192);
+        }
+
+        // price = token1/token0 (USDC per TRUST), amountOut(TRUST) = amountIn(USDC) * Q192 / priceX192
+        return Math.mulDiv(amountIn, Q192, priceX192);
+    }
+
+    function uniswapV3SwapCallback(int256 amount0Delta, int256 amount1Delta, bytes calldata) external override {
+        if (msg.sender != CL_USDC_TRUST_POOL) {
+            revert TrustSwapAndBridgeRouter_InvalidAddress();
+        }
+
+        if (amount0Delta > 0) {
+            trustToken.safeTransfer(msg.sender, uint256(amount0Delta));
+        }
+        if (amount1Delta > 0) {
+            usdcToken.safeTransfer(msg.sender, uint256(amount1Delta));
+        }
     }
 
     /**
@@ -467,7 +513,7 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
         uint256 bridgeFee = metaERC20Hub.quoteTransferRemote(recipientDomain, recipientAddress, amountOut);
 
         uint256 ethRemaining = address(this).balance;
-        if (ethRemaining < bridgeFee) revert TrustSwapRouter_InsufficientBridgeFee();
+        if (ethRemaining < bridgeFee) revert TrustSwapAndBridgeRouter_InsufficientBridgeFee();
 
         transferId = metaERC20Hub.transferRemote{ value: bridgeFee }(
             recipientDomain, recipientAddress, amountOut, bridgeGasLimit, finalityState
@@ -518,7 +564,7 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
             }
         }
 
-        revert TrustSwapRouter_NoViableRoute();
+        revert TrustSwapAndBridgeRouter_NoViableRoute();
     }
 
     /**
@@ -695,7 +741,7 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
 
         uint256 bridgeFee = metaERC20Hub.quoteTransferRemote(recipientDomain, recipientAddress, amountOut);
 
-        if (msg.value < bridgeFee) revert TrustSwapRouter_InsufficientBridgeFee();
+        if (msg.value < bridgeFee) revert TrustSwapAndBridgeRouter_InsufficientBridgeFee();
 
         transferId = metaERC20Hub.transferRemote{ value: bridgeFee }(
             recipientDomain, recipientAddress, amountOut, bridgeGasLimit, finalityState
@@ -713,42 +759,42 @@ contract TrustSwapRouter is ITrustSwapRouter, Initializable, Ownable2StepUpgrade
 
     /// @dev Internal function to set the Aerodrome Router address
     function _setAerodromeRouter(address newRouter) internal {
-        if (newRouter == address(0)) revert TrustSwapRouter_InvalidAddress();
+        if (newRouter == address(0)) revert TrustSwapAndBridgeRouter_InvalidAddress();
         aerodromeRouter = IAerodromeRouter(newRouter);
         emit AerodromeRouterSet(newRouter);
     }
 
     /// @dev Internal function to set the Aerodrome Pool Factory address
     function _setPoolFactory(address newFactory) internal {
-        if (newFactory == address(0)) revert TrustSwapRouter_InvalidAddress();
+        if (newFactory == address(0)) revert TrustSwapAndBridgeRouter_InvalidAddress();
         poolFactory = newFactory;
         emit PoolFactorySet(newFactory);
     }
 
     /// @dev Internal function to set the default swap deadline
     function _setDefaultSwapDeadline(uint256 newDeadline) internal {
-        if (newDeadline == 0) revert TrustSwapRouter_InvalidDeadline();
+        if (newDeadline == 0) revert TrustSwapAndBridgeRouter_InvalidDeadline();
         defaultSwapDeadline = newDeadline;
         emit DefaultSwapDeadlineSet(newDeadline);
     }
 
     /// @dev Internal function to set the MetaERC20Hub address
     function _setMetaERC20Hub(address newMetaERC20Hub) internal {
-        if (newMetaERC20Hub == address(0)) revert TrustSwapRouter_InvalidAddress();
+        if (newMetaERC20Hub == address(0)) revert TrustSwapAndBridgeRouter_InvalidAddress();
         metaERC20Hub = IMetaERC20Hub(newMetaERC20Hub);
         emit MetaERC20HubSet(newMetaERC20Hub);
     }
 
     /// @dev Internal function to set the recipient domain
     function _setRecipientDomain(uint32 newRecipientDomain) internal {
-        if (newRecipientDomain == 0) revert TrustSwapRouter_InvalidRecipientDomain();
+        if (newRecipientDomain == 0) revert TrustSwapAndBridgeRouter_InvalidRecipientDomain();
         recipientDomain = newRecipientDomain;
         emit RecipientDomainSet(newRecipientDomain);
     }
 
     /// @dev Internal function to set the bridge gas limit
     function _setBridgeGasLimit(uint256 newBridgeGasLimit) internal {
-        if (newBridgeGasLimit == 0) revert TrustSwapRouter_InvalidBridgeGasLimit();
+        if (newBridgeGasLimit == 0) revert TrustSwapAndBridgeRouter_InvalidBridgeGasLimit();
         bridgeGasLimit = newBridgeGasLimit;
         emit BridgeGasLimitSet(newBridgeGasLimit);
     }

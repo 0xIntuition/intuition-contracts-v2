@@ -7,12 +7,12 @@ import { IAerodromeRouter } from "src/interfaces/external/aerodrome/IAerodromeRo
 import { FinalityState, IMetaERC20Hub } from "src/interfaces/external/metalayer/IMetaERC20Hub.sol";
 
 /**
- * @title  ITrustSwapRouter
+ * @title  ITrustSwapAndBridgeRouter
  * @author 0xIntuition
- * @notice Interface for the TrustSwapRouter contract which facilitates swapping USDC for TRUST tokens
+ * @notice Interface for the TrustSwapAndBridgeRouter contract which facilitates swapping USDC for TRUST tokens
  *         on the Base network using the Aerodrome DEX and bridging them to Intuition mainnet via Metalayer.
  */
-interface ITrustSwapRouter {
+interface ITrustSwapAndBridgeRouter {
     /* =================================================== */
     /*                       EVENTS                        */
     /* =================================================== */
@@ -128,47 +128,47 @@ interface ITrustSwapRouter {
     /* =================================================== */
 
     /// @dev Thrown when a zero address is provided where a valid address is required
-    error TrustSwapRouter_InvalidAddress();
+    error TrustSwapAndBridgeRouter_InvalidAddress();
 
     /// @dev Thrown when attempting to swap with zero amount
-    error TrustSwapRouter_AmountInZero();
+    error TrustSwapAndBridgeRouter_AmountInZero();
 
     /// @dev Thrown when an invalid deadline (zero) is provided
-    error TrustSwapRouter_InvalidDeadline();
+    error TrustSwapAndBridgeRouter_InvalidDeadline();
 
     /// @dev Thrown when the permit signature has expired
-    error TrustSwapRouter_PermitExpired();
+    error TrustSwapAndBridgeRouter_PermitExpired();
 
     /// @dev Thrown when the permit call fails
-    error TrustSwapRouter_PermitFailed();
+    error TrustSwapAndBridgeRouter_PermitFailed();
 
     /// @dev Thrown when insufficient ETH is provided for bridge fees
-    error TrustSwapRouter_InsufficientBridgeFee();
+    error TrustSwapAndBridgeRouter_InsufficientBridgeFee();
 
     /// @dev Thrown when an invalid recipient domain is provided
-    error TrustSwapRouter_InvalidRecipientDomain();
+    error TrustSwapAndBridgeRouter_InvalidRecipientDomain();
 
     /// @dev Thrown when an invalid bridge gas limit is provided
-    error TrustSwapRouter_InvalidBridgeGasLimit();
+    error TrustSwapAndBridgeRouter_InvalidBridgeGasLimit();
 
     /// @dev Thrown when insufficient ETH is provided for swap and bridge
-    error TrustSwapRouter_InsufficientETH();
+    error TrustSwapAndBridgeRouter_InsufficientETH();
 
     /// @dev Thrown when no viable route exists from input token to TRUST
-    error TrustSwapRouter_NoViableRoute();
+    error TrustSwapAndBridgeRouter_NoViableRoute();
 
     /// @dev Thrown when input token address is invalid
-    error TrustSwapRouter_InvalidToken();
+    error TrustSwapAndBridgeRouter_InvalidToken();
 
     /// @dev Thrown when route output doesn't meet minimum threshold
-    error TrustSwapRouter_OutputBelowThreshold();
+    error TrustSwapAndBridgeRouter_OutputBelowThreshold();
 
     /* =================================================== */
     /*                      FUNCTIONS                      */
     /* =================================================== */
 
     /**
-     * @notice Initializes the TrustSwapRouter contract
+     * @notice Initializes the TrustSwapAndBridgeRouter contract
      * @param owner Owner address for the Ownable2StepUpgradeable
      * @param aerodromeRouterAddress Address of the Aerodrome Router contract
      * @param poolFactoryAddress Address of the Aerodrome Pool Factory contract

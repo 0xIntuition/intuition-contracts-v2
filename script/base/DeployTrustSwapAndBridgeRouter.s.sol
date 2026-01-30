@@ -6,12 +6,12 @@ import { Script } from "forge-std/src/Script.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 import { FinalityState } from "src/interfaces/external/metalayer/IMetaERC20Hub.sol";
-import { TrustSwapRouter } from "src/utils/TrustSwapRouter.sol";
+import { TrustSwapAndBridgeRouter } from "src/utils/TrustSwapAndBridgeRouter.sol";
 import { SetupScript } from "script/SetupScript.s.sol";
 
 /*
 MAINNET (Base)
-forge script script/base/DeployTrustSwapRouter.s.sol:DeployTrustSwapRouter \
+forge script script/base/DeployTrustSwapAndBridgeRouter.s.sol:DeployTrustSwapAndBridgeRouter \
 --optimizer-runs 10000 \
 --rpc-url base \
 --broadcast \
@@ -23,7 +23,7 @@ forge script script/base/DeployTrustSwapRouter.s.sol:DeployTrustSwapRouter \
 --etherscan-api-key $ETHERSCAN_API_KEY
 */
 
-contract DeployTrustSwapRouter is SetupScript {
+contract DeployTrustSwapAndBridgeRouter is SetupScript {
     /* =================================================== */
     /*                   Config Constants                  */
     /* =================================================== */
@@ -51,8 +51,8 @@ contract DeployTrustSwapRouter is SetupScript {
     uint256 public constant MAX_SLIPPAGE_BPS = 10_000;
 
     /// @dev Deployed contracts
-    TrustSwapRouter public trustSwapRouterImplementation;
-    TransparentUpgradeableProxy public trustSwapRouterProxy;
+    TrustSwapAndBridgeRouter public trustSwapAndBridgeRouterImplementation;
+    TransparentUpgradeableProxy public trustSwapAndBridgeRouterProxy;
 
     function setUp() public override {
         super.setUp();
@@ -66,8 +66,8 @@ contract DeployTrustSwapRouter is SetupScript {
 
         console2.log("");
         console2.log("DEPLOYMENT COMPLETE: =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+");
-        contractInfo("TrustSwapRouter Implementation", address(trustSwapRouterImplementation));
-        contractInfo("TrustSwapRouter Proxy", address(trustSwapRouterProxy));
+        contractInfo("TrustSwapAndBridgeRouter Implementation", address(trustSwapAndBridgeRouterImplementation));
+        contractInfo("TrustSwapAndBridgeRouter Proxy", address(trustSwapAndBridgeRouterProxy));
     }
 
     /* =================================================== */
@@ -75,13 +75,13 @@ contract DeployTrustSwapRouter is SetupScript {
     /* =================================================== */
 
     function _deploy() internal {
-        // Deploy TrustSwapRouter implementation
-        trustSwapRouterImplementation = new TrustSwapRouter();
-        info("TrustSwapRouter Implementation", address(trustSwapRouterImplementation));
+        // Deploy TrustSwapAndBridgeRouter implementation
+        trustSwapAndBridgeRouterImplementation = new TrustSwapAndBridgeRouter();
+        info("TrustSwapAndBridgeRouter Implementation", address(trustSwapAndBridgeRouterImplementation));
 
         // Prepare initialization data
         bytes memory initData = abi.encodeWithSelector(
-            TrustSwapRouter.initialize.selector,
+            TrustSwapAndBridgeRouter.initialize.selector,
             ADMIN,
             BASE_MAINNET_AERODROME_ROUTER,
             BASE_MAINNET_POOL_FACTORY,
@@ -94,10 +94,10 @@ contract DeployTrustSwapRouter is SetupScript {
             MAX_SLIPPAGE_BPS
         );
 
-        // Deploy TrustSwapRouter proxy
-        trustSwapRouterProxy = new TransparentUpgradeableProxy(
-            address(trustSwapRouterImplementation), UPGRADES_TIMELOCK_CONTROLLER, initData
+        // Deploy TrustSwapAndBridgeRouter proxy
+        trustSwapAndBridgeRouterProxy = new TransparentUpgradeableProxy(
+            address(trustSwapAndBridgeRouterImplementation), UPGRADES_TIMELOCK_CONTROLLER, initData
         );
-        info("TrustSwapRouter Proxy", address(trustSwapRouterProxy));
+        info("TrustSwapAndBridgeRouter Proxy", address(trustSwapAndBridgeRouterProxy));
     }
 }

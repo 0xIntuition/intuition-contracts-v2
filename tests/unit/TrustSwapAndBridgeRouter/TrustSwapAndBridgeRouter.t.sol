@@ -10,9 +10,10 @@ import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/trans
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { MessageHashUtils } from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
-import { TrustSwapRouter } from "src/utils/TrustSwapRouter.sol";
-import { ITrustSwapRouter } from "src/interfaces/ITrustSwapRouter.sol";
+import { TrustSwapAndBridgeRouter } from "src/utils/TrustSwapAndBridgeRouter.sol";
+import { ITrustSwapAndBridgeRouter } from "src/interfaces/ITrustSwapAndBridgeRouter.sol";
 import { IAerodromeRouter } from "src/interfaces/external/aerodrome/IAerodromeRouter.sol";
+import { ICLSwapCallback } from "src/interfaces/external/aerodrome/ICLPool.sol";
 import { FinalityState, IMetaERC20Hub } from "src/interfaces/external/metalayer/IMetaERC20Hub.sol";
 
 contract MockERC20 {
@@ -189,6 +190,72 @@ contract MockWETH is MockERC20 {
     }
 }
 
+contract MockCLPool {
+    address public token0;
+    address public token1;
+    uint160 public sqrtPriceX96;
+    uint256 public outputMultiplier;
+    bool public initialized;
+    bool public shouldFail;
+
+    function initialize(address _token0, address _token1, uint160 _sqrtPriceX96, uint256 _outputMultiplier) external {
+        require(!initialized, "MockCLPool: already initialized");
+        initialized = true;
+        token0 = _token0;
+        token1 = _token1;
+        sqrtPriceX96 = _sqrtPriceX96;
+        outputMultiplier = _outputMultiplier;
+    }
+
+    function setOutputMultiplier(uint256 multiplier) external {
+        outputMultiplier = multiplier;
+    }
+
+    function setSqrtPriceX96(uint160 newSqrtPriceX96) external {
+        sqrtPriceX96 = newSqrtPriceX96;
+    }
+
+    function setShouldFail(bool fail) external {
+        shouldFail = fail;
+    }
+
+    function slot0() external view returns (uint160, int24, uint16, uint16, uint16, bool) {
+        return (sqrtPriceX96, 0, 0, 0, 0, true);
+    }
+
+    function swap(
+        address recipient,
+        bool zeroForOne,
+        int256 amountSpecified,
+        uint160,
+        bytes calldata data
+    )
+        external
+        returns (int256 amount0, int256 amount1)
+    {
+        require(!shouldFail, "MockCLPool: swap failed");
+        require(amountSpecified > 0, "MockCLPool: exact input only");
+
+        uint256 amountIn = uint256(amountSpecified);
+        uint256 amountOut = amountIn * outputMultiplier;
+
+        if (zeroForOne) {
+            amount0 = int256(amountIn);
+            amount1 = -int256(amountOut);
+        } else {
+            amount0 = -int256(amountOut);
+            amount1 = int256(amountIn);
+        }
+
+        ICLSwapCallback(msg.sender).uniswapV3SwapCallback(amount0, amount1, data);
+        if (zeroForOne) {
+            MockERC20(token1).mint(recipient, amountOut);
+        } else {
+            MockERC20(token0).mint(recipient, amountOut);
+        }
+    }
+}
+
 contract MockAerodromeRouter {
     uint256 public outputMultiplier = 1e12;
     bool public shouldFail;
@@ -298,13 +365,14 @@ contract MockMetaERC20Hub {
     }
 }
 
-contract TrustSwapRouterTest is Test {
-    TrustSwapRouter public trustSwapRouter;
-    TrustSwapRouter public trustSwapRouterImplementation;
+contract TrustSwapAndBridgeRouterTest is Test {
+    TrustSwapAndBridgeRouter public trustSwapRouter;
+    TrustSwapAndBridgeRouter public trustSwapRouterImplementation;
     TransparentUpgradeableProxy public trustSwapRouterProxy;
 
     MockERC20 public usdcToken;
     MockERC20 public trustToken;
+    MockCLPool public clPool;
     MockAerodromeRouter public aerodromeRouter;
     MockMetaERC20Hub public metaERC20Hub;
     address public poolFactory;
@@ -317,6 +385,7 @@ contract TrustSwapRouterTest is Test {
     address public constant BASE_MAINNET_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
     address public constant BASE_MAINNET_TRUST = 0x6cd905dF2Ed214b22e0d48FF17CD4200C1C6d8A3;
     address payable public constant BASE_MAINNET_WETH = payable(0x4200000000000000000000000000000000000006);
+    address public constant BASE_MAINNET_USDC_TRUST_CL_POOL = 0x17f707CF3EDBbd5d9251D4bCDF9Ad70a247D7B84;
 
     uint256 public constant DEFAULT_SWAP_DEADLINE = 30 minutes;
     uint256 public constant USDC_DECIMALS = 6;
@@ -326,6 +395,8 @@ contract TrustSwapRouterTest is Test {
     FinalityState public constant FINALITY_STATE = FinalityState.INSTANT;
     uint256 public constant MINIMUM_OUTPUT_THRESHOLD = 0;
     uint256 public constant MAX_SLIPPAGE_BPS = 10_000;
+    uint160 public constant DEFAULT_SQRT_PRICE_X96 = 79_228_162_514_264_337_593_543;
+    uint256 public constant DEFAULT_OUTPUT_MULTIPLIER = 1e12;
 
     function setUp() public {
         owner = makeAddr("owner");
@@ -337,24 +408,28 @@ contract TrustSwapRouterTest is Test {
         MockERC20 usdcTemplate = new MockERC20("USD Coin", "USDC", uint8(USDC_DECIMALS));
         MockERC20 trustTemplate = new MockERC20("Trust Token", "TRUST", uint8(TRUST_DECIMALS));
         MockWETH wethTemplate = new MockWETH();
+        MockCLPool clPoolTemplate = new MockCLPool();
 
         vm.etch(BASE_MAINNET_USDC, address(usdcTemplate).code);
         vm.etch(BASE_MAINNET_TRUST, address(trustTemplate).code);
         vm.etch(BASE_MAINNET_WETH, address(wethTemplate).code);
+        vm.etch(BASE_MAINNET_USDC_TRUST_CL_POOL, address(clPoolTemplate).code);
 
         usdcToken = MockERC20(BASE_MAINNET_USDC);
         trustToken = MockERC20(BASE_MAINNET_TRUST);
+        clPool = MockCLPool(BASE_MAINNET_USDC_TRUST_CL_POOL);
 
         usdcToken.initialize("USD Coin", "USDC", uint8(USDC_DECIMALS));
         trustToken.initialize("Trust Token", "TRUST", uint8(TRUST_DECIMALS));
         MockWETH(BASE_MAINNET_WETH).initialize("Wrapped Ether", "WETH", 18);
+        clPool.initialize(address(trustToken), address(usdcToken), DEFAULT_SQRT_PRICE_X96, DEFAULT_OUTPUT_MULTIPLIER);
         aerodromeRouter = new MockAerodromeRouter();
         metaERC20Hub = new MockMetaERC20Hub();
 
-        trustSwapRouterImplementation = new TrustSwapRouter();
+        trustSwapRouterImplementation = new TrustSwapAndBridgeRouter();
 
         bytes memory initData = abi.encodeWithSelector(
-            TrustSwapRouter.initialize.selector,
+            TrustSwapAndBridgeRouter.initialize.selector,
             owner,
             address(aerodromeRouter),
             poolFactory,
@@ -369,7 +444,7 @@ contract TrustSwapRouterTest is Test {
 
         trustSwapRouterProxy = new TransparentUpgradeableProxy(address(trustSwapRouterImplementation), owner, initData);
 
-        trustSwapRouter = TrustSwapRouter(address(trustSwapRouterProxy));
+        trustSwapRouter = TrustSwapAndBridgeRouter(address(trustSwapRouterProxy));
 
         usdcToken.mint(user, 1_000_000e6);
         usdcToken.mint(alice, 1_000_000e6);
@@ -384,9 +459,10 @@ contract TrustSwapRouterTest is Test {
         vm.prank(bob);
         usdcToken.approve(address(trustSwapRouter), type(uint256).max);
 
-        vm.label(address(trustSwapRouter), "TrustSwapRouter");
+        vm.label(address(trustSwapRouter), "TrustSwapAndBridgeRouter");
         vm.label(address(usdcToken), "USDC");
         vm.label(address(trustToken), "TRUST");
+        vm.label(address(clPool), "USDC_TRUST_CL_POOL");
         vm.label(address(aerodromeRouter), "AerodromeRouter");
     }
 
@@ -404,10 +480,10 @@ contract TrustSwapRouterTest is Test {
     }
 
     function test_initialize_revertsOnZeroOwner() public {
-        TrustSwapRouter newImplementation = new TrustSwapRouter();
+        TrustSwapAndBridgeRouter newImplementation = new TrustSwapAndBridgeRouter();
         TransparentUpgradeableProxy newProxy =
             new TransparentUpgradeableProxy(address(newImplementation), address(this), "");
-        TrustSwapRouter newRouter = TrustSwapRouter(address(newProxy));
+        TrustSwapAndBridgeRouter newRouter = TrustSwapAndBridgeRouter(address(newProxy));
 
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableInvalidOwner.selector, address(0)));
         newRouter.initialize(
@@ -425,12 +501,12 @@ contract TrustSwapRouterTest is Test {
     }
 
     function test_initialize_revertsOnZeroAerodromeRouter() public {
-        TrustSwapRouter newImplementation = new TrustSwapRouter();
+        TrustSwapAndBridgeRouter newImplementation = new TrustSwapAndBridgeRouter();
         TransparentUpgradeableProxy newProxy =
             new TransparentUpgradeableProxy(address(newImplementation), address(this), "");
-        TrustSwapRouter newRouter = TrustSwapRouter(address(newProxy));
+        TrustSwapAndBridgeRouter newRouter = TrustSwapAndBridgeRouter(address(newProxy));
 
-        vm.expectRevert(abi.encodeWithSelector(ITrustSwapRouter.TrustSwapRouter_InvalidAddress.selector));
+        vm.expectRevert(abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_InvalidAddress.selector));
         newRouter.initialize(
             owner,
             address(0),
@@ -446,12 +522,12 @@ contract TrustSwapRouterTest is Test {
     }
 
     function test_initialize_revertsOnZeroPoolFactory() public {
-        TrustSwapRouter newImplementation = new TrustSwapRouter();
+        TrustSwapAndBridgeRouter newImplementation = new TrustSwapAndBridgeRouter();
         TransparentUpgradeableProxy newProxy =
             new TransparentUpgradeableProxy(address(newImplementation), address(this), "");
-        TrustSwapRouter newRouter = TrustSwapRouter(address(newProxy));
+        TrustSwapAndBridgeRouter newRouter = TrustSwapAndBridgeRouter(address(newProxy));
 
-        vm.expectRevert(abi.encodeWithSelector(ITrustSwapRouter.TrustSwapRouter_InvalidAddress.selector));
+        vm.expectRevert(abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_InvalidAddress.selector));
         newRouter.initialize(
             owner,
             address(aerodromeRouter),
@@ -467,12 +543,12 @@ contract TrustSwapRouterTest is Test {
     }
 
     function test_initialize_revertsOnZeroDeadline() public {
-        TrustSwapRouter newImplementation = new TrustSwapRouter();
+        TrustSwapAndBridgeRouter newImplementation = new TrustSwapAndBridgeRouter();
         TransparentUpgradeableProxy newProxy =
             new TransparentUpgradeableProxy(address(newImplementation), address(this), "");
-        TrustSwapRouter newRouter = TrustSwapRouter(address(newProxy));
+        TrustSwapAndBridgeRouter newRouter = TrustSwapAndBridgeRouter(address(newProxy));
 
-        vm.expectRevert(abi.encodeWithSelector(ITrustSwapRouter.TrustSwapRouter_InvalidDeadline.selector));
+        vm.expectRevert(abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_InvalidDeadline.selector));
         newRouter.initialize(
             owner,
             address(aerodromeRouter),
@@ -511,7 +587,7 @@ contract TrustSwapRouterTest is Test {
         address newRouter = makeAddr("newRouter");
 
         vm.expectEmit(true, true, true, true);
-        emit ITrustSwapRouter.AerodromeRouterSet(newRouter);
+        emit ITrustSwapAndBridgeRouter.AerodromeRouterSet(newRouter);
 
         vm.prank(owner);
         trustSwapRouter.setAerodromeRouter(newRouter);
@@ -521,7 +597,7 @@ contract TrustSwapRouterTest is Test {
 
     function test_setAerodromeRouter_revertsOnZeroAddress() public {
         vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(ITrustSwapRouter.TrustSwapRouter_InvalidAddress.selector));
+        vm.expectRevert(abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_InvalidAddress.selector));
         trustSwapRouter.setAerodromeRouter(address(0));
     }
 
@@ -535,7 +611,7 @@ contract TrustSwapRouterTest is Test {
         address newFactory = makeAddr("newFactory");
 
         vm.expectEmit(true, true, true, true);
-        emit ITrustSwapRouter.PoolFactorySet(newFactory);
+        emit ITrustSwapAndBridgeRouter.PoolFactorySet(newFactory);
 
         vm.prank(owner);
         trustSwapRouter.setPoolFactory(newFactory);
@@ -545,7 +621,7 @@ contract TrustSwapRouterTest is Test {
 
     function test_setPoolFactory_revertsOnZeroAddress() public {
         vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(ITrustSwapRouter.TrustSwapRouter_InvalidAddress.selector));
+        vm.expectRevert(abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_InvalidAddress.selector));
         trustSwapRouter.setPoolFactory(address(0));
     }
 
@@ -559,7 +635,7 @@ contract TrustSwapRouterTest is Test {
         uint256 newDeadline = 1 hours;
 
         vm.expectEmit(true, true, true, true);
-        emit ITrustSwapRouter.DefaultSwapDeadlineSet(newDeadline);
+        emit ITrustSwapAndBridgeRouter.DefaultSwapDeadlineSet(newDeadline);
 
         vm.prank(owner);
         trustSwapRouter.setDefaultSwapDeadline(newDeadline);
@@ -569,7 +645,7 @@ contract TrustSwapRouterTest is Test {
 
     function test_setDefaultSwapDeadline_revertsOnZeroDeadline() public {
         vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(ITrustSwapRouter.TrustSwapRouter_InvalidDeadline.selector));
+        vm.expectRevert(abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_InvalidDeadline.selector));
         trustSwapRouter.setDefaultSwapDeadline(0);
     }
 
@@ -585,7 +661,7 @@ contract TrustSwapRouterTest is Test {
 
     function test_swapToTrust_successful() public {
         uint256 amountIn = 100e6;
-        uint256 expectedOutput = amountIn * aerodromeRouter.outputMultiplier();
+        uint256 expectedOutput = amountIn * clPool.outputMultiplier();
         uint256 minAmountOut = expectedOutput;
 
         uint256 userUsdcBalanceBefore = usdcToken.balanceOf(user);
@@ -603,27 +679,29 @@ contract TrustSwapRouterTest is Test {
 
     function test_swapToTrust_revertsOnZeroAmountIn() public {
         vm.prank(user);
-        vm.expectRevert(abi.encodeWithSelector(ITrustSwapRouter.TrustSwapRouter_AmountInZero.selector));
+        vm.expectRevert(abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_AmountInZero.selector));
         trustSwapRouter.swapAndBridge(0, 0, user);
     }
 
     function test_swapToTrust_revertsOnInsufficientOutputAmount() public {
         uint256 amountIn = 100e6;
-        uint256 expectedOutput = amountIn * aerodromeRouter.outputMultiplier();
-        uint256 minAmountOut = expectedOutput + 1;
+        uint256 quotedOutput = trustSwapRouter.quoteSwapToTrust(amountIn);
+        uint256 minAmountOut = quotedOutput + 1;
 
         vm.deal(user, 1 ether);
 
+        uint256 bridgeFee = metaERC20Hub.BRIDGE_FEE();
+
         vm.startPrank(user);
         vm.expectRevert();
-        trustSwapRouter.swapAndBridge{ value: metaERC20Hub.BRIDGE_FEE() }(amountIn, minAmountOut, user);
+        trustSwapRouter.swapAndBridge{ value: bridgeFee }(amountIn, minAmountOut, user);
         vm.stopPrank();
     }
 
     function test_swapToTrust_multipleUsersSequential() public {
         uint256 aliceAmountIn = 100e6;
         uint256 bobAmountIn = 200e6;
-        uint256 outputMultiplier = aerodromeRouter.outputMultiplier();
+        uint256 outputMultiplier = clPool.outputMultiplier();
 
         vm.deal(alice, 1 ether);
         vm.deal(bob, 1 ether);
@@ -658,7 +736,7 @@ contract TrustSwapRouterTest is Test {
 
     function test_quoteSwapToTrust_successful() public view {
         uint256 amountIn = 100e6;
-        uint256 expectedOutput = amountIn * aerodromeRouter.outputMultiplier();
+        uint256 expectedOutput = amountIn * clPool.outputMultiplier();
 
         uint256 quotedOutput = trustSwapRouter.quoteSwapToTrust(amountIn);
 
@@ -751,7 +829,7 @@ contract TrustSwapRouterTest is Test {
         usdcToken.mint(user, amountIn);
         vm.deal(user, 1 ether);
 
-        uint256 expectedOutput = amountIn * aerodromeRouter.outputMultiplier();
+        uint256 expectedOutput = amountIn * clPool.outputMultiplier();
 
         vm.startPrank(user);
         (uint256 amountOut,) = trustSwapRouter.swapAndBridge{ value: metaERC20Hub.BRIDGE_FEE() }(amountIn, 0, user);
@@ -768,7 +846,8 @@ contract TrustSwapRouterTest is Test {
         if (amountIn == 0) {
             assertEq(quotedOutput, 0);
         } else {
-            assertEq(quotedOutput, amountIn * aerodromeRouter.outputMultiplier());
+            uint256 expectedOutput = amountIn * clPool.outputMultiplier();
+            assertApproxEqAbs(quotedOutput, expectedOutput, 1_000_000);
         }
     }
 
@@ -805,7 +884,7 @@ contract TrustSwapRouterTest is Test {
 
     function test_swapToTrust_minimumAmount() public {
         uint256 amountIn = 1;
-        uint256 expectedOutput = amountIn * aerodromeRouter.outputMultiplier();
+        uint256 expectedOutput = amountIn * clPool.outputMultiplier();
 
         usdcToken.mint(user, amountIn);
         vm.deal(user, 1 ether);
@@ -819,7 +898,7 @@ contract TrustSwapRouterTest is Test {
 
     function test_swapToTrust_largeAmount() public {
         uint256 amountIn = 100_000_000e6;
-        uint256 expectedOutput = amountIn * aerodromeRouter.outputMultiplier();
+        uint256 expectedOutput = amountIn * clPool.outputMultiplier();
 
         usdcToken.mint(user, amountIn);
         vm.deal(user, 1 ether);
@@ -833,7 +912,7 @@ contract TrustSwapRouterTest is Test {
 
     function test_swapToTrust_exactMinAmountOut() public {
         uint256 amountIn = 100e6;
-        uint256 expectedOutput = amountIn * aerodromeRouter.outputMultiplier();
+        uint256 expectedOutput = amountIn * clPool.outputMultiplier();
 
         vm.deal(user, 1 ether);
 
@@ -910,7 +989,7 @@ contract TrustSwapRouterTest is Test {
         address newRouter = makeAddr("newRouter");
 
         vm.expectEmit(true, true, true, true);
-        emit ITrustSwapRouter.AerodromeRouterSet(newRouter);
+        emit ITrustSwapAndBridgeRouter.AerodromeRouterSet(newRouter);
 
         vm.prank(owner);
         trustSwapRouter.setAerodromeRouter(newRouter);
@@ -920,7 +999,7 @@ contract TrustSwapRouterTest is Test {
         address newFactory = makeAddr("newFactory");
 
         vm.expectEmit(true, true, true, true);
-        emit ITrustSwapRouter.PoolFactorySet(newFactory);
+        emit ITrustSwapAndBridgeRouter.PoolFactorySet(newFactory);
 
         vm.prank(owner);
         trustSwapRouter.setPoolFactory(newFactory);
@@ -930,7 +1009,7 @@ contract TrustSwapRouterTest is Test {
         uint256 newDeadline = 1 hours;
 
         vm.expectEmit(true, true, true, true);
-        emit ITrustSwapRouter.DefaultSwapDeadlineSet(newDeadline);
+        emit ITrustSwapAndBridgeRouter.DefaultSwapDeadlineSet(newDeadline);
 
         vm.prank(owner);
         trustSwapRouter.setDefaultSwapDeadline(newDeadline);
@@ -938,7 +1017,7 @@ contract TrustSwapRouterTest is Test {
 
     function test_emitsSwappedToTrust_onSwapToTrust() public {
         uint256 amountIn = 100e6;
-        uint256 expectedOutput = amountIn * aerodromeRouter.outputMultiplier();
+        uint256 expectedOutput = amountIn * clPool.outputMultiplier();
 
         vm.deal(user, 1 ether);
 
@@ -952,10 +1031,10 @@ contract TrustSwapRouterTest is Test {
     /* =================================================== */
 
     function test_initializeEmitsAllEvents() public {
-        TrustSwapRouter newImplementation = new TrustSwapRouter();
+        TrustSwapAndBridgeRouter newImplementation = new TrustSwapAndBridgeRouter();
         TransparentUpgradeableProxy newProxy =
             new TransparentUpgradeableProxy(address(newImplementation), address(this), "");
-        TrustSwapRouter newRouter = TrustSwapRouter(address(newProxy));
+        TrustSwapAndBridgeRouter newRouter = TrustSwapAndBridgeRouter(address(newProxy));
 
         address newOwner = makeAddr("newOwner");
         address newAerodromeRouter = makeAddr("newAerodromeRouter");
@@ -969,31 +1048,31 @@ contract TrustSwapRouterTest is Test {
         uint256 newMaxSlippageBps = 9500;
 
         vm.expectEmit(true, true, true, true);
-        emit ITrustSwapRouter.AerodromeRouterSet(newAerodromeRouter);
+        emit ITrustSwapAndBridgeRouter.AerodromeRouterSet(newAerodromeRouter);
 
         vm.expectEmit(true, true, true, true);
-        emit ITrustSwapRouter.PoolFactorySet(newPoolFactory);
+        emit ITrustSwapAndBridgeRouter.PoolFactorySet(newPoolFactory);
 
         vm.expectEmit(true, true, true, true);
-        emit ITrustSwapRouter.MetaERC20HubSet(newMetaERC20Hub);
+        emit ITrustSwapAndBridgeRouter.MetaERC20HubSet(newMetaERC20Hub);
 
         vm.expectEmit(true, true, true, true);
-        emit ITrustSwapRouter.RecipientDomainSet(newRecipientDomain);
+        emit ITrustSwapAndBridgeRouter.RecipientDomainSet(newRecipientDomain);
 
         vm.expectEmit(true, true, true, true);
-        emit ITrustSwapRouter.BridgeGasLimitSet(newBridgeGasLimit);
+        emit ITrustSwapAndBridgeRouter.BridgeGasLimitSet(newBridgeGasLimit);
 
         vm.expectEmit(true, true, true, true);
-        emit ITrustSwapRouter.FinalityStateSet(newFinalityState);
+        emit ITrustSwapAndBridgeRouter.FinalityStateSet(newFinalityState);
 
         vm.expectEmit(true, true, true, true);
-        emit ITrustSwapRouter.DefaultSwapDeadlineSet(newDeadline);
+        emit ITrustSwapAndBridgeRouter.DefaultSwapDeadlineSet(newDeadline);
 
         vm.expectEmit(true, true, true, true);
-        emit ITrustSwapRouter.MinimumOutputThresholdSet(newMinimumOutputThreshold);
+        emit ITrustSwapAndBridgeRouter.MinimumOutputThresholdSet(newMinimumOutputThreshold);
 
         vm.expectEmit(true, true, true, true);
-        emit ITrustSwapRouter.MaxSlippageBpsSet(newMaxSlippageBps);
+        emit ITrustSwapAndBridgeRouter.MaxSlippageBpsSet(newMaxSlippageBps);
 
         newRouter.initialize(
             newOwner,
@@ -1010,15 +1089,16 @@ contract TrustSwapRouterTest is Test {
     }
 }
 
-/// @title TrustSwapRouterPermitTest
+/// @title TrustSwapAndBridgeRouterPermitTest
 /// @notice Tests for EIP-2612 permit functionality
-contract TrustSwapRouterPermitTest is Test {
-    TrustSwapRouter public trustSwapRouter;
-    TrustSwapRouter public trustSwapRouterImplementation;
+contract TrustSwapAndBridgeRouterPermitTest is Test {
+    TrustSwapAndBridgeRouter public trustSwapRouter;
+    TrustSwapAndBridgeRouter public trustSwapRouterImplementation;
     TransparentUpgradeableProxy public trustSwapRouterProxy;
 
     MockERC20Permit public usdcToken;
     MockERC20 public trustToken;
+    MockCLPool public clPool;
     MockAerodromeRouter public aerodromeRouter;
     MockMetaERC20Hub public metaERC20Hub;
     address public poolFactory;
@@ -1029,6 +1109,7 @@ contract TrustSwapRouterPermitTest is Test {
 
     address public constant BASE_MAINNET_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
     address public constant BASE_MAINNET_TRUST = 0x6cd905dF2Ed214b22e0d48FF17CD4200C1C6d8A3;
+    address public constant BASE_MAINNET_USDC_TRUST_CL_POOL = 0x17f707CF3EDBbd5d9251D4bCDF9Ad70a247D7B84;
 
     uint256 public constant DEFAULT_SWAP_DEADLINE = 30 minutes;
     uint256 public constant USDC_DECIMALS = 6;
@@ -1038,6 +1119,8 @@ contract TrustSwapRouterPermitTest is Test {
     FinalityState public constant FINALITY_STATE = FinalityState.INSTANT;
     uint256 public constant MINIMUM_OUTPUT_THRESHOLD = 0;
     uint256 public constant MAX_SLIPPAGE_BPS = 10_000;
+    uint160 public constant DEFAULT_SQRT_PRICE_X96 = 79_228_162_514_264_337_593_543;
+    uint256 public constant DEFAULT_OUTPUT_MULTIPLIER = 1e12;
 
     bytes32 public constant PERMIT_TYPEHASH =
         keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
@@ -1050,22 +1133,26 @@ contract TrustSwapRouterPermitTest is Test {
 
         MockERC20Permit usdcTemplate = new MockERC20Permit("USD Coin", "USDC", uint8(USDC_DECIMALS));
         MockERC20 trustTemplate = new MockERC20("Trust Token", "TRUST", uint8(TRUST_DECIMALS));
+        MockCLPool clPoolTemplate = new MockCLPool();
 
         vm.etch(BASE_MAINNET_USDC, address(usdcTemplate).code);
         vm.etch(BASE_MAINNET_TRUST, address(trustTemplate).code);
+        vm.etch(BASE_MAINNET_USDC_TRUST_CL_POOL, address(clPoolTemplate).code);
 
         usdcToken = MockERC20Permit(BASE_MAINNET_USDC);
         trustToken = MockERC20(BASE_MAINNET_TRUST);
+        clPool = MockCLPool(BASE_MAINNET_USDC_TRUST_CL_POOL);
 
         usdcToken.initialize("USD Coin", "USDC", uint8(USDC_DECIMALS));
         trustToken.initialize("Trust Token", "TRUST", uint8(TRUST_DECIMALS));
+        clPool.initialize(address(trustToken), address(usdcToken), DEFAULT_SQRT_PRICE_X96, DEFAULT_OUTPUT_MULTIPLIER);
         aerodromeRouter = new MockAerodromeRouter();
         metaERC20Hub = new MockMetaERC20Hub();
 
-        trustSwapRouterImplementation = new TrustSwapRouter();
+        trustSwapRouterImplementation = new TrustSwapAndBridgeRouter();
 
         bytes memory initData = abi.encodeWithSelector(
-            TrustSwapRouter.initialize.selector,
+            TrustSwapAndBridgeRouter.initialize.selector,
             owner,
             address(aerodromeRouter),
             poolFactory,
@@ -1079,13 +1166,14 @@ contract TrustSwapRouterPermitTest is Test {
         );
 
         trustSwapRouterProxy = new TransparentUpgradeableProxy(address(trustSwapRouterImplementation), owner, initData);
-        trustSwapRouter = TrustSwapRouter(address(trustSwapRouterProxy));
+        trustSwapRouter = TrustSwapAndBridgeRouter(address(trustSwapRouterProxy));
 
         usdcToken.mint(user, 1_000_000e6);
 
-        vm.label(address(trustSwapRouter), "TrustSwapRouter");
+        vm.label(address(trustSwapRouter), "TrustSwapAndBridgeRouter");
         vm.label(address(usdcToken), "USDC");
         vm.label(address(trustToken), "TRUST");
+        vm.label(address(clPool), "USDC_TRUST_CL_POOL");
         vm.label(address(aerodromeRouter), "AerodromeRouter");
         vm.label(user, "user");
     }
@@ -1109,6 +1197,21 @@ contract TrustSwapRouterPermitTest is Test {
         (v, r, s) = vm.sign(privateKey, hash);
     }
 
+    function _getPermitSignatureWithCurrentNonce(
+        uint256 privateKey,
+        address permitOwner,
+        address spender,
+        uint256 value,
+        uint256 deadline
+    )
+        internal
+        view
+        returns (uint8 v, bytes32 r, bytes32 s)
+    {
+        uint256 nonce = usdcToken.nonces(permitOwner);
+        return _getPermitSignature(privateKey, permitOwner, spender, value, nonce, deadline);
+    }
+
     /* =================================================== */
     /*              PERMIT SWAP FUNCTION TESTS             */
     /* =================================================== */
@@ -1116,19 +1219,20 @@ contract TrustSwapRouterPermitTest is Test {
     function test_swapToTrustWithPermit_successful() public {
         uint256 amountIn = 100e6;
         uint256 deadline = block.timestamp + 1 hours;
-        uint256 expectedOutput = amountIn * aerodromeRouter.outputMultiplier();
+        uint256 expectedOutput = amountIn * clPool.outputMultiplier();
 
         (uint8 v, bytes32 r, bytes32 s) =
-            _getPermitSignature(userPrivateKey, user, address(trustSwapRouter), amountIn, 0, deadline);
+            _getPermitSignatureWithCurrentNonce(userPrivateKey, user, address(trustSwapRouter), amountIn, deadline);
 
         uint256 userUsdcBalanceBefore = usdcToken.balanceOf(user);
 
         vm.deal(user, 1 ether);
 
-        vm.prank(user);
+        vm.startPrank(user);
         (uint256 amountOut,) = trustSwapRouter.swapAndBridgeWithPermit{ value: metaERC20Hub.BRIDGE_FEE() }(
             amountIn, 0, user, deadline, v, r, s
         );
+        vm.stopPrank();
 
         assertEq(amountOut, expectedOutput);
         assertEq(usdcToken.balanceOf(user), userUsdcBalanceBefore - amountIn);
@@ -1137,10 +1241,10 @@ contract TrustSwapRouterPermitTest is Test {
     function test_swapToTrustWithPermit_revertsOnZeroAmountIn() public {
         uint256 deadline = block.timestamp + 1 hours;
         (uint8 v, bytes32 r, bytes32 s) =
-            _getPermitSignature(userPrivateKey, user, address(trustSwapRouter), 0, 0, deadline);
+            _getPermitSignatureWithCurrentNonce(userPrivateKey, user, address(trustSwapRouter), 0, deadline);
 
         vm.prank(user);
-        vm.expectRevert(abi.encodeWithSelector(ITrustSwapRouter.TrustSwapRouter_AmountInZero.selector));
+        vm.expectRevert(abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_AmountInZero.selector));
         trustSwapRouter.swapAndBridgeWithPermit(0, 0, user, deadline, v, r, s);
     }
 
@@ -1149,10 +1253,10 @@ contract TrustSwapRouterPermitTest is Test {
         uint256 deadline = block.timestamp - 1;
 
         (uint8 v, bytes32 r, bytes32 s) =
-            _getPermitSignature(userPrivateKey, user, address(trustSwapRouter), amountIn, 0, deadline);
+            _getPermitSignatureWithCurrentNonce(userPrivateKey, user, address(trustSwapRouter), amountIn, deadline);
 
         vm.prank(user);
-        vm.expectRevert(abi.encodeWithSelector(ITrustSwapRouter.TrustSwapRouter_PermitExpired.selector));
+        vm.expectRevert(abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_PermitExpired.selector));
         trustSwapRouter.swapAndBridgeWithPermit(amountIn, 0, user, deadline, v, r, s);
     }
 
@@ -1162,31 +1266,32 @@ contract TrustSwapRouterPermitTest is Test {
 
         uint256 wrongPrivateKey = 0xBAD;
         (uint8 v, bytes32 r, bytes32 s) =
-            _getPermitSignature(wrongPrivateKey, user, address(trustSwapRouter), amountIn, 0, deadline);
+            _getPermitSignatureWithCurrentNonce(wrongPrivateKey, user, address(trustSwapRouter), amountIn, deadline);
 
         vm.prank(user);
-        vm.expectRevert(abi.encodeWithSelector(ITrustSwapRouter.TrustSwapRouter_PermitFailed.selector));
+        vm.expectRevert(abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_PermitFailed.selector));
         trustSwapRouter.swapAndBridgeWithPermit(amountIn, 0, user, deadline, v, r, s);
     }
 
     function test_swapToTrustWithPermit_succeedsWithExistingAllowance() public {
         uint256 amountIn = 100e6;
         uint256 deadline = block.timestamp + 1 hours;
-        uint256 expectedOutput = amountIn * aerodromeRouter.outputMultiplier();
+        uint256 expectedOutput = amountIn * clPool.outputMultiplier();
 
         vm.prank(user);
         usdcToken.approve(address(trustSwapRouter), amountIn);
 
         uint256 wrongPrivateKey = 0xBAD;
         (uint8 v, bytes32 r, bytes32 s) =
-            _getPermitSignature(wrongPrivateKey, user, address(trustSwapRouter), amountIn, 0, deadline);
+            _getPermitSignatureWithCurrentNonce(wrongPrivateKey, user, address(trustSwapRouter), amountIn, deadline);
 
         vm.deal(user, 1 ether);
 
-        vm.prank(user);
+        vm.startPrank(user);
         (uint256 amountOut,) = trustSwapRouter.swapAndBridgeWithPermit{ value: metaERC20Hub.BRIDGE_FEE() }(
             amountIn, 0, user, deadline, v, r, s
         );
+        vm.stopPrank();
 
         assertEq(amountOut, expectedOutput);
     }
@@ -1194,19 +1299,22 @@ contract TrustSwapRouterPermitTest is Test {
     function test_swapToTrustWithPermit_revertsOnInsufficientOutput() public {
         uint256 amountIn = 100e6;
         uint256 deadline = block.timestamp + 1 hours;
-        uint256 expectedOutput = amountIn * aerodromeRouter.outputMultiplier();
-        uint256 minAmountOut = expectedOutput + 1;
+        uint256 quotedOutput = trustSwapRouter.quoteSwapToTrust(amountIn);
+        uint256 minAmountOut = quotedOutput + 1;
 
         (uint8 v, bytes32 r, bytes32 s) =
-            _getPermitSignature(userPrivateKey, user, address(trustSwapRouter), amountIn, 0, deadline);
+            _getPermitSignatureWithCurrentNonce(userPrivateKey, user, address(trustSwapRouter), amountIn, deadline);
 
         vm.deal(user, 1 ether);
 
-        vm.prank(user);
+        uint256 bridgeFee = metaERC20Hub.BRIDGE_FEE();
+
+        vm.startPrank(user);
         vm.expectRevert();
-        trustSwapRouter.swapAndBridgeWithPermit{ value: metaERC20Hub.BRIDGE_FEE() }(
+        trustSwapRouter.swapAndBridgeWithPermit{ value: bridgeFee }(
             amountIn, minAmountOut, user, deadline, v, r, s
         );
+        vm.stopPrank();
     }
 
     function test_swapToTrustWithPermit_incrementsNonce() public {
@@ -1216,14 +1324,15 @@ contract TrustSwapRouterPermitTest is Test {
         assertEq(usdcToken.nonces(user), 0);
 
         (uint8 v, bytes32 r, bytes32 s) =
-            _getPermitSignature(userPrivateKey, user, address(trustSwapRouter), amountIn, 0, deadline);
+            _getPermitSignatureWithCurrentNonce(userPrivateKey, user, address(trustSwapRouter), amountIn, deadline);
 
         vm.deal(user, 1 ether);
 
-        vm.prank(user);
+        vm.startPrank(user);
         trustSwapRouter.swapAndBridgeWithPermit{ value: metaERC20Hub.BRIDGE_FEE() }(
             amountIn, 0, user, deadline, v, r, s
         );
+        vm.stopPrank();
 
         assertEq(usdcToken.nonces(user), 1);
     }
@@ -1233,22 +1342,22 @@ contract TrustSwapRouterPermitTest is Test {
         uint256 deadline = block.timestamp + 1 hours;
 
         (uint8 v1, bytes32 r1, bytes32 s1) =
-            _getPermitSignature(userPrivateKey, user, address(trustSwapRouter), amountIn, 0, deadline);
+            _getPermitSignatureWithCurrentNonce(userPrivateKey, user, address(trustSwapRouter), amountIn, deadline);
 
         vm.deal(user, 2 ether);
 
-        vm.prank(user);
+        vm.startPrank(user);
         trustSwapRouter.swapAndBridgeWithPermit{ value: metaERC20Hub.BRIDGE_FEE() }(
             amountIn, 0, user, deadline, v1, r1, s1
         );
 
         (uint8 v2, bytes32 r2, bytes32 s2) =
-            _getPermitSignature(userPrivateKey, user, address(trustSwapRouter), amountIn, 1, deadline);
+            _getPermitSignatureWithCurrentNonce(userPrivateKey, user, address(trustSwapRouter), amountIn, deadline);
 
-        vm.prank(user);
         trustSwapRouter.swapAndBridgeWithPermit{ value: metaERC20Hub.BRIDGE_FEE() }(
             amountIn, 0, user, deadline, v2, r2, s2
         );
+        vm.stopPrank();
 
         assertEq(usdcToken.nonces(user), 2);
     }
@@ -1256,18 +1365,19 @@ contract TrustSwapRouterPermitTest is Test {
     function testFuzz_swapToTrustWithPermit_variousAmounts(uint256 amountIn) public {
         amountIn = bound(amountIn, 1, 1_000_000e6);
         uint256 deadline = block.timestamp + 1 hours;
-        uint256 expectedOutput = amountIn * aerodromeRouter.outputMultiplier();
+        uint256 expectedOutput = amountIn * clPool.outputMultiplier();
 
         usdcToken.mint(user, amountIn);
         vm.deal(user, 1 ether);
 
         (uint8 v, bytes32 r, bytes32 s) =
-            _getPermitSignature(userPrivateKey, user, address(trustSwapRouter), amountIn, 0, deadline);
+            _getPermitSignatureWithCurrentNonce(userPrivateKey, user, address(trustSwapRouter), amountIn, deadline);
 
-        vm.prank(user);
+        vm.startPrank(user);
         (uint256 amountOut,) = trustSwapRouter.swapAndBridgeWithPermit{ value: metaERC20Hub.BRIDGE_FEE() }(
             amountIn, 0, user, deadline, v, r, s
         );
+        vm.stopPrank();
 
         assertEq(amountOut, expectedOutput);
     }
@@ -1276,27 +1386,28 @@ contract TrustSwapRouterPermitTest is Test {
         deadlineOffset = bound(deadlineOffset, 1, 365 days);
         uint256 amountIn = 100e6;
         uint256 deadline = block.timestamp + deadlineOffset;
-        uint256 expectedOutput = amountIn * aerodromeRouter.outputMultiplier();
+        uint256 expectedOutput = amountIn * clPool.outputMultiplier();
 
         (uint8 v, bytes32 r, bytes32 s) =
-            _getPermitSignature(userPrivateKey, user, address(trustSwapRouter), amountIn, 0, deadline);
+            _getPermitSignatureWithCurrentNonce(userPrivateKey, user, address(trustSwapRouter), amountIn, deadline);
 
         vm.deal(user, 1 ether);
 
-        vm.prank(user);
+        vm.startPrank(user);
         (uint256 amountOut,) = trustSwapRouter.swapAndBridgeWithPermit{ value: metaERC20Hub.BRIDGE_FEE() }(
             amountIn, 0, user, deadline, v, r, s
         );
+        vm.stopPrank();
 
         assertEq(amountOut, expectedOutput);
     }
 }
 
-/// @title TrustSwapRouterForkTest
+/// @title TrustSwapAndBridgeRouterForkTest
 /// @notice Fork tests against Base mainnet for real-world swap testing
-contract TrustSwapRouterForkTest is Test {
-    TrustSwapRouter public trustSwapRouter;
-    TrustSwapRouter public trustSwapRouterImplementation;
+contract TrustSwapAndBridgeRouterForkTest is Test {
+    TrustSwapAndBridgeRouter public trustSwapRouter;
+    TrustSwapAndBridgeRouter public trustSwapRouterImplementation;
     TransparentUpgradeableProxy public trustSwapRouterProxy;
 
     address public constant BASE_MAINNET_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
@@ -1335,10 +1446,10 @@ contract TrustSwapRouterForkTest is Test {
         trust = IERC20(BASE_MAINNET_TRUST);
         metaERC20Hub = new MockMetaERC20Hub();
 
-        trustSwapRouterImplementation = new TrustSwapRouter();
+        trustSwapRouterImplementation = new TrustSwapAndBridgeRouter();
 
         bytes memory initData = abi.encodeWithSelector(
-            TrustSwapRouter.initialize.selector,
+            TrustSwapAndBridgeRouter.initialize.selector,
             owner,
             BASE_MAINNET_AERODROME_ROUTER,
             BASE_MAINNET_POOL_FACTORY,
@@ -1352,14 +1463,14 @@ contract TrustSwapRouterForkTest is Test {
         );
 
         trustSwapRouterProxy = new TransparentUpgradeableProxy(address(trustSwapRouterImplementation), owner, initData);
-        trustSwapRouter = TrustSwapRouter(address(trustSwapRouterProxy));
+        trustSwapRouter = TrustSwapAndBridgeRouter(address(trustSwapRouterProxy));
 
         deal(address(usdc), user, 10_000e6);
 
         vm.prank(user);
         usdc.approve(address(trustSwapRouter), type(uint256).max);
 
-        vm.label(address(trustSwapRouter), "TrustSwapRouter");
+        vm.label(address(trustSwapRouter), "TrustSwapAndBridgeRouter");
         vm.label(BASE_MAINNET_USDC, "USDC");
         vm.label(BASE_MAINNET_TRUST, "TRUST");
         vm.label(BASE_MAINNET_AERODROME_ROUTER, "AerodromeRouter");
@@ -1408,7 +1519,7 @@ contract TrustSwapRouterForkTest is Test {
         uint256 minAmountOut = (quotedOutput * 95) / 100;
 
         uint256 userUsdcBefore = usdc.balanceOf(user);
-        uint256 userTrustBefore = trust.balanceOf(user);
+        uint256 routerTrustBefore = trust.balanceOf(address(trustSwapRouter));
 
         vm.deal(user, 1 ether);
 
@@ -1418,17 +1529,17 @@ contract TrustSwapRouterForkTest is Test {
         vm.stopPrank();
 
         uint256 userUsdcAfter = usdc.balanceOf(user);
-        uint256 userTrustAfter = trust.balanceOf(user);
+        uint256 routerTrustAfter = trust.balanceOf(address(trustSwapRouter));
 
         console2.log("Swap executed:");
         console2.log("  USDC spent:", userUsdcBefore - userUsdcAfter);
-        console2.log("  TRUST received:", userTrustAfter - userTrustBefore);
+        console2.log("  TRUST received:", routerTrustAfter - routerTrustBefore);
         console2.log("  Quoted:", quotedOutput);
         console2.log("  Actual:", amountOut);
 
         assertEq(userUsdcBefore - userUsdcAfter, amountIn, "Should spend exact USDC amount");
         assertGe(amountOut, minAmountOut, "Should receive at least minAmountOut");
-        assertEq(userTrustAfter - userTrustBefore, amountOut, "Trust balance should increase by amountOut");
+        assertEq(routerTrustAfter - routerTrustBefore, amountOut, "Router trust balance should increase by amountOut");
     }
 
     function test_fork_swapToTrust_multipleSwapsWork() public {
@@ -1466,7 +1577,7 @@ contract TrustSwapRouterForkTest is Test {
         uint256 minAmountOut = (quotedOutput * 95) / 100;
 
         uint256 userUsdcBefore = usdc.balanceOf(user);
-        uint256 userTrustBefore = trust.balanceOf(user);
+        uint256 routerTrustBefore = trust.balanceOf(address(trustSwapRouter));
 
         vm.deal(user, 1 ether);
 
@@ -1478,7 +1589,7 @@ contract TrustSwapRouterForkTest is Test {
 
         console2.log("Permit swap executed:");
         console2.log("  USDC spent:", userUsdcBefore - usdc.balanceOf(user));
-        console2.log("  TRUST received:", trust.balanceOf(user) - userTrustBefore);
+        console2.log("  TRUST received:", trust.balanceOf(address(trustSwapRouter)) - routerTrustBefore);
         console2.log("  Amount out:", amountOut);
 
         assertGe(amountOut, minAmountOut, "Should receive at least minAmountOut");
