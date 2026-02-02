@@ -48,8 +48,10 @@ contract AtomWalletFactory is IAtomWalletFactory, Initializable {
     /*                    INITIALIZER                      */
     /* =================================================== */
 
-    /// @notice Initializes the AtomWalletFactory contract
-    /// @param _multiVault The address of the MultiVault contract
+    /**
+     * @notice Initializes the AtomWalletFactory contract
+     * @param _multiVault The address of the MultiVault contract
+     */
     function initialize(address _multiVault) external initializer {
         if (_multiVault == address(0)) {
             revert AtomWalletFactory_ZeroAddress();
@@ -62,11 +64,13 @@ contract AtomWalletFactory is IAtomWalletFactory, Initializable {
     /*                    WRITE FUNCTIONS                  */
     /* =================================================== */
 
-    /// @notice Deploys an AtomWallet for a given atom ID
-    /// @dev Deploys an ERC-4337 account (atom wallet) through a BeaconProxy or returns the existing one if already
-    /// deployed
-    /// @param atomId id of atom
-    /// @return atomWallet the address of the atom wallet
+    /**
+     * @notice Deploys an AtomWallet for a given atom ID
+     * @dev Deploys an ERC-4337 account (atom wallet) through a BeaconProxy or returns the existing
+     *      one if already deployed
+     * @param atomId id of atom
+     * @return atomWallet the address of the atom wallet
+     */
     function deployAtomWallet(bytes32 atomId) external returns (address) {
         if (!IMultiVault(multiVault).isTermCreated(atomId)) {
             revert AtomWalletFactory_TermDoesNotExist();
@@ -112,10 +116,12 @@ contract AtomWalletFactory is IAtomWalletFactory, Initializable {
     /*                    VIEW FUNCTIONS                   */
     /* =================================================== */
 
-    /// @notice Returns the AtomWallet address for the given atom data
-    /// @dev The create2 salt is based off of the vault ID
-    /// @param atomId id of the atom associated to the atom wallet
-    /// @return atomWallet the address of the atom wallet
+    /**
+     * @notice Returns the AtomWallet address for the given atom data
+     * @dev The create2 salt is based off of the vault ID
+     * @param atomId id of the atom associated to the atom wallet
+     * @return atomWallet the address of the atom wallet
+     */
     function computeAtomWalletAddr(bytes32 atomId) public view returns (address) {
         // get contract deployment data
         bytes memory data = _getDeploymentData(atomId);
@@ -130,9 +136,11 @@ contract AtomWalletFactory is IAtomWalletFactory, Initializable {
     /*                    INTERNAL HELPERS                 */
     /* =================================================== */
 
-    /// @dev Returns the deployment data for the new AtomWallet contract
-    /// @param atomId the term ID of the atom wallet
-    /// @return bytes memory the deployment data for the AtomWallet contract (using BeaconProxy pattern)
+    /**
+     * @dev Returns the deployment data for the new AtomWallet contract
+     * @param atomId the term ID of the atom wallet
+     * @return bytes memory the deployment data for the AtomWallet contract (using BeaconProxy pattern)
+     */
     function _getDeploymentData(bytes32 atomId) internal view returns (bytes memory) {
         // Addresses of the atomWalletBeacon and entryPoint contracts
         (address entryPoint,, address atomWalletBeacon,) = IMultiVaultCore(multiVault).walletConfig();

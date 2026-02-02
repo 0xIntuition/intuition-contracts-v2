@@ -5,10 +5,12 @@ import { Test, console } from "forge-std/src/Test.sol";
 import { BeaconProxy } from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import { IEntryPoint } from "@account-abstraction/interfaces/IEntryPoint.sol";
 import { PackedUserOperation } from "@account-abstraction/interfaces/PackedUserOperation.sol";
+import { SIG_VALIDATION_FAILED, _packValidationData } from "@account-abstraction/core/Helpers.sol";
 import {
     Ownable2StepUpgradeable,
     OwnableUpgradeable
 } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 import { AtomWallet } from "src/protocol/wallet/AtomWallet.sol";
@@ -31,6 +33,7 @@ contract MockEntryPoint {
 }
 
 contract AtomWalletTest is BaseTest {
+    uint256 private constant SECP256K1_CURVE_ORDER = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141;
     /// @notice Test actors
     address public constant UNAUTHORIZED_USER = address(0x9999);
     address public constant NEW_OWNER = address(0x1111);
@@ -141,7 +144,7 @@ contract AtomWalletTest is BaseTest {
 
         freshWallet.initialize(address(mockEntryPoint), address(protocol.multiVault), TEST_ATOM_ID);
 
-        vm.expectRevert();
+        vm.expectRevert(Initializable.InvalidInitialization.selector);
         freshWallet.initialize(address(mockEntryPoint), address(protocol.multiVault), TEST_ATOM_ID);
     }
 
@@ -334,11 +337,11 @@ contract AtomWalletTest is BaseTest {
     function test_addDeposit_multipleDeposits() public {
         vm.deal(users.alice, TEST_DEPOSIT_AMOUNT * 2);
 
-        vm.prank(users.alice);
+        vm.startPrank(users.alice);
         atomWallet.addDeposit{ value: TEST_DEPOSIT_AMOUNT }();
 
-        vm.prank(users.alice);
         atomWallet.addDeposit{ value: TEST_DEPOSIT_AMOUNT }();
+        vm.stopPrank();
 
         assertEq(atomWallet.getDeposit(), TEST_DEPOSIT_AMOUNT * 2);
     }
@@ -425,7 +428,9 @@ contract AtomWalletTest is BaseTest {
 
     function test_transferOwnership_revertsOnUnauthorizedUser() public {
         vm.prank(UNAUTHORIZED_USER);
-        vm.expectRevert();
+        vm.expectRevert(
+            abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, UNAUTHORIZED_USER)
+        );
         atomWallet.transferOwnership(NEW_OWNER);
     }
 
@@ -497,7 +502,9 @@ contract AtomWalletTest is BaseTest {
 
     function test_claimAtomWalletDepositFees_revertsOnUnauthorizedUser() public {
         vm.prank(UNAUTHORIZED_USER);
-        vm.expectRevert();
+        vm.expectRevert(
+            abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, UNAUTHORIZED_USER)
+        );
         atomWallet.claimAtomWalletDepositFees();
     }
 
@@ -505,11 +512,10 @@ contract AtomWalletTest is BaseTest {
         vm.prank(address(ATOM_WARDEN));
         atomWallet.transferOwnership(NEW_OWNER);
 
-        vm.prank(NEW_OWNER);
+        vm.startPrank(NEW_OWNER);
         atomWallet.acceptOwnership();
-
-        vm.prank(NEW_OWNER);
         atomWallet.claimAtomWalletDepositFees();
+        vm.stopPrank();
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -523,109 +529,93 @@ contract AtomWalletTest is BaseTest {
     //
     // ECDSA.tryRecover expects the signature to be for the prefixed hash.
     // So we need to sign the prefixed message.
-    function test_validateSignature_successful() public {
+    function test_validateSignature_successfulWithoutTimeWindow_returnsSuccess() public {
         vm.warp(BASE_TIMESTAMP);
 
-        uint256 privateKey = 0x1;
-        address expectedOwner = vm.addr(privateKey);
+        uint256 ownerPrivateKey = 0x1;
+        address expectedOwner = vm.addr(ownerPrivateKey);
 
         PackedUserOperation memory userOp = _createValidUserOp();
         bytes32 userOpHash = keccak256(abi.encode(userOp));
 
-        // AtomWallet will create this hash internally
-        bytes32 ethSignedMessageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", userOpHash));
-
-        // We need to sign the message that matches what will be passed to ecrecover
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, ethSignedMessageHash);
-        userOp.signature = abi.encodePacked(r, s, v);
+        userOp.signature = _signUserOpHash(ownerPrivateKey, userOpHash);
 
         // Create a wallet owned by the expected owner
         AtomWallet testWallet = _createWalletOwnedBy(expectedOwner);
 
         // Call validateUserOp as the EntryPoint
-        vm.prank(address(mockEntryPoint));
+        vm.startPrank(address(mockEntryPoint));
         uint256 validationResult = testWallet.validateUserOp(userOp, userOpHash, 0);
+        vm.stopPrank();
 
-        assertEq(validationResult, 0);
+        assertEq(validationResult, _packValidationData(false, 0, 0));
     }
 
-    function test_validateSignature_failsOnInvalidSignature() public {
-        vm.warp(BASE_TIMESTAMP); // Ensure consistent timestamp
+    function test_validateSignature_successfulWithTimeWindow_returnsPackedValidationData() public {
+        vm.warp(BASE_TIMESTAMP);
 
         PackedUserOperation memory userOp = _createValidUserOp();
         bytes32 userOpHash = keccak256(abi.encode(userOp));
 
-        // Sign with wrong key
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(2, userOpHash);
-        userOp.signature = abi.encodePacked(r, s, v);
+        uint256 ownerPrivateKey = 0x1;
+        address expectedOwner = vm.addr(ownerPrivateKey);
+        uint48 validUntil = uint48(BASE_TIMESTAMP + 1000);
+        uint48 validAfter = uint48(BASE_TIMESTAMP - 100);
 
-        // Create a wallet owned by different account
-        AtomWallet testWallet = _createWalletOwnedBy(vm.addr(1));
+        userOp.signature = _signUserOpHashWithTimeWindow(ownerPrivateKey, userOpHash, validUntil, validAfter);
 
-        // Call validateUserOp as the EntryPoint
-        vm.prank(address(mockEntryPoint));
-        uint256 validationResult = testWallet.validateUserOp(userOp, userOpHash, 0);
-
-        assertEq(validationResult, 1);
-    }
-
-    function test_validateSignature_failsOnExpiredSignature() public {
-        vm.warp(BASE_TIMESTAMP); // Ensure consistent timestamp
-
-        PackedUserOperation memory userOp = _createExpiredUserOp();
-        bytes32 userOpHash = keccak256(abi.encode(userOp));
-
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(1, userOpHash);
-        userOp.signature = abi.encodePacked(r, s, v);
-
-        AtomWallet testWallet = _createWalletOwnedBy(vm.addr(1));
+        AtomWallet testWallet = _createWalletOwnedBy(expectedOwner);
 
         // Call validateUserOp as the EntryPoint
-        vm.prank(address(mockEntryPoint));
+        vm.startPrank(address(mockEntryPoint));
         uint256 validationResult = testWallet.validateUserOp(userOp, userOpHash, 0);
+        vm.stopPrank();
 
-        assertEq(validationResult, 1);
+        assertEq(validationResult, _packValidationData(false, validUntil, validAfter));
     }
 
-    function test_validateSignature_failsOnNotYetValidSignature() public {
-        vm.warp(BASE_TIMESTAMP); // Ensure consistent timestamp
-
-        PackedUserOperation memory userOp = _createFutureUserOp();
-        bytes32 userOpHash = keccak256(abi.encode(userOp));
-
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(1, userOpHash);
-        userOp.signature = abi.encodePacked(r, s, v);
-
-        AtomWallet testWallet = _createWalletOwnedBy(vm.addr(1));
-
-        // Call validateUserOp as the EntryPoint
-        vm.prank(address(mockEntryPoint));
-        uint256 validationResult = testWallet.validateUserOp(userOp, userOpHash, 0);
-
-        assertEq(validationResult, 1);
-    }
-
-    function test_validateSignature_revertsOnInvalidCallDataLength() public {
-        vm.warp(BASE_TIMESTAMP); // Ensure consistent timestamp
+    function test_validateSignature_returnsSigFailedForWrongSigner_withoutTimeWindow() public {
+        vm.warp(BASE_TIMESTAMP);
 
         PackedUserOperation memory userOp = _createValidUserOp();
-        userOp.callData = hex"deadbeef"; // Too short
-
         bytes32 userOpHash = keccak256(abi.encode(userOp));
 
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(1, userOpHash);
-        userOp.signature = abi.encodePacked(r, s, v);
+        uint256 signerPrivateKey = 0x2;
+        userOp.signature = _signUserOpHash(signerPrivateKey, userOpHash);
 
-        AtomWallet testWallet = _createWalletOwnedBy(vm.addr(1));
+        AtomWallet testWallet = _createWalletOwnedBy(vm.addr(0x1));
 
         // Call validateUserOp as the EntryPoint
-        vm.prank(address(mockEntryPoint));
-        vm.expectRevert(abi.encodeWithSelector(AtomWallet.AtomWallet_InvalidCallDataLength.selector));
-        testWallet.validateUserOp(userOp, userOpHash, 0);
+        vm.startPrank(address(mockEntryPoint));
+        uint256 validationResult = testWallet.validateUserOp(userOp, userOpHash, 0);
+        vm.stopPrank();
+
+        assertEq(validationResult, SIG_VALIDATION_FAILED);
+    }
+
+    function test_validateSignature_returnsSigFailedForWrongSigner_withTimeWindow() public {
+        vm.warp(BASE_TIMESTAMP);
+
+        PackedUserOperation memory userOp = _createValidUserOp();
+        bytes32 userOpHash = keccak256(abi.encode(userOp));
+
+        uint256 signerPrivateKey = 0x2;
+        uint48 validUntil = uint48(BASE_TIMESTAMP + 1000);
+        uint48 validAfter = uint48(BASE_TIMESTAMP - 100);
+        userOp.signature = _signUserOpHashWithTimeWindow(signerPrivateKey, userOpHash, validUntil, validAfter);
+
+        AtomWallet testWallet = _createWalletOwnedBy(vm.addr(0x1));
+
+        // Call validateUserOp as the EntryPoint
+        vm.startPrank(address(mockEntryPoint));
+        uint256 validationResult = testWallet.validateUserOp(userOp, userOpHash, 0);
+        vm.stopPrank();
+
+        assertEq(validationResult, _packValidationData(true, validUntil, validAfter));
     }
 
     function test_validateSignature_revertsOnInvalidSignatureLength() public {
-        vm.warp(BASE_TIMESTAMP); // Add this line to prevent underflow
+        vm.warp(BASE_TIMESTAMP);
 
         PackedUserOperation memory userOp = _createValidUserOp();
         bytes32 userOpHash = keccak256(abi.encode(userOp));
@@ -636,7 +626,9 @@ contract AtomWalletTest is BaseTest {
 
         // Call validateUserOp as the EntryPoint
         vm.prank(address(mockEntryPoint));
-        vm.expectRevert();
+        vm.expectRevert(
+            abi.encodeWithSelector(AtomWallet.AtomWallet_InvalidSignatureLength.selector, userOp.signature.length)
+        );
         testWallet.validateUserOp(userOp, userOpHash, 0);
     }
 
@@ -770,7 +762,7 @@ contract AtomWalletTest is BaseTest {
 
         freshFactory.initialize(address(protocol.multiVault));
 
-        vm.expectRevert();
+        vm.expectRevert(Initializable.InvalidInitialization.selector);
         freshFactory.initialize(address(protocol.multiVault));
     }
 
@@ -788,7 +780,7 @@ contract AtomWalletTest is BaseTest {
         assertFalse(atomWallet.isClaimed());
 
         // Accept ownership
-        vm.prank(NEW_OWNER);
+        vm.startPrank(NEW_OWNER);
         atomWallet.acceptOwnership();
 
         assertEq(atomWallet.owner(), NEW_OWNER);
@@ -796,8 +788,8 @@ contract AtomWalletTest is BaseTest {
         assertTrue(atomWallet.isClaimed());
 
         // New owner can execute
-        vm.prank(NEW_OWNER);
         atomWallet.execute(CALL_TARGET, TEST_AMOUNT, TEST_CALLDATA);
+        vm.stopPrank();
 
         assertEq(CALL_TARGET.balance, TEST_AMOUNT);
     }
@@ -914,16 +906,61 @@ contract AtomWalletTest is BaseTest {
         }
     }
 
+    function testFuzz_validateSignature_validOwner_withoutTimeWindow(
+        uint256 ownerPrivateKey,
+        bytes32 userOpHashSeed
+    )
+        external
+    {
+        ownerPrivateKey = bound(ownerPrivateKey, 1, SECP256K1_CURVE_ORDER - 1);
+        address expectedOwner = vm.addr(ownerPrivateKey);
+
+        PackedUserOperation memory userOp = _createValidUserOp();
+        bytes32 userOpHash = keccak256(abi.encode(userOp, userOpHashSeed));
+        userOp.signature = _signUserOpHash(ownerPrivateKey, userOpHash);
+
+        AtomWallet testWallet = _createWalletOwnedBy(expectedOwner);
+
+        vm.startPrank(address(mockEntryPoint));
+        uint256 validationResult = testWallet.validateUserOp(userOp, userOpHash, 0);
+        vm.stopPrank();
+
+        assertEq(validationResult, _packValidationData(false, 0, 0));
+    }
+
+    function testFuzz_validateSignature_validOwner_withTimeWindow(
+        uint256 ownerPrivateKey,
+        uint48 validUntil,
+        uint48 validAfter,
+        bytes32 userOpHashSeed
+    )
+        external
+    {
+        ownerPrivateKey = bound(ownerPrivateKey, 1, SECP256K1_CURVE_ORDER - 1);
+        address expectedOwner = vm.addr(ownerPrivateKey);
+
+        PackedUserOperation memory userOp = _createValidUserOp();
+        bytes32 userOpHash = keccak256(abi.encode(userOp, userOpHashSeed));
+        userOp.signature = _signUserOpHashWithTimeWindow(ownerPrivateKey, userOpHash, validUntil, validAfter);
+
+        AtomWallet testWallet = _createWalletOwnedBy(expectedOwner);
+
+        vm.startPrank(address(mockEntryPoint));
+        uint256 validationResult = testWallet.validateUserOp(userOp, userOpHash, 0);
+        vm.stopPrank();
+
+        assertEq(validationResult, _packValidationData(false, validUntil, validAfter));
+    }
+
     /*//////////////////////////////////////////////////////////////
                             EDGE CASE TESTS
     //////////////////////////////////////////////////////////////*/
 
     function test_edge_multipleOwnershipTransfers() public {
-        vm.prank(address(ATOM_WARDEN));
+        vm.startPrank(address(ATOM_WARDEN));
         atomWallet.transferOwnership(NEW_OWNER);
-
-        vm.prank(address(ATOM_WARDEN));
         atomWallet.transferOwnership(users.alice);
+        vm.stopPrank();
 
         assertEq(atomWallet.pendingOwner(), users.alice);
 
@@ -948,16 +985,8 @@ contract AtomWalletTest is BaseTest {
     //////////////////////////////////////////////////////////////*/
 
     function _createValidUserOp() internal view returns (PackedUserOperation memory) {
-        // Use uint96 for timestamps to fit in 12 bytes
-        uint96 validUntil = uint96(block.timestamp + 1000);
-        uint96 validAfter = uint96(block.timestamp - 100);
-
-        // Encode timestamps as uint96 (12 bytes each)
-        bytes memory callData = abi.encodePacked(
-            validUntil, // 12 bytes
-            validAfter, // 12 bytes
-            abi.encodeWithSelector(atomWallet.execute.selector, CALL_TARGET, TEST_AMOUNT, TEST_CALLDATA)
-        );
+        bytes memory callData =
+            abi.encodeWithSelector(atomWallet.execute.selector, CALL_TARGET, TEST_AMOUNT, TEST_CALLDATA);
 
         return PackedUserOperation({
             sender: address(atomWallet),
@@ -972,52 +1001,23 @@ contract AtomWalletTest is BaseTest {
         });
     }
 
-    function _createExpiredUserOp() internal view returns (PackedUserOperation memory) {
-        // Use uint96 for timestamps to fit in 12 bytes
-        uint96 validUntil = uint96(block.timestamp - 100);
-        uint96 validAfter = uint96(block.timestamp - 200);
-
-        bytes memory callData = abi.encodePacked(
-            validUntil, // 12 bytes (expired)
-            validAfter, // 12 bytes
-            abi.encodeWithSelector(atomWallet.execute.selector, CALL_TARGET, TEST_AMOUNT, TEST_CALLDATA)
-        );
-
-        return PackedUserOperation({
-            sender: address(atomWallet),
-            nonce: 0,
-            initCode: "",
-            callData: callData,
-            accountGasLimits: bytes32(uint256(1_000_000) << 128 | 1_000_000),
-            preVerificationGas: 21_000,
-            gasFees: bytes32(uint256(1_000_000_000) << 128 | 1_000_000_000),
-            paymasterAndData: "",
-            signature: ""
-        });
+    function _signUserOpHash(uint256 signerPrivateKey, bytes32 userOpHash) internal returns (bytes memory) {
+        bytes32 ethSignedMessageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", userOpHash));
+        (uint8 signatureV, bytes32 signatureR, bytes32 signatureS) = vm.sign(signerPrivateKey, ethSignedMessageHash);
+        return abi.encodePacked(signatureR, signatureS, signatureV);
     }
 
-    function _createFutureUserOp() internal view returns (PackedUserOperation memory) {
-        // Use uint96 for timestamps to fit in 12 bytes
-        uint96 validUntil = uint96(block.timestamp + 2000);
-        uint96 validAfter = uint96(block.timestamp + 1000);
-
-        bytes memory callData = abi.encodePacked(
-            validUntil, // 12 bytes
-            validAfter, // 12 bytes (future)
-            abi.encodeWithSelector(atomWallet.execute.selector, CALL_TARGET, TEST_AMOUNT, TEST_CALLDATA)
-        );
-
-        return PackedUserOperation({
-            sender: address(atomWallet),
-            nonce: 0,
-            initCode: "",
-            callData: callData,
-            accountGasLimits: bytes32(uint256(1_000_000) << 128 | 1_000_000),
-            preVerificationGas: 21_000,
-            gasFees: bytes32(uint256(1_000_000_000) << 128 | 1_000_000_000),
-            paymasterAndData: "",
-            signature: ""
-        });
+    function _signUserOpHashWithTimeWindow(
+        uint256 signerPrivateKey,
+        bytes32 userOpHash,
+        uint48 validUntil,
+        uint48 validAfter
+    )
+        internal
+        returns (bytes memory)
+    {
+        bytes memory rawSignature = _signUserOpHash(signerPrivateKey, userOpHash);
+        return abi.encodePacked(rawSignature, validUntil, validAfter);
     }
 
     function _createWalletOwnedBy(address owner) internal returns (AtomWallet) {
