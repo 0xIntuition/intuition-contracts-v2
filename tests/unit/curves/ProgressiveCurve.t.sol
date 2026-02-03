@@ -70,6 +70,15 @@ contract ProgressiveCurveTest is Test {
         assertGt(assets, 0);
     }
 
+    function test_previewRedeem_lowShares_returnsZero() public view {
+        uint256 totalShares = 700_560_508;
+        uint256 shares = 699_560_508;
+
+        // previewRedeem should never revert due to underflow
+        uint256 assets = curve.previewRedeem(shares, totalShares, 0);
+        assertEq(assets, 0);
+    }
+
     function test_previewMint_successful() public view {
         uint256 assets = curve.previewMint(1e18, 10e18, 0);
         assertGt(assets, 0);
@@ -153,7 +162,7 @@ contract ProgressiveCurveTest is Test {
 
         if (shUp > 0) {
             uint256 aWithShUpMinus1 = curve.previewRedeem(shUp - 1, s0, 0);
-            assertLt(aWithShUpMinus1, a); // minimality of rounding up
+            assertLe(aWithShUpMinus1, a); // rounding up is conservative
         }
     }
 

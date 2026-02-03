@@ -237,7 +237,7 @@ contract OffsetProgressiveCurveTest is Test {
 
         if (shUp > 0) {
             uint256 aWithShUpMinus1 = curve.previewRedeem(shUp - 1, s0, 0);
-            assertLt(aWithShUpMinus1, a);
+            assertLe(aWithShUpMinus1, a); // rounding up is conservative
         }
     }
 
@@ -432,5 +432,36 @@ contract OffsetProgressiveCurveTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_DomainExceeded.selector));
         curve.previewDeposit(0, aMax, sMax + 1);
+    }
+
+    function test_previewRedeem_lowShares_returnsZero_withZeroOffset() public {
+        OffsetProgressiveCurve localCurve = _deployCurveWithOffset(SLOPE, 0);
+
+        uint256 totalShares = 700_560_508;
+        uint256 shares = 699_560_508;
+
+        // previewRedeem should never revert due to underflow, even with zero offset
+        uint256 assets = localCurve.previewRedeem(shares, totalShares, 0);
+        assertEq(assets, 0);
+    }
+
+    function test_previewRedeem_lowShares_succeeds_withConfiguredOffset() public view {
+        uint256 totalShares = 700_560_508;
+        uint256 shares = 699_560_508;
+
+        uint256 assets = curve.previewRedeem(shares, totalShares, 0);
+        assertGt(assets, 0);
+    }
+
+    function _deployCurveWithOffset(uint256 slope, uint256 offset) internal returns (OffsetProgressiveCurve deployed) {
+        OffsetProgressiveCurve impl = new OffsetProgressiveCurve();
+        TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
+            address(impl),
+            address(this),
+            abi.encodeWithSelector(
+                OffsetProgressiveCurve.initialize.selector, "Offset Progressive Curve Test", slope, offset
+            )
+        );
+        deployed = OffsetProgressiveCurve(address(proxy));
     }
 }

@@ -244,7 +244,7 @@ contract OffsetProgressiveCurve is BaseCurve {
         UD60x18 s = add(wrap(totalShares), OFFSET);
         UD60x18 sNext = sub(s, wrap(shares));
 
-        UD60x18 area = sub(PCMath.square(s), PCMath.squareUp(sNext));
+        UD60x18 area = sub(PCMath.square(s), PCMath.square(sNext));
         UD60x18 assetsUD = mul(area, HALF_SLOPE);
         assets = unwrap(assetsUD);
     }
