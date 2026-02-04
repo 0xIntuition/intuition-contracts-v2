@@ -33,9 +33,11 @@ contract ComputeSqrtPriceX96 is UniswapV3SetupBase {
         uint160 sqrtPriceX96;
         uint256 humanPrice;
         uint256 humanPriceInverse;
+        bool aIsToken0;
     }
 
-    function run() external view {
+    function run() external {
+        setUp();
         console2.log("");
         console2.log("=== Script 3: Compute sqrtPriceX96 for Pool Initialization ===");
         console2.log("");
@@ -44,7 +46,7 @@ contract ComputeSqrtPriceX96 is UniswapV3SetupBase {
 
         _validateTokenAddresses();
 
-        uint256 trustPriceUsd = vm.envOr("TRUST_PRICE_USD", uint256(0.085e18)); // default $0.085 per TRUST
+        uint256 trustPriceUsd = vm.envOr("TRUST_PRICE_USD", uint256(0.083e18)); // default $0.083 per TRUST
         uint256 wethPriceUsd = vm.envOr("WETH_PRICE_USD", uint256(2200e18)); // default $2,200 per WETH
         uint256 usdcPriceUsd = vm.envOr("USDC_PRICE_USD", uint256(1e18)); // default $1 per USDC
 
@@ -111,18 +113,16 @@ contract ComputeSqrtPriceX96 is UniswapV3SetupBase {
         (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
         bool aIsToken0 = tokenA < tokenB;
 
-        uint256 priceToken1PerToken0;
-        if (aIsToken0) {
-            priceToken1PerToken0 = (priceAUsd * PRICE_PRECISION) / priceBUsd;
-        } else {
-            priceToken1PerToken0 = (priceBUsd * PRICE_PRECISION) / priceAUsd;
-        }
+        uint256 priceToken0Usd = aIsToken0 ? priceAUsd : priceBUsd;
+        uint256 priceToken1Usd = aIsToken0 ? priceBUsd : priceAUsd;
+
+        uint256 priceToken1PerToken0 = (priceToken0Usd * PRICE_PRECISION) / priceToken1Usd;
 
         int256 decimalDiff;
         if (aIsToken0) {
-            decimalDiff = int256(uint256(decimalsA)) - int256(uint256(decimalsB));
-        } else {
             decimalDiff = int256(uint256(decimalsB)) - int256(uint256(decimalsA));
+        } else {
+            decimalDiff = int256(uint256(decimalsA)) - int256(uint256(decimalsB));
         }
 
         uint256 adjustedPrice;
@@ -142,12 +142,12 @@ contract ComputeSqrtPriceX96 is UniswapV3SetupBase {
         if (result.humanPrice > 0) {
             result.humanPriceInverse = (PRICE_PRECISION * PRICE_PRECISION) / result.humanPrice;
         }
+        result.aIsToken0 = aIsToken0;
     }
 
     function _printComputedPrice(ComputedPrice memory price, string memory nameA, string memory nameB) internal pure {
-        bool aIsToken0 = price.token0 < price.token1;
-        string memory token0Name = aIsToken0 ? nameA : nameB;
-        string memory token1Name = aIsToken0 ? nameB : nameA;
+        string memory token0Name = price.aIsToken0 ? nameA : nameB;
+        string memory token1Name = price.aIsToken0 ? nameB : nameA;
 
         console2.log("Token ordering:");
         console2.log(string.concat("  token0 (", token0Name, "):"), price.token0);

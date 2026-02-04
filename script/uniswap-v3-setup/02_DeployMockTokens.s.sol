@@ -29,6 +29,9 @@ import { WrappedTrust } from "src/WrappedTrust.sol";
  *   WTRUST_TOKEN=<deployed_address>  (Wrapped native TRUST)
  *   USDC_TOKEN=<deployed_address>
  *   WETH_TOKEN=<deployed_address>
+ *
+ * Optional env vars:
+ *   WTRUST_TOKEN=<existing_wtrust_address> (set this to use existing instead of deploying new)
  */
 contract DeployMockTokens is UniswapV3SetupBase {
     uint8 public constant USDC_DECIMALS = 6;
@@ -38,11 +41,12 @@ contract DeployMockTokens is UniswapV3SetupBase {
     uint256 public constant WETH_MINT_AMOUNT = 10_000 * 1e18;
     uint256 public constant WTRUST_DEPOSIT_AMOUNT = 10_000_000 * 1e18;
 
-    WrappedTrust public wrappedTrust = WrappedTrust(payable(0xDE80b6EE63f7D809427CA350e30093F436A0fe35));
+    WrappedTrust public wrappedTrust;
     ERC20Mock public mockUsdc;
     ERC20Mock public mockWeth;
 
     function run() external broadcast {
+        setUp();
         console2.log("");
         console2.log("=== Script 2: Deploy Mock Tokens ===");
         console2.log("Deployer:", broadcaster);
@@ -58,7 +62,14 @@ contract DeployMockTokens is UniswapV3SetupBase {
         console2.log("");
         console2.log("Deploying tokens...");
 
-        console2.log("  WTRUST (WrappedTrust) already deployed:", address(wrappedTrust));
+        address existingWtrust = vm.envOr("WTRUST_TOKEN", address(0));
+        if (existingWtrust != address(0)) {
+            wrappedTrust = WrappedTrust(payable(existingWtrust));
+            console2.log("  WTRUST (WrappedTrust) provided via env:", address(wrappedTrust));
+        } else {
+            wrappedTrust = new WrappedTrust();
+            console2.log("  WTRUST (WrappedTrust) deployed:", address(wrappedTrust));
+        }
         console2.log("    Name:", wrappedTrust.name());
         console2.log("    Symbol:", wrappedTrust.symbol());
         console2.log("    Decimals:", wrappedTrust.decimals());

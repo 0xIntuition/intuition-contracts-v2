@@ -55,6 +55,7 @@ contract SeedLiquidity is UniswapV3SetupBase {
     LiquidityResult public wethUsdcPosition;
 
     function run() external broadcast {
+        setUp();
         console2.log("");
         console2.log("=== Script 5: Seed Liquidity with Wide Ranges ===");
         console2.log("");

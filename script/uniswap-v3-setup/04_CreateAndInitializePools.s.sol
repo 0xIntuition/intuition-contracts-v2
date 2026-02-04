@@ -26,6 +26,7 @@ contract CreateAndInitializePools is UniswapV3SetupBase {
     address public deployedWethUsdcPool;
 
     function run() external broadcast {
+        setUp();
         console2.log("");
         console2.log("=== Script 4: Create and Initialize Canonical Pools ===");
         console2.log("");

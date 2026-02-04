@@ -22,8 +22,8 @@ import { IUniswapV3Pool } from "src/interfaces/external/uniswapv3/IUniswapV3Pool
  *   WTRUST_USDC_POOL, WTRUST_WETH_POOL, WETH_USDC_POOL
  *
  * Optional env vars (expected prices in USD with 18 decimals):
- *   EXPECTED_TRUST_PRICE_USD (default: 0.025e18)
- *   EXPECTED_WETH_PRICE_USD (default: 2500e18)
+ *   EXPECTED_TRUST_PRICE_USD (default: 0.083e18)
+ *   EXPECTED_WETH_PRICE_USD (default: 2200e18)
  *
  * Price tolerance: 50% by default (can be adjusted via PRICE_TOLERANCE_BPS)
  */
@@ -46,7 +46,8 @@ contract PriceSanityCheck is UniswapV3SetupBase {
         string diagnosis;
     }
 
-    function run() external view {
+    function run() external {
+        setUp();
         console2.log("");
         console2.log("=== Script 7: Minimal Price Sanity Check ===");
         console2.log("");
@@ -55,8 +56,8 @@ contract PriceSanityCheck is UniswapV3SetupBase {
 
         _validateInputs();
 
-        uint256 trustPriceUsd = vm.envOr("EXPECTED_TRUST_PRICE_USD", uint256(0.025e18));
-        uint256 wethPriceUsd = vm.envOr("EXPECTED_WETH_PRICE_USD", uint256(2500e18));
+        uint256 trustPriceUsd = vm.envOr("EXPECTED_TRUST_PRICE_USD", uint256(0.083e18));
+        uint256 wethPriceUsd = vm.envOr("EXPECTED_WETH_PRICE_USD", uint256(2200e18));
         uint256 toleranceBps = vm.envOr("PRICE_TOLERANCE_BPS", DEFAULT_TOLERANCE_BPS);
 
         console2.log("Expected reference prices:");

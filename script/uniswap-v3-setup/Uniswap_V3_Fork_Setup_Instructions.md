@@ -11,6 +11,8 @@ When working with these scripts:
 - Users wrap TRUST → WTRUST to interact with pools
 - Users unwrap WTRUST → TRUST to get native tokens back
 
+Note: On this chain, **WTRUST** is the canonical wrapped native token. **WETH** is just a bridged ERC20 and should be treated as any other external token.
+
 ---
 
 ## Deployed Contract Addresses (adjust as needed)
@@ -32,11 +34,11 @@ These addresses are hardcoded in `UniswapV3SetupBase.s.sol`:
 |---|--------|---------|-------------------|
 | 1 | `01_EnableFeeTiers.s.sol` | Enable fee tiers on factory | Yes |
 | 2 | `02_DeployMockTokens.s.sol` | Deploy WTRUST + mock USDC/WETH | Yes |
-| 3 | `03_ComputeSqrtPriceX96.s.sol` | Compute pool init prices | No (view) |
+| 3 | `03_ComputeSqrtPriceX96.s.sol` | Compute pool init prices | No |
 | 4 | `04_CreateAndInitializePools.s.sol` | Create and init pools | Yes |
 | 5 | `05_SeedLiquidity.s.sol` | Add initial liquidity | Yes |
 | 6 | `06_ExecuteSampleSwaps.s.sol` | Test swap functionality | Yes |
-| 7 | `07_PriceSanityCheck.s.sol` | Validate pool prices | No (view) |
+| 7 | `07_PriceSanityCheck.s.sol` | Validate pool prices | No |
 
 ---
 
@@ -87,7 +89,7 @@ Script automatically verifies `feeAmountTickSpacing(fee)` returns expected value
 
 ### Purpose
 Deploy test tokens for the testnet environment:
-- **WTRUST**: Wrapped TRUST (wrapper for native token) - already deployed, address output for reference (18 decimals)
+- **WTRUST**: Wrapped TRUST (wrapper for native token). Uses `WTRUST_TOKEN` if provided; otherwise deploys a new WrappedTrust (18 decimals)
 - **Mock USDC**: 6 decimals
 - **Mock WETH**: 18 decimals
 
@@ -155,8 +157,8 @@ export USDC_TOKEN=<address>
 export WETH_TOKEN=<address>
 
 # Optionally override prices
-export TRUST_PRICE_USD=25000000000000000  # 0.025e18
-export WETH_PRICE_USD=2500000000000000000000  # 2500e18
+export TRUST_PRICE_USD=83000000000000000  # 0.083e18
+export WETH_PRICE_USD=2200000000000000000000  # 2200e18
 
 forge script script/uniswap-v3-setup/03_ComputeSqrtPriceX96.s.sol:ComputeSqrtPriceX96 \
   --rpc-url <RPC_URL>
@@ -314,8 +316,8 @@ For each pool:
 ### Command
 ```bash
 # Optionally override expected prices
-export EXPECTED_TRUST_PRICE_USD=25000000000000000  # 0.025e18
-export EXPECTED_WETH_PRICE_USD=2500000000000000000000  # 2500e18
+export EXPECTED_TRUST_PRICE_USD=83000000000000000  # 0.083e18
+export EXPECTED_WETH_PRICE_USD=2200000000000000000000  # 2200e18
 export PRICE_TOLERANCE_BPS=5000  # 50%
 
 forge script script/uniswap-v3-setup/07_PriceSanityCheck.s.sol:PriceSanityCheck \

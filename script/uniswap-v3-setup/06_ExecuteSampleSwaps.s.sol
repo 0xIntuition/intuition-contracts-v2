@@ -46,6 +46,7 @@ contract ExecuteSampleSwaps is UniswapV3SetupBase {
     SwapResult[] public swapResults;
 
     function run() external broadcast {
+        setUp();
         console2.log("");
         console2.log("=== Script 6: Execute Sample Swaps End-to-End ===");
         console2.log("");
@@ -177,7 +178,7 @@ contract ExecuteSampleSwaps is UniswapV3SetupBase {
                 amountIn: amountIn,
                 amountOut: amountOut,
                 quotedAmount: quotedAmount,
-                effectivePrice: passed ? (amountIn * 1e18) / amountOut : 0,
+                effectivePrice: (passed && amountOut > 0) ? (amountIn * 1e18) / amountOut : 0,
                 passed: passed
             })
         );
