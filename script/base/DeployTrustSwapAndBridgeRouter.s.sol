@@ -31,10 +31,6 @@ contract DeployTrustSwapAndBridgeRouter is SetupScript {
     // ===== Upgrades TimelockController Address =====
     address public constant UPGRADES_TIMELOCK_CONTROLLER = 0x1E442BbB08c98100b18fa830a88E8A57b5dF9157;
 
-    // ===== Base Mainnet Aerodrome V2 Router / Factory =====
-    address public constant BASE_MAINNET_AERODROME_ROUTER = 0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43;
-    address public constant BASE_MAINNET_POOL_FACTORY = 0x420DD381b31aEf6683db6B902084cB0FFECe40Da;
-
     // ===== Base Mainnet MetaERC20Hub for Bridging =====
     address public constant BASE_MAINNET_META_ERC20_HUB = 0xE12aaF1529Ae21899029a9b51cca2F2Bc2cfC421;
 
@@ -83,8 +79,6 @@ contract DeployTrustSwapAndBridgeRouter is SetupScript {
         bytes memory initData = abi.encodeWithSelector(
             TrustSwapAndBridgeRouter.initialize.selector,
             ADMIN,
-            BASE_MAINNET_AERODROME_ROUTER,
-            BASE_MAINNET_POOL_FACTORY,
             BASE_MAINNET_META_ERC20_HUB,
             INTUITION_MAINNET_DOMAIN,
             BRIDGE_GAS_LIMIT,

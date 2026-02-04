@@ -3,7 +3,6 @@ pragma solidity 0.8.29;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import { IAerodromeRouter } from "src/interfaces/external/aerodrome/IAerodromeRouter.sol";
 import { FinalityState, IMetaERC20Hub } from "src/interfaces/external/metalayer/IMetaERC20Hub.sol";
 
 /**
@@ -12,22 +11,18 @@ import { FinalityState, IMetaERC20Hub } from "src/interfaces/external/metalayer/
  * @notice Interface for the TrustSwapAndBridgeRouter contract which facilitates swapping USDC for TRUST tokens
  *         on the Base network using the Aerodrome DEX and bridging them to Intuition mainnet via Metalayer.
  */
+struct RouteCandidate {
+    address[] pools;
+    address[] path;
+    uint256 amountOut;
+}
+
 interface ITrustSwapAndBridgeRouter {
     /* =================================================== */
     /*                       EVENTS                        */
     /* =================================================== */
 
-    /**
-     * @notice Emitted when the Aerodrome Router address is updated
-     * @param newRouter The new Aerodrome Router address
-     */
-    event AerodromeRouterSet(address indexed newRouter);
-
-    /**
-     * @notice Emitted when the Pool Factory address is updated
-     * @param newFactory The new Pool Factory address
-     */
-    event PoolFactorySet(address indexed newFactory);
+    // Aerodrome V2 events removed (CL-only router).
 
     /**
      * @notice Emitted when a user swaps USDC for TRUST tokens
@@ -170,8 +165,6 @@ interface ITrustSwapAndBridgeRouter {
     /**
      * @notice Initializes the TrustSwapAndBridgeRouter contract
      * @param owner Owner address for the Ownable2StepUpgradeable
-     * @param aerodromeRouterAddress Address of the Aerodrome Router contract
-     * @param poolFactoryAddress Address of the Aerodrome Pool Factory contract
      * @param metaERC20HubAddress Address of the MetaERC20Hub contract for bridging
      * @param recipientDomain Domain ID of the destination chain (Intuition mainnet)
      * @param bridgeGasLimit Gas limit for bridge transactions
@@ -182,8 +175,6 @@ interface ITrustSwapAndBridgeRouter {
      */
     function initialize(
         address owner,
-        address aerodromeRouterAddress,
-        address poolFactoryAddress,
         address metaERC20HubAddress,
         uint32 recipientDomain,
         uint256 bridgeGasLimit,
@@ -193,18 +184,6 @@ interface ITrustSwapAndBridgeRouter {
         uint256 maxSlippageBps
     )
         external;
-
-    /**
-     * @notice Updates the Aerodrome Router contract address
-     * @param newRouter Address of the new Aerodrome Router contract
-     */
-    function setAerodromeRouter(address newRouter) external;
-
-    /**
-     * @notice Updates the Aerodrome Pool Factory contract address
-     * @param newFactory Address of the new Aerodrome Pool Factory contract
-     */
-    function setPoolFactory(address newFactory) external;
 
     /**
      * @notice Updates the default swap deadline
@@ -402,17 +381,7 @@ interface ITrustSwapAndBridgeRouter {
      */
     function trustToken() external view returns (IERC20);
 
-    /**
-     * @notice Returns the Aerodrome Router contract
-     * @return The Aerodrome Router contract
-     */
-    function aerodromeRouter() external view returns (IAerodromeRouter);
-
-    /**
-     * @notice Returns the Aerodrome Pool Factory contract address
-     * @return The Pool Factory address
-     */
-    function poolFactory() external view returns (address);
+    // Aerodrome V2 getters removed.
 
     /**
      * @notice Returns the default deadline (in seconds) for swaps
