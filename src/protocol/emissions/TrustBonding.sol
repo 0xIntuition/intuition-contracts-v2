@@ -319,6 +319,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     /// @inheritdoc ITrustBonding
     function getUnclaimedRewardsForEpoch(uint256 epoch) external view returns (uint256) {
         uint256 currentEpochLocal = currentEpoch();
+
         // There cannot be any unclaimed rewards during the first two epochs, so we return 0.
         if (currentEpochLocal < 2) {
             return 0;
@@ -331,8 +332,11 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
             return 0;
         }
 
-        uint256 epochRewards = _emissionsForEpoch(epoch);
+        // Reclaiming of unclaimed rewards is based on the amount of rewards allocated for a given epoch
+        // (i.e. `maxEpochEmissions`), and not the system utilization-adjusted rewards.
+        uint256 epochRewards = ICoreEmissionsController(satelliteEmissionsController).getEmissionsAtEpoch(epoch);
         uint256 claimedRewards = totalClaimedRewardsForEpoch[epoch];
+
         return epochRewards - claimedRewards;
     }
 

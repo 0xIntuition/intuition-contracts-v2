@@ -104,7 +104,7 @@ contract WithdrawUnclaimedEmissionsTest is TrustBondingBase {
         // Advance to epoch 4 so epoch 2 rewards are withdrawable
         _advanceToEpoch(4);
 
-        uint256 totalEpochRewards = protocol.trustBonding.emissionsForEpoch(2);
+        uint256 totalEpochRewards = protocol.satelliteEmissionsController.getEmissionsAtEpoch(2);
         uint256 unclaimedRewards = protocol.trustBonding.getUnclaimedRewardsForEpoch(2);
 
         assertEq(unclaimedRewards, totalEpochRewards, "All rewards should be unclaimed");
@@ -396,7 +396,7 @@ contract WithdrawUnclaimedEmissionsTest is TrustBondingBase {
         _advanceToEpoch(4);
 
         // Calculate expected unclaimed rewards (Bob + Charlie's rewards)
-        uint256 totalEpoch2Rewards = protocol.trustBonding.emissionsForEpoch(2);
+        uint256 totalEpoch2Rewards = protocol.satelliteEmissionsController.getEmissionsAtEpoch(2);
         uint256 aliceClaimedRewards = protocol.trustBonding.userClaimedRewardsForEpoch(users.alice, 2);
         uint256 expectedUnclaimed = totalEpoch2Rewards - aliceClaimedRewards;
 
@@ -502,7 +502,7 @@ contract WithdrawUnclaimedEmissionsTest is TrustBondingBase {
         uint256 unclaimedRewards = protocol.trustBonding.getUnclaimedRewardsForEpoch(2);
 
         // All rewards should be unclaimed since no one claimed
-        uint256 expectedRewards = protocol.trustBonding.emissionsForEpoch(2);
+        uint256 expectedRewards = protocol.satelliteEmissionsController.getEmissionsAtEpoch(2);
         assertEq(unclaimedRewards, expectedRewards, "All rewards should be unclaimed");
 
         resetPrank(users.admin);
