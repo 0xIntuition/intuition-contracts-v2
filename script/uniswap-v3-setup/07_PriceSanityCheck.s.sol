@@ -107,7 +107,7 @@ contract PriceSanityCheck is UniswapV3SetupBase {
     function _checkPool(
         address poolAddress,
         address tokenA,
-        address, /* tokenB */
+        address tokenB,
         uint256 priceAUsd,
         uint256 priceBUsd,
         uint256 toleranceBps
@@ -137,12 +137,24 @@ contract PriceSanityCheck is UniswapV3SetupBase {
 
         check.derivedPrice = _derivePriceFromSqrt(sqrtPriceX96, check.decimals0, check.decimals1);
 
-        bool aIsToken0 = tokenA == check.token0;
-        uint256 price0Usd = aIsToken0 ? priceAUsd : priceBUsd;
-        uint256 price1Usd = aIsToken0 ? priceBUsd : priceAUsd;
+        uint256 price0Usd;
+        uint256 price1Usd;
+        if (check.token0 == tokenA && check.token1 == tokenB) {
+            price0Usd = priceAUsd;
+            price1Usd = priceBUsd;
+        } else if (check.token0 == tokenB && check.token1 == tokenA) {
+            price0Usd = priceBUsd;
+            price1Usd = priceAUsd;
+        } else {
+            check.isOk = false;
+            check.diagnosis = "Pool token0/token1 do not match provided tokenA/tokenB";
+            return check;
+        }
 
-        if (price0Usd > 0) {
-            check.expectedPrice = (price1Usd * PRICE_PRECISION) / price0Usd;
+        // Uniswap v3 price is token1/token0. With USD prices:
+        // token1/token0 = price(token0)/price(token1)
+        if (price1Usd > 0) {
+            check.expectedPrice = (price0Usd * PRICE_PRECISION) / price1Usd;
         }
 
         (check.isOk, check.diagnosis) =

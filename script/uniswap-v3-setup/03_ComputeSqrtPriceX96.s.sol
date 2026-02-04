@@ -149,7 +149,9 @@ contract ComputeSqrtPriceX96 is UniswapV3SetupBase {
         console2.log("Expected / derived prices (human units, 1e18 precision):");
         console2.log(string.concat("  Expected (", token1Name, " per ", token0Name, "):"), price.expectedPriceHumanX18);
         console2.log(string.concat("  Derived  (", token1Name, " per ", token0Name, "):"), price.derivedPriceHumanX18);
-        console2.log(string.concat("  Derived  (", token0Name, " per ", token1Name, "):"), price.derivedPriceHumanInverseX18);
+        console2.log(
+            string.concat("  Derived  (", token0Name, " per ", token1Name, "):"), price.derivedPriceHumanInverseX18
+        );
     }
 
     function _toRawPriceX18(uint256 humanPriceX18, uint8 decimals0, uint8 decimals1) internal pure returns (uint256) {
