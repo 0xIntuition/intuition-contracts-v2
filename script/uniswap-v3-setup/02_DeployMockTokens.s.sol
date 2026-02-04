@@ -46,7 +46,7 @@ contract DeployMockTokens is UniswapV3SetupBase {
     ERC20Mock public mockWeth;
 
     function run() external broadcast {
-        setUp();
+        super.setUp();
         console2.log("");
         console2.log("=== Script 2: Deploy Mock Tokens ===");
         console2.log("Deployer:", broadcaster);

@@ -16,7 +16,8 @@ import { IQuoterV2 } from "src/interfaces/external/uniswapv3/IQuoterV2.sol";
  * USAGE:
  * forge script script/uniswap-v3-setup/06_ExecuteSampleSwaps.s.sol:ExecuteSampleSwaps \
  *   --rpc-url intuition_sepolia \
- *   --broadcast
+ *   --broadcast \
+ *   --slow
  *
  * Required env vars:
  *   WTRUST_TOKEN, USDC_TOKEN, WETH_TOKEN
@@ -46,7 +47,7 @@ contract ExecuteSampleSwaps is UniswapV3SetupBase {
     SwapResult[] public swapResults;
 
     function run() external broadcast {
-        setUp();
+        super.setUp();
         console2.log("");
         console2.log("=== Script 6: Execute Sample Swaps End-to-End ===");
         console2.log("");

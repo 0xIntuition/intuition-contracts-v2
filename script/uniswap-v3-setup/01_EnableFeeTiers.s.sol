@@ -22,7 +22,7 @@ contract EnableFeeTiers is UniswapV3SetupBase {
     }
 
     function run() external broadcast {
-        setUp();
+        super.setUp();
         console2.log("");
         console2.log("=== Script 1: Enable Fee Tiers and Tick Spacings ===");
         console2.log("Factory:", V3_FACTORY);

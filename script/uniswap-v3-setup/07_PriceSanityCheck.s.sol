@@ -47,7 +47,7 @@ contract PriceSanityCheck is UniswapV3SetupBase {
     }
 
     function run() external {
-        setUp();
+        super.setUp();
         console2.log("");
         console2.log("=== Script 7: Minimal Price Sanity Check ===");
         console2.log("");

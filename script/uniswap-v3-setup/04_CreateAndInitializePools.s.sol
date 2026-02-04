@@ -12,7 +12,8 @@ import { IUniswapV3Pool } from "src/interfaces/external/uniswapv3/IUniswapV3Pool
  * USAGE:
  * forge script script/uniswap-v3-setup/04_CreateAndInitializePools.s.sol:CreateAndInitializePools \
  *   --rpc-url intuition_sepolia \
- *   --broadcast
+ *   --broadcast \
+ *   --slow
  *
  * Required env vars:
  *   WTRUST_TOKEN, USDC_TOKEN, WETH_TOKEN
@@ -26,7 +27,7 @@ contract CreateAndInitializePools is UniswapV3SetupBase {
     address public deployedWethUsdcPool;
 
     function run() external broadcast {
-        setUp();
+        super.setUp();
         console2.log("");
         console2.log("=== Script 4: Create and Initialize Canonical Pools ===");
         console2.log("");

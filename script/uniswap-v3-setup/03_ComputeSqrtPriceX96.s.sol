@@ -30,14 +30,17 @@ contract ComputeSqrtPriceX96 is UniswapV3SetupBase {
     struct ComputedPrice {
         address token0;
         address token1;
+        uint8 decimals0;
+        uint8 decimals1;
         uint160 sqrtPriceX96;
-        uint256 humanPrice;
-        uint256 humanPriceInverse;
+        uint256 expectedPriceHumanX18; // token1 per token0 in human units, 1e18 precision
+        uint256 derivedPriceHumanX18; // token1 per token0 in human units, 1e18 precision
+        uint256 derivedPriceHumanInverseX18; // token0 per token1 in human units, 1e18 precision
         bool aIsToken0;
     }
 
     function run() external {
-        setUp();
+        super.setUp();
         console2.log("");
         console2.log("=== Script 3: Compute sqrtPriceX96 for Pool Initialization ===");
         console2.log("");
@@ -110,39 +113,27 @@ contract ComputeSqrtPriceX96 is UniswapV3SetupBase {
         pure
         returns (ComputedPrice memory result)
     {
-        (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
-        bool aIsToken0 = tokenA < tokenB;
+        result.aIsToken0 = tokenA < tokenB;
+        (result.token0, result.token1) = result.aIsToken0 ? (tokenA, tokenB) : (tokenB, tokenA);
+        result.decimals0 = result.aIsToken0 ? decimalsA : decimalsB;
+        result.decimals1 = result.aIsToken0 ? decimalsB : decimalsA;
 
-        uint256 priceToken0Usd = aIsToken0 ? priceAUsd : priceBUsd;
-        uint256 priceToken1Usd = aIsToken0 ? priceBUsd : priceAUsd;
+        uint256 priceToken0Usd = result.aIsToken0 ? priceAUsd : priceBUsd;
+        uint256 priceToken1Usd = result.aIsToken0 ? priceBUsd : priceAUsd;
+        result.expectedPriceHumanX18 = (priceToken0Usd * PRICE_PRECISION) / priceToken1Usd;
 
-        uint256 priceToken1PerToken0 = (priceToken0Usd * PRICE_PRECISION) / priceToken1Usd;
+        uint256 rawPriceX18 = _toRawPriceX18(result.expectedPriceHumanX18, result.decimals0, result.decimals1);
 
-        int256 decimalDiff;
-        if (aIsToken0) {
-            decimalDiff = int256(uint256(decimalsB)) - int256(uint256(decimalsA));
-        } else {
-            decimalDiff = int256(uint256(decimalsA)) - int256(uint256(decimalsB));
+        uint256 sqrtPriceRaw = Math.sqrt(rawPriceX18);
+        result.sqrtPriceX96 = uint160((sqrtPriceRaw * Q96) / Math.sqrt(PRICE_PRECISION));
+
+        // Derive the price back from sqrtPriceX96, then convert back into human units for display.
+        uint256 derivedRawPriceX18 =
+            Math.mulDiv(uint256(result.sqrtPriceX96), uint256(result.sqrtPriceX96) * PRICE_PRECISION, Q192);
+        result.derivedPriceHumanX18 = _toHumanPriceX18(derivedRawPriceX18, result.decimals0, result.decimals1);
+        if (result.derivedPriceHumanX18 > 0) {
+            result.derivedPriceHumanInverseX18 = (PRICE_PRECISION * PRICE_PRECISION) / result.derivedPriceHumanX18;
         }
-
-        uint256 adjustedPrice;
-        if (decimalDiff >= 0) {
-            adjustedPrice = priceToken1PerToken0 * (10 ** uint256(decimalDiff));
-        } else {
-            adjustedPrice = priceToken1PerToken0 / (10 ** uint256(-decimalDiff));
-        }
-
-        uint256 sqrtPriceRaw = Math.sqrt(adjustedPrice);
-        uint160 sqrtPriceX96 = uint160((sqrtPriceRaw * Q96) / Math.sqrt(PRICE_PRECISION));
-
-        result.token0 = token0;
-        result.token1 = token1;
-        result.sqrtPriceX96 = sqrtPriceX96;
-        result.humanPrice = (uint256(sqrtPriceX96) * uint256(sqrtPriceX96) * PRICE_PRECISION) / Q192;
-        if (result.humanPrice > 0) {
-            result.humanPriceInverse = (PRICE_PRECISION * PRICE_PRECISION) / result.humanPrice;
-        }
-        result.aIsToken0 = aIsToken0;
     }
 
     function _printComputedPrice(ComputedPrice memory price, string memory nameA, string memory nameB) internal pure {
@@ -155,9 +146,24 @@ contract ComputeSqrtPriceX96 is UniswapV3SetupBase {
         console2.log("");
         console2.log("sqrtPriceX96:", price.sqrtPriceX96);
         console2.log("");
-        console2.log("Derived human-readable prices (with 18 decimal precision):");
-        console2.log(string.concat("  Price (", token1Name, " per ", token0Name, "):"), price.humanPrice);
-        console2.log(string.concat("  Price (", token0Name, " per ", token1Name, "):"), price.humanPriceInverse);
+        console2.log("Expected / derived prices (human units, 1e18 precision):");
+        console2.log(string.concat("  Expected (", token1Name, " per ", token0Name, "):"), price.expectedPriceHumanX18);
+        console2.log(string.concat("  Derived  (", token1Name, " per ", token0Name, "):"), price.derivedPriceHumanX18);
+        console2.log(string.concat("  Derived  (", token0Name, " per ", token1Name, "):"), price.derivedPriceHumanInverseX18);
+    }
+
+    function _toRawPriceX18(uint256 humanPriceX18, uint8 decimals0, uint8 decimals1) internal pure returns (uint256) {
+        int256 dec1MinusDec0 = int256(uint256(decimals1)) - int256(uint256(decimals0));
+        if (dec1MinusDec0 > 0) return humanPriceX18 * (10 ** uint256(dec1MinusDec0));
+        if (dec1MinusDec0 < 0) return humanPriceX18 / (10 ** uint256(-dec1MinusDec0));
+        return humanPriceX18;
+    }
+
+    function _toHumanPriceX18(uint256 rawPriceX18, uint8 decimals0, uint8 decimals1) internal pure returns (uint256) {
+        int256 dec1MinusDec0 = int256(uint256(decimals1)) - int256(uint256(decimals0));
+        if (dec1MinusDec0 > 0) return rawPriceX18 / (10 ** uint256(dec1MinusDec0));
+        if (dec1MinusDec0 < 0) return rawPriceX18 * (10 ** uint256(-dec1MinusDec0));
+        return rawPriceX18;
     }
 
     function _printSummary(

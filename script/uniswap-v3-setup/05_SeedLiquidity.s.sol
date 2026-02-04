@@ -14,7 +14,8 @@ import { INonfungiblePositionManager } from "src/interfaces/external/uniswapv3/I
  * USAGE:
  * forge script script/uniswap-v3-setup/05_SeedLiquidity.s.sol:SeedLiquidity \
  *   --rpc-url intuition_sepolia \
- *   --broadcast
+ *   --broadcast \
+ *   --slow
  *
  * Required env vars:
  *   WTRUST_TOKEN, USDC_TOKEN, WETH_TOKEN
@@ -55,7 +56,7 @@ contract SeedLiquidity is UniswapV3SetupBase {
     LiquidityResult public wethUsdcPosition;
 
     function run() external broadcast {
-        setUp();
+        super.setUp();
         console2.log("");
         console2.log("=== Script 5: Seed Liquidity with Wide Ranges ===");
         console2.log("");
