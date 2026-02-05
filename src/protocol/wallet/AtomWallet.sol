@@ -31,7 +31,6 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
     error AtomWallet_ZeroAddress();
     error AtomWallet_WrongArrayLengths();
     error AtomWallet_OnlyOwner();
-    error AtomWallet_InvalidSignature();
     error AtomWallet_InvalidSignatureLength(uint256 length);
     error AtomWallet_InvalidSignatureS(bytes32 s);
 
