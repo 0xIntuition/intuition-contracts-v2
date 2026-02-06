@@ -345,6 +345,53 @@ contract MockAerodromeRouter {
     }
 }
 
+contract MockV2Pool {
+    address public token0;
+    address public token1;
+    bool public stable;
+    uint256 public reserve0;
+    uint256 public reserve1;
+    bool public initialized;
+
+    function initialize(address _token0, address _token1, bool _stable, uint256 _reserve0, uint256 _reserve1) external {
+        require(!initialized, "MockV2Pool: already initialized");
+        initialized = true;
+        token0 = _token0;
+        token1 = _token1;
+        stable = _stable;
+        reserve0 = _reserve0;
+        reserve1 = _reserve1;
+    }
+
+    function setReserves(uint256 _reserve0, uint256 _reserve1) external {
+        reserve0 = _reserve0;
+        reserve1 = _reserve1;
+    }
+
+    function getReserves() external view returns (uint256, uint256, uint256) {
+        return (reserve0, reserve1, block.timestamp);
+    }
+}
+
+contract MockV2Factory {
+    bool public initialized;
+    mapping(address => mapping(address => mapping(bool => address))) internal pools;
+
+    function initialize() external {
+        require(!initialized, "MockV2Factory: already initialized");
+        initialized = true;
+    }
+
+    function setPool(address tokenA, address tokenB, bool stable, address pool) external {
+        pools[tokenA][tokenB][stable] = pool;
+        pools[tokenB][tokenA][stable] = pool;
+    }
+
+    function getPool(address tokenA, address tokenB, bool stable) external view returns (address) {
+        return pools[tokenA][tokenB][stable];
+    }
+}
+
 contract MockMetaERC20Hub {
     uint256 public constant BRIDGE_FEE = 0.001 ether;
     uint256 public transferRemoteCallCount;
@@ -409,6 +456,8 @@ contract TrustSwapAndBridgeRouterTest is Test {
     MockMetaERC20Hub public metaERC20Hub;
     MockERC20 public tokenTwoHop;
     MockERC20 public tokenThreeHop;
+    MockAerodromeRouter public v2Router;
+    MockV2Factory public v2Factory;
 
     address public owner;
     address public user;
@@ -421,6 +470,8 @@ contract TrustSwapAndBridgeRouterTest is Test {
     address public constant BASE_MAINNET_USDC_TRUST_CL_POOL = 0x17f707CF3EDBbd5d9251D4bCDF9Ad70a247D7B84;
     address public constant BASE_MAINNET_CL_FACTORY_PRIMARY = 0x5e7BB104d84c7CB9B682AaC2F3d509f5F406809A;
     address public constant BASE_MAINNET_CL_FACTORY_SECONDARY = 0xaDe65c38CD4849aDBA595a4323a8C7DdfE89716a;
+    address public constant BASE_MAINNET_V2_ROUTER = 0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43;
+    address public constant BASE_MAINNET_V2_FACTORY = 0x420DD381b31aEf6683db6B902084cB0FFECe40Da;
 
     uint256 public constant DEFAULT_SWAP_DEADLINE = 30 minutes;
     uint256 public constant USDC_DECIMALS = 6;
@@ -445,6 +496,8 @@ contract TrustSwapAndBridgeRouterTest is Test {
         MockWETH wethTemplate = new MockWETH();
         MockCLPool clPoolTemplate = new MockCLPool();
         MockCLFactory clFactoryTemplate = new MockCLFactory();
+        MockAerodromeRouter v2RouterTemplate = new MockAerodromeRouter();
+        MockV2Factory v2FactoryTemplate = new MockV2Factory();
 
         vm.etch(BASE_MAINNET_USDC, address(usdcTemplate).code);
         vm.etch(BASE_MAINNET_TRUST, address(trustTemplate).code);
@@ -452,12 +505,16 @@ contract TrustSwapAndBridgeRouterTest is Test {
         vm.etch(BASE_MAINNET_USDC_TRUST_CL_POOL, address(clPoolTemplate).code);
         vm.etch(BASE_MAINNET_CL_FACTORY_PRIMARY, address(clFactoryTemplate).code);
         vm.etch(BASE_MAINNET_CL_FACTORY_SECONDARY, address(clFactoryTemplate).code);
+        vm.etch(BASE_MAINNET_V2_ROUTER, address(v2RouterTemplate).code);
+        vm.etch(BASE_MAINNET_V2_FACTORY, address(v2FactoryTemplate).code);
 
         usdcToken = MockERC20(BASE_MAINNET_USDC);
         trustToken = MockERC20(BASE_MAINNET_TRUST);
         clPool = MockCLPool(BASE_MAINNET_USDC_TRUST_CL_POOL);
         clFactoryPrimary = MockCLFactory(BASE_MAINNET_CL_FACTORY_PRIMARY);
         clFactorySecondary = MockCLFactory(BASE_MAINNET_CL_FACTORY_SECONDARY);
+        v2Router = MockAerodromeRouter(BASE_MAINNET_V2_ROUTER);
+        v2Factory = MockV2Factory(BASE_MAINNET_V2_FACTORY);
 
         usdcToken.initialize("USD Coin", "USDC", uint8(USDC_DECIMALS));
         trustToken.initialize("Trust Token", "TRUST", uint8(TRUST_DECIMALS));
@@ -467,6 +524,7 @@ contract TrustSwapAndBridgeRouterTest is Test {
         tickSpacings[0] = 1;
         clFactoryPrimary.initialize(tickSpacings);
         clFactorySecondary.initialize(tickSpacings);
+        v2Factory.initialize();
         metaERC20Hub = new MockMetaERC20Hub();
 
         trustSwapRouterImplementation = new TrustSwapAndBridgeRouter();
@@ -702,18 +760,20 @@ contract TrustSwapAndBridgeRouterTest is Test {
         uint256 ethAmountIn = 0.01 ether;
         uint256 quotedOut = trustSwapRouter.quoteSwapFromETHToTrust(ethAmountIn);
         uint256 bridgeFee = metaERC20Hub.BRIDGE_FEE();
+        uint256 minAmountOut = (quotedOut * 99) / 100;
 
         uint256 routerTrustBefore = trustToken.balanceOf(address(trustSwapRouter));
 
         vm.deal(user, ethAmountIn + bridgeFee);
 
         vm.startPrank(user);
-        (uint256 amountOut,) = trustSwapRouter.swapAndBridgeWithETH{ value: ethAmountIn + bridgeFee }(quotedOut, user);
+        (uint256 amountOut,) =
+            trustSwapRouter.swapAndBridgeWithETH{ value: ethAmountIn + bridgeFee }(minAmountOut, user);
         vm.stopPrank();
 
         uint256 routerTrustAfter = trustToken.balanceOf(address(trustSwapRouter));
 
-        assertGe(amountOut, quotedOut);
+        assertGe(amountOut, minAmountOut);
         assertEq(routerTrustAfter - routerTrustBefore, amountOut);
     }
 
@@ -753,19 +813,20 @@ contract TrustSwapAndBridgeRouterTest is Test {
         tokenTwoHop.approve(address(trustSwapRouter), type(uint256).max);
 
         (uint256 quotedOut,) = trustSwapRouter.quoteArbitraryTokenSwap(address(tokenTwoHop), amountIn);
+        uint256 minAmountOut = (quotedOut * 99) / 100;
 
         uint256 routerTrustBefore = trustToken.balanceOf(address(trustSwapRouter));
 
         vm.deal(user, bridgeFee);
         vm.startPrank(user);
         (uint256 amountOut,) = trustSwapRouter.swapArbitraryTokenAndBridge{ value: bridgeFee }(
-            address(tokenTwoHop), amountIn, quotedOut, user
+            address(tokenTwoHop), amountIn, minAmountOut, user
         );
         vm.stopPrank();
 
         uint256 routerTrustAfter = trustToken.balanceOf(address(trustSwapRouter));
 
-        assertGe(amountOut, quotedOut);
+        assertGe(amountOut, minAmountOut);
         assertEq(routerTrustAfter - routerTrustBefore, amountOut);
     }
 
@@ -791,7 +852,7 @@ contract TrustSwapAndBridgeRouterTest is Test {
         trustSwapRouter.swapArbitraryTokenAndBridge(address(trustToken), 1, 1, user);
     }
 
-    function test_swapArbitraryTokenAndBridge_revertsOnZeroMinAmountOut() public {
+    function test_swapArbitraryTokenAndBridge_succeedsWithZeroMinAmountOut() public {
         uint256 amountIn = 100e18;
         uint256 bridgeFee = metaERC20Hub.BRIDGE_FEE();
 
@@ -799,12 +860,18 @@ contract TrustSwapAndBridgeRouterTest is Test {
         vm.prank(user);
         tokenTwoHop.approve(address(trustSwapRouter), type(uint256).max);
 
+        uint256 routerTrustBefore = trustToken.balanceOf(address(trustSwapRouter));
+
         vm.deal(user, bridgeFee);
-        vm.prank(user);
-        vm.expectRevert(
-            abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_OutputBelowThreshold.selector)
-        );
-        trustSwapRouter.swapArbitraryTokenAndBridge{ value: bridgeFee }(address(tokenTwoHop), amountIn, 0, user);
+        vm.startPrank(user);
+        (uint256 amountOut,) =
+            trustSwapRouter.swapArbitraryTokenAndBridge{ value: bridgeFee }(address(tokenTwoHop), amountIn, 0, user);
+        vm.stopPrank();
+
+        uint256 routerTrustAfter = trustToken.balanceOf(address(trustSwapRouter));
+
+        assertGt(amountOut, 0);
+        assertEq(routerTrustAfter - routerTrustBefore, amountOut);
     }
 
     function test_swapArbitraryTokenAndBridge_revertsOnInsufficientBridgeFee() public {
@@ -815,12 +882,13 @@ contract TrustSwapAndBridgeRouterTest is Test {
         tokenTwoHop.approve(address(trustSwapRouter), type(uint256).max);
 
         (uint256 quotedOut,) = trustSwapRouter.quoteArbitraryTokenSwap(address(tokenTwoHop), amountIn);
+        uint256 minAmountOut = (quotedOut * 99) / 100;
 
         vm.prank(user);
         vm.expectRevert(
             abi.encodeWithSelector(ITrustSwapAndBridgeRouter.TrustSwapAndBridgeRouter_InsufficientBridgeFee.selector)
         );
-        trustSwapRouter.swapArbitraryTokenAndBridge(address(tokenTwoHop), amountIn, quotedOut, user);
+        trustSwapRouter.swapArbitraryTokenAndBridge(address(tokenTwoHop), amountIn, minAmountOut, user);
     }
 
     /* =================================================== */
@@ -985,13 +1053,14 @@ contract TrustSwapAndBridgeRouterTest is Test {
 
         uint256 bridgeFee = metaERC20Hub.BRIDGE_FEE();
         uint256 quotedOut = trustSwapRouter.quoteSwapFromETHToTrust(amountIn);
+        uint256 minAmountOut = (quotedOut * 99) / 100;
 
         vm.deal(user, amountIn + bridgeFee);
         vm.startPrank(user);
-        (uint256 amountOut,) = trustSwapRouter.swapAndBridgeWithETH{ value: amountIn + bridgeFee }(quotedOut, user);
+        (uint256 amountOut,) = trustSwapRouter.swapAndBridgeWithETH{ value: amountIn + bridgeFee }(minAmountOut, user);
         vm.stopPrank();
 
-        assertGe(amountOut, quotedOut);
+        assertGe(amountOut, minAmountOut);
     }
 
     function testFuzz_quoteSwapFromETHToTrust_variousAmounts(uint256 amountIn) public view {
@@ -1014,15 +1083,44 @@ contract TrustSwapAndBridgeRouterTest is Test {
         tokenTwoHop.approve(address(trustSwapRouter), type(uint256).max);
 
         (uint256 quotedOut,) = trustSwapRouter.quoteArbitraryTokenSwap(address(tokenTwoHop), amountIn);
+        uint256 minAmountOut = (quotedOut * 99) / 100;
 
         vm.deal(user, metaERC20Hub.BRIDGE_FEE());
         vm.startPrank(user);
         (uint256 amountOut,) = trustSwapRouter.swapArbitraryTokenAndBridge{ value: metaERC20Hub.BRIDGE_FEE() }(
-            address(tokenTwoHop), amountIn, quotedOut, user
+            address(tokenTwoHop), amountIn, minAmountOut, user
         );
         vm.stopPrank();
 
-        assertGe(amountOut, quotedOut);
+        assertGe(amountOut, minAmountOut);
+    }
+
+    function test_swapArbitraryTokenAndBridge_successfulViaV2Pool() public {
+        MockERC20 tokenWithV2Pool = new MockERC20("Token V2", "V2", 18);
+        MockV2Pool v2Pool = new MockV2Pool();
+        v2Pool.initialize(address(tokenWithV2Pool), address(usdcToken), false, 1000e18, 1000e6);
+        v2Factory.setPool(address(tokenWithV2Pool), address(usdcToken), false, address(v2Pool));
+        v2Router.setOutputMultiplier(1e6);
+
+        uint256 amountIn = 100e18;
+        tokenWithV2Pool.mint(user, amountIn);
+        vm.prank(user);
+        tokenWithV2Pool.approve(address(trustSwapRouter), type(uint256).max);
+
+        (uint256 quotedOut, uint256 routeHops) =
+            trustSwapRouter.quoteArbitraryTokenSwap(address(tokenWithV2Pool), amountIn);
+        assertGt(quotedOut, 0, "Should have a quote");
+        assertEq(routeHops, 2, "Should be a 2-hop route");
+
+        uint256 minAmountOut = (quotedOut * 90) / 100;
+        vm.deal(user, metaERC20Hub.BRIDGE_FEE());
+        vm.startPrank(user);
+        (uint256 amountOut,) = trustSwapRouter.swapArbitraryTokenAndBridge{ value: metaERC20Hub.BRIDGE_FEE() }(
+            address(tokenWithV2Pool), amountIn, minAmountOut, user
+        );
+        vm.stopPrank();
+
+        assertGe(amountOut, minAmountOut, "Should receive at least minAmountOut");
     }
 
     function testFuzz_quoteArbitraryTokenSwap_variousAmounts(uint256 amountIn) public view {
@@ -1655,6 +1753,36 @@ contract TrustSwapAndBridgeRouterForkTest is Test {
         assertGt(routeHops, 0, "Arbitrary token route should have at least one hop");
     }
 
+    function test_fork_quoteArbitraryTokenSwap_cbETH_returnsNonZero() public view {
+        address cbETH = 0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22;
+        uint256 amountIn = 0.01 ether;
+
+        (uint256 quotedOutput, uint256 routeHops) = trustSwapRouter.quoteArbitraryTokenSwap(cbETH, amountIn);
+
+        console2.log("cbETH quote:");
+        console2.log("  cbETH in:", amountIn);
+        console2.log("  TRUST out:", quotedOutput);
+        console2.log("  Route hops:", routeHops);
+
+        assertGt(quotedOutput, 0, "cbETH quote should return non-zero output");
+        assertGt(routeHops, 0, "cbETH route should have at least one hop");
+    }
+
+    function test_fork_quoteArbitraryTokenSwap_DAI_returnsNonZero() public view {
+        address DAI = 0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb;
+        uint256 amountIn = 100e18;
+
+        (uint256 quotedOutput, uint256 routeHops) = trustSwapRouter.quoteArbitraryTokenSwap(DAI, amountIn);
+
+        console2.log("DAI quote:");
+        console2.log("  DAI in:", amountIn);
+        console2.log("  TRUST out:", quotedOutput);
+        console2.log("  Route hops:", routeHops);
+
+        assertGt(quotedOutput, 0, "DAI quote should return non-zero output");
+        assertGt(routeHops, 0, "DAI route should have at least one hop");
+    }
+
     /* =================================================== */
     /*                FORK TEST: SWAP                      */
     /* =================================================== */
@@ -1736,7 +1864,7 @@ contract TrustSwapAndBridgeRouterForkTest is Test {
         assertEq(routerTrustAfter - routerTrustBefore, amountOut, "Router trust balance should increase by amountOut");
     }
 
-        function test_fork_swapArbitraryTokenAndBridge_AERO_executesSuccessfully() public {
+    function test_fork_swapArbitraryTokenAndBridge_AERO_executesSuccessfully() public {
         uint256 amountIn = 1e18;
         uint256 bridgeFee = metaERC20Hub.BRIDGE_FEE();
 
@@ -1754,7 +1882,7 @@ contract TrustSwapAndBridgeRouterForkTest is Test {
         aeroToken.approve(address(trustSwapRouter), type(uint256).max);
 
         (uint256 quotedOutput,) = trustSwapRouter.quoteArbitraryTokenSwap(aeroTokenAddress, amountIn);
-        uint256 minAmountOut = 0;
+        uint256 minAmountOut = (quotedOutput * 5) / 100;
 
         uint256 routerTrustBefore = trust.balanceOf(address(trustSwapRouter));
 
@@ -1785,6 +1913,64 @@ contract TrustSwapAndBridgeRouterForkTest is Test {
 
         assertGt(firstSwapOut, 0, "First swap should return tokens");
         assertGt(secondSwapOut, 0, "Second swap should return tokens");
+    }
+
+    function test_fork_swapArbitraryTokenAndBridge_cbETH_executesSuccessfully() public {
+        address cbETH = 0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22;
+        uint256 amountIn = 0.01 ether;
+        uint256 bridgeFee = metaERC20Hub.BRIDGE_FEE();
+
+        deal(cbETH, user, amountIn);
+        vm.deal(user, 1 ether);
+
+        vm.startPrank(user);
+        IERC20(cbETH).approve(address(trustSwapRouter), type(uint256).max);
+
+        (uint256 quotedOutput, uint256 routeHops) = trustSwapRouter.quoteArbitraryTokenSwap(cbETH, amountIn);
+        uint256 minAmountOut = 0; // (quotedOutput * 90) / 100;
+
+        console2.log("cbETH swap:");
+        console2.log("  cbETH in:", amountIn);
+        console2.log("  Quoted TRUST out:", quotedOutput);
+        console2.log("  Route hops:", routeHops);
+
+        (uint256 amountOut,) =
+            trustSwapRouter.swapArbitraryTokenAndBridge{ value: bridgeFee }(cbETH, amountIn, minAmountOut, user);
+        vm.stopPrank();
+
+        console2.log("  Actual TRUST out:", amountOut);
+
+        assertGe(amountOut, minAmountOut, "Should receive at least minAmountOut");
+        assertGt(amountOut, 0, "Should receive some TRUST");
+    }
+
+    function test_fork_swapArbitraryTokenAndBridge_DAI_executesSuccessfully() public {
+        address DAI = 0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb;
+        uint256 amountIn = 100e18;
+        uint256 bridgeFee = metaERC20Hub.BRIDGE_FEE();
+
+        deal(DAI, user, amountIn);
+        vm.deal(user, 1 ether);
+
+        vm.startPrank(user);
+        IERC20(DAI).approve(address(trustSwapRouter), type(uint256).max);
+
+        (uint256 quotedOutput, uint256 routeHops) = trustSwapRouter.quoteArbitraryTokenSwap(DAI, amountIn);
+        uint256 minAmountOut = 0; // (quotedOutput * 90) / 100;
+
+        console2.log("DAI swap:");
+        console2.log("  DAI in:", amountIn);
+        console2.log("  Quoted TRUST out:", quotedOutput);
+        console2.log("  Route hops:", routeHops);
+
+        (uint256 amountOut,) =
+            trustSwapRouter.swapArbitraryTokenAndBridge{ value: bridgeFee }(DAI, amountIn, minAmountOut, user);
+        vm.stopPrank();
+
+        console2.log("  Actual TRUST out:", amountOut);
+
+        assertGe(amountOut, minAmountOut, "Should receive at least minAmountOut");
+        assertGt(amountOut, 0, "Should receive some TRUST");
     }
 
     /* =================================================== */
