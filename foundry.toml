@@ -24,8 +24,7 @@
     "@openzeppelinV4/contracts-upgradeable/=node_modules/@openzeppelin/contracts-upgradeable/",
     "solady/=lib/solady/src/",
     "@prb/math/=lib/prb-math/",
-    "@account-abstraction/=lib/account-abstraction/contracts/",
-    "permit2/=lib/permit2/src/"
+    "@account-abstraction/=lib/account-abstraction/contracts/"
   ]
 
 [profile.ci]
