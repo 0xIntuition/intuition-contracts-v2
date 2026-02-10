@@ -167,7 +167,7 @@ contract TrustSwapAndBridgeRouter is
 
         bytes32 recipientAddress = bytes32(uint256(uint160(recipient)));
 
-        uint256 bridgeFee = metaERC20Hub.quoteTransferRemote(recipientDomain, recipientAddress, 0);
+        uint256 bridgeFee = metaERC20Hub.quoteTransferRemote(recipientDomain, recipientAddress, minTrustOut);
         if (msg.value <= bridgeFee) {
             revert TrustSwapAndBridgeRouter_InsufficientETH();
         }
@@ -224,7 +224,7 @@ contract TrustSwapAndBridgeRouter is
 
         bytes32 recipientAddress = bytes32(uint256(uint160(recipient)));
 
-        uint256 bridgeFee = metaERC20Hub.quoteTransferRemote(recipientDomain, recipientAddress, 0);
+        uint256 bridgeFee = metaERC20Hub.quoteTransferRemote(recipientDomain, recipientAddress, minTrustOut);
         if (msg.value < bridgeFee) {
             revert TrustSwapAndBridgeRouter_InsufficientBridgeFee();
         }
