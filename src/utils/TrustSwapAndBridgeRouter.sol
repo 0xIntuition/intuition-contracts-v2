@@ -2,58 +2,35 @@
 pragma solidity 0.8.29;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { IERC20Permit } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
-import { IAerodromeFactory } from "src/interfaces/external/aerodrome/IAerodromeFactory.sol";
-import { IAerodromePool } from "src/interfaces/external/aerodrome/IAerodromePool.sol";
-import { IAerodromeRouter } from "src/interfaces/external/aerodrome/IAerodromeRouter.sol";
 import { ICLFactory } from "src/interfaces/external/aerodrome/ICLFactory.sol";
-import { ICLPool, ICLSwapCallback } from "src/interfaces/external/aerodrome/ICLPool.sol";
+import { ICLQuoter } from "src/interfaces/external/aerodrome/ICLQuoter.sol";
+import { ISlipstreamSwapRouter } from "src/interfaces/external/aerodrome/ISlipstreamSwapRouter.sol";
 import { FinalityState, IMetaERC20Hub } from "src/interfaces/external/metalayer/IMetaERC20Hub.sol";
 import { IWETH } from "src/interfaces/external/IWETH.sol";
-import { ITrustSwapAndBridgeRouter } from "src/interfaces/ITrustSwapAndBridgeRouter.sol";
+import { ITrustSwapAndBridgeRouter, RouterConfig } from "src/interfaces/ITrustSwapAndBridgeRouter.sol";
 
 /**
  * @title TrustSwapAndBridgeRouter
  * @author 0xIntuition
- * @notice TrustSwapAndBridgeRouter facilitates swapping any token for TRUST on the Base network using the Aerodrome
- *         DEX and bridging them to Intuition mainnet via Metalayer.
+ * @notice Minimal router that validates pre-built Slipstream (CL) paths, delegates swaps to the
+ *         Slipstream SwapRouter and bridges resulting TRUST to Intuition mainnet via Metalayer.
  */
 contract TrustSwapAndBridgeRouter is
     ITrustSwapAndBridgeRouter,
     Initializable,
     Ownable2StepUpgradeable,
-    ReentrancyGuardUpgradeable,
-    ICLSwapCallback
+    ReentrancyGuardUpgradeable
 {
     using SafeERC20 for IERC20;
 
-    /*//////////////////////////////////////////////////////////////
-                                STATE
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Base mainnet Aerodrome CL USDC/TRUST pool address
-    address public constant CL_USDC_TRUST_POOL = 0x17f707CF3EDBbd5d9251D4bCDF9Ad70a247D7B84;
-
-    /// @notice Primary Aerodrome CL factory (Base)
-    address internal constant CL_FACTORY_PRIMARY = 0x5e7BB104d84c7CB9B682AaC2F3d509f5F406809A;
-
-    /// @notice Secondary Aerodrome CL factory (Base)
-    address internal constant CL_FACTORY_SECONDARY = 0xaDe65c38CD4849aDBA595a4323a8C7DdfE89716a;
-
-    /// @notice Aerodrome V2 Router address on Base
-    address internal constant V2_ROUTER = 0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43;
-
-    /// @notice Aerodrome V2 Factory address on Base
-    address internal constant V2_FACTORY = 0x420DD381b31aEf6683db6B902084cB0FFECe40Da;
-
-    /// @notice Base mainnet USDC address
-    address public constant USDC_ADDRESS = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+    /* =================================================== */
+    /*                      CONSTANTS                      */
+    /* =================================================== */
 
     /// @notice Base mainnet TRUST address
     address public constant TRUST_ADDRESS = 0x6cd905dF2Ed214b22e0d48FF17CD4200C1C6d8A3;
@@ -61,17 +38,30 @@ contract TrustSwapAndBridgeRouter is
     /// @notice Base mainnet WETH address (canonical Base WETH)
     address public constant WETH_ADDRESS = 0x4200000000000000000000000000000000000006;
 
-    /// @notice USDC token contract on Base
-    IERC20 public constant usdcToken = IERC20(USDC_ADDRESS);
-
     /// @notice TRUST token contract on Base
     IERC20 public constant trustToken = IERC20(TRUST_ADDRESS);
 
-    /// @notice WETH token contract on Base (canonical Base WETH)
-    address public constant weth = WETH_ADDRESS;
+    /// @dev Minimum packed path length: 1 hop = 20 (addr) + 3 (tickSpacing) + 20 (addr) = 43 bytes
+    uint256 private constant MIN_PATH_LENGTH = 43;
 
-    /// @notice Default deadline (in seconds) for swaps
-    uint256 public defaultSwapDeadline;
+    /// @dev Each additional hop adds 23 bytes (3 tickSpacing + 20 address)
+    uint256 private constant HOP_SIZE = 23;
+
+    /// @dev Size of an address in the packed path
+    uint256 private constant ADDR_SIZE = 20;
+
+    /* =================================================== */
+    /*                   STATE VARIABLES                   */
+    /* =================================================== */
+
+    /// @notice The single allowlisted Slipstream SwapRouter
+    address public slipstreamSwapRouter;
+
+    /// @notice Slipstream CL Factory for pool existence verification
+    ICLFactory public slipstreamFactory;
+
+    /// @notice Slipstream CL Quoter for swap quotes
+    address public slipstreamQuoter;
 
     /// @notice MetaERC20Hub contract for cross-chain bridging
     IMetaERC20Hub public metaERC20Hub;
@@ -85,89 +75,50 @@ contract TrustSwapAndBridgeRouter is
     /// @notice Finality state for bridge transactions
     FinalityState public finalityState;
 
-    /// @notice Minimum TRUST output threshold for route viability
-    uint256 public minimumOutputThreshold;
-
-    /// @notice Maximum slippage tolerance in basis points (10000 = 100%)
-    uint256 public maxSlippageBps;
-
-    /// @notice Minimum sqrt price ratio (Uniswap V3 bounds)
-    uint160 internal constant MIN_SQRT_RATIO = 4_295_128_739;
-
-    /// @notice Maximum sqrt price ratio (Uniswap V3 bounds)
-    uint160 internal constant MAX_SQRT_RATIO = 1_461_446_703_485_210_103_287_273_052_203_988_822_378_723_970_342;
-
-    /// @notice Fixed-point scaling for price math (Q96)
-    uint256 internal constant Q96 = 1 << 96;
-    /// @notice Fixed-point scaling for price math (Q192)
-    uint256 internal constant Q192 = 1 << 192;
-
-    /// @notice Pool type enum for hybrid routing
-    enum PoolType {
-        CL,
-        V2_VOLATILE,
-        V2_STABLE
-    }
-
-    /// @notice Extended route candidate for hybrid CL/V2 routing
-    struct HybridRouteCandidate {
-        address[] pools;
-        address[] path;
-        PoolType[] poolTypes;
-        uint256 amountOut;
-    }
-
-    /// @notice Pool address authorized to call swap callback for the current swap
-    address private swapCallbackPool;
-
-    /*//////////////////////////////////////////////////////////////
-                            CONSTRUCTOR
-    //////////////////////////////////////////////////////////////*/
+    /* =================================================== */
+    /*                     CONSTRUCTOR                     */
+    /* =================================================== */
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
 
-    /*//////////////////////////////////////////////////////////////
-                          INITIALIZER
-    //////////////////////////////////////////////////////////////*/
+    /* =================================================== */
+    /*                     INITIALIZER                     */
+    /* =================================================== */
 
     /// @inheritdoc ITrustSwapAndBridgeRouter
-    function initialize(
-        address _owner,
-        address metaERC20HubAddress,
-        uint32 _recipientDomain,
-        uint256 _bridgeGasLimit,
-        FinalityState _finalityState,
-        uint256 _defaultSwapDeadline,
-        uint256 _minimumOutputThreshold,
-        uint256 _maxSlippageBps
-    )
-        external
-        initializer
-    {
+    function initialize(address _owner, RouterConfig calldata config) external initializer {
         __Ownable_init(_owner);
         __ReentrancyGuard_init();
 
-        _setMetaERC20Hub(metaERC20HubAddress);
-        _setRecipientDomain(_recipientDomain);
-        _setBridgeGasLimit(_bridgeGasLimit);
-        _setFinalityState(_finalityState);
-        _setDefaultSwapDeadline(_defaultSwapDeadline);
-        _setMinimumOutputThreshold(_minimumOutputThreshold);
-        _setMaxSlippageBps(_maxSlippageBps);
+        _setSlipstreamSwapRouter(config.slipstreamSwapRouter);
+        _setSlipstreamFactory(config.slipstreamFactory);
+        _setSlipstreamQuoter(config.slipstreamQuoter);
+        _setMetaERC20Hub(config.metaERC20Hub);
+        _setRecipientDomain(config.recipientDomain);
+        _setBridgeGasLimit(config.bridgeGasLimit);
+        _setFinalityState(config.finalityState);
     }
 
-    /*//////////////////////////////////////////////////////////////
-                        ADMIN FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    // Aerodrome V2 admin setters removed.
+    /* =================================================== */
+    /*                   ADMIN FUNCTIONS                   */
+    /* =================================================== */
 
     /// @inheritdoc ITrustSwapAndBridgeRouter
-    function setDefaultSwapDeadline(uint256 newDeadline) external onlyOwner {
-        _setDefaultSwapDeadline(newDeadline);
+    function setSlipstreamSwapRouter(address newSlipstreamSwapRouter) external onlyOwner {
+        _setSlipstreamSwapRouter(newSlipstreamSwapRouter);
+    }
+
+    /// @inheritdoc ITrustSwapAndBridgeRouter
+    function setSlipstreamFactory(address newSlipstreamFactory) external onlyOwner {
+        _setSlipstreamFactory(newSlipstreamFactory);
+    }
+
+    /// @inheritdoc ITrustSwapAndBridgeRouter
+    function setSlipstreamQuoter(address newSlipstreamQuoter) external onlyOwner {
+        _setSlipstreamQuoter(newSlipstreamQuoter);
     }
 
     /// @inheritdoc ITrustSwapAndBridgeRouter
@@ -190,72 +141,14 @@ contract TrustSwapAndBridgeRouter is
         _setFinalityState(newFinalityState);
     }
 
-    /// @inheritdoc ITrustSwapAndBridgeRouter
-    function setMinimumOutputThreshold(uint256 newThreshold) external onlyOwner {
-        _setMinimumOutputThreshold(newThreshold);
-    }
-
-    /// @inheritdoc ITrustSwapAndBridgeRouter
-    function setMaxSlippageBps(uint256 newMaxSlippageBps) external onlyOwner {
-        _setMaxSlippageBps(newMaxSlippageBps);
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                        SWAP FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @inheritdoc ITrustSwapAndBridgeRouter
-    function swapAndBridge(
-        uint256 amountIn,
-        uint256 minAmountOut,
-        address recipient
-    )
-        external
-        payable
-        nonReentrant
-        returns (uint256 amountOut, bytes32 transferId)
-    {
-        if (amountIn == 0) revert TrustSwapAndBridgeRouter_AmountInZero();
-
-        usdcToken.safeTransferFrom(msg.sender, address(this), amountIn);
-
-        return _executeSwapAndBridge(amountIn, minAmountOut, bytes32(uint256(uint160(recipient))));
-    }
-
-    /// @inheritdoc ITrustSwapAndBridgeRouter
-    function swapAndBridgeWithPermit(
-        uint256 amountIn,
-        uint256 minAmountOut,
-        address recipient,
-        uint256 deadline,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    )
-        external
-        payable
-        nonReentrant
-        returns (uint256 amountOut, bytes32 transferId)
-    {
-        if (amountIn == 0) revert TrustSwapAndBridgeRouter_AmountInZero();
-        if (deadline < block.timestamp) revert TrustSwapAndBridgeRouter_PermitExpired();
-
-        try IERC20Permit(address(usdcToken)).permit(msg.sender, address(this), amountIn, deadline, v, r, s) { }
-        catch {
-            uint256 currentAllowance = usdcToken.allowance(msg.sender, address(this));
-            if (currentAllowance < amountIn) {
-                revert TrustSwapAndBridgeRouter_PermitFailed();
-            }
-        }
-
-        usdcToken.safeTransferFrom(msg.sender, address(this), amountIn);
-
-        return _executeSwapAndBridge(amountIn, minAmountOut, bytes32(uint256(uint160(recipient))));
-    }
+    /* =================================================== */
+    /*                   SWAP FUNCTIONS                    */
+    /* =================================================== */
 
     /// @inheritdoc ITrustSwapAndBridgeRouter
     function swapAndBridgeWithETH(
-        uint256 minAmountOut,
+        bytes calldata path,
+        uint256 minTrustOut,
         address recipient
     )
         external
@@ -263,7 +156,14 @@ contract TrustSwapAndBridgeRouter is
         nonReentrant
         returns (uint256 amountOut, bytes32 transferId)
     {
-        if (msg.value == 0) revert TrustSwapAndBridgeRouter_InsufficientETH();
+        if (_extractFirstToken(path) != WETH_ADDRESS) {
+            revert TrustSwapAndBridgeRouter_PathDoesNotStartWithWETH();
+        }
+        if (_extractLastToken(path) != TRUST_ADDRESS) {
+            revert TrustSwapAndBridgeRouter_PathDoesNotEndWithTRUST();
+        }
+
+        _validatePoolsExist(path);
 
         bytes32 recipientAddress = bytes32(uint256(uint160(recipient)));
 
@@ -271,21 +171,35 @@ contract TrustSwapAndBridgeRouter is
         if (msg.value <= bridgeFee) {
             revert TrustSwapAndBridgeRouter_InsufficientETH();
         }
-        uint256 ethAmountForSwap = msg.value - bridgeFee;
 
-        IWETH(weth).deposit{ value: ethAmountForSwap }();
+        uint256 swapEth = msg.value - bridgeFee;
 
-        (amountOut, transferId,) =
-            _swapTokenAndBridge(weth, ethAmountForSwap, minAmountOut, recipientAddress, bridgeFee);
+        IWETH(WETH_ADDRESS).deposit{ value: swapEth }();
 
-        emit SwappedAndBridgedFromETH(msg.sender, ethAmountForSwap, amountOut, recipientAddress, transferId);
+        IERC20(WETH_ADDRESS).safeIncreaseAllowance(slipstreamSwapRouter, swapEth);
+
+        amountOut = ISlipstreamSwapRouter(slipstreamSwapRouter)
+            .exactInput(
+                ISlipstreamSwapRouter.ExactInputParams({
+                    path: path,
+                    recipient: address(this),
+                    deadline: block.timestamp,
+                    amountIn: swapEth,
+                    amountOutMinimum: minTrustOut
+                })
+            );
+
+        transferId = _bridgeTrust(amountOut, recipientAddress, bridgeFee);
+
+        emit SwappedAndBridgedFromETH(msg.sender, swapEth, amountOut, recipientAddress, transferId);
     }
 
     /// @inheritdoc ITrustSwapAndBridgeRouter
-    function swapArbitraryTokenAndBridge(
+    function swapAndBridgeWithERC20(
         address tokenIn,
         uint256 amountIn,
-        uint256 minAmountOut,
+        bytes calldata path,
+        uint256 minTrustOut,
         address recipient
     )
         external
@@ -294,714 +208,192 @@ contract TrustSwapAndBridgeRouter is
         returns (uint256 amountOut, bytes32 transferId)
     {
         if (amountIn == 0) revert TrustSwapAndBridgeRouter_AmountInZero();
-        if (tokenIn == address(0) || tokenIn == address(trustToken)) {
+        if (tokenIn == address(0) || tokenIn == TRUST_ADDRESS) {
             revert TrustSwapAndBridgeRouter_InvalidToken();
         }
+        if (_extractFirstToken(path) != tokenIn) {
+            revert TrustSwapAndBridgeRouter_PathDoesNotStartWithToken();
+        }
+        if (_extractLastToken(path) != TRUST_ADDRESS) {
+            revert TrustSwapAndBridgeRouter_PathDoesNotEndWithTRUST();
+        }
+
+        _validatePoolsExist(path);
 
         IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
 
         bytes32 recipientAddress = bytes32(uint256(uint160(recipient)));
 
-        uint256 routeHops;
-        (amountOut, transferId, routeHops) =
-            _swapTokenAndBridge(tokenIn, amountIn, minAmountOut, recipientAddress, msg.value);
-
-        emit SwappedArbitraryTokenAndBridged(
-            msg.sender, tokenIn, amountIn, amountOut, routeHops, recipientAddress, transferId
-        );
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                          VIEW FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @inheritdoc ITrustSwapAndBridgeRouter
-    function quoteSwapToTrust(uint256 amountIn) external view returns (uint256 amountOut) {
-        if (amountIn == 0) return 0;
-
-        return _quoteUSDCToTrustCL(amountIn);
-    }
-
-    /// @inheritdoc ITrustSwapAndBridgeRouter
-    function quoteSwapAndBridge(
-        uint256 amountIn,
-        address recipient
-    )
-        external
-        view
-        returns (uint256 amountOut, uint256 bridgeFee)
-    {
-        if (amountIn == 0) {
-            return (0, 0);
+        uint256 bridgeFee = metaERC20Hub.quoteTransferRemote(recipientDomain, recipientAddress, 0);
+        if (msg.value < bridgeFee) {
+            revert TrustSwapAndBridgeRouter_InsufficientBridgeFee();
         }
 
-        amountOut = _quoteUSDCToTrustCL(amountIn);
+        IERC20(tokenIn).safeIncreaseAllowance(slipstreamSwapRouter, amountIn);
 
-        bridgeFee = metaERC20Hub.quoteTransferRemote(recipientDomain, bytes32(uint256(uint160(recipient))), amountOut);
+        amountOut = ISlipstreamSwapRouter(slipstreamSwapRouter)
+            .exactInput(
+                ISlipstreamSwapRouter.ExactInputParams({
+                    path: path,
+                    recipient: address(this),
+                    deadline: block.timestamp,
+                    amountIn: amountIn,
+                    amountOutMinimum: minTrustOut
+                })
+            );
+
+        transferId = _bridgeTrust(amountOut, recipientAddress, bridgeFee);
+
+        uint256 refundAmount = msg.value - bridgeFee;
+        _refundExcess(refundAmount);
+
+        emit SwappedAndBridgedFromERC20(msg.sender, tokenIn, amountIn, amountOut, recipientAddress, transferId);
+    }
+
+    /* =================================================== */
+    /*                   VIEW FUNCTIONS                    */
+    /* =================================================== */
+
+    /// @inheritdoc ITrustSwapAndBridgeRouter
+    function quoteBridgeFee(uint256 trustAmount, address recipient) external view returns (uint256 bridgeFee) {
+        bytes32 recipientAddress = bytes32(uint256(uint160(recipient)));
+        bridgeFee = metaERC20Hub.quoteTransferRemote(recipientDomain, recipientAddress, trustAmount);
     }
 
     /// @inheritdoc ITrustSwapAndBridgeRouter
-    function quoteSwapFromETHToTrust(uint256 amountIn) external view returns (uint256 amountOut) {
-        return _quoteSwapFromETH(amountIn);
-    }
+    function quoteExactInput(bytes calldata path, uint256 amountIn) external returns (uint256 amountOut) {
+        if (slipstreamQuoter == address(0)) revert TrustSwapAndBridgeRouter_InvalidAddress();
 
-    /// @inheritdoc ITrustSwapAndBridgeRouter
-    function quoteSwapAndBridgeWithETH(
-        uint256 amountIn,
-        address recipient
-    )
-        external
-        view
-        returns (uint256 amountOut, uint256 bridgeFee)
-    {
-        if (amountIn == 0) {
-            return (0, 0);
-        }
-
-        amountOut = _quoteSwapFromETH(amountIn);
-        bridgeFee = metaERC20Hub.quoteTransferRemote(recipientDomain, bytes32(uint256(uint160(recipient))), 0);
-    }
-
-    /// @inheritdoc ITrustSwapAndBridgeRouter
-    function quoteArbitraryTokenSwap(
-        address tokenIn,
-        uint256 amountIn
-    )
-        external
-        view
-        returns (uint256 amountOut, uint256 routeHops)
-    {
-        if (amountIn == 0) {
-            return (0, 0);
-        }
-        if (tokenIn == address(0) || tokenIn == address(trustToken)) {
-            revert TrustSwapAndBridgeRouter_InvalidToken();
-        }
-
-        HybridRouteCandidate memory route = _discoverHybridRoute(tokenIn, amountIn);
-        return (route.amountOut, route.pools.length == 0 ? 0 : route.path.length - 1);
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                          INTERNAL FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    /**
-     * @dev Internal function to execute the swap and bridge after USDC has been transferred to this contract
-     * @param amountIn Amount of USDC to swap
-     * @param minAmountOut Minimum acceptable amount of TRUST to receive
-     * @param recipientAddress Recipient address on the destination chain
-     * @return amountOut Actual amount of TRUST received and bridged
-     * @return transferId Unique cross-chain transfer ID from Metalayer
-     */
-    function _executeSwapAndBridge(
-        uint256 amountIn,
-        uint256 minAmountOut,
-        bytes32 recipientAddress
-    )
-        internal
-        returns (uint256 amountOut, bytes32 transferId)
-    {
-        amountOut = _swapUSDCToTrustCL(amountIn, minAmountOut);
-
-        // Approve MetaERC20Hub to spend TRUST
-        trustToken.safeIncreaseAllowance(address(metaERC20Hub), amountOut);
-
-        // Get bridge fee quote
-        uint256 bridgeFee = metaERC20Hub.quoteTransferRemote(recipientDomain, recipientAddress, amountOut);
-
-        // Verify sufficient ETH provided for bridge fee
-        if (msg.value < bridgeFee) revert TrustSwapAndBridgeRouter_InsufficientBridgeFee();
-
-        // Bridge TRUST to destination chain
-        transferId = metaERC20Hub.transferRemote{ value: bridgeFee }(
-            recipientDomain, recipientAddress, amountOut, bridgeGasLimit, finalityState
-        );
-
-        // Refund excess ETH if any
-        if (msg.value > bridgeFee) {
-            (bool success,) = msg.sender.call{ value: msg.value - bridgeFee }("");
-            require(success, "ETH refund failed");
-        }
-
-        emit SwappedAndBridged(msg.sender, amountIn, amountOut, recipientAddress, transferId);
-    }
-
-    function _swapUSDCToTrustCL(uint256 amountIn, uint256 minAmountOut) internal returns (uint256 amountOut) {
-        amountOut = _swapExactInputCL(CL_USDC_TRUST_POOL, address(usdcToken), address(trustToken), amountIn);
-        if (amountOut < minAmountOut) {
-            revert TrustSwapAndBridgeRouter_OutputBelowThreshold();
-        }
-    }
-
-    function _quoteUSDCToTrustCL(uint256 amountIn) internal view returns (uint256 amountOut) {
-        ICLPool pool = ICLPool(CL_USDC_TRUST_POOL);
-        address token0 = pool.token0();
-        address token1 = pool.token1();
-        if (token0 != address(usdcToken) && token1 != address(usdcToken)) {
-            revert TrustSwapAndBridgeRouter_InvalidToken();
-        }
-        if (token0 != address(trustToken) && token1 != address(trustToken)) {
-            revert TrustSwapAndBridgeRouter_InvalidToken();
-        }
-
-        (uint160 sqrtPriceX96,,,,, bool unlocked) = pool.slot0();
-        if (!unlocked || sqrtPriceX96 == 0) {
-            return 0;
-        }
-        if (sqrtPriceX96 <= MIN_SQRT_RATIO + 1 || sqrtPriceX96 >= MAX_SQRT_RATIO - 1) {
-            return 0;
-        }
-
-        if (token0 == address(usdcToken)) {
-            // amountOut = amountIn * (sqrtP^2 / Q192)
-            return _quoteFromSqrtPrice(amountIn, sqrtPriceX96, true);
-        }
-
-        // amountOut = amountIn * (Q192 / sqrtP^2)
-        return _quoteFromSqrtPrice(amountIn, sqrtPriceX96, false);
-    }
-
-    function _swapExactInputCL(
-        address poolAddress,
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn
-    )
-        internal
-        returns (uint256 amountOut)
-    {
-        ICLPool pool = ICLPool(poolAddress);
-        address token0 = pool.token0();
-        address token1 = pool.token1();
-        bool zeroForOne;
-        if (token0 == tokenIn && token1 == tokenOut) {
-            zeroForOne = true;
-        } else if (token1 == tokenIn && token0 == tokenOut) {
-            zeroForOne = false;
-        } else {
-            revert TrustSwapAndBridgeRouter_InvalidToken();
-        }
-
-        uint160 sqrtPriceLimitX96 = zeroForOne ? (MIN_SQRT_RATIO + 1) : (MAX_SQRT_RATIO - 1);
-        swapCallbackPool = poolAddress;
-
-        (int256 amount0, int256 amount1) =
-            pool.swap(address(this), zeroForOne, int256(amountIn), sqrtPriceLimitX96, bytes(""));
-
-        swapCallbackPool = address(0);
-
-        if (zeroForOne) {
-            if (amount1 >= 0) revert TrustSwapAndBridgeRouter_NoViableRoute();
-            amountOut = uint256(-amount1);
-        } else {
-            if (amount0 >= 0) revert TrustSwapAndBridgeRouter_NoViableRoute();
-            amountOut = uint256(-amount0);
-        }
-    }
-
-    function _quoteCLPool(
-        address poolAddress,
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn
-    )
-        internal
-        view
-        returns (uint256 amountOut)
-    {
-        if (amountIn == 0) return 0;
-
-        ICLPool pool = ICLPool(poolAddress);
-        address token0 = pool.token0();
-        address token1 = pool.token1();
-        if (!((token0 == tokenIn && token1 == tokenOut) || (token1 == tokenIn && token0 == tokenOut))) {
-            return 0;
-        }
-
-        (uint160 sqrtPriceX96,,,,, bool unlocked) = pool.slot0();
-        if (!unlocked || sqrtPriceX96 == 0) {
-            return 0;
-        }
-        if (sqrtPriceX96 <= MIN_SQRT_RATIO + 1 || sqrtPriceX96 >= MAX_SQRT_RATIO - 1) {
-            return 0;
-        }
-        if (token0 == tokenIn) {
-            return _quoteFromSqrtPrice(amountIn, sqrtPriceX96, true);
-        }
-
-        return _quoteFromSqrtPrice(amountIn, sqrtPriceX96, false);
-    }
-
-    function _quoteFromSqrtPrice(
-        uint256 amountIn,
-        uint160 sqrtPriceX96,
-        bool token0IsIn
-    )
-        internal
-        pure
-        returns (uint256 amountOut)
-    {
-        if (token0IsIn) {
-            uint256 tmp = Math.mulDiv(amountIn, uint256(sqrtPriceX96), Q96);
-            return Math.mulDiv(tmp, uint256(sqrtPriceX96), Q96);
-        }
-
-        uint256 tmp = Math.mulDiv(amountIn, Q96, uint256(sqrtPriceX96));
-        return Math.mulDiv(tmp, Q96, uint256(sqrtPriceX96));
-    }
-
-    function _clFactories() internal pure returns (address[] memory factories) {
-        factories = new address[](2);
-        factories[0] = CL_FACTORY_PRIMARY;
-        factories[1] = CL_FACTORY_SECONDARY;
-    }
-
-    function _findBestPool(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn
-    )
-        internal
-        view
-        returns (address bestPool, uint256 bestOut)
-    {
-        address[] memory factories = _clFactories();
-        for (uint256 i = 0; i < factories.length; i++) {
-            int24[] memory tickSpacings = ICLFactory(factories[i]).tickSpacings();
-            for (uint256 j = 0; j < tickSpacings.length; j++) {
-                address pool = ICLFactory(factories[i]).getPool(tokenIn, tokenOut, tickSpacings[j]);
-                if (pool == address(0)) continue;
-                uint256 out = _quoteCLPool(pool, tokenIn, tokenOut, amountIn);
-                if (out > bestOut) {
-                    bestOut = out;
-                    bestPool = pool;
-                }
-            }
-        }
-    }
-
-    /**
-     * @dev Quotes output amount for a V2 pool swap using the router
-     * @param tokenIn Input token address
-     * @param tokenOut Output token address
-     * @param amountIn Amount of input token
-     * @param stable Whether the pool is stable
-     * @return amountOut Expected output amount
-     */
-    function _quoteV2Pool(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        bool stable
-    )
-        internal
-        view
-        returns (uint256 amountOut)
-    {
-        if (amountIn == 0) return 0;
-
-        address poolAddress = IAerodromeFactory(V2_FACTORY).getPool(tokenIn, tokenOut, stable);
-        if (poolAddress == address(0)) return 0;
-
-        IAerodromePool pool = IAerodromePool(poolAddress);
-        (uint256 reserve0, uint256 reserve1,) = pool.getReserves();
-        if (reserve0 == 0 || reserve1 == 0) return 0;
-
-        IAerodromeRouter.Route[] memory routes = new IAerodromeRouter.Route[](1);
-        routes[0] = IAerodromeRouter.Route({ from: tokenIn, to: tokenOut, stable: stable, factory: V2_FACTORY });
-
-        try IAerodromeRouter(V2_ROUTER).getAmountsOut(amountIn, routes) returns (uint256[] memory amounts) {
-            if (amounts.length >= 2) {
-                amountOut = amounts[1];
-            }
+        try ICLQuoter(slipstreamQuoter).quoteExactInput(path, amountIn) returns (
+            uint256 quotedAmountOut, uint160[] memory, uint32[] memory, uint256
+        ) {
+            amountOut = quotedAmountOut;
         } catch {
             amountOut = 0;
         }
     }
 
+    /* =================================================== */
+    /*                 INTERNAL FUNCTIONS                  */
+    /* =================================================== */
+
     /**
-     * @dev Finds the best V2 pool for a token pair (checks both stable and volatile)
-     * @param tokenIn Input token address
-     * @param tokenOut Output token address
-     * @param amountIn Amount of input token
-     * @return bestPool Best V2 pool address
-     * @return isStable Whether the best pool is stable
-     * @return bestOut Best quote amount out
+     * @dev Extracts the first token address from a packed Slipstream path.
+     *      Path format: token0 (20 bytes) | tickSpacing (3 bytes) | token1 (20 bytes) | ...
      */
-    function _findBestV2Pool(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn
-    )
-        internal
-        view
-        returns (address bestPool, bool isStable, uint256 bestOut)
-    {
-        address volatilePool = IAerodromeFactory(V2_FACTORY).getPool(tokenIn, tokenOut, false);
-        if (volatilePool != address(0)) {
-            uint256 volatileOut = _quoteV2Pool(tokenIn, tokenOut, amountIn, false);
-            if (volatileOut > bestOut) {
-                bestOut = volatileOut;
-                bestPool = volatilePool;
-                isStable = false;
+    function _extractFirstToken(bytes calldata path) internal pure returns (address token) {
+        if (path.length < MIN_PATH_LENGTH) revert TrustSwapAndBridgeRouter_InvalidPath();
+        assembly {
+            token := shr(96, calldataload(path.offset))
+        }
+    }
+
+    /**
+     * @dev Extracts the last token address from a packed Slipstream path.
+     *      The last 20 bytes of the path contain the final token address.
+     */
+    function _extractLastToken(bytes calldata path) internal pure returns (address token) {
+        if (path.length < MIN_PATH_LENGTH) revert TrustSwapAndBridgeRouter_InvalidPath();
+        assembly {
+            token := shr(96, calldataload(add(path.offset, sub(path.length, 20))))
+        }
+    }
+
+    /**
+     * @dev Validates that all pools referenced in the packed path exist in the CL factory.
+     *      Iterates hop-by-hop, extracting (tokenA, tickSpacing, tokenB) and checking
+     *      ICLFactory.getPool(tokenA, tokenB, tickSpacing) != address(0).
+     */
+    function _validatePoolsExist(bytes calldata path) internal view {
+        if (path.length < MIN_PATH_LENGTH) revert TrustSwapAndBridgeRouter_InvalidPath();
+        if ((path.length - ADDR_SIZE) % HOP_SIZE != 0) revert TrustSwapAndBridgeRouter_InvalidPath();
+
+        uint256 numHops = (path.length - ADDR_SIZE) / HOP_SIZE;
+        uint256 offset = 0;
+
+        for (uint256 i = 0; i < numHops; i++) {
+            address tokenA;
+            int24 tickSpacing;
+            address tokenB;
+
+            assembly {
+                tokenA := shr(96, calldataload(add(path.offset, offset)))
+                tickSpacing := signextend(2, shr(232, calldataload(add(path.offset, add(offset, 20)))))
+                tokenB := shr(96, calldataload(add(path.offset, add(offset, 23))))
             }
-        }
 
-        address stablePool = IAerodromeFactory(V2_FACTORY).getPool(tokenIn, tokenOut, true);
-        if (stablePool != address(0)) {
-            uint256 stableOut = _quoteV2Pool(tokenIn, tokenOut, amountIn, true);
-            if (stableOut > bestOut) {
-                bestOut = stableOut;
-                bestPool = stablePool;
-                isStable = true;
+            if (slipstreamFactory.getPool(tokenA, tokenB, tickSpacing) == address(0)) {
+                revert TrustSwapAndBridgeRouter_PoolDoesNotExist();
             }
+
+            offset += HOP_SIZE;
         }
     }
 
-    /**
-     * @dev Finds the best pool (CL or V2) for a token pair
-     * @param tokenIn Input token address
-     * @param tokenOut Output token address
-     * @param amountIn Amount of input token
-     * @return bestPool Best pool address
-     * @return poolType Type of the best pool
-     * @return isStable If V2, whether stable (ignored for CL)
-     * @return bestOut Best quote amount out
-     */
-    function _findBestHybridPool(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn
-    )
-        internal
-        view
-        returns (address bestPool, PoolType poolType, bool isStable, uint256 bestOut)
-    {
-        (address clPool, uint256 clOut) = _findBestPool(tokenIn, tokenOut, amountIn);
-        if (clOut > bestOut) {
-            bestOut = clOut;
-            bestPool = clPool;
-            poolType = PoolType.CL;
-        }
-
-        (address v2Pool, bool v2IsStable, uint256 v2Out) = _findBestV2Pool(tokenIn, tokenOut, amountIn);
-        if (v2Out > bestOut) {
-            bestOut = v2Out;
-            bestPool = v2Pool;
-            isStable = v2IsStable;
-            poolType = v2IsStable ? PoolType.V2_STABLE : PoolType.V2_VOLATILE;
-        }
-    }
-
-    /**
-     * @dev Discovers the best hybrid route (CL/V2) from tokenIn to TRUST
-     * @param tokenIn Input token address
-     * @param amountIn Amount of input token
-     * @return route The best hybrid route candidate
-     */
-    function _discoverHybridRoute(
-        address tokenIn,
-        uint256 amountIn
-    )
-        internal
-        view
-        returns (HybridRouteCandidate memory route)
-    {
-        HybridRouteCandidate memory direct = _bestDirectHybridRoute(tokenIn, amountIn);
-        HybridRouteCandidate memory twoHop = _bestTwoHopHybridRoute(tokenIn, amountIn);
-        HybridRouteCandidate memory threeHop = _bestThreeHopHybridRoute(tokenIn, amountIn);
-
-        if (direct.amountOut >= twoHop.amountOut && direct.amountOut >= threeHop.amountOut && direct.amountOut > 0) {
-            return direct;
-        }
-
-        if (twoHop.amountOut >= threeHop.amountOut && twoHop.amountOut > 0) {
-            return twoHop;
-        }
-
-        if (threeHop.amountOut > 0) {
-            return threeHop;
-        }
-
-        revert TrustSwapAndBridgeRouter_NoViableRoute();
-    }
-
-    function _bestDirectHybridRoute(
-        address tokenIn,
-        uint256 amountIn
-    )
-        internal
-        view
-        returns (HybridRouteCandidate memory route)
-    {
-        (address pool, PoolType poolType,, uint256 out) = _findBestHybridPool(tokenIn, address(trustToken), amountIn);
-
-        if (out == 0) {
-            return route;
-        }
-
-        route.pools = new address[](1);
-        route.pools[0] = pool;
-        route.path = new address[](2);
-        route.path[0] = tokenIn;
-        route.path[1] = address(trustToken);
-        route.poolTypes = new PoolType[](1);
-        route.poolTypes[0] = poolType;
-        route.amountOut = out;
-    }
-
-    function _bestTwoHopHybridRoute(
-        address tokenIn,
-        uint256 amountIn
-    )
-        internal
-        view
-        returns (HybridRouteCandidate memory route)
-    {
-        (address pool1, PoolType type1,, uint256 outToUsdc) = _findBestHybridPool(tokenIn, address(usdcToken), amountIn);
-        if (pool1 == address(0) || outToUsdc == 0) {
-            return route;
-        }
-
-        (address pool2, PoolType type2,, uint256 outToTrust) =
-            _findBestHybridPool(address(usdcToken), address(trustToken), outToUsdc);
-        if (pool2 == address(0) || outToTrust == 0) {
-            return route;
-        }
-
-        route.pools = new address[](2);
-        route.pools[0] = pool1;
-        route.pools[1] = pool2;
-        route.path = new address[](3);
-        route.path[0] = tokenIn;
-        route.path[1] = address(usdcToken);
-        route.path[2] = address(trustToken);
-        route.poolTypes = new PoolType[](2);
-        route.poolTypes[0] = type1;
-        route.poolTypes[1] = type2;
-        route.amountOut = outToTrust;
-    }
-
-    function _bestThreeHopHybridRoute(
-        address tokenIn,
-        uint256 amountIn
-    )
-        internal
-        view
-        returns (HybridRouteCandidate memory route)
-    {
-        (address pool1, PoolType type1,, uint256 outToWeth) = _findBestHybridPool(tokenIn, weth, amountIn);
-        if (pool1 == address(0) || outToWeth == 0) {
-            return route;
-        }
-
-        (address pool2, PoolType type2,, uint256 outToUsdc) = _findBestHybridPool(weth, address(usdcToken), outToWeth);
-        if (pool2 == address(0) || outToUsdc == 0) {
-            return route;
-        }
-
-        (address pool3, PoolType type3,, uint256 outToTrust) =
-            _findBestHybridPool(address(usdcToken), address(trustToken), outToUsdc);
-        if (pool3 == address(0) || outToTrust == 0) {
-            return route;
-        }
-
-        route.pools = new address[](3);
-        route.pools[0] = pool1;
-        route.pools[1] = pool2;
-        route.pools[2] = pool3;
-        route.path = new address[](4);
-        route.path[0] = tokenIn;
-        route.path[1] = weth;
-        route.path[2] = address(usdcToken);
-        route.path[3] = address(trustToken);
-        route.poolTypes = new PoolType[](3);
-        route.poolTypes[0] = type1;
-        route.poolTypes[1] = type2;
-        route.poolTypes[2] = type3;
-        route.amountOut = outToTrust;
-    }
-
-    /**
-     * @dev Shared internal function for swapping any token to TRUST and bridging
-     * @param tokenIn Address of token to swap (must already be in contract)
-     * @param amountIn Amount of tokenIn to swap
-     * @param minAmountOut Minimum acceptable TRUST output
-     * @param recipientAddress Recipient address on destination chain (bytes32 encoded)
-     * @param availableEthForBridge ETH available for bridge fee
-     * @return amountOut Actual TRUST received
-     * @return transferId Bridge transfer ID
-     * @return routeHops Number of swap hops used
-     */
-    function _swapTokenAndBridge(
-        address tokenIn,
-        uint256 amountIn,
-        uint256 minAmountOut,
+    function _bridgeTrust(
+        uint256 amountOut,
         bytes32 recipientAddress,
-        uint256 availableEthForBridge
+        uint256 bridgeFee
     )
         internal
-        returns (uint256 amountOut, bytes32 transferId, uint256 routeHops)
+        returns (bytes32 transferId)
     {
-        HybridRouteCandidate memory route = _discoverHybridRoute(tokenIn, amountIn);
-
-        routeHops = route.pools.length;
-        amountOut = _executeHybridSwapPath(amountIn, route);
-
-        if (amountOut < minAmountOut) {
-            revert TrustSwapAndBridgeRouter_OutputBelowThreshold();
-        }
-
         trustToken.safeIncreaseAllowance(address(metaERC20Hub), amountOut);
-
-        uint256 bridgeFee = metaERC20Hub.quoteTransferRemote(recipientDomain, recipientAddress, amountOut);
-
-        if (availableEthForBridge < bridgeFee) revert TrustSwapAndBridgeRouter_InsufficientBridgeFee();
 
         transferId = metaERC20Hub.transferRemote{ value: bridgeFee }(
             recipientDomain, recipientAddress, amountOut, bridgeGasLimit, finalityState
         );
+    }
 
-        uint256 ethRemaining = address(this).balance;
-        if (ethRemaining > 0) {
-            (bool success,) = msg.sender.call{ value: ethRemaining }("");
+    function _refundExcess(uint256 refundAmount) internal {
+        if (refundAmount > 0) {
+            (bool success,) = msg.sender.call{ value: refundAmount }("");
             require(success, "ETH refund failed");
         }
     }
 
-    function uniswapV3SwapCallback(int256 amount0Delta, int256 amount1Delta, bytes calldata) external override {
-        if (msg.sender != swapCallbackPool) {
-            revert TrustSwapAndBridgeRouter_InvalidAddress();
-        }
+    /* =================================================== */
+    /*              INTERNAL ADMIN FUNCTIONS               */
+    /* =================================================== */
 
-        if (amount0Delta > 0) {
-            IERC20(ICLPool(msg.sender).token0()).safeTransfer(msg.sender, uint256(amount0Delta));
-        }
-        if (amount1Delta > 0) {
-            IERC20(ICLPool(msg.sender).token1()).safeTransfer(msg.sender, uint256(amount1Delta));
-        }
+    function _setSlipstreamSwapRouter(address newSlipstreamSwapRouter) internal {
+        if (newSlipstreamSwapRouter == address(0)) revert TrustSwapAndBridgeRouter_InvalidAddress();
+        slipstreamSwapRouter = newSlipstreamSwapRouter;
+        emit SlipstreamSwapRouterSet(newSlipstreamSwapRouter);
     }
 
-    /**
-     * @dev Executes a V2 swap through the Aerodrome router
-     * @param tokenIn Input token address
-     * @param tokenOut Output token address
-     * @param amountIn Amount of input token
-     * @param stable Whether the pool is stable
-     * @return amountOut Actual output amount
-     */
-    function _swapExactInputV2(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        bool stable
-    )
-        internal
-        returns (uint256 amountOut)
-    {
-        IERC20(tokenIn).safeIncreaseAllowance(V2_ROUTER, amountIn);
-
-        IAerodromeRouter.Route[] memory routes = new IAerodromeRouter.Route[](1);
-        routes[0] = IAerodromeRouter.Route({ from: tokenIn, to: tokenOut, stable: stable, factory: V2_FACTORY });
-
-        uint256[] memory amounts = IAerodromeRouter(V2_ROUTER)
-            .swapExactTokensForTokens(amountIn, 0, routes, address(this), block.timestamp + defaultSwapDeadline);
-
-        amountOut = amounts[amounts.length - 1];
+    function _setSlipstreamFactory(address newSlipstreamFactory) internal {
+        if (newSlipstreamFactory == address(0)) revert TrustSwapAndBridgeRouter_InvalidAddress();
+        slipstreamFactory = ICLFactory(newSlipstreamFactory);
+        emit SlipstreamFactorySet(newSlipstreamFactory);
     }
 
-    // Legacy _executeSwapFromETHAndBridge and Aerodrome V2 route discovery/execution removed.
-    // ETH path now uses shared _swapTokenAndBridge after wrapping ETH to WETH.
-
-    /// @dev Internal function to set the default swap deadline
-    function _setDefaultSwapDeadline(uint256 newDeadline) internal {
-        if (newDeadline == 0) revert TrustSwapAndBridgeRouter_InvalidDeadline();
-        defaultSwapDeadline = newDeadline;
-        emit DefaultSwapDeadlineSet(newDeadline);
+    function _setSlipstreamQuoter(address newSlipstreamQuoter) internal {
+        if (newSlipstreamQuoter == address(0)) revert TrustSwapAndBridgeRouter_InvalidAddress();
+        slipstreamQuoter = newSlipstreamQuoter;
+        emit SlipstreamQuoterSet(newSlipstreamQuoter);
     }
 
-    /// @dev Internal function to set the MetaERC20Hub address
     function _setMetaERC20Hub(address newMetaERC20Hub) internal {
         if (newMetaERC20Hub == address(0)) revert TrustSwapAndBridgeRouter_InvalidAddress();
         metaERC20Hub = IMetaERC20Hub(newMetaERC20Hub);
         emit MetaERC20HubSet(newMetaERC20Hub);
     }
 
-    /// @dev Internal function to set the recipient domain
     function _setRecipientDomain(uint32 newRecipientDomain) internal {
         if (newRecipientDomain == 0) revert TrustSwapAndBridgeRouter_InvalidRecipientDomain();
         recipientDomain = newRecipientDomain;
         emit RecipientDomainSet(newRecipientDomain);
     }
 
-    /// @dev Internal function to set the bridge gas limit
     function _setBridgeGasLimit(uint256 newBridgeGasLimit) internal {
         if (newBridgeGasLimit == 0) revert TrustSwapAndBridgeRouter_InvalidBridgeGasLimit();
         bridgeGasLimit = newBridgeGasLimit;
         emit BridgeGasLimitSet(newBridgeGasLimit);
     }
 
-    /// @dev Internal function to set the finality state
     function _setFinalityState(FinalityState newFinalityState) internal {
         finalityState = newFinalityState;
         emit FinalityStateSet(newFinalityState);
-    }
-
-    /// @dev Internal function to set the minimum output threshold
-    function _setMinimumOutputThreshold(uint256 newThreshold) internal {
-        minimumOutputThreshold = newThreshold;
-        emit MinimumOutputThresholdSet(newThreshold);
-    }
-
-    /// @dev Internal function to set the maximum slippage in basis points
-    function _setMaxSlippageBps(uint256 newMaxSlippageBps) internal {
-        maxSlippageBps = newMaxSlippageBps;
-        emit MaxSlippageBpsSet(newMaxSlippageBps);
-    }
-
-    /**
-     * @dev Internal function to quote ETH→WETH→USDC→TRUST swap using hybrid routing
-     * @param amountIn Amount of ETH to quote
-     * @return amountOut Expected amount of TRUST out
-     */
-    function _quoteSwapFromETH(uint256 amountIn) internal view returns (uint256 amountOut) {
-        if (amountIn == 0) return 0;
-
-        HybridRouteCandidate memory direct = _bestDirectHybridRoute(weth, amountIn);
-        HybridRouteCandidate memory twoHop = _bestTwoHopHybridRoute(weth, amountIn);
-        HybridRouteCandidate memory threeHop = _bestThreeHopHybridRoute(weth, amountIn);
-
-        uint256 best = direct.amountOut;
-        if (twoHop.amountOut > best) best = twoHop.amountOut;
-        if (threeHop.amountOut > best) best = threeHop.amountOut;
-        return best;
-    }
-
-    /**
-     * @dev Executes a hybrid swap path (supports both CL and V2 pools)
-     * @param amountIn Amount of input token
-     * @param route The hybrid route to execute
-     * @return amountOut Final output amount
-     */
-    function _executeHybridSwapPath(
-        uint256 amountIn,
-        HybridRouteCandidate memory route
-    )
-        internal
-        returns (uint256 amountOut)
-    {
-        uint256 hopAmount = amountIn;
-
-        for (uint256 i = 0; i < route.pools.length; i++) {
-            if (route.poolTypes[i] == PoolType.CL) {
-                hopAmount = _swapExactInputCL(route.pools[i], route.path[i], route.path[i + 1], hopAmount);
-            } else {
-                bool stable = route.poolTypes[i] == PoolType.V2_STABLE;
-                hopAmount = _swapExactInputV2(route.path[i], route.path[i + 1], hopAmount, stable);
-            }
-        }
-
-        return hopAmount;
     }
 }

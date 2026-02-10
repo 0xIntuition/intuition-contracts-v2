@@ -3,18 +3,26 @@ pragma solidity 0.8.29;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+import { ICLFactory } from "src/interfaces/external/aerodrome/ICLFactory.sol";
 import { FinalityState, IMetaERC20Hub } from "src/interfaces/external/metalayer/IMetaERC20Hub.sol";
 
 /**
  * @title  ITrustSwapAndBridgeRouter
  * @author 0xIntuition
- * @notice Interface for the TrustSwapAndBridgeRouter contract which facilitates swapping USDC for TRUST tokens
- *         on the Base network using the Aerodrome DEX and bridging them to Intuition mainnet via Metalayer.
+ * @notice Interface for the TrustSwapAndBridgeRouter contract which facilitates swapping any token for TRUST tokens
+ *         on the Base network using pre-built Slipstream (CL) paths and bridging them to Intuition mainnet via
+ * Metalayer.
  */
-struct RouteCandidate {
-    address[] pools;
-    address[] path;
-    uint256 amountOut;
+
+/// @notice Configuration struct for router initialization
+struct RouterConfig {
+    address slipstreamSwapRouter;
+    address slipstreamFactory;
+    address slipstreamQuoter;
+    address metaERC20Hub;
+    uint32 recipientDomain;
+    uint256 bridgeGasLimit;
+    FinalityState finalityState;
 }
 
 interface ITrustSwapAndBridgeRouter {
@@ -22,21 +30,35 @@ interface ITrustSwapAndBridgeRouter {
     /*                       EVENTS                        */
     /* =================================================== */
 
-    // Aerodrome V2 events removed (CL-only router).
+    /**
+     * @notice Emitted when a user swaps ETH for TRUST and bridges to destination chain
+     * @param user The address of the user who performed the swap and bridge
+     * @param ethSwapped The amount of ETH swapped (not including bridge fee)
+     * @param trustOut The amount of TRUST tokens received and bridged
+     * @param recipientAddress The recipient address on the destination chain
+     * @param transferId The unique cross-chain transfer ID from Metalayer
+     */
+    event SwappedAndBridgedFromETH(
+        address indexed user, uint256 ethSwapped, uint256 trustOut, bytes32 recipientAddress, bytes32 transferId
+    );
 
     /**
-     * @notice Emitted when a user swaps USDC for TRUST tokens
+     * @notice Emitted when an ERC20 token is swapped for TRUST and bridged
      * @param user The address of the user who performed the swap
-     * @param amountIn The amount of USDC swapped
-     * @param amountOut The amount of TRUST tokens received
+     * @param tokenIn The input token address
+     * @param amountIn The amount of input token swapped
+     * @param trustOut The amount of TRUST received and bridged
+     * @param recipientAddress The recipient address on the destination chain
+     * @param transferId The unique cross-chain transfer ID from Metalayer
      */
-    event SwappedToTrust(address indexed user, uint256 amountIn, uint256 amountOut);
-
-    /**
-     * @notice Emitted when the default swap deadline is updated
-     * @param newDeadline The new default swap deadline in seconds
-     */
-    event DefaultSwapDeadlineSet(uint256 newDeadline);
+    event SwappedAndBridgedFromERC20(
+        address indexed user,
+        address indexed tokenIn,
+        uint256 amountIn,
+        uint256 trustOut,
+        bytes32 recipientAddress,
+        bytes32 transferId
+    );
 
     /**
      * @notice Emitted when the MetaERC20Hub address is updated
@@ -63,60 +85,22 @@ interface ITrustSwapAndBridgeRouter {
     event FinalityStateSet(FinalityState newFinalityState);
 
     /**
-     * @notice Emitted when a user swaps USDC for TRUST and bridges to destination chain
-     * @param user The address of the user who performed the swap and bridge
-     * @param amountIn The amount of USDC swapped
-     * @param amountOut The amount of TRUST tokens received and bridged
-     * @param recipientAddress The recipient address on the destination chain
-     * @param transferId The unique cross-chain transfer ID from Metalayer
+     * @notice Emitted when the Slipstream swap router is updated
+     * @param newSlipstreamSwapRouter The new Slipstream SwapRouter address
      */
-    event SwappedAndBridged(
-        address indexed user, uint256 amountIn, uint256 amountOut, bytes32 recipientAddress, bytes32 transferId
-    );
+    event SlipstreamSwapRouterSet(address indexed newSlipstreamSwapRouter);
 
     /**
-     * @notice Emitted when a user swaps ETH for TRUST and bridges to destination chain
-     * @param user The address of the user who performed the swap and bridge
-     * @param ethAmountIn The amount of ETH swapped (not including bridge fee)
-     * @param amountOut The amount of TRUST tokens received and bridged
-     * @param recipientAddress The recipient address on the destination chain
-     * @param transferId The unique cross-chain transfer ID from Metalayer
+     * @notice Emitted when the Slipstream factory is updated
+     * @param newSlipstreamFactory The new Slipstream CL Factory address
      */
-    event SwappedAndBridgedFromETH(
-        address indexed user, uint256 ethAmountIn, uint256 amountOut, bytes32 recipientAddress, bytes32 transferId
-    );
+    event SlipstreamFactorySet(address indexed newSlipstreamFactory);
 
     /**
-     * @notice Emitted when an arbitrary token is swapped for TRUST and bridged
-     * @param user The address of the user who performed the swap
-     * @param tokenIn The input token address
-     * @param amountIn The amount of input token swapped
-     * @param amountOut The amount of TRUST received and bridged
-     * @param routeHops Number of hops used (1, 2, or 3)
-     * @param recipientAddress The recipient address on the destination chain
-     * @param transferId The unique cross-chain transfer ID from Metalayer
+     * @notice Emitted when the Slipstream quoter is updated
+     * @param newSlipstreamQuoter The new Slipstream CL Quoter address
      */
-    event SwappedArbitraryTokenAndBridged(
-        address indexed user,
-        address indexed tokenIn,
-        uint256 amountIn,
-        uint256 amountOut,
-        uint256 routeHops,
-        bytes32 recipientAddress,
-        bytes32 transferId
-    );
-
-    /**
-     * @notice Emitted when minimum output threshold is updated
-     * @param newThreshold The new minimum output threshold
-     */
-    event MinimumOutputThresholdSet(uint256 newThreshold);
-
-    /**
-     * @notice Emitted when maximum slippage is updated
-     * @param newMaxSlippageBps The new maximum slippage in basis points
-     */
-    event MaxSlippageBpsSet(uint256 newMaxSlippageBps);
+    event SlipstreamQuoterSet(address indexed newSlipstreamQuoter);
 
     /* =================================================== */
     /*                       ERRORS                        */
@@ -127,15 +111,6 @@ interface ITrustSwapAndBridgeRouter {
 
     /// @dev Thrown when attempting to swap with zero amount
     error TrustSwapAndBridgeRouter_AmountInZero();
-
-    /// @dev Thrown when an invalid deadline (zero) is provided
-    error TrustSwapAndBridgeRouter_InvalidDeadline();
-
-    /// @dev Thrown when the permit signature has expired
-    error TrustSwapAndBridgeRouter_PermitExpired();
-
-    /// @dev Thrown when the permit call fails
-    error TrustSwapAndBridgeRouter_PermitFailed();
 
     /// @dev Thrown when insufficient ETH is provided for bridge fees
     error TrustSwapAndBridgeRouter_InsufficientBridgeFee();
@@ -149,14 +124,26 @@ interface ITrustSwapAndBridgeRouter {
     /// @dev Thrown when insufficient ETH is provided for swap and bridge
     error TrustSwapAndBridgeRouter_InsufficientETH();
 
-    /// @dev Thrown when no viable route exists from input token to TRUST
-    error TrustSwapAndBridgeRouter_NoViableRoute();
-
-    /// @dev Thrown when input token address is invalid
+    /// @dev Thrown when input token address is invalid (zero address or TRUST)
     error TrustSwapAndBridgeRouter_InvalidToken();
 
-    /// @dev Thrown when route output doesn't meet minimum threshold
-    error TrustSwapAndBridgeRouter_OutputBelowThreshold();
+    /// @dev Thrown when the packed path is malformed (too short or wrong length)
+    error TrustSwapAndBridgeRouter_InvalidPath();
+
+    /// @dev Thrown when the first token in the path is not WETH (for ETH swaps)
+    error TrustSwapAndBridgeRouter_PathDoesNotStartWithWETH();
+
+    /// @dev Thrown when the first token in the path does not match tokenIn (for ERC20 swaps)
+    error TrustSwapAndBridgeRouter_PathDoesNotStartWithToken();
+
+    /// @dev Thrown when the last token in the path is not TRUST
+    error TrustSwapAndBridgeRouter_PathDoesNotEndWithTRUST();
+
+    /// @dev Thrown when a pool referenced in the path does not exist in the CL factory
+    error TrustSwapAndBridgeRouter_PoolDoesNotExist();
+
+    /// @dev Thrown when route path[0] doesn't match tokenIn
+    error TrustSwapAndBridgeRouter_TokenMismatch();
 
     /* =================================================== */
     /*                      FUNCTIONS                      */
@@ -165,31 +152,72 @@ interface ITrustSwapAndBridgeRouter {
     /**
      * @notice Initializes the TrustSwapAndBridgeRouter contract
      * @param owner Owner address for the Ownable2StepUpgradeable
-     * @param metaERC20HubAddress Address of the MetaERC20Hub contract for bridging
-     * @param recipientDomain Domain ID of the destination chain (Intuition mainnet)
-     * @param bridgeGasLimit Gas limit for bridge transactions
-     * @param finalityState Desired finality state for bridge transactions
-     * @param defaultSwapDeadline Default deadline (in seconds) for swaps
-     * @param minimumOutputThreshold Minimum TRUST output threshold for route viability (in TRUST wei, 18 decimals)
-     * @param maxSlippageBps Maximum slippage tolerance in basis points (10000 = 100%)
+     * @param config Router configuration struct containing all initialization parameters
      */
-    function initialize(
-        address owner,
-        address metaERC20HubAddress,
-        uint32 recipientDomain,
-        uint256 bridgeGasLimit,
-        FinalityState finalityState,
-        uint256 defaultSwapDeadline,
-        uint256 minimumOutputThreshold,
-        uint256 maxSlippageBps
-    )
-        external;
+    function initialize(address owner, RouterConfig calldata config) external;
 
     /**
-     * @notice Updates the default swap deadline
-     * @param newDeadline New default deadline (in seconds) for swaps
+     * @notice Swaps ETH for TRUST using a pre-built Slipstream path and bridges to destination chain
+     * @dev Wraps ETH to WETH, then calls Slipstream SwapRouter exactInput. Path must start with WETH and end with
+     * TRUST.
+     *      msg.value must include both swap amount and bridge fee.
+     * @param path Packed Slipstream path (token0|tickSpacing|token1|...). Must start with WETH and end with TRUST.
+     * @param minTrustOut Minimum acceptable TRUST output (slippage protection, enforced by SwapRouter)
+     * @param recipient Recipient address on destination chain
+     * @return amountOut Actual TRUST received and bridged
+     * @return transferId Cross-chain transfer ID from Metalayer
      */
-    function setDefaultSwapDeadline(uint256 newDeadline) external;
+    function swapAndBridgeWithETH(
+        bytes calldata path,
+        uint256 minTrustOut,
+        address recipient
+    )
+        external
+        payable
+        returns (uint256 amountOut, bytes32 transferId);
+
+    /**
+     * @notice Swaps any ERC20 for TRUST using a pre-built Slipstream path and bridges to destination chain
+     * @dev Caller must approve this contract to spend amountIn of tokenIn. msg.value must cover bridge fee.
+     * @param tokenIn Input token address (must match first token in path)
+     * @param amountIn Amount of tokenIn to swap
+     * @param path Packed Slipstream path (token0|tickSpacing|token1|...). Must start with tokenIn and end with TRUST.
+     * @param minTrustOut Minimum acceptable TRUST output (slippage protection, enforced by SwapRouter)
+     * @param recipient Recipient address on destination chain
+     * @return amountOut Actual TRUST received and bridged
+     * @return transferId Cross-chain transfer ID from Metalayer
+     */
+    function swapAndBridgeWithERC20(
+        address tokenIn,
+        uint256 amountIn,
+        bytes calldata path,
+        uint256 minTrustOut,
+        address recipient
+    )
+        external
+        payable
+        returns (uint256 amountOut, bytes32 transferId);
+
+    /**
+     * @notice Quotes the bridge fee for transferring TRUST to the destination chain
+     * @param trustAmount The amount of TRUST to bridge (fee may be flat regardless of amount)
+     * @param recipient The recipient address on the destination chain
+     * @return bridgeFee The required bridge fee in ETH
+     */
+    function quoteBridgeFee(uint256 trustAmount, address recipient) external view returns (uint256 bridgeFee);
+
+    /**
+     * @notice Quotes expected output for a given Slipstream path and input amount
+     * @dev Thin wrapper around Slipstream QuoterV2. Returns 0 on failure.
+     * @param path Packed Slipstream path
+     * @param amountIn Input amount for first token in path
+     * @return amountOut Expected output amount
+     */
+    function quoteExactInput(bytes calldata path, uint256 amountIn) external returns (uint256 amountOut);
+
+    /* =================================================== */
+    /*                   ADMIN FUNCTIONS                   */
+    /* =================================================== */
 
     /**
      * @notice Updates the MetaERC20Hub contract address
@@ -216,178 +244,32 @@ interface ITrustSwapAndBridgeRouter {
     function setFinalityState(FinalityState newFinalityState) external;
 
     /**
-     * @notice Updates the minimum output threshold for route viability
-     * @param newThreshold New threshold in TRUST wei (18 decimals)
+     * @notice Updates the Slipstream SwapRouter address
+     * @param newSlipstreamSwapRouter Address of the new Slipstream SwapRouter
      */
-    function setMinimumOutputThreshold(uint256 newThreshold) external;
+    function setSlipstreamSwapRouter(address newSlipstreamSwapRouter) external;
 
     /**
-     * @notice Updates the maximum slippage tolerance
-     * @param newMaxSlippageBps New max slippage in basis points (10000 = 100%)
+     * @notice Updates the Slipstream CL Factory address
+     * @param newSlipstreamFactory Address of the new Slipstream CL Factory
      */
-    function setMaxSlippageBps(uint256 newMaxSlippageBps) external;
+    function setSlipstreamFactory(address newSlipstreamFactory) external;
 
     /**
-     * @notice Swaps `amountIn` USDC for TRUST tokens and bridges them to the destination chain
-     * @dev Caller must approve this contract to spend `amountIn` USDC first and provide sufficient ETH for bridge fees
-     * @param amountIn Amount of USDC to swap
-     * @param minAmountOut Minimum acceptable amount of TRUST to receive (slippage protection)
-     * @param recipient Recipient address on the destination chain
-     * @return amountOut Actual amount of TRUST received and bridged
-     * @return transferId Unique cross-chain transfer ID from Metalayer
+     * @notice Updates the Slipstream CL Quoter address
+     * @param newSlipstreamQuoter Address of the new Slipstream CL Quoter
      */
-    function swapAndBridge(
-        uint256 amountIn,
-        uint256 minAmountOut,
-        address recipient
-    )
-        external
-        payable
-        returns (uint256 amountOut, bytes32 transferId);
+    function setSlipstreamQuoter(address newSlipstreamQuoter) external;
 
-    /**
-     * @notice Swaps `amountIn` USDC for TRUST using EIP-2612 permit and bridges to destination chain
-     * @dev If `permit()` fails, proceeds only if the caller already granted sufficient USDC allowance
-     * @param amountIn Amount of USDC to swap
-     * @param minAmountOut Minimum acceptable amount of TRUST to receive (slippage protection)
-     * @param recipient Recipient address on the destination chain
-     * @param deadline Deadline for the permit signature
-     * @param v ECDSA signature component
-     * @param r ECDSA signature component
-     * @param s ECDSA signature component
-     * @return amountOut Amount of TRUST received and bridged
-     * @return transferId Unique cross-chain transfer ID from Metalayer
-     */
-    function swapAndBridgeWithPermit(
-        uint256 amountIn,
-        uint256 minAmountOut,
-        address recipient,
-        uint256 deadline,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    )
-        external
-        payable
-        returns (uint256 amountOut, bytes32 transferId);
-
-    /**
-     * @notice Quotes expected TRUST out for `amountIn` USDC (USDC has 6 decimals)
-     * @dev Assumes the USDC/TRUST pool is a volatile pool (stable=false)
-     * @param amountIn Amount of USDC to quote
-     * @return amountOut Expected amount of TRUST out
-     */
-    function quoteSwapToTrust(uint256 amountIn) external view returns (uint256 amountOut);
-
-    /**
-     * @notice Quotes the total cost (swap + bridge) for swapping and bridging USDC to TRUST
-     * @param amountIn Amount of USDC to swap
-     * @param recipient Recipient address on the destination chain
-     * @return amountOut Expected amount of TRUST tokens to receive
-     * @return bridgeFee Bridge fee in wei required for the transaction
-     */
-    function quoteSwapAndBridge(
-        uint256 amountIn,
-        address recipient
-    )
-        external
-        view
-        returns (uint256 amountOut, uint256 bridgeFee);
-
-    /**
-     * @notice Swaps ETH for TRUST tokens via WETH→USDC→TRUST route and bridges to destination chain
-     * @dev User sends total ETH needed: some for swap, rest for bridge fee
-     *      Contract estimates bridge fee, uses remainder for swap, refunds any excess
-     * @param minAmountOut Minimum acceptable amount of TRUST to receive (slippage protection)
-     * @param recipient Recipient address on the destination chain
-     * @return amountOut Actual amount of TRUST received and bridged
-     * @return transferId Unique cross-chain transfer ID from Metalayer
-     */
-    function swapAndBridgeWithETH(
-        uint256 minAmountOut,
-        address recipient
-    )
-        external
-        payable
-        returns (uint256 amountOut, bytes32 transferId);
-
-    /**
-     * @notice Quotes expected TRUST out for `amountIn` ETH (via WETH→USDC→TRUST)
-     * @param amountIn Amount of ETH to quote (in wei)
-     * @return amountOut Expected amount of TRUST out
-     */
-    function quoteSwapFromETHToTrust(uint256 amountIn) external view returns (uint256 amountOut);
-
-    /**
-     * @notice Quotes the total cost (swap + bridge) for swapping and bridging ETH to TRUST
-     * @param amountIn Amount of ETH to use for swap (excludes bridge fee)
-     * @param recipient Recipient address on the destination chain
-     * @return amountOut Expected amount of TRUST tokens to receive
-     * @return bridgeFee Bridge fee in wei required for the transaction
-     */
-    function quoteSwapAndBridgeWithETH(
-        uint256 amountIn,
-        address recipient
-    )
-        external
-        view
-        returns (uint256 amountOut, uint256 bridgeFee);
-
-    /**
-     * @notice Swaps arbitrary ERC20 token for TRUST and bridges to destination chain
-     * @dev Automatically discovers best route (1-3 hops) or reverts if no viable route exists
-     * @param tokenIn Address of input token (must be ERC20)
-     * @param amountIn Amount of input token to swap
-     * @param minAmountOut Minimum acceptable amount of TRUST to receive (slippage protection)
-     * @param recipient Recipient address on the destination chain
-     * @return amountOut Actual amount of TRUST received and bridged
-     * @return transferId Unique cross-chain transfer ID from Metalayer
-     */
-    function swapArbitraryTokenAndBridge(
-        address tokenIn,
-        uint256 amountIn,
-        uint256 minAmountOut,
-        address recipient
-    )
-        external
-        payable
-        returns (uint256 amountOut, bytes32 transferId);
-
-    /**
-     * @notice Quotes expected TRUST out for arbitrary token input
-     * @dev Discovers optimal route and returns quote, reverts if no viable route
-     * @param tokenIn Address of input token
-     * @param amountIn Amount of input token
-     * @return amountOut Expected amount of TRUST out
-     * @return routeHops Number of hops in the discovered route (1, 2, or 3)
-     */
-    function quoteArbitraryTokenSwap(
-        address tokenIn,
-        uint256 amountIn
-    )
-        external
-        view
-        returns (uint256 amountOut, uint256 routeHops);
-
-    /**
-     * @notice Returns the USDC token contract
-     * @return The USDC token contract
-     */
-    function usdcToken() external view returns (IERC20);
+    /* =================================================== */
+    /*                   VIEW FUNCTIONS                    */
+    /* =================================================== */
 
     /**
      * @notice Returns the TRUST token contract
      * @return The TRUST token contract
      */
     function trustToken() external view returns (IERC20);
-
-    // Aerodrome V2 getters removed.
-
-    /**
-     * @notice Returns the default deadline (in seconds) for swaps
-     * @return The default swap deadline
-     */
-    function defaultSwapDeadline() external view returns (uint256);
 
     /**
      * @notice Returns the MetaERC20Hub contract
@@ -414,20 +296,20 @@ interface ITrustSwapAndBridgeRouter {
     function finalityState() external view returns (FinalityState);
 
     /**
-     * @notice Returns the WETH token address
-     * @return The WETH token address
+     * @notice Returns the Slipstream SwapRouter address
+     * @return The Slipstream SwapRouter address
      */
-    function weth() external view returns (address);
+    function slipstreamSwapRouter() external view returns (address);
 
     /**
-     * @notice Returns the minimum output threshold for route viability
-     * @return The minimum output threshold in TRUST wei (18 decimals)
+     * @notice Returns the Slipstream CL Factory
+     * @return The Slipstream CL Factory contract
      */
-    function minimumOutputThreshold() external view returns (uint256);
+    function slipstreamFactory() external view returns (ICLFactory);
 
     /**
-     * @notice Returns the maximum slippage tolerance
-     * @return The maximum slippage in basis points (10000 = 100%)
+     * @notice Returns the Slipstream CL Quoter address
+     * @return The Slipstream CL Quoter address
      */
-    function maxSlippageBps() external view returns (uint256);
+    function slipstreamQuoter() external view returns (address);
 }
