@@ -7,7 +7,7 @@ import {
 } from "@openzeppelinV4/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { ProxyAdmin } from "@openzeppelinV4/contracts/proxy/transparent/ProxyAdmin.sol";
 
-import { SetupScript } from "../SetupScript.s.sol";
+import { SetupScript } from "script/SetupScript.s.sol";
 import { TrustToken } from "src/legacy/TrustToken.sol";
 
 /*

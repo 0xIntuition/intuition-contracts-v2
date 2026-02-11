@@ -7,7 +7,7 @@ import { ud21x18, UD21x18 } from "@prb/math/src/UD21x18.sol";
 import { PRBMathUtils } from "@prb/math/test/utils/Utils.sol";
 import { CommonBase } from "forge-std/src/Base.sol";
 import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
-import { Constants } from "./Constants.sol";
+import { Constants } from "tests/utils/Constants.sol";
 
 abstract contract Utils is CommonBase, Constants, PRBMathUtils {
     using SafeCastLib for uint256;

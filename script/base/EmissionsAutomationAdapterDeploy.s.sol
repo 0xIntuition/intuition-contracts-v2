@@ -4,7 +4,7 @@ pragma solidity 0.8.29;
 import { Script, console2 } from "forge-std/src/Script.sol";
 
 import { EmissionsAutomationAdapter } from "src/utils/EmissionsAutomationAdapter.sol";
-import { SetupScript } from "../SetupScript.s.sol";
+import { SetupScript } from "script/SetupScript.s.sol";
 
 /*
 LOCAL

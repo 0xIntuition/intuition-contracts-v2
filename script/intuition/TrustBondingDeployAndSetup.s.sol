@@ -3,7 +3,7 @@ pragma solidity 0.8.29;
 
 import { console2 } from "forge-std/src/console2.sol";
 
-import { SetupScript } from "../SetupScript.s.sol";
+import { SetupScript } from "script/SetupScript.s.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
