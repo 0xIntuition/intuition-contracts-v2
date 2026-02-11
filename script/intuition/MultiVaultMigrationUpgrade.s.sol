@@ -7,7 +7,7 @@ import {
 } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
 
-import { SetupScript } from "../SetupScript.s.sol";
+import { SetupScript } from "script/SetupScript.s.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 
 /*

@@ -3,7 +3,7 @@ pragma solidity 0.8.29;
 
 import { Script, console2 } from "forge-std/src/Script.sol";
 
-import { SetupScript } from "../SetupScript.s.sol";
+import { SetupScript } from "script/SetupScript.s.sol";
 import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";
 import { BaseEmissionsController } from "src/protocol/emissions/BaseEmissionsController.sol";
 

@@ -5,7 +5,7 @@ import { Script, console2 } from "forge-std/src/Script.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
 
-import { SetupScript } from "../SetupScript.s.sol";
+import { SetupScript } from "script/SetupScript.s.sol";
 import { BaseEmissionsController } from "src/protocol/emissions/BaseEmissionsController.sol";
 import { MetaERC20DispatchInit, FinalityState } from "src/interfaces/IMetaLayer.sol";
 import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";

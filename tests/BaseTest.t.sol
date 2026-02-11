@@ -28,13 +28,13 @@ import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.s
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
 import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCurve.sol";
 import { ProgressiveCurve } from "src/protocol/curves/ProgressiveCurve.sol";
-import { ERC20Mock } from "./mocks/ERC20Mock.sol";
-import { Users } from "./utils/Types.sol";
+import { ERC20Mock } from "tests/mocks/ERC20Mock.sol";
+import { Users } from "tests/utils/Types.sol";
 import { Trust } from "src/Trust.sol";
 import { WrappedTrust } from "src/WrappedTrust.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { MetalayerRouterMock, IIGPMock, MetaERC20HubOrSpokeMock } from "tests/mocks/MetalayerRouterMock.sol";
-import { Modifiers } from "./utils/Modifiers.sol";
+import { Modifiers } from "tests/utils/Modifiers.sol";
 
 abstract contract BaseTest is Modifiers, Test {
     /*//////////////////////////////////////////////////////////////////////////

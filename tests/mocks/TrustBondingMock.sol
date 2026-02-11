@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { TrustBonding } from "../../src/protocol/emissions/TrustBonding.sol";
+import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 
 /**
  * @title TrustBondingMock

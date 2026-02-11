@@ -4,7 +4,7 @@ pragma solidity 0.8.29;
 import { console2 } from "forge-std/src/console2.sol";
 import { MultiVaultMigrationMode } from "src/protocol/MultiVaultMigrationMode.sol";
 
-import { SetupScript } from "../SetupScript.s.sol";
+import { SetupScript } from "script/SetupScript.s.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 
 /*
