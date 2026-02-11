@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { CoreEmissionsControllerBase } from "src/protocol/emissions/CoreEmissionsController.sol";
+import { CoreEmissionsControllerBase } from "tests/unit/CoreEmissionsController/CoreEmissionsControllerBase.t.sol";
 import { console2 } from "forge-std/src/console2.sol";
 
 contract CoreEmissionsControllerTest is CoreEmissionsControllerBase {
