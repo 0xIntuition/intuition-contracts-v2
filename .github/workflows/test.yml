@@ -12,6 +12,7 @@ concurrency:
 
 env:
   FOUNDRY_PROFILE: 'ci'
+  API_KEY_ALCHEMY: ${{ secrets.API_KEY_ALCHEMY }}
   SEPOLIA_RPC_URL: 'https://sepolia.base.org'
   BASE_RPC_URL: 'https://mainnet.base.org'
 
