@@ -1,4 +1,5 @@
 ---
+name: "contracts:audit-spec-compliance"
 description: Verify implementation against audit spec
 argument-hint: "<spec-document> [codebase-path]"
 allowed-tools:

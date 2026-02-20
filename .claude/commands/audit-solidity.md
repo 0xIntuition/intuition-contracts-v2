@@ -1,4 +1,5 @@
 ---
+name: "contracts:audit-solidity"
 description: Run end-to-end Solidity audit workflow
 argument-hint: "[codebase-path] [spec-document-optional]"
 allowed-tools:

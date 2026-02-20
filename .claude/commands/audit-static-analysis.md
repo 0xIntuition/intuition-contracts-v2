@@ -1,4 +1,5 @@
 ---
+name: "contracts:audit-static-analysis"
 description: Run static analysis workflow for security findings
 argument-hint: "[codebase-path]"
 allowed-tools:

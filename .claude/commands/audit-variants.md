@@ -1,4 +1,5 @@
 ---
+name: "contracts:audit-variants"
 description: Find code variants of a known vulnerability pattern
 argument-hint: "[vulnerability-description]"
 allowed-tools:

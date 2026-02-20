@@ -1,4 +1,5 @@
 ---
+name: "contracts:audit-context"
 description: Build audit context for this Solidity codebase
 argument-hint: "[codebase-path] [--focus <module>]"
 allowed-tools:

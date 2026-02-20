@@ -1,4 +1,5 @@
 ---
+name: "contracts:audit-entry-points"
 description: Enumerate state-changing attack surface
 argument-hint: "[directory-path]"
 allowed-tools:
