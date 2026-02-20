@@ -33,6 +33,7 @@
     "test": "forge test",
     "coverage": "forge coverage --no-match-coverage '(script|tests|src/external/curve)'",
     "test:coverage": "forge coverage",
-    "test:coverage:report": "forge coverage --no-match-coverage '(script|tests|src/external/curve)' --report lcov && genhtml lcov.info --branch-coverage --output-dir coverage --ignore-errors inconsistent"
+    "test:coverage:report": "forge coverage --no-match-coverage '(script|tests|src/external/curve)' --report lcov && genhtml lcov.info --branch-coverage --output-dir coverage --ignore-errors inconsistent",
+    "fetch:roles:summary": "npx tsx script/utils/fetch-roles-summary.ts"
   }
 }
