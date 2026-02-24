@@ -136,6 +136,22 @@ $ bun run test:coverage:report
 > macOS, you can install it with Homebrew: `brew install lcov`.
 
 
+## Claude Slash Commands (Shared)
+
+This repo includes team-shared Claude slash commands in `.claude/commands`.
+
+Use `/help` in Claude Code to see them, then run:
+
+- `/audit-solidity [codebase-path] [spec-document-optional]`
+- `/audit-context [codebase-path] [--focus <module>]`
+- `/audit-entry-points [directory-path]`
+- `/audit-static-analysis [codebase-path]`
+- `/audit-spec-compliance <spec-document> [codebase-path]`
+- `/audit-variants [vulnerability-description]`
+
+Generated reports are written to `audits/automated-reports/`.
+
+
 ## License
 
 This project is licensed under BUSL-1.1

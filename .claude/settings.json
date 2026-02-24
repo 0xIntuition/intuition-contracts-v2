@@ -64,5 +64,22 @@
     "requireNatSpec": true,
     "generateDocs": true,
     "includeGasReports": true
+  },
+  "extraKnownMarketplaces": {
+    "trailofbits-skills": {
+      "source": {
+        "source": "github",
+        "repo": "trailofbits/skills"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "building-secure-contracts@trailofbits-skills": true,
+    "audit-context-building@trailofbits-skills": true,
+    "entry-point-analyzer@trailofbits-skills": true,
+    "spec-to-code-compliance@trailofbits-skills": true,
+    "variant-analysis@trailofbits-skills": true,
+    "static-analysis@trailofbits-skills": true,
+    "property-based-testing@trailofbits-skills": true
   }
 }
