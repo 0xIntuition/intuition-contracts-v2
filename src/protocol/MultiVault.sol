@@ -82,6 +82,9 @@ contract MultiVault is
     /// @notice Mapping of the last 3 active epochs for each user
     mapping(address user => uint256[3] epoch) public userEpochHistory;
 
+    /// @notice Tracks whether system-wide utilization rollover has been initialized for a given epoch
+    mapping(uint256 epoch => bool hasRolledOver) public hasRolledOverSystemUtilization;
+
     /* =================================================== */
     /*                        Errors                       */
     /* =================================================== */
@@ -1525,12 +1528,16 @@ contract MultiVault is
         uint256 currentEpochLocal = _currentEpoch();
         uint256 userLastEpoch = userEpochHistory[user][0];
 
-        // First, handle the system-wide rollover if this is the first action in the new epoch
-        if (currentEpochLocal > 0 && totalUtilization[currentEpochLocal] == 0) {
+        // First, handle the system-wide rollover if this is the first action in the new epoch.
+        // A zero totalUtilization is a valid runtime value and cannot be used as an initialization sentinel.
+        if (currentEpochLocal > 0 && !hasRolledOverSystemUtilization[currentEpochLocal]) {
+            hasRolledOverSystemUtilization[currentEpochLocal] = true;
+
             // Roll over from the immediately previous epoch
             uint256 previousEpoch = currentEpochLocal - 1;
-            if (totalUtilization[previousEpoch] != 0) {
-                totalUtilization[currentEpochLocal] = totalUtilization[previousEpoch];
+            int256 previousEpochUtilization = totalUtilization[previousEpoch];
+            if (previousEpochUtilization != 0 && totalUtilization[currentEpochLocal] == 0) {
+                totalUtilization[currentEpochLocal] = previousEpochUtilization;
             }
         }
 
