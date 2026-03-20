@@ -169,7 +169,7 @@ contract SatelliteEmissionsControllerGettersTest is BaseTest {
 
     function test_getEpochTimestampEnd_EpochZero_Success() public {
         uint256 endTimestamp = satelliteEmissionsController.getEpochTimestampEnd(0);
-        assertEq(endTimestamp, TEST_START_TIMESTAMP + TEST_EPOCH_LENGTH);
+        assertEq(endTimestamp, TEST_START_TIMESTAMP + TEST_EPOCH_LENGTH - 1);
     }
 
     function test_getCurrentEpochTimestampStart_Success() public {

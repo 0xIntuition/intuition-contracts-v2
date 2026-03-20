@@ -123,32 +123,25 @@ contract TrustBondingUpgradeRegressionTest is Test {
         // 3. POST-UPGRADE: the same calls must no longer revert
         // ----------------------------------------------------------
 
-        // (a) Global supply at epoch end should now be readable
+        // (a) Global supply at epoch end should now be readable.
         uint256 totalAtEpoch0 = trustBonding.totalBondedBalanceAtEpochEnd(0);
-        assertEq(totalAtEpoch0, totalAtEpoch0PreBug, "total bonded balance must match pre and post-fix");
+        assertEq(totalAtEpoch0, totalAtEpoch0PreBug, "total bonded balance must match");
 
         // (b) User balance at epoch end must no longer revert either
         assertEq(
-            trustBonding.userBondedBalanceAtEpochEnd(USER0, 0),
-            user0AtEpoch0PreBug,
-            "user 0 bonded balance must match pre and post-fix"
+            trustBonding.userBondedBalanceAtEpochEnd(USER0, 0), user0AtEpoch0PreBug, "user 0 bonded balance must match"
         );
         assertEq(
-            trustBonding.userBondedBalanceAtEpochEnd(USER1, 0),
-            user1AtEpoch0PreBug,
-            "user 1 bonded balance must match pre and post-fix"
+            trustBonding.userBondedBalanceAtEpochEnd(USER1, 0), user1AtEpoch0PreBug, "user 1 bonded balance must match"
         );
         assertEq(
-            trustBonding.userBondedBalanceAtEpochEnd(USER2, 0),
-            user2AtEpoch0PreBug,
-            "user 2 bonded balance must match pre and post-fix"
+            trustBonding.userBondedBalanceAtEpochEnd(USER2, 0), user2AtEpoch0PreBug, "user 2 bonded balance must match"
         );
 
-        // Make sure eligible rewards match pre-upgrade values
         assertEq(
             user0EligibleRewardsPreUpgrade,
             trustBonding.userEligibleRewardsForEpoch(USER0, 0),
-            "user 0 eligible rewards view must match pre and post-fix"
+            "user 0 eligible rewards view must match"
         );
 
         // (c) Claim rewards for USER1 should now succeed
