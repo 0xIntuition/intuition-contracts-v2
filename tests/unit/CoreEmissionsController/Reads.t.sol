@@ -104,14 +104,14 @@ contract CoreEmissionsControllerTest is CoreEmissionsControllerBase {
         _initializeController();
 
         uint256 endTimestamp = controller.getEpochTimestampEnd(0);
-        assertEq(endTimestamp, DEFAULT_START_TIMESTAMP + DEFAULT_EPOCH_LENGTH);
+        assertEq(endTimestamp, DEFAULT_START_TIMESTAMP + DEFAULT_EPOCH_LENGTH - 1);
     }
 
     function test_getEpochTimestampEnd_EpochOne_Success() public {
         _initializeController();
 
         uint256 endTimestamp = controller.getEpochTimestampEnd(1);
-        assertEq(endTimestamp, DEFAULT_START_TIMESTAMP + (2 * DEFAULT_EPOCH_LENGTH));
+        assertEq(endTimestamp, DEFAULT_START_TIMESTAMP + (2 * DEFAULT_EPOCH_LENGTH) - 1);
     }
 
     /* =================================================== */
