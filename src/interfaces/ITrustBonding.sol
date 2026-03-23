@@ -71,6 +71,9 @@ interface ITrustBonding {
     /// @dev Thrown when an invalid utilization lower bound is provided (must be between 0 and 1e18)
     error TrustBonding_InvalidUtilizationLowerBound();
 
+    /// @dev Thrown when the epoch budget is fully exhausted and no more rewards can be claimed
+    error TrustBonding_EpochBudgetExhausted();
+
     /// @dev Thrown when an invalid start timestamp is provided during initialization
     error TrustBonding_InvalidStartTimestamp();
 

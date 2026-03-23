@@ -112,6 +112,10 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         _disableInitializers();
     }
 
+    /*//////////////////////////////////////////////////////////////
+                             INITIALIZER
+    //////////////////////////////////////////////////////////////*/
+
     /// @inheritdoc ITrustBonding
     function initialize(
         address _owner,
@@ -380,6 +384,17 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         // Check if the user has already claimed rewards for the previous epoch
         if (_hasClaimedRewardsForEpoch(msg.sender, prevEpoch)) {
             revert TrustBonding_RewardsAlreadyClaimedForEpoch();
+        }
+
+        // Enforce per-epoch budget safety to keep total claimed rewards bounded by epoch emissions.
+        uint256 epochBudget = _emissionsForEpoch(prevEpoch);
+        uint256 alreadyClaimed = totalClaimedRewardsForEpoch[prevEpoch];
+        if (alreadyClaimed >= epochBudget) {
+            revert TrustBonding_EpochBudgetExhausted();
+        }
+        uint256 remainingBudget = epochBudget - alreadyClaimed;
+        if (userRewards > remainingBudget) {
+            userRewards = remainingBudget;
         }
 
         // Increment the total claimed inflationary rewards for the previous epoch and set the user's claimed rewards

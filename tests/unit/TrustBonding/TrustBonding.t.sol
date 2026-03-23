@@ -128,8 +128,11 @@ contract TrustBondingTest is TrustBondingBase {
     function test_epochTimestampEnd() external {
         uint256 currentEpoch = protocol.trustBonding.currentEpoch();
         uint256 currentEpochEndTimestamp = protocol.trustBonding.epochTimestampEnd(currentEpoch);
+        uint256 startTimestamp = protocol.satelliteEmissionsController.getStartTimestamp();
+        uint256 epochLength = protocol.trustBonding.epochLength();
+        uint256 expectedEpochEndTimestamp = startTimestamp + ((currentEpoch + 1) * epochLength) - 1;
 
-        assertEq(currentEpochEndTimestamp, TRUST_BONDING_START_TIMESTAMP + TRUST_BONDING_EPOCH_LENGTH - 20);
+        assertEq(currentEpochEndTimestamp, expectedEpochEndTimestamp);
 
         // Warp 20 days into the future (should be in the middle of epoch 1)
         vm.warp(TRUST_BONDING_START_TIMESTAMP + TRUST_BONDING_EPOCH_LENGTH + (TRUST_BONDING_EPOCH_LENGTH / 2));

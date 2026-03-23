@@ -96,7 +96,7 @@ contract ClaimRewardsTest is TrustBondingBase {
 
         uint256 aliceBalanceBefore = users.alice.balance;
 
-        vm.expectEmit(true, true, false, true);
+        vm.expectEmit(true, true, false, true, address(protocol.trustBonding));
         emit RewardsClaimed(users.alice, users.alice, expectedFinalRewards);
 
         resetPrank(users.alice);
