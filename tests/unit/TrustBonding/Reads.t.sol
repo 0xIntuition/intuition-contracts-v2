@@ -38,10 +38,10 @@ contract TrustBondingReadsTest is TrustBondingBase {
     function test_epochTimestampEnd_currentEpoch() external view {
         uint256 currentEpoch = protocol.trustBonding.currentEpoch();
         uint256 endTimestamp = protocol.trustBonding.epochTimestampEnd(currentEpoch);
+        uint256 startTimestamp = protocol.satelliteEmissionsController.getStartTimestamp();
+        uint256 epochLength = protocol.trustBonding.epochLength();
 
-        // SatelliteEmissionsController startTimestamp = block.timestamp (1 in Foundry).
-        // epochEnd(0) = startTimestamp + epochLength - 1 (closed interval).
-        uint256 expected = TRUST_BONDING_EPOCH_LENGTH;
+        uint256 expected = startTimestamp + ((currentEpoch + 1) * epochLength) - 1;
         assertEq(endTimestamp, expected);
     }
 
@@ -53,8 +53,9 @@ contract TrustBondingReadsTest is TrustBondingBase {
         assertEq(epoch1, 1);
 
         uint256 endTimestamp = protocol.trustBonding.epochTimestampEnd(epoch1);
-        // epochEnd(1) = startTimestamp + 2*epochLength - 1
-        uint256 expected = TRUST_BONDING_EPOCH_LENGTH * 2;
+        uint256 startTimestamp = protocol.satelliteEmissionsController.getStartTimestamp();
+        uint256 epochLength = protocol.trustBonding.epochLength();
+        uint256 expected = startTimestamp + ((epoch1 + 1) * epochLength) - 1;
         assertEq(endTimestamp, expected);
     }
 
