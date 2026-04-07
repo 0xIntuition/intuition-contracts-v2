@@ -31,8 +31,6 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
     error AtomWallet_ZeroAddress();
     error AtomWallet_WrongArrayLengths();
     error AtomWallet_OnlyOwner();
-    error AtomWallet_InvalidSignatureLength(uint256 length);
-    error AtomWallet_InvalidSignatureS(bytes32 s);
 
     /* =================================================== */
     /*                  CONSTANTS                          */
@@ -291,18 +289,30 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
         override
         returns (uint256 validationData)
     {
-        (uint48 validUntil, uint48 validAfter, bytes memory signature) =
+        (uint48 validUntil, uint48 validAfter, bytes memory signature, bool isMalformedSignature) =
             _extractValidUntilAndValidAfterFromSignature(userOp.signature);
+        // Malformed signature format (wrong length): return zero time bounds because
+        // validity window cannot be parsed from an invalid format.
+        if (isMalformedSignature) {
+            return _packValidationData(true, 0, 0);
+        }
 
-        bytes32 hash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", userOpHash));
+        bytes32 signedHash = userOpHash;
+        if (userOp.signature.length == 77) {
+            // Bind 77-byte validity metadata to the signed payload.
+            signedHash = keccak256(abi.encodePacked(userOpHash, validUntil, validAfter));
+        }
+        bytes32 hash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", signedHash));
 
-        (address recovered, ECDSA.RecoverError recoverError, bytes32 errorArg) = ECDSA.tryRecover(hash, signature);
+        (address recovered, ECDSA.RecoverError recoverError,) = ECDSA.tryRecover(hash, signature);
 
-        if (recoverError == ECDSA.RecoverError.InvalidSignatureLength) {
-            revert AtomWallet_InvalidSignatureLength(uint256(errorArg));
-        } else if (recoverError == ECDSA.RecoverError.InvalidSignatureS) {
-            revert AtomWallet_InvalidSignatureS(errorArg);
-        } else if (recoverError == ECDSA.RecoverError.InvalidSignature) {
+        // Valid-length but cryptographically invalid signature: preserve the parsed
+        // time bounds so the EntryPoint can still enforce the validity window.
+        if (
+            recoverError == ECDSA.RecoverError.InvalidSignatureLength
+                || recoverError == ECDSA.RecoverError.InvalidSignatureS
+                || recoverError == ECDSA.RecoverError.InvalidSignature
+        ) {
             return _packValidationData(true, validUntil, validAfter);
         }
 
@@ -333,18 +343,19 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
      * @return validUntil the valid until timestamp (0 means no expiry)
      * @return validAfter the valid after timestamp
      * @return rawSignature the 65-byte ECDSA signature (r,s,v)
+     * @return isMalformedSignature true when signature format is invalid
      */
     function _extractValidUntilAndValidAfterFromSignature(bytes calldata signature)
         internal
         pure
-        returns (uint48 validUntil, uint48 validAfter, bytes memory rawSignature)
+        returns (uint48 validUntil, uint48 validAfter, bytes memory rawSignature, bool isMalformedSignature)
     {
         uint256 signatureLength = signature.length;
         if (signatureLength == 65) {
-            return (0, 0, signature);
+            return (0, 0, signature, false);
         }
         if (signatureLength != 77) {
-            revert AtomWallet_InvalidSignatureLength(signatureLength);
+            return (0, 0, "", true);
         }
 
         uint256 metaOffset = signatureLength - 12;
@@ -358,6 +369,7 @@ contract AtomWallet is Initializable, BaseAccount, Ownable2StepUpgradeable, Reen
         uint96 packed = uint96(word >> 160);
         validUntil = uint48(packed >> 48);
         validAfter = uint48(packed);
+        return (validUntil, validAfter, rawSignature, false);
     }
 
     /**
