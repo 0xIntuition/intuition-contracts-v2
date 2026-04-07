@@ -175,8 +175,13 @@ contract CoreEmissionsController is ICoreEmissionsController {
         return _START_TIMESTAMP + (epoch * _EPOCH_LENGTH);
     }
 
+    /// @dev Returns the last second that belongs to `epoch`.
+    ///      Epochs are closed intervals [start, end] with no overlap:
+    ///      epoch N ends at `start + (N+1)*length - 1`, epoch N+1 starts
+    ///      at `start + (N+1)*length`.  This eliminates the boundary
+    ///      ambiguity where a single timestamp could belong to two epochs.
     function _calculateEpochTimestampEnd(uint256 epoch) internal view returns (uint256) {
-        return _START_TIMESTAMP + (epoch * _EPOCH_LENGTH) + _EPOCH_LENGTH;
+        return _START_TIMESTAMP + (epoch * _EPOCH_LENGTH) + _EPOCH_LENGTH - 1;
     }
 
     /**
