@@ -204,7 +204,7 @@ contract DepositTest is BaseTest {
         (address registry, uint256 oldDefault) = protocol.multiVault.bondingCurveConfig();
         uint256 newDefault = oldDefault == 1 ? 2 : 1;
 
-        resetPrank(users.admin);
+        resetPrank(users.timelock);
         protocol.multiVault
             .setBondingCurveConfig(BondingCurveConfig({ registry: registry, defaultCurveId: newDefault }));
 
@@ -215,7 +215,7 @@ contract DepositTest is BaseTest {
         protocol.multiVault.deposit{ value: 1 ether }(users.alice, atomId, newDefault, 0);
 
         // Restore default to keep other tests deterministic (optional)
-        resetPrank(users.admin);
+        resetPrank(users.timelock);
         protocol.multiVault
             .setBondingCurveConfig(BondingCurveConfig({ registry: registry, defaultCurveId: oldDefault }));
     }
@@ -235,7 +235,7 @@ contract DepositTest is BaseTest {
         // For atom, minShareCost = minShare
         uint256 minShare = protocol.multiVault.getGeneralConfig().minShare;
 
-        resetPrank(users.admin);
+        resetPrank(users.timelock);
         // Set minDeposit to very small value to isolate the test case
         protocol.multiVault.setGeneralConfig(_getGeneralConfigWithVerySmallMinDeposit());
 
@@ -271,7 +271,7 @@ contract DepositTest is BaseTest {
         // For triple (or counter), minShareCost = 2 * minShare
         uint256 minShare2x = protocol.multiVault.getGeneralConfig().minShare * 2;
 
-        resetPrank(users.admin);
+        resetPrank(users.timelock);
         // Set minDeposit to very small value to isolate the test case
         protocol.multiVault.setGeneralConfig(_getGeneralConfigWithVerySmallMinDeposit());
 
@@ -548,7 +548,7 @@ contract DefaultCurveEntryFeeImpactTest is BaseTest {
     function _setFeeThreshold(uint256 newThreshold) internal {
         GeneralConfig memory gc = _gc();
         gc.feeThreshold = newThreshold;
-        vm.prank(gc.admin);
+        vm.prank(users.timelock);
         protocol.multiVault.setGeneralConfig(gc);
     }
 }

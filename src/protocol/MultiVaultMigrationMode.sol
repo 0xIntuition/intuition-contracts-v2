@@ -55,8 +55,6 @@ contract MultiVaultMigrationMode is MultiVault {
 
     error MultiVault_InvalidBondingCurveId();
 
-    error MultiVault_ZeroAddress();
-
     /*//////////////////////////////////////////////////////////////
                              MIGRATION FUNCTIONS
     //////////////////////////////////////////////////////////////*/

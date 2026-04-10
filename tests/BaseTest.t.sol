@@ -371,6 +371,10 @@ abstract contract BaseTest is Modifiers, Test {
                 bondingCurveConfig
             );
 
+        // Bootstrap RBAC: set timelock (reinitialize also grants PAUSER_ROLE to generalConfig.admin)
+        resetPrank(users.admin);
+        protocol.multiVault.reinitialize(users.timelock);
+
         resetPrank(users.timelock);
         protocol.trustBonding.setMultiVault(address(protocol.multiVault));
 
