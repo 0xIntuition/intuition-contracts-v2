@@ -165,6 +165,10 @@ interface IMultiVault {
     /// @param amount The amount of protocol fee accrued
     event ProtocolFeeAccrued(uint256 indexed epoch, address indexed sender, uint256 amount);
 
+    /// @notice Emitted when the timelock controller address is updated
+    /// @param timelock The new timelock controller address
+    event TimelockSet(address indexed timelock);
+
     /// @notice Emitted when a protocol fee is transferred to the protocol multisig or the TrustBonding contract
     /// @dev The protocol fee is charged when depositing assets and redeeming shares from the vault, except
     ///      when the contract is paused
@@ -548,6 +552,8 @@ interface IMultiVault {
     function unpause() external;
 
     /// @notice Sets the general configuration parameters
+    /// @dev Updating `_generalConfig.admin` does not grant or revoke `DEFAULT_ADMIN_ROLE`.
+    /// AccessControl role membership is managed separately via role operations.
     function setGeneralConfig(GeneralConfig memory _generalConfig) external;
 
     /// @notice Sets the atom configuration parameters
@@ -564,4 +570,12 @@ interface IMultiVault {
 
     /// @notice Sets the bonding curve configuration parameters
     function setBondingCurveConfig(BondingCurveConfig memory _bondingCurveConfig) external;
+
+    /// @notice Updates the timelock controller address
+    /// @param _timelock The new timelock controller address
+    function setTimelock(address _timelock) external;
+
+    /// @notice Reinitializes the contract to bootstrap the timelock address after upgrade
+    /// @param _timelock The timelock controller address
+    function reinitialize(address _timelock) external;
 }

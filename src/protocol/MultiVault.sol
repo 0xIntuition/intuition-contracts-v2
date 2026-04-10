@@ -48,6 +48,9 @@ contract MultiVault is
     /// @notice Constant representing the burn address, which receives the "ghost (min) shares"
     address public constant BURN_ADDRESS = address(0x000000000000000000000000000000000000dEaD);
 
+    /// @notice Role identifier for addresses that can pause the contract
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+
     /* =================================================== */
     /*                  INTERNAL STATE                     */
     /* =================================================== */
@@ -84,6 +87,12 @@ contract MultiVault is
 
     /// @notice Tracks whether system-wide utilization rollover has been initialized for a given epoch
     mapping(uint256 epoch => bool hasRolledOver) public hasRolledOverSystemUtilization;
+
+    /// @notice The address of the parameters timelock controller
+    address public timelock;
+
+    /// @dev Storage gap for future upgrade safety
+    uint256[50] private __gap;
 
     /* =================================================== */
     /*                        Errors                       */
@@ -149,6 +158,20 @@ contract MultiVault is
 
     error MultiVault_InvalidEpoch();
 
+    error MultiVault_OnlyTimelock();
+
+    error MultiVault_ZeroAddress();
+
+    /* =================================================== */
+    /*                      MODIFIERS                      */
+    /* =================================================== */
+
+    /// @notice Restricts function access to the timelock controller
+    modifier onlyTimelock() {
+        if (msg.sender != timelock) revert MultiVault_OnlyTimelock();
+        _;
+    }
+
     /* =================================================== */
     /*                    CONSTRUCTOR                      */
     /* =================================================== */
@@ -187,6 +210,13 @@ contract MultiVault is
             _generalConfig, _atomConfig, _tripleConfig, _walletConfig, _vaultFees, _bondingCurveConfig
         );
         _grantRole(DEFAULT_ADMIN_ROLE, _generalConfig.admin);
+    }
+
+    /// @notice Reinitializer to bootstrap the timelock address after upgrade
+    /// @param _timelock The timelock controller address
+    function reinitialize(address _timelock) external onlyRole(DEFAULT_ADMIN_ROLE) reinitializer(2) {
+        _setTimelock(_timelock);
+        _grantRole(PAUSER_ROLE, generalConfig.admin);
     }
 
     /* =================================================== */
@@ -975,7 +1005,7 @@ contract MultiVault is
     /* =================================================== */
 
     /// @inheritdoc IMultiVault
-    function pause() external onlyRole(DEFAULT_ADMIN_ROLE) whenNotPaused {
+    function pause() external onlyRole(PAUSER_ROLE) whenNotPaused {
         _pause();
     }
 
@@ -985,7 +1015,7 @@ contract MultiVault is
     }
 
     /// @inheritdoc IMultiVault
-    function setGeneralConfig(GeneralConfig memory _generalConfig) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setGeneralConfig(GeneralConfig memory _generalConfig) external onlyTimelock {
         _setGeneralConfig(_generalConfig);
         emit GeneralConfigUpdated(
             _generalConfig.admin,
@@ -1000,19 +1030,19 @@ contract MultiVault is
     }
 
     /// @inheritdoc IMultiVault
-    function setAtomConfig(AtomConfig memory _atomConfig) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setAtomConfig(AtomConfig memory _atomConfig) external onlyTimelock {
         atomConfig = _atomConfig;
         emit AtomConfigUpdated(_atomConfig.atomCreationProtocolFee, _atomConfig.atomWalletDepositFee);
     }
 
     /// @inheritdoc IMultiVault
-    function setTripleConfig(TripleConfig memory _tripleConfig) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setTripleConfig(TripleConfig memory _tripleConfig) external onlyTimelock {
         tripleConfig = _tripleConfig;
         emit TripleConfigUpdated(_tripleConfig.tripleCreationProtocolFee, _tripleConfig.atomDepositFractionForTriple);
     }
 
     /// @inheritdoc IMultiVault
-    function setWalletConfig(WalletConfig memory _walletConfig) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setWalletConfig(WalletConfig memory _walletConfig) external onlyTimelock {
         walletConfig = _walletConfig;
         emit WalletConfigUpdated(
             _walletConfig.entryPoint,
@@ -1023,16 +1053,13 @@ contract MultiVault is
     }
 
     /// @inheritdoc IMultiVault
-    function setVaultFees(VaultFees memory _vaultFees) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setVaultFees(VaultFees memory _vaultFees) external onlyTimelock {
         vaultFees = _vaultFees;
         emit VaultFeesUpdated(_vaultFees.entryFee, _vaultFees.exitFee, _vaultFees.protocolFee);
     }
 
     /// @inheritdoc IMultiVault
-    function setBondingCurveConfig(BondingCurveConfig memory _bondingCurveConfig)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE)
-    {
+    function setBondingCurveConfig(BondingCurveConfig memory _bondingCurveConfig) external onlyTimelock {
         bondingCurveConfig = _bondingCurveConfig;
         emit BondingCurveConfigUpdated(_bondingCurveConfig.registry, _bondingCurveConfig.defaultCurveId);
     }
@@ -1040,6 +1067,11 @@ contract MultiVault is
     /// @inheritdoc IMultiVault
     function sweepAccumulatedProtocolFees(uint256 epoch) external {
         _claimAccumulatedProtocolFees(epoch);
+    }
+
+    /// @inheritdoc IMultiVault
+    function setTimelock(address _timelock) external onlyTimelock {
+        _setTimelock(_timelock);
     }
 
     /* =================================================== */
@@ -1565,6 +1597,14 @@ contract MultiVault is
         Address.sendValue(payable(generalConfig.protocolMultisig), protocolFees);
 
         emit ProtocolFeeTransferred(epoch, generalConfig.protocolMultisig, protocolFees);
+    }
+
+    /// @dev Internal function to set and validate the timelock address
+    /// @param _timelock The new timelock controller address
+    function _setTimelock(address _timelock) internal {
+        if (_timelock == address(0)) revert MultiVault_ZeroAddress();
+        timelock = _timelock;
+        emit TimelockSet(_timelock);
     }
 
     /// @dev Updates the vault state on creation of a new vault

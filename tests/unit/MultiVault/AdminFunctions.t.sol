@@ -7,6 +7,7 @@ import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/trans
 
 import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
+import { MultiVault } from "src/protocol/MultiVault.sol";
 import {
     GeneralConfig,
     AtomConfig,
@@ -26,7 +27,7 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
                                 INTERNAL HELPERS
     ////////////////////////////////////////////////////////////////////*/
 
-    function _expectUnauthorized(address caller) internal {
+    function _expectUnauthorizedAdmin(address caller) internal {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IAccessControl.AccessControlUnauthorizedAccount.selector,
@@ -36,12 +37,24 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
         );
     }
 
+    function _expectUnauthorizedPauser(address caller) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, caller, protocol.multiVault.PAUSER_ROLE()
+            )
+        );
+    }
+
+    function _expectOnlyTimelock() internal {
+        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_OnlyTimelock.selector));
+    }
+
     /*////////////////////////////////////////////////////////////////////
                                   PAUSE / UNPAUSE
     ////////////////////////////////////////////////////////////////////*/
 
-    function testPause_OnlyAdmin_SetsPausedAndBlocksDeposit() public {
-        // pause as admin
+    function testPause_OnlyPauser_SetsPausedAndBlocksDeposit() public {
+        // pause as admin (who has PAUSER_ROLE)
         resetPrank({ msgSender: users.admin });
         protocol.multiVault.pause();
 
@@ -56,9 +69,9 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
         protocol.multiVault.deposit{ value: 1 ether }(users.alice, bytes32(0), 1, 0);
     }
 
-    function testPause_RevertWhen_CalledByNonAdmin() public {
+    function testPause_RevertWhen_CalledByNonPauser() public {
         resetPrank({ msgSender: users.alice });
-        _expectUnauthorized(users.alice);
+        _expectUnauthorizedPauser(users.alice);
         protocol.multiVault.pause();
     }
 
@@ -75,10 +88,9 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
         protocol.multiVault.unpause();
 
         // Create a valid atom so we can perform a real deposit after unpause
-        // (default curve already exists; deposit into default curve works)
         bytes32 atomId = createSimpleAtom("admin-atom", getAtomCreationCost(), users.admin);
 
-        // Alice deposits into default curve (onlySelf approval OK)
+        // Alice deposits into default curve
         resetPrank({ msgSender: users.alice });
         vm.deal(users.alice, 10 ether);
         uint256 curveId = getDefaultCurveId();
@@ -94,7 +106,7 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
         protocol.multiVault.pause();
 
         resetPrank({ msgSender: users.bob });
-        _expectUnauthorized(users.bob);
+        _expectUnauthorizedAdmin(users.bob);
         protocol.multiVault.unpause();
     }
 
@@ -102,7 +114,7 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
                                setGeneralConfig
     ////////////////////////////////////////////////////////////////////*/
 
-    function testSetGeneralConfig_OnlyAdmin_UpdatesFields() public {
+    function testSetGeneralConfig_OnlyTimelock_UpdatesFields() public {
         // Read current config
         (
             address admin,
@@ -127,7 +139,7 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
             feeThreshold: feeThreshold
         });
 
-        resetPrank({ msgSender: users.admin });
+        resetPrank({ msgSender: users.timelock });
         protocol.multiVault.setGeneralConfig(gc);
 
         // Verify updated
@@ -151,13 +163,12 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
         assertEq(newFeeThreshold, feeThreshold);
     }
 
-    function testSetGeneralConfig_RevertWhen_NonAdmin() public {
-        // Craft a dummy config
+    function testSetGeneralConfig_RevertWhen_NotTimelock() public {
         GeneralConfig memory generalConfig = _getDefaultGeneralConfig();
         generalConfig.protocolMultisig = users.bob;
 
         resetPrank({ msgSender: users.alice });
-        _expectUnauthorized(users.alice);
+        _expectOnlyTimelock();
         protocol.multiVault.setGeneralConfig(generalConfig);
     }
 
@@ -165,13 +176,13 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
                                setAtomConfig
     ////////////////////////////////////////////////////////////////////*/
 
-    function testSetAtomConfig_OnlyAdmin_UpdatesFields() public {
+    function testSetAtomConfig_OnlyTimelock_UpdatesFields() public {
         (uint256 creationFee, uint256 walletDepositFee) = protocol.multiVault.atomConfig();
 
         AtomConfig memory ac =
             AtomConfig({ atomCreationProtocolFee: creationFee + 123, atomWalletDepositFee: walletDepositFee + 5 });
 
-        resetPrank({ msgSender: users.admin });
+        resetPrank({ msgSender: users.timelock });
         protocol.multiVault.setAtomConfig(ac);
 
         (uint256 newCreationFee, uint256 newWalletDepositFee) = protocol.multiVault.atomConfig();
@@ -179,12 +190,12 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
         assertEq(newWalletDepositFee, walletDepositFee + 5);
     }
 
-    function testSetAtomConfig_RevertWhen_NonAdmin() public {
+    function testSetAtomConfig_RevertWhen_NotTimelock() public {
         AtomConfig memory ac = _getDefaultAtomConfig();
         ac.atomWalletDepositFee = ac.atomWalletDepositFee + 1;
 
         resetPrank({ msgSender: users.charlie });
-        _expectUnauthorized(users.charlie);
+        _expectOnlyTimelock();
         protocol.multiVault.setAtomConfig(ac);
     }
 
@@ -192,14 +203,14 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
                                setTripleConfig
     ////////////////////////////////////////////////////////////////////*/
 
-    function testSetTripleConfig_OnlyAdmin_UpdatesFields() public {
+    function testSetTripleConfig_OnlyTimelock_UpdatesFields() public {
         (uint256 creationFee, uint256 atomDepositFrac) = protocol.multiVault.tripleConfig();
 
         TripleConfig memory tc = TripleConfig({
             tripleCreationProtocolFee: creationFee + 1, atomDepositFractionForTriple: atomDepositFrac + 3
         });
 
-        resetPrank({ msgSender: users.admin });
+        resetPrank({ msgSender: users.timelock });
         protocol.multiVault.setTripleConfig(tc);
 
         (uint256 nCreationFee, uint256 nFrac) = protocol.multiVault.tripleConfig();
@@ -207,12 +218,12 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
         assertEq(nFrac, atomDepositFrac + 3);
     }
 
-    function testSetTripleConfig_RevertWhen_NonAdmin() public {
+    function testSetTripleConfig_RevertWhen_NotTimelock() public {
         TripleConfig memory tc = _getDefaultTripleConfig();
         tc.atomDepositFractionForTriple = tc.atomDepositFractionForTriple + 1;
 
         resetPrank({ msgSender: users.alice });
-        _expectUnauthorized(users.alice);
+        _expectOnlyTimelock();
         protocol.multiVault.setTripleConfig(tc);
     }
 
@@ -220,12 +231,12 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
                                setVaultFees (+ fuzz)
     ////////////////////////////////////////////////////////////////////*/
 
-    function testSetVaultFees_OnlyAdmin_UpdatesFields() public {
+    function testSetVaultFees_OnlyTimelock_UpdatesFields() public {
         (uint256 entryFee, uint256 exitFee, uint256 protocolFee) = protocol.multiVault.vaultFees();
 
         VaultFees memory vf = VaultFees({ entryFee: entryFee + 7, exitFee: exitFee + 9, protocolFee: protocolFee + 11 });
 
-        resetPrank({ msgSender: users.admin });
+        resetPrank({ msgSender: users.timelock });
         protocol.multiVault.setVaultFees(vf);
 
         (uint256 nEntry, uint256 nExit, uint256 nProt) = protocol.multiVault.vaultFees();
@@ -234,16 +245,16 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
         assertEq(nProt, protocolFee + 11);
     }
 
-    function testSetVaultFees_RevertWhen_NonAdmin() public {
+    function testSetVaultFees_RevertWhen_NotTimelock() public {
         VaultFees memory vf = _getDefaultVaultFees();
         vf.protocolFee = vf.protocolFee + 1;
 
         resetPrank({ msgSender: users.bob });
-        _expectUnauthorized(users.bob);
+        _expectOnlyTimelock();
         protocol.multiVault.setVaultFees(vf);
     }
 
-    function testFuzz_SetVaultFees_OnlyAdmin(uint16 entryFee, uint16 exitFee, uint16 protocolFee) public {
+    function testFuzz_SetVaultFees_OnlyTimelock(uint16 entryFee, uint16 exitFee, uint16 protocolFee) public {
         // Bound to sensible ranges (<= fee denominator)
         uint256 denom = FEE_DENOMINATOR;
         uint256 e = uint256(entryFee) % (denom + 1);
@@ -252,7 +263,7 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
 
         VaultFees memory vf = VaultFees({ entryFee: e, exitFee: x, protocolFee: p });
 
-        resetPrank({ msgSender: users.admin });
+        resetPrank({ msgSender: users.timelock });
         protocol.multiVault.setVaultFees(vf);
 
         (uint256 ne, uint256 nx, uint256 np) = protocol.multiVault.vaultFees();
@@ -265,7 +276,7 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
                            setBondingCurveConfig
     ////////////////////////////////////////////////////////////////////*/
 
-    function testSetBondingCurveConfig_OnlyAdmin_UpdatesFields() public {
+    function testSetBondingCurveConfig_OnlyTimelock_UpdatesFields() public {
         // Deploy a fresh registry and at least one curve so defaultCurveId=1 is valid
         BondingCurveRegistry newRegImpl = new BondingCurveRegistry();
         TransparentUpgradeableProxy newReg = new TransparentUpgradeableProxy(
@@ -282,9 +293,11 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
 
         resetPrank(users.admin);
         newRegInstance.addBondingCurve(address(lcProxy));
+
         // set to the fresh registry, default curve id 1
         BondingCurveConfig memory bc = BondingCurveConfig({ registry: address(newReg), defaultCurveId: 1 });
 
+        resetPrank({ msgSender: users.timelock });
         protocol.multiVault.setBondingCurveConfig(bc);
 
         (address regAddr, uint256 defId) = protocol.multiVault.bondingCurveConfig();
@@ -292,12 +305,12 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
         assertEq(defId, 1);
     }
 
-    function testSetBondingCurveConfig_RevertWhen_NonAdmin() public {
+    function testSetBondingCurveConfig_RevertWhen_NotTimelock() public {
         BondingCurveConfig memory bc = _getDefaultBondingCurveConfig();
         bc.defaultCurveId = 2;
 
         resetPrank({ msgSender: users.charlie });
-        _expectUnauthorized(users.charlie);
+        _expectOnlyTimelock();
         protocol.multiVault.setBondingCurveConfig(bc);
     }
 
@@ -305,7 +318,7 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
                                setWalletConfig
     ////////////////////////////////////////////////////////////////////*/
 
-    function testSetWalletConfig_OnlyAdmin_UpdatesFields() public {
+    function testSetWalletConfig_OnlyTimelock_UpdatesFields() public {
         (address entryPoint, address atomWarden, address atomWalletBeacon, address atomWalletFactory) =
             protocol.multiVault.walletConfig();
 
@@ -316,7 +329,7 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
             atomWalletFactory: atomWalletFactory // leave same
         });
 
-        resetPrank({ msgSender: users.admin });
+        resetPrank({ msgSender: users.timelock });
         protocol.multiVault.setWalletConfig(wc);
 
         (address nEntry, address nWarden, address nBeacon, address nFactory) = protocol.multiVault.walletConfig();
@@ -332,12 +345,12 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
         atomWalletBeacon;
     }
 
-    function testSetWalletConfig_RevertWhen_NonAdmin() public {
+    function testSetWalletConfig_RevertWhen_NotTimelock() public {
         WalletConfig memory wc = _getDefaultWalletConfig(address(1));
         wc.entryPoint = address(0x99);
 
         resetPrank({ msgSender: users.bob });
-        _expectUnauthorized(users.bob);
+        _expectOnlyTimelock();
         protocol.multiVault.setWalletConfig(wc);
     }
 }

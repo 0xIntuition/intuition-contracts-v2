@@ -50,7 +50,7 @@ contract FeeFlowsTest is BaseTest {
     function _setFeeThreshold(uint256 newThreshold) internal {
         GeneralConfig memory gc = _gc();
         gc.feeThreshold = newThreshold;
-        vm.prank(gc.admin);
+        vm.prank(users.timelock);
         protocol.multiVault.setGeneralConfig(gc);
     }
 
