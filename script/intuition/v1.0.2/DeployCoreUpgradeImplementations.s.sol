@@ -17,7 +17,7 @@ import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEm
 
 /*
 MAINNET (Intuition)
-forge script script/intuition/DeployCoreUpgradeImplementations.s.sol:DeployCoreUpgradeImplementations \
+forge script script/intuition/v1.0.2/DeployCoreUpgradeImplementations.s.sol:DeployCoreUpgradeImplementations \
 --optimizer-runs 10000 \
 --rpc-url intuition \
 --broadcast \
@@ -74,8 +74,8 @@ contract DeployCoreUpgradeImplementations is SetupScript {
     }
 
     function _deployImplementations() internal {
-        multiVaultImplementation = new MultiVault();
-        info("MultiVault Implementation", address(multiVaultImplementation));
+        // multiVaultImplementation = new MultiVault();
+        // info("MultiVault Implementation", address(multiVaultImplementation));
 
         trustBondingImplementation = new TrustBonding();
         info("TrustBonding Implementation", address(trustBondingImplementation));
@@ -97,14 +97,14 @@ contract DeployCoreUpgradeImplementations is SetupScript {
         console2.log("UPGRADE CALLDATA: =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+");
 
         // ProxyAdmin.upgradeAndCall(proxy, newImpl, 0x) for each TransparentUpgradeableProxy
-        console2.log("");
-        console2.log("MultiVault upgrade (target: ProxyAdmin %s):", MULTIVAULT_PROXY_ADMIN);
-        console2.logBytes(
-            abi.encodeCall(
-                ProxyAdmin.upgradeAndCall,
-                (ITransparentUpgradeableProxy(MULTIVAULT_PROXY), address(multiVaultImplementation), "")
-            )
-        );
+        // console2.log("");
+        // console2.log("MultiVault upgrade (target: ProxyAdmin %s):", MULTIVAULT_PROXY_ADMIN);
+        // console2.logBytes(
+        //     abi.encodeCall(
+        //         ProxyAdmin.upgradeAndCall,
+        //         (ITransparentUpgradeableProxy(MULTIVAULT_PROXY), address(multiVaultImplementation), "")
+        //     )
+        // );
 
         console2.log("");
         console2.log("TrustBonding upgrade (target: ProxyAdmin %s):", TRUST_BONDING_PROXY_ADMIN);

@@ -2,6 +2,7 @@
 pragma solidity 0.8.29;
 
 import { Test } from "forge-std/src/Test.sol";
+import { console2 } from "forge-std/src/console2.sol";
 import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
 import {
     ITransparentUpgradeableProxy,
@@ -11,19 +12,18 @@ import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/Upgradea
 import { PackedUserOperation } from "@account-abstraction/interfaces/PackedUserOperation.sol";
 import { SIG_VALIDATION_FAILED, _packValidationData } from "@account-abstraction/core/Helpers.sol";
 
-import { MultiVault } from "src/protocol/MultiVault.sol";
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
-import { BaseEmissionsController } from "src/protocol/emissions/BaseEmissionsController.sol";
-import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
 import { AtomWallet } from "src/protocol/wallet/AtomWallet.sol";
-import { AtomWalletFactory } from "src/protocol/wallet/AtomWalletFactory.sol";
 import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCurve.sol";
 import { WrappedTrust } from "src/WrappedTrust.sol";
 import { ICoreEmissionsController } from "src/interfaces/ICoreEmissionsController.sol";
+import { IMultiVault } from "src/interfaces/IMultiVault.sol";
+import { ITrustBonding } from "src/interfaces/ITrustBonding.sol";
+import { IBondingCurveRegistry } from "src/interfaces/IBondingCurveRegistry.sol";
+import { IMultiVaultCore, GeneralConfig, BondingCurveConfig } from "src/interfaces/IMultiVaultCore.sol";
 
 contract CoreMainnetUpgradeRegressionTest is Test {
     struct CoreImplementations {
-        address multiVault;
         address trustBonding;
         address offsetProgressiveCurve;
         address atomWallet;
@@ -31,10 +31,6 @@ contract CoreMainnetUpgradeRegressionTest is Test {
     }
 
     struct StorageSnapshot {
-        bytes32 mvSlot0;
-        bytes32 mvTotalUtilization;
-        bytes32 mvPersonalUtilization;
-        bytes32 mvUserEpoch0;
         bytes32[7] tbCoreSlots;
         bytes32[3] atomWalletCoreSlots;
         bytes32[5] offsetCurveCoreSlots;
@@ -48,6 +44,15 @@ contract CoreMainnetUpgradeRegressionTest is Test {
         bool isClaimed;
     }
 
+    struct EpochSnapshot {
+        uint256 startTimestamp;
+        uint256 epochLength;
+        uint256 currentEpoch;
+        uint256 currentEpochStart;
+        uint256 currentEpochEnd;
+        uint256 nextEpochStart;
+    }
+
     bytes32 internal constant EIP1967_IMPLEMENTATION_SLOT =
         bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1);
 
@@ -55,10 +60,12 @@ contract CoreMainnetUpgradeRegressionTest is Test {
     address internal constant UPGRADES_TIMELOCK = 0x321e5d4b20158648dFd1f360A79CAFc97190bAd1;
     address internal constant ADMIN_SAFE = 0xbeA18ab4c83a12be25f8AA8A10D8747A07Cdc6eb;
 
-    // Proxies + admins (contracts/core/README.md)
-    address internal constant MULTIVAULT_PROXY = 0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e;
-    address internal constant MULTIVAULT_PROXY_ADMIN = 0x1999faD6477e4fa9aA0FF20DaafC32F7B90005C8;
+    // Base mainnet governance
+    address internal constant BASE_UPGRADES_TIMELOCK = 0x1E442BbB08c98100b18fa830a88E8A57b5dF9157;
+    address internal constant BASE_ADMIN_SAFE = 0xCa66d181c76eAE6439B90Fb5f73bF6252107AE4E;
 
+    // Live protocol dependencies on Intuition mainnet.
+    address internal constant MULTIVAULT_PROXY = 0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e;
     address internal constant TRUST_BONDING_PROXY = 0x635bBD1367B66E7B16a21D6E5A63C812fFC00617;
     address internal constant TRUST_BONDING_PROXY_ADMIN = 0xF10FEE90B3C633c4fCd49aA557Ec7d51E5AEef62;
 
@@ -66,7 +73,6 @@ contract CoreMainnetUpgradeRegressionTest is Test {
     address internal constant OFFSET_PROGRESSIVE_CURVE_PROXY_ADMIN = 0xe58B117aDfB0a141dC1CC22b98297294F6E2c5E7;
 
     address internal constant ATOM_WALLET_BEACON = 0xC23cD55CF924b3FE4b97deAA0EAF222a5082A1FF;
-    address internal constant ATOM_WALLET_FACTORY = 0x33827373a7D1c7C78a01094071C2f6CE74253B9B;
 
     // Emissions controller proxies
     address internal constant SATELLITE_EMISSIONS_CONTROLLER_PROXY = 0x73B8819f9b157BE42172E3866fB0Ba0d5fA0A5c6;
@@ -74,18 +80,43 @@ contract CoreMainnetUpgradeRegressionTest is Test {
     address internal constant BASE_EMISSIONS_CONTROLLER_PROXY = 0x7745bDEe668501E5eeF7e9605C746f9cDfb60667;
     address internal constant BASE_EMISSIONS_CONTROLLER_PROXY_ADMIN = 0x58dCdf3b6F5D03835CF6556EdC798bfd690B251a;
 
+    // Predeployed upgrade implementations supplied by deployment output.
+    address internal constant TRUST_BONDING_IMPLEMENTATION = 0xd1716D4430466397Fc88e938e97C7e12adcEcF24;
+    address internal constant OFFSET_PROGRESSIVE_CURVE_IMPLEMENTATION = 0xea5B87984253AE3D8472df3738e5Ad421297c246;
+    address internal constant ATOM_WALLET_IMPLEMENTATION = 0xbCb1526A8de4a155e4dE003361b122eDe2f22908;
+    address internal constant SATELLITE_EMISSIONS_CONTROLLER_IMPLEMENTATION =
+        0x0D1a22119c23920d24DCcF5387EAEf1E472D9639;
+    address internal constant BASE_EMISSIONS_CONTROLLER_IMPLEMENTATION = 0xd235B804f25B062D99457dA82F3787671573c355;
+
+    // Existing atom wallet on Intuition mainnet (factory event at block 150634).
+    address internal constant KNOWN_ATOM_WALLET = 0xD52d9eD3309207Ab4f696A21023c60F7947a4a56;
+    bytes32 internal constant KNOWN_ATOM_ID = 0x70400f554d8b44b2b4e1edc61b42421c57844932a47efb6b3815d3e44f384730;
+    address internal constant KNOWN_ATOM_WALLET_OWNER = 0x98C9BCecf318d0D1409Bf81Ea3551b629fAEC165;
+
     // Core dependencies
     address internal constant WRAPPED_TRUST = 0x81cFb09cb44f7184Ad934C09F82000701A4bF672;
     address internal constant ENTRY_POINT = 0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108;
 
-    uint256 internal constant DEFAULT_CURVE_ID = 1;
-    uint256 internal constant OFFSET_CURVE_ID = 2;
-    uint256 internal constant INTUITION_FORK_BLOCK = 2_367_274;
-    uint256 internal constant BASE_BLOCK_NUMBER = 43_451_628;
+    uint256 internal constant OFFSET_PROGRESSIVE_CURVE_ID = 2;
+
+    // Fork block numbers
+    uint256 internal constant INTUITION_FORK_BLOCK = 3_208_388;
+    uint256 internal constant BASE_FORK_BLOCK = 45_206_800;
+
+    uint256 internal intuitionFork;
+    uint256 internal baseFork;
+    uint256 internal baseForkBlockNumber;
 
     function setUp() external {
+        baseFork = vm.createFork("base", BASE_FORK_BLOCK);
+        _selectBaseFork();
+        baseForkBlockNumber = block.number;
+
+        intuitionFork = vm.createFork("intuition", INTUITION_FORK_BLOCK);
         _selectIntuitionFork();
         _ensureEpochAtLeastOne();
+
+        vm.stopPrank();
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -93,15 +124,12 @@ contract CoreMainnetUpgradeRegressionTest is Test {
     //////////////////////////////////////////////////////////////*/
 
     function test_preflight_rolesAndUpgradeOwnership() external view {
-        MultiVault multiVault = MultiVault(payable(MULTIVAULT_PROXY));
         TrustBonding trustBonding = TrustBonding(payable(TRUST_BONDING_PROXY));
 
-        // DEFAULT_ADMIN_ROLE is held by the Safe for both contracts.
-        assertTrue(multiVault.hasRole(multiVault.DEFAULT_ADMIN_ROLE(), ADMIN_SAFE));
+        // DEFAULT_ADMIN_ROLE is held by the Safe.
         assertTrue(trustBonding.hasRole(trustBonding.DEFAULT_ADMIN_ROLE(), ADMIN_SAFE));
 
         // Upgrade ownership is held by the upgrades timelock.
-        assertEq(ProxyAdmin(MULTIVAULT_PROXY_ADMIN).owner(), UPGRADES_TIMELOCK);
         assertEq(ProxyAdmin(TRUST_BONDING_PROXY_ADMIN).owner(), UPGRADES_TIMELOCK);
         assertEq(ProxyAdmin(OFFSET_PROGRESSIVE_CURVE_PROXY_ADMIN).owner(), UPGRADES_TIMELOCK);
         assertEq(ProxyAdmin(SATELLITE_EMISSIONS_CONTROLLER_PROXY_ADMIN).owner(), UPGRADES_TIMELOCK);
@@ -109,22 +137,19 @@ contract CoreMainnetUpgradeRegressionTest is Test {
     }
 
     function test_upgradeInUnison() external {
-        address oldMultiVaultImpl = _implementationOf(MULTIVAULT_PROXY);
         address oldTrustBondingImpl = _implementationOf(TRUST_BONDING_PROXY);
         address oldOffsetCurveImpl = _implementationOf(OFFSET_PROGRESSIVE_CURVE_PROXY);
         address oldAtomWalletImpl = UpgradeableBeacon(ATOM_WALLET_BEACON).implementation();
         address oldSatelliteEmissionsImpl = _implementationOf(SATELLITE_EMISSIONS_CONTROLLER_PROXY);
 
-        CoreImplementations memory impls = _deployCoreImplementations();
+        CoreImplementations memory impls = _configuredCoreImplementations();
         _upgradeCoreInUnison(impls);
 
-        assertEq(_implementationOf(MULTIVAULT_PROXY), impls.multiVault);
         assertEq(_implementationOf(TRUST_BONDING_PROXY), impls.trustBonding);
         assertEq(_implementationOf(OFFSET_PROGRESSIVE_CURVE_PROXY), impls.offsetProgressiveCurve);
         assertEq(UpgradeableBeacon(ATOM_WALLET_BEACON).implementation(), impls.atomWallet);
         assertEq(_implementationOf(SATELLITE_EMISSIONS_CONTROLLER_PROXY), impls.satelliteEmissionsController);
 
-        assertTrue(oldMultiVaultImpl != impls.multiVault);
         assertTrue(oldTrustBondingImpl != impls.trustBonding);
         assertTrue(oldOffsetCurveImpl != impls.offsetProgressiveCurve);
         assertTrue(oldAtomWalletImpl != impls.atomWallet);
@@ -142,7 +167,7 @@ contract CoreMainnetUpgradeRegressionTest is Test {
         uint256 epochLength = controller.getEpochLength();
         uint256 startTimestamp = controller.getStartTimestamp();
 
-        for (uint256 epoch = 0; epoch < 5; ++epoch) {
+        for (uint256 epoch = 0; epoch < 15; ++epoch) {
             _assertEpochBoundarySemantics(
                 controller, epoch, epochLength, startTimestamp, false, "pre-upgrade satellite"
             );
@@ -157,14 +182,14 @@ contract CoreMainnetUpgradeRegressionTest is Test {
             );
         }
 
-        CoreImplementations memory impls = _deployCoreImplementations();
+        CoreImplementations memory impls = _configuredCoreImplementations();
         _upgradeCoreInUnison(impls);
 
         controller = ICoreEmissionsController(SATELLITE_EMISSIONS_CONTROLLER_PROXY);
         epochLength = controller.getEpochLength();
         startTimestamp = controller.getStartTimestamp();
 
-        for (uint256 epoch = 0; epoch < 5; ++epoch) {
+        for (uint256 epoch = 0; epoch < 15; ++epoch) {
             _assertEpochBoundarySemantics(
                 controller, epoch, epochLength, startTimestamp, true, "post-upgrade satellite"
             );
@@ -182,129 +207,97 @@ contract CoreMainnetUpgradeRegressionTest is Test {
 
     /// @notice Verifies pre-upgrade and post-upgrade epoch boundary semantics on base emissions controller.
     function test_baseEmissionsController_epochBoundariesNoOverlap() external {
-        vm.createSelectFork("base", BASE_BLOCK_NUMBER);
+        _selectBaseFork();
 
         ICoreEmissionsController controller = ICoreEmissionsController(BASE_EMISSIONS_CONTROLLER_PROXY);
 
         uint256 epochLength = controller.getEpochLength();
         uint256 startTimestamp = controller.getStartTimestamp();
 
-        for (uint256 epoch = 0; epoch < 5; ++epoch) {
+        for (uint256 epoch = 0; epoch < 15; ++epoch) {
             _assertEpochBoundarySemantics(controller, epoch, epochLength, startTimestamp, false, "pre-upgrade base");
         }
 
-        BaseEmissionsController newBaseImpl = new BaseEmissionsController();
-        address baseProxyAdminOwner = ProxyAdmin(BASE_EMISSIONS_CONTROLLER_PROXY_ADMIN).owner();
-
-        vm.prank(baseProxyAdminOwner);
-        ProxyAdmin(BASE_EMISSIONS_CONTROLLER_PROXY_ADMIN)
-            .upgradeAndCall(
-                ITransparentUpgradeableProxy(payable(BASE_EMISSIONS_CONTROLLER_PROXY)), address(newBaseImpl), bytes("")
-            );
+        _upgradeBaseEmissionsControllerViaScheduledOperation();
+        assertEq(_implementationOf(BASE_EMISSIONS_CONTROLLER_PROXY), BASE_EMISSIONS_CONTROLLER_IMPLEMENTATION);
 
         controller = ICoreEmissionsController(BASE_EMISSIONS_CONTROLLER_PROXY);
         epochLength = controller.getEpochLength();
         startTimestamp = controller.getStartTimestamp();
 
-        for (uint256 epoch = 0; epoch < 5; ++epoch) {
+        for (uint256 epoch = 0; epoch < 15; ++epoch) {
             _assertEpochBoundarySemantics(controller, epoch, epochLength, startTimestamp, true, "post-upgrade base");
         }
     }
 
-    /*//////////////////////////////////////////////////////////////
-                    MULTIVAULT REGRESSION (PRE/POST)
-    //////////////////////////////////////////////////////////////*/
+    function test_scheduledUpgrades_keepBaseAndIntuitionEpochsInSync() external {
+        _selectIntuitionFork();
+        _upgradeCoreInUnison(_configuredCoreImplementations());
 
-    function test_multivault_zeroCrossingReplay_preThenPostUpgrade() external {
-        MultiVault multiVault = MultiVault(payable(MULTIVAULT_PROXY));
+        ICoreEmissionsController intuitionController = ICoreEmissionsController(SATELLITE_EMISSIONS_CONTROLLER_PROXY);
+        EpochSnapshot memory intuitionEpoch = _captureEpochSnapshot(intuitionController);
 
-        address actor = makeAddr("mv-zero-crossing-actor");
-        vm.deal(actor, 50 ether);
-
-        bytes32 atomId = _createAtom(actor, "mv-zero-crossing-atom");
-
-        uint256 epoch = multiVault.currentEpoch();
-        if (epoch == 0) {
-            // Ensure epoch > 0 because rollover copies from previous epoch.
-            vm.warp(TrustBonding(payable(TRUST_BONDING_PROXY)).epochTimestampEnd(0) + 1);
-            epoch = multiVault.currentEpoch();
+        if (intuitionEpoch.currentEpoch > 0) {
+            _assertEpochBoundarySemantics(
+                intuitionController,
+                intuitionEpoch.currentEpoch - 1,
+                intuitionEpoch.epochLength,
+                intuitionEpoch.startTimestamp,
+                true,
+                "scheduled intuition previous"
+            );
         }
-        uint256 previousEpoch = epoch - 1;
 
-        int256 previousEpochUtilization = int256(1000 ether);
-        uint256 firstDeposit = 2 ether;
-        uint256 secondDeposit = 1 ether;
-
-        _setMultiVaultTotalUtilization(previousEpoch, previousEpochUtilization);
-        _setMultiVaultTotalUtilization(epoch, 0);
-
-        // PRE-UPGRADE: vulnerable replay when current epoch utilization reaches 0 mid-epoch.
-        _depositIntoAtom(actor, atomId, firstDeposit);
-        assertEq(multiVault.totalUtilization(epoch), previousEpochUtilization + int256(firstDeposit));
-
-        // Simulate legitimate mid-epoch zero crossing.
-        _setMultiVaultTotalUtilization(epoch, 0);
-
-        _depositIntoAtom(actor, atomId, secondDeposit);
-        assertEq(
-            multiVault.totalUtilization(epoch),
-            previousEpochUtilization + int256(secondDeposit),
-            "pre-upgrade replay should re-copy previous epoch"
+        _assertEpochBoundarySemantics(
+            intuitionController,
+            intuitionEpoch.currentEpoch,
+            intuitionEpoch.epochLength,
+            intuitionEpoch.startTimestamp,
+            true,
+            "scheduled intuition current"
         );
+        assertEq(_implementationOf(TRUST_BONDING_PROXY), TRUST_BONDING_IMPLEMENTATION);
+        assertEq(_implementationOf(OFFSET_PROGRESSIVE_CURVE_PROXY), OFFSET_PROGRESSIVE_CURVE_IMPLEMENTATION);
+        assertEq(_implementationOf(SATELLITE_EMISSIONS_CONTROLLER_PROXY), SATELLITE_EMISSIONS_CONTROLLER_IMPLEMENTATION);
+        assertEq(UpgradeableBeacon(ATOM_WALLET_BEACON).implementation(), ATOM_WALLET_IMPLEMENTATION);
+        _logEpochSnapshot("Intuition", intuitionEpoch);
 
-        CoreImplementations memory impls = _deployCoreImplementations();
-        _upgradeCoreInUnison(impls);
+        _selectBaseFork();
+        _upgradeBaseEmissionsControllerViaScheduledOperation();
 
-        // POST-UPGRADE: explicit rollover flag prevents replay.
-        _setMultiVaultTotalUtilization(previousEpoch, previousEpochUtilization);
-        _setMultiVaultTotalUtilization(epoch, 0);
+        ICoreEmissionsController baseController = ICoreEmissionsController(BASE_EMISSIONS_CONTROLLER_PROXY);
+        EpochSnapshot memory baseEpoch = _captureEpochSnapshot(baseController);
 
-        assertFalse(multiVault.hasRolledOverSystemUtilization(epoch));
-
-        _depositIntoAtom(actor, atomId, firstDeposit);
-        assertEq(multiVault.totalUtilization(epoch), previousEpochUtilization + int256(firstDeposit));
-
-        _setMultiVaultTotalUtilization(epoch, 0);
-
-        _depositIntoAtom(actor, atomId, secondDeposit);
-        assertEq(
-            multiVault.totalUtilization(epoch),
-            int256(secondDeposit),
-            "post-upgrade must not replay previous epoch after zero crossing"
-        );
-    }
-
-    function test_multivault_midEpochUpgrade_doesNotOverwriteInitializedCurrentEpochUtilization() external {
-        MultiVault multiVault = MultiVault(payable(MULTIVAULT_PROXY));
-
-        address actor = makeAddr("mv-mid-epoch-actor");
-        vm.deal(actor, 50 ether);
-
-        bytes32 atomId = _createAtom(actor, "mv-mid-epoch-atom");
-
-        uint256 epoch = multiVault.currentEpoch();
-        if (epoch == 0) {
-            vm.warp(TrustBonding(payable(TRUST_BONDING_PROXY)).epochTimestampEnd(0) + 1);
-            epoch = multiVault.currentEpoch();
+        if (baseEpoch.currentEpoch > 0) {
+            _assertEpochBoundarySemantics(
+                baseController,
+                baseEpoch.currentEpoch - 1,
+                baseEpoch.epochLength,
+                baseEpoch.startTimestamp,
+                true,
+                "scheduled base previous"
+            );
         }
-        uint256 previousEpoch = epoch - 1;
 
-        _setMultiVaultTotalUtilization(previousEpoch, int256(1000 ether));
-        _setMultiVaultTotalUtilization(epoch, int256(777 ether));
-
-        CoreImplementations memory impls = _deployCoreImplementations();
-        _upgradeCoreInUnison(impls);
-
-        assertFalse(multiVault.hasRolledOverSystemUtilization(epoch));
-
-        _depositIntoAtom(actor, atomId, 5 ether);
-
-        assertEq(
-            multiVault.totalUtilization(epoch),
-            int256(782 ether),
-            "upgrade safety guard must preserve existing current-epoch utilization"
+        _assertEpochBoundarySemantics(
+            baseController,
+            baseEpoch.currentEpoch,
+            baseEpoch.epochLength,
+            baseEpoch.startTimestamp,
+            true,
+            "scheduled base current"
         );
-        assertTrue(multiVault.hasRolledOverSystemUtilization(epoch));
+        assertEq(_implementationOf(BASE_EMISSIONS_CONTROLLER_PROXY), BASE_EMISSIONS_CONTROLLER_IMPLEMENTATION);
+        _logEpochSnapshot("Base", baseEpoch);
+
+        assertEq(baseEpoch.startTimestamp, intuitionEpoch.startTimestamp, "base/intuition startTimestamp mismatch");
+        assertEq(baseEpoch.epochLength, intuitionEpoch.epochLength, "base/intuition epochLength mismatch");
+        assertEq(baseEpoch.currentEpoch, intuitionEpoch.currentEpoch, "base/intuition currentEpoch mismatch");
+        assertEq(
+            baseEpoch.currentEpochStart, intuitionEpoch.currentEpochStart, "base/intuition currentEpochStart mismatch"
+        );
+        assertEq(baseEpoch.currentEpochEnd, intuitionEpoch.currentEpochEnd, "base/intuition currentEpochEnd mismatch");
+        assertEq(baseEpoch.nextEpochStart, intuitionEpoch.nextEpochStart, "base/intuition nextEpochStart mismatch");
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -320,7 +313,7 @@ contract CoreMainnetUpgradeRegressionTest is Test {
         address alice = makeAddr("tb-boundary-alice");
         address bob = makeAddr("tb-boundary-bob");
 
-        CoreImplementations memory impls = _deployCoreImplementations();
+        CoreImplementations memory impls = _configuredCoreImplementations();
         _upgradeCoreInUnison(impls);
 
         _createLock(alice, 50 ether);
@@ -367,7 +360,7 @@ contract CoreMainnetUpgradeRegressionTest is Test {
         uint256 preTotalClaimed = trustBonding.totalClaimedRewardsForEpoch(preClaimEpoch);
         assertGt(preTotalClaimed, preBudget, "pre-upgrade claim should exceed epoch budget");
 
-        CoreImplementations memory impls = _deployCoreImplementations();
+        CoreImplementations memory impls = _configuredCoreImplementations();
         _upgradeCoreInUnison(impls);
 
         address postUser = makeAddr("tb-budget-post-user");
@@ -399,52 +392,129 @@ contract CoreMainnetUpgradeRegressionTest is Test {
         assertLe(postTotalClaimed, postBudget, "budget invariant must hold");
     }
 
+    function test_trustBonding_boundaryInclusion_retryProtectionAndSameEpochClaimBlock_postUpgrade() external {
+        TrustBonding trustBonding = TrustBonding(payable(TRUST_BONDING_PROXY));
+        address boundaryUser = makeAddr("tb-boundary-inclusive-user");
+
+        CoreImplementations memory impls = _configuredCoreImplementations();
+        _upgradeCoreInUnison(impls);
+        assertEq(_implementationOf(TRUST_BONDING_PROXY), TRUST_BONDING_IMPLEMENTATION);
+
+        uint256 targetEpoch = trustBonding.currentEpoch();
+        assertGt(targetEpoch, 0, "boundary claim test requires a prior epoch");
+
+        uint256 boundaryTimestamp = trustBonding.epochTimestampEnd(targetEpoch);
+        vm.warp(boundaryTimestamp);
+
+        _createLock(boundaryUser, 10_000 ether);
+
+        assertEq(
+            trustBonding.userBondedBalanceAtEpochEnd(boundaryUser, targetEpoch - 1),
+            0,
+            "boundary lock must not overlap into the previous epoch"
+        );
+        assertGt(
+            trustBonding.userBondedBalanceAtEpochEnd(boundaryUser, targetEpoch),
+            0,
+            "boundary lock must be included in the closed interval epoch"
+        );
+
+        vm.startPrank(boundaryUser);
+        vm.expectRevert(abi.encodeWithSelector(ITrustBonding.TrustBonding_NoRewardsToClaim.selector));
+        trustBonding.claimRewards(boundaryUser);
+        vm.stopPrank();
+
+        vm.warp(boundaryTimestamp + 1);
+        _primeUserUtilizationForClaim(boundaryUser, targetEpoch);
+
+        uint256 claimableRewards = trustBonding.getUserCurrentClaimableRewards(boundaryUser);
+        assertGt(claimableRewards, 0, "boundary-inclusive lock should become claimable in the next epoch");
+
+        vm.prank(boundaryUser);
+        trustBonding.claimRewards(boundaryUser);
+
+        assertEq(
+            trustBonding.userClaimedRewardsForEpoch(boundaryUser, targetEpoch),
+            claimableRewards,
+            "boundary-inclusive rewards must settle exactly once"
+        );
+
+        vm.startPrank(boundaryUser);
+        vm.expectRevert(abi.encodeWithSelector(ITrustBonding.TrustBonding_RewardsAlreadyClaimedForEpoch.selector));
+        trustBonding.claimRewards(boundaryUser);
+        vm.stopPrank();
+    }
+
+    function test_trustBonding_epochBoundariesRemainDisjointAcrossManyEpochsPostUpgrade() external {
+        TrustBonding trustBonding = TrustBonding(payable(TRUST_BONDING_PROXY));
+
+        CoreImplementations memory impls = _configuredCoreImplementations();
+        _upgradeCoreInUnison(impls);
+        assertEq(_implementationOf(TRUST_BONDING_PROXY), TRUST_BONDING_IMPLEMENTATION);
+
+        uint256 startEpoch = trustBonding.currentEpoch();
+        uint256 epochLength = trustBonding.epochLength();
+
+        for (uint256 epochOffset = 0; epochOffset < 12; ++epochOffset) {
+            uint256 epoch = startEpoch + epochOffset;
+            uint256 epochEnd = trustBonding.epochTimestampEnd(epoch);
+            uint256 nextEpochEnd = trustBonding.epochTimestampEnd(epoch + 1);
+
+            assertEq(
+                trustBonding.epochAtTimestamp(epochEnd),
+                epoch,
+                "epoch end timestamp must stay within its own epoch across repeated epochs"
+            );
+            assertEq(
+                trustBonding.epochAtTimestamp(epochEnd + 1),
+                epoch + 1,
+                "the first second after epoch end must move into the next epoch across repeated epochs"
+            );
+            assertEq(
+                nextEpochEnd - epochEnd,
+                epochLength,
+                "epoch boundaries must stay evenly spaced without overlap across repeated epochs"
+            );
+        }
+    }
+
     /*//////////////////////////////////////////////////////////////
                     ATOM WALLET BEACON REGRESSION
     //////////////////////////////////////////////////////////////*/
 
     function test_atomWallet_beaconUpgrade_preservesState_andMalformedSigNoRevertPost() external {
-        address creator = makeAddr("atom-wallet-creator");
-        vm.deal(creator, 20 ether);
-
-        bytes32 atomId = _createAtom(creator, "atom-wallet-regression-atom");
-
-        address atomWalletAddress = AtomWalletFactory(ATOM_WALLET_FACTORY).deployAtomWallet(atomId);
-        AtomWallet atomWallet = AtomWallet(payable(atomWalletAddress));
+        AtomWallet atomWallet = AtomWallet(payable(KNOWN_ATOM_WALLET));
         AtomWalletState memory before = _captureAtomWalletState(atomWallet);
+        assertEq(atomWallet.termId(), KNOWN_ATOM_ID);
 
         // PRE-UPGRADE: malformed signature path reverts.
         bytes32 userOpHash = keccak256("core-upgrade-regression-malformed-op");
 
         vm.prank(ENTRY_POINT);
         vm.expectRevert();
-        atomWallet.validateUserOp(_buildMalformedSignatureUserOperation(atomWalletAddress), userOpHash, 0);
+        atomWallet.validateUserOp(_buildMalformedSignatureUserOperation(KNOWN_ATOM_WALLET), userOpHash, 0);
 
-        CoreImplementations memory impls = _deployCoreImplementations();
+        CoreImplementations memory impls = _configuredCoreImplementations();
         _upgradeCoreInUnison(impls);
 
         // POST-UPGRADE: malformed signature must fail validation without reverting.
         vm.prank(ENTRY_POINT);
         uint256 validationData =
-            atomWallet.validateUserOp(_buildMalformedSignatureUserOperation(atomWalletAddress), userOpHash, 0);
+            atomWallet.validateUserOp(_buildMalformedSignatureUserOperation(KNOWN_ATOM_WALLET), userOpHash, 0);
         assertEq(validationData, SIG_VALIDATION_FAILED);
 
         // Storage/state continuity across beacon implementation upgrade.
         _assertAtomWalletState(atomWallet, before);
 
-        // Owner remains atomWarden before claim.
-        assertEq(atomWallet.owner(), MultiVault(payable(MULTIVAULT_PROXY)).getAtomWarden());
+        // Owner remains unchanged before claim.
+        assertEq(atomWallet.owner(), KNOWN_ATOM_WALLET_OWNER);
     }
 
     function test_atomWallet_beaconUpgrade_preRejectsLegacyTimeWindow_postRejectsWithoutRevertAndAcceptsBound77()
         external
     {
-        address creator = makeAddr("atom-wallet-s149-creator");
-        vm.deal(creator, 20 ether);
-
-        bytes32 atomId = _createAtom(creator, "atom-wallet-s149-regression-atom");
-        address atomWalletAddress = AtomWalletFactory(ATOM_WALLET_FACTORY).deployAtomWallet(atomId);
-        AtomWallet atomWallet = AtomWallet(payable(atomWalletAddress));
+        AtomWallet atomWallet = AtomWallet(payable(KNOWN_ATOM_WALLET));
+        assertEq(atomWallet.termId(), KNOWN_ATOM_ID);
 
         // Claim wallet ownership to a deterministic key so signatures can be generated in-test.
         uint256 ownerPrivateKey = 0xA11CE;
@@ -464,7 +534,7 @@ contract CoreMainnetUpgradeRegressionTest is Test {
 
         bytes memory legacyRawSignature = _signUserOpHash(ownerPrivateKey, userOpHash);
         PackedUserOperation memory tamperedLegacyOp = _buildUserOperationWithSignature(
-            atomWalletAddress, abi.encodePacked(legacyRawSignature, tamperedValidUntil, validAfter)
+            KNOWN_ATOM_WALLET, abi.encodePacked(legacyRawSignature, tamperedValidUntil, validAfter)
         );
 
         // PRE-UPGRADE (fork reality): legacy 77-byte signatures are rejected and revert.
@@ -472,7 +542,7 @@ contract CoreMainnetUpgradeRegressionTest is Test {
         vm.expectRevert();
         atomWallet.validateUserOp(tamperedLegacyOp, userOpHash, 0);
 
-        CoreImplementations memory impls = _deployCoreImplementations();
+        CoreImplementations memory impls = _configuredCoreImplementations();
         _upgradeCoreInUnison(impls);
 
         // POST-UPGRADE: the same tampered legacy-format signature must fail without reverting.
@@ -482,13 +552,79 @@ contract CoreMainnetUpgradeRegressionTest is Test {
 
         // 77-byte signatures remain valid when metadata is bound during signing.
         PackedUserOperation memory boundOp = _buildUserOperationWithSignature(
-            atomWalletAddress,
+            KNOWN_ATOM_WALLET,
             _signUserOpHashWithTimeWindow(ownerPrivateKey, userOpHash, originalValidUntil, validAfter)
         );
 
         vm.prank(ENTRY_POINT);
         uint256 boundValidation = atomWallet.validateUserOp(boundOp, userOpHash, 0);
         assertEq(boundValidation, _packValidationData(false, originalValidUntil, validAfter));
+    }
+
+    function test_atomWallet_computeAddress_remainsStableAcrossBeaconUpgrade() external {
+        IMultiVault multiVault = IMultiVault(MULTIVAULT_PROXY);
+
+        address computedBefore = multiVault.computeAtomWalletAddr(KNOWN_ATOM_ID);
+        assertEq(computedBefore, KNOWN_ATOM_WALLET);
+
+        CoreImplementations memory impls = _configuredCoreImplementations();
+        _upgradeCoreInUnison(impls);
+        assertEq(UpgradeableBeacon(ATOM_WALLET_BEACON).implementation(), ATOM_WALLET_IMPLEMENTATION);
+
+        address computedAfter = multiVault.computeAtomWalletAddr(KNOWN_ATOM_ID);
+        assertEq(computedAfter, KNOWN_ATOM_WALLET);
+        assertEq(computedAfter, computedBefore);
+    }
+
+    function test_atomWallet_beaconUpgrade_invalidSignersAndTimeWindows_preserveValidationMetadataPost() external {
+        AtomWallet atomWallet = AtomWallet(payable(KNOWN_ATOM_WALLET));
+
+        uint256 ownerPrivateKey = 0xA11CE;
+        uint256 attackerPrivateKey = 0xB0B;
+        address controlledOwner = vm.addr(ownerPrivateKey);
+
+        assertEq(IMultiVault(MULTIVAULT_PROXY).computeAtomWalletAddr(KNOWN_ATOM_ID), KNOWN_ATOM_WALLET);
+
+        vm.prank(atomWallet.owner());
+        atomWallet.transferOwnership(controlledOwner);
+        vm.prank(controlledOwner);
+        atomWallet.acceptOwnership();
+        assertEq(atomWallet.owner(), controlledOwner);
+
+        CoreImplementations memory impls = _configuredCoreImplementations();
+        _upgradeCoreInUnison(impls);
+        assertEq(UpgradeableBeacon(ATOM_WALLET_BEACON).implementation(), ATOM_WALLET_IMPLEMENTATION);
+
+        {
+            bytes32 userOpHash = keccak256("core-upgrade-regression-invalid-window-cases");
+            uint48 expiredValidUntil = uint48(block.timestamp - 1);
+            uint48 futureValidUntil = uint48(block.timestamp + 3 days);
+            uint48 futureValidAfter = uint48(block.timestamp + 1 days);
+
+            PackedUserOperation memory wrongSignerOp = _buildUserOperationWithSignature(
+                KNOWN_ATOM_WALLET,
+                _signUserOpHashWithTimeWindow(attackerPrivateKey, userOpHash, futureValidUntil, futureValidAfter)
+            );
+            PackedUserOperation memory expiredWindowOp = _buildUserOperationWithSignature(
+                KNOWN_ATOM_WALLET, _signUserOpHashWithTimeWindow(ownerPrivateKey, userOpHash, expiredValidUntil, 0)
+            );
+            PackedUserOperation memory futureWindowOp = _buildUserOperationWithSignature(
+                KNOWN_ATOM_WALLET,
+                _signUserOpHashWithTimeWindow(ownerPrivateKey, userOpHash, futureValidUntil, futureValidAfter)
+            );
+
+            vm.startPrank(ENTRY_POINT);
+            uint256 wrongSignerValidation = atomWallet.validateUserOp(wrongSignerOp, userOpHash, 0);
+            uint256 expiredWindowValidation = atomWallet.validateUserOp(expiredWindowOp, userOpHash, 0);
+            uint256 futureWindowValidation = atomWallet.validateUserOp(futureWindowOp, userOpHash, 0);
+            vm.stopPrank();
+
+            assertEq(wrongSignerValidation, _packValidationData(true, futureValidUntil, futureValidAfter));
+            assertEq(expiredWindowValidation, _packValidationData(false, expiredValidUntil, 0));
+            assertEq(futureWindowValidation, _packValidationData(false, futureValidUntil, futureValidAfter));
+        }
+
+        assertEq(IMultiVault(MULTIVAULT_PROXY).computeAtomWalletAddr(KNOWN_ATOM_ID), KNOWN_ATOM_WALLET);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -504,7 +640,7 @@ contract CoreMainnetUpgradeRegressionTest is Test {
         uint256 preAssets = curve.previewRedeem(sharesToRedeem, totalShares, 0);
         assertGt(preAssets, 0, "production-config offset curve should redeem without underflow");
 
-        CoreImplementations memory impls = _deployCoreImplementations();
+        CoreImplementations memory impls = _configuredCoreImplementations();
         _upgradeCoreInUnison(impls);
 
         uint256 postAssets = curve.previewRedeem(sharesToRedeem, totalShares, 0);
@@ -517,42 +653,64 @@ contract CoreMainnetUpgradeRegressionTest is Test {
         assertEq(localAssets, 0, "zero-offset low-share edge should not underflow");
     }
 
+    function test_offsetProgressiveCurve_liveCurve2_smallDeposits_stopReverting_postUpgrade() external {
+        uint256[4] memory minShareAssetSamples;
+        uint256[4] memory minDepositSamples;
+
+        {
+            IMultiVaultCore multiVaultCore = IMultiVaultCore(MULTIVAULT_PROXY);
+            GeneralConfig memory generalConfig = multiVaultCore.getGeneralConfig();
+            BondingCurveConfig memory bondingCurveConfig = multiVaultCore.getBondingCurveConfig();
+            (uint256 totalAssets, uint256 totalShares) =
+                IMultiVault(MULTIVAULT_PROXY).getVault(KNOWN_ATOM_ID, OFFSET_PROGRESSIVE_CURVE_ID);
+
+            uint256 minShareAssetCost = IBondingCurveRegistry(bondingCurveConfig.registry)
+                .previewMint(generalConfig.minShare, totalShares, totalAssets, OFFSET_PROGRESSIVE_CURVE_ID);
+            assertGt(minShareAssetCost, 0, "live curve-2 minShare cost must be non-zero");
+
+            minShareAssetSamples =
+                [minShareAssetCost, minShareAssetCost * 10, minShareAssetCost * 100, minShareAssetCost * 1000];
+            minDepositSamples = [
+                generalConfig.minDeposit,
+                generalConfig.minDeposit * 10,
+                generalConfig.minDeposit * 100,
+                generalConfig.minDeposit * 1000
+            ];
+        }
+
+        (uint256[4] memory preMinShareShares, uint256[4] memory preMinShareNetAssets) =
+            _capturePreviewDepositSeries(KNOWN_ATOM_ID, OFFSET_PROGRESSIVE_CURVE_ID, minShareAssetSamples);
+        (uint256[4] memory preMinDepositShares, uint256[4] memory preMinDepositNetAssets) =
+            _capturePreviewDepositSeries(KNOWN_ATOM_ID, OFFSET_PROGRESSIVE_CURVE_ID, minDepositSamples);
+
+        CoreImplementations memory impls = _configuredCoreImplementations();
+        _upgradeCoreInUnison(impls);
+        assertEq(_implementationOf(OFFSET_PROGRESSIVE_CURVE_PROXY), OFFSET_PROGRESSIVE_CURVE_IMPLEMENTATION);
+
+        _assertPreviewDepositSeriesStable(
+            KNOWN_ATOM_ID, OFFSET_PROGRESSIVE_CURVE_ID, minShareAssetSamples, preMinShareShares, preMinShareNetAssets
+        );
+        _assertPreviewDepositSeriesStable(
+            KNOWN_ATOM_ID, OFFSET_PROGRESSIVE_CURVE_ID, minDepositSamples, preMinDepositShares, preMinDepositNetAssets
+        );
+    }
+
     /*//////////////////////////////////////////////////////////////
                     STORAGE CONTINUITY + SAFETY
     //////////////////////////////////////////////////////////////*/
 
     function test_storageContinuityAcrossUnisonUpgrade() external {
-        MultiVault multiVault = MultiVault(payable(MULTIVAULT_PROXY));
-        TrustBonding trustBonding = TrustBonding(payable(TRUST_BONDING_PROXY));
         OffsetProgressiveCurve curve = OffsetProgressiveCurve(payable(OFFSET_PROGRESSIVE_CURVE_PROXY));
+        StorageSnapshot memory before = _captureStorageSnapshot(KNOWN_ATOM_WALLET);
 
-        address actor = makeAddr("storage-actor");
-        vm.deal(actor, 20 ether);
-
-        bytes32 atomId = _createAtom(actor, "storage-continuity-atom");
-        address atomWalletAddress = AtomWalletFactory(ATOM_WALLET_FACTORY).deployAtomWallet(atomId);
-
-        uint256 epoch = multiVault.currentEpoch();
-        if (epoch == 0) {
-            vm.warp(trustBonding.epochTimestampEnd(0) + 1);
-            epoch = multiVault.currentEpoch();
-        }
-
-        // Seed known state values for continuity checks.
-        _setMultiVaultTotalUtilization(epoch, int256(321 ether));
-        _setMultiVaultPersonalUtilization(actor, epoch, int256(123 ether));
-        vm.store(MULTIVAULT_PROXY, _multiVaultUserEpochHistorySlot(actor, 0), bytes32(epoch));
-        StorageSnapshot memory before = _captureStorageSnapshot(actor, epoch, atomWalletAddress);
-
-        CoreImplementations memory impls = _deployCoreImplementations();
+        CoreImplementations memory impls = _configuredCoreImplementations();
         _upgradeCoreInUnison(impls);
 
         // Existing slots and mapping entries remain intact after implementation switch.
-        _assertStorageSnapshot(before, actor, epoch, atomWalletAddress);
+        _assertStorageSnapshot(before, KNOWN_ATOM_WALLET);
 
         // Slot 69 is part of the __gap (never used on mainnet), should remain zero.
         assertEq(vm.load(TRUST_BONDING_PROXY, bytes32(uint256(69))), bytes32(0));
-        assertFalse(multiVault.hasRolledOverSystemUtilization(epoch));
 
         // Existing slots remain unchanged after upgrade.
         _assertTrustCoreSlots(before.tbCoreSlots);
@@ -566,31 +724,24 @@ contract CoreMainnetUpgradeRegressionTest is Test {
     //////////////////////////////////////////////////////////////*/
 
     function test_postUpgrade_coreSmokeFlows() external {
-        MultiVault multiVault = MultiVault(payable(MULTIVAULT_PROXY));
         TrustBonding trustBonding = TrustBonding(payable(TRUST_BONDING_PROXY));
         OffsetProgressiveCurve curve = OffsetProgressiveCurve(payable(OFFSET_PROGRESSIVE_CURVE_PROXY));
+        AtomWallet atomWallet = AtomWallet(payable(KNOWN_ATOM_WALLET));
 
-        CoreImplementations memory impls = _deployCoreImplementations();
+        CoreImplementations memory impls = _configuredCoreImplementations();
         _upgradeCoreInUnison(impls);
 
         address user = makeAddr("smoke-user");
         vm.deal(user, 20 ether);
 
-        bytes32 atomId = _createAtom(user, "smoke-atom");
-        uint256 shares = _depositIntoAtom(user, atomId, 1 ether);
-        _redeemFromAtom(user, atomId, shares / 2);
-
-        uint256 currentEpoch = trustBonding.currentEpoch();
-        uint256 systemRatio = trustBonding.getSystemUtilizationRatio(currentEpoch);
-        assertLe(systemRatio, trustBonding.BASIS_POINTS_DIVISOR());
+        uint256 totalLockedBefore = trustBonding.totalLocked();
+        _createLock(user, 1 ether);
+        assertEq(trustBonding.totalLocked(), totalLockedBefore + 1 ether);
 
         uint256 assetsPreview = curve.previewRedeem(699_560_508, 700_560_508, 0);
         assertGt(assetsPreview, 0);
 
-        address atomWalletAddress = AtomWalletFactory(ATOM_WALLET_FACTORY).deployAtomWallet(atomId);
-        AtomWallet atomWallet = AtomWallet(payable(atomWalletAddress));
-
-        PackedUserOperation memory malformedOp = _buildMalformedSignatureUserOperation(atomWalletAddress);
+        PackedUserOperation memory malformedOp = _buildMalformedSignatureUserOperation(KNOWN_ATOM_WALLET);
         bytes32 userOpHash = keccak256("post-upgrade-smoke-malformed");
 
         vm.prank(ENTRY_POINT);
@@ -603,10 +754,14 @@ contract CoreMainnetUpgradeRegressionTest is Test {
     //////////////////////////////////////////////////////////////*/
 
     function _selectIntuitionFork() internal {
-        vm.createSelectFork("intuition", INTUITION_FORK_BLOCK);
+        vm.selectFork(intuitionFork);
         // veTRUST checkpoints persist Base L2 `blk` values, while this fork executes on Intuition L3.
         // Rolling to a Base block keeps checkpoint-based block reads/actions from treating those blocks as "future".
-        vm.roll(BASE_BLOCK_NUMBER);
+        vm.roll(baseForkBlockNumber);
+    }
+
+    function _selectBaseFork() internal {
+        vm.selectFork(baseFork);
     }
 
     function _ensureEpochAtLeastOne() internal {
@@ -616,40 +771,67 @@ contract CoreMainnetUpgradeRegressionTest is Test {
         }
     }
 
-    function _deployCoreImplementations() internal returns (CoreImplementations memory impls) {
-        impls.multiVault = address(new MultiVault());
-        impls.trustBonding = address(new TrustBonding());
-        impls.offsetProgressiveCurve = address(new OffsetProgressiveCurve());
-        impls.atomWallet = address(new AtomWallet());
-        impls.satelliteEmissionsController = address(new SatelliteEmissionsController());
+    function _configuredCoreImplementations() internal pure returns (CoreImplementations memory impls) {
+        impls.trustBonding = TRUST_BONDING_IMPLEMENTATION;
+        impls.offsetProgressiveCurve = OFFSET_PROGRESSIVE_CURVE_IMPLEMENTATION;
+        impls.atomWallet = ATOM_WALLET_IMPLEMENTATION;
+        impls.satelliteEmissionsController = SATELLITE_EMISSIONS_CONTROLLER_IMPLEMENTATION;
     }
 
-    function _upgradeCoreInUnison(CoreImplementations memory impls) internal {
-        vm.startPrank(UPGRADES_TIMELOCK);
+    function _upgradeCoreInUnison(CoreImplementations memory) internal {
+        vm.warp(block.timestamp + 7 days);
 
-        ProxyAdmin(MULTIVAULT_PROXY_ADMIN)
-            .upgradeAndCall(ITransparentUpgradeableProxy(payable(MULTIVAULT_PROXY)), impls.multiVault, bytes(""));
+        vm.startPrank(ADMIN_SAFE);
 
-        ProxyAdmin(TRUST_BONDING_PROXY_ADMIN)
-            .upgradeAndCall(ITransparentUpgradeableProxy(payable(TRUST_BONDING_PROXY)), impls.trustBonding, bytes(""));
+        (bool trustBondingSuccess,) = UPGRADES_TIMELOCK.call(_trustBondingUpgradeExecuteCalldata());
+        assertTrue(trustBondingSuccess);
 
-        ProxyAdmin(OFFSET_PROGRESSIVE_CURVE_PROXY_ADMIN)
-            .upgradeAndCall(
-                ITransparentUpgradeableProxy(payable(OFFSET_PROGRESSIVE_CURVE_PROXY)),
-                impls.offsetProgressiveCurve,
-                bytes("")
-            );
+        (bool offsetProgressiveCurveSuccess,) = UPGRADES_TIMELOCK.call(_offsetProgressiveCurveUpgradeExecuteCalldata());
+        assertTrue(offsetProgressiveCurveSuccess);
 
-        ProxyAdmin(SATELLITE_EMISSIONS_CONTROLLER_PROXY_ADMIN)
-            .upgradeAndCall(
-                ITransparentUpgradeableProxy(payable(SATELLITE_EMISSIONS_CONTROLLER_PROXY)),
-                impls.satelliteEmissionsController,
-                bytes("")
-            );
+        (bool satelliteEmissionsControllerSuccess,) =
+            UPGRADES_TIMELOCK.call(_satelliteEmissionsControllerUpgradeExecuteCalldata());
+        assertTrue(satelliteEmissionsControllerSuccess);
 
-        UpgradeableBeacon(ATOM_WALLET_BEACON).upgradeTo(impls.atomWallet);
+        (bool atomWalletSuccess,) = UPGRADES_TIMELOCK.call(_atomWalletBeaconUpgradeExecuteCalldata());
+        assertTrue(atomWalletSuccess);
 
         vm.stopPrank();
+    }
+
+    function _upgradeBaseEmissionsControllerViaScheduledOperation() internal {
+        vm.warp(block.timestamp + 7 days);
+
+        vm.startPrank(BASE_ADMIN_SAFE);
+
+        (bool success,) = BASE_UPGRADES_TIMELOCK.call(_baseEmissionsControllerUpgradeExecuteCalldata());
+        assertTrue(success);
+
+        vm.stopPrank();
+    }
+
+    function _captureEpochSnapshot(ICoreEmissionsController controller)
+        internal
+        view
+        returns (EpochSnapshot memory snapshot)
+    {
+        snapshot.startTimestamp = controller.getStartTimestamp();
+        snapshot.epochLength = controller.getEpochLength();
+        snapshot.currentEpoch = controller.getCurrentEpoch();
+        snapshot.currentEpochStart = controller.getEpochTimestampStart(snapshot.currentEpoch);
+        snapshot.currentEpochEnd = controller.getEpochTimestampEnd(snapshot.currentEpoch);
+        snapshot.nextEpochStart = controller.getEpochTimestampStart(snapshot.currentEpoch + 1);
+    }
+
+    function _logEpochSnapshot(string memory label, EpochSnapshot memory snapshot) internal {
+        console2.log(label);
+        console2.log("  block.timestamp", block.timestamp);
+        console2.log("  startTimestamp", snapshot.startTimestamp);
+        console2.log("  epochLength", snapshot.epochLength);
+        console2.log("  currentEpoch", snapshot.currentEpoch);
+        console2.log("  currentEpochStart", snapshot.currentEpochStart);
+        console2.log("  currentEpochEnd", snapshot.currentEpochEnd);
+        console2.log("  nextEpochStart", snapshot.nextEpochStart);
     }
 
     function _assertEpochBoundarySemantics(
@@ -717,43 +899,54 @@ contract CoreMainnetUpgradeRegressionTest is Test {
         return address(uint160(uint256(vm.load(proxy, EIP1967_IMPLEMENTATION_SLOT))));
     }
 
-    function _createAtom(address user, string memory atomLabel) internal returns (bytes32 atomId) {
-        MultiVault multiVault = MultiVault(payable(MULTIVAULT_PROXY));
+    function _capturePreviewDepositSeries(
+        bytes32 termId,
+        uint256 curveId,
+        uint256[4] memory assetSamples
+    )
+        internal
+        view
+        returns (uint256[4] memory sharesOut, uint256[4] memory netAssetsOut)
+    {
+        uint256 previousShares;
+        uint256 previousNetAssets;
 
-        uint256 atomCost = multiVault.getAtomCost();
-        vm.deal(user, user.balance + atomCost + 10 ether);
+        for (uint256 i = 0; i < assetSamples.length; ++i) {
+            (sharesOut[i], netAssetsOut[i]) =
+                IMultiVault(MULTIVAULT_PROXY).previewDeposit(termId, curveId, assetSamples[i]);
 
-        bytes[] memory data = new bytes[](1);
-        data[0] = bytes(atomLabel);
+            assertLe(netAssetsOut[i], assetSamples[i], "live curve-2 preview net assets must not exceed gross assets");
+            assertGe(netAssetsOut[i], previousNetAssets, "live curve-2 preview net assets must stay monotonic");
+            assertGe(sharesOut[i], previousShares, "live curve-2 preview shares must stay monotonic");
 
-        uint256[] memory assets = new uint256[](1);
-        assets[0] = atomCost;
-
-        vm.prank(user);
-        bytes32[] memory atomIds = multiVault.createAtoms{ value: atomCost }(data, assets);
-
-        atomId = atomIds[0];
+            previousShares = sharesOut[i];
+            previousNetAssets = netAssetsOut[i];
+        }
     }
 
-    function _depositIntoAtom(address user, bytes32 atomId, uint256 amount) internal returns (uint256 shares) {
-        MultiVault multiVault = MultiVault(payable(MULTIVAULT_PROXY));
+    function _assertPreviewDepositSeriesStable(
+        bytes32 termId,
+        uint256 curveId,
+        uint256[4] memory assetSamples,
+        uint256[4] memory expectedShares,
+        uint256[4] memory expectedNetAssets
+    )
+        internal
+        view
+    {
+        (uint256[4] memory sharesOut, uint256[4] memory netAssetsOut) =
+            _capturePreviewDepositSeries(termId, curveId, assetSamples);
 
-        vm.deal(user, user.balance + amount);
-        vm.prank(user);
-        shares = multiVault.deposit{ value: amount }(user, atomId, DEFAULT_CURVE_ID, 0);
-    }
-
-    function _redeemFromAtom(address user, bytes32 atomId, uint256 shares) internal returns (uint256 assetsReceived) {
-        MultiVault multiVault = MultiVault(payable(MULTIVAULT_PROXY));
-
-        vm.prank(user);
-        assetsReceived = multiVault.redeem(user, atomId, DEFAULT_CURVE_ID, shares, 0);
+        for (uint256 i = 0; i < assetSamples.length; ++i) {
+            assertEq(sharesOut[i], expectedShares[i], "live curve-2 preview shares changed across upgrade");
+            assertEq(netAssetsOut[i], expectedNetAssets[i], "live curve-2 preview net assets changed across upgrade");
+        }
     }
 
     function _createLock(address user, uint256 amount) internal {
         WrappedTrust wrappedTrust = WrappedTrust(payable(WRAPPED_TRUST));
         TrustBonding trustBonding = TrustBonding(payable(TRUST_BONDING_PROXY));
-        vm.roll(BASE_BLOCK_NUMBER);
+        vm.roll(baseForkBlockNumber);
 
         vm.deal(user, user.balance + amount);
 
@@ -790,14 +983,6 @@ contract CoreMainnetUpgradeRegressionTest is Test {
 
         // Non-zero prior target utilization so ratio resolves to max when delta >= target.
         vm.store(TRUST_BONDING_PROXY, _trustUserClaimedRewardsSlot(user, claimEpoch - 1), bytes32(uint256(1)));
-    }
-
-    function _setMultiVaultTotalUtilization(uint256 epoch, int256 value) internal {
-        vm.store(MULTIVAULT_PROXY, _multiVaultTotalUtilizationSlot(epoch), bytes32(uint256(value)));
-    }
-
-    function _setMultiVaultPersonalUtilization(address user, uint256 epoch, int256 value) internal {
-        vm.store(MULTIVAULT_PROXY, _multiVaultPersonalUtilizationSlot(user, epoch), bytes32(uint256(value)));
     }
 
     function _buildMalformedSignatureUserOperation(address sender)
@@ -864,6 +1049,26 @@ contract CoreMainnetUpgradeRegressionTest is Test {
         return abi.encodePacked(rawSignature, validUntil, validAfter);
     }
 
+    function _baseEmissionsControllerUpgradeExecuteCalldata() internal pure returns (bytes memory) {
+        return hex"134008d300000000000000000000000058dcdf3b6f5d03835cf6556edc798bfd690b251a000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000849623609d0000000000000000000000007745bdee668501e5eef7e9605c746f9cdfb60667000000000000000000000000d235b804f25b062d99457da82f3787671573c3550000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+    }
+
+    function _trustBondingUpgradeExecuteCalldata() internal pure returns (bytes memory) {
+        return hex"134008d3000000000000000000000000f10fee90b3c633c4fcd49aa557ec7d51e5aeef62000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000849623609d000000000000000000000000635bbd1367b66e7b16a21d6e5a63c812ffc00617000000000000000000000000d1716d4430466397fc88e938e97c7e12adcecf240000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+    }
+
+    function _offsetProgressiveCurveUpgradeExecuteCalldata() internal pure returns (bytes memory) {
+        return hex"134008d3000000000000000000000000e58b117adfb0a141dc1cc22b98297294f6e2c5e7000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000849623609d00000000000000000000000023aff95153aa88d28b9b97ba97629e05d5fd335d000000000000000000000000ea5b87984253ae3d8472df3738e5ad421297c2460000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+    }
+
+    function _satelliteEmissionsControllerUpgradeExecuteCalldata() internal pure returns (bytes memory) {
+        return hex"134008d3000000000000000000000000df60d18e86f3454309ad7734055843f7ee5f30a3000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000849623609d00000000000000000000000073b8819f9b157be42172e3866fb0ba0d5fa0a5c60000000000000000000000000d1a22119c23920d24dccf5387eaef1e472d96390000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+    }
+
+    function _atomWalletBeaconUpgradeExecuteCalldata() internal pure returns (bytes memory) {
+        return hex"134008d3000000000000000000000000c23cd55cf924b3fe4b97deaa0eaf222a5082a1ff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000243659cfe6000000000000000000000000bcb1526a8de4a155e4de003361b122ede2f2290800000000000000000000000000000000000000000000000000000000";
+    }
+
     function _deployOffsetCurve(
         string memory name,
         uint256 slope,
@@ -896,41 +1101,17 @@ contract CoreMainnetUpgradeRegressionTest is Test {
         assertEq(atomWallet.isClaimed(), expected.isClaimed);
     }
 
-    function _captureStorageSnapshot(
-        address actor,
-        uint256 epoch,
-        address atomWalletAddress
-    )
+    function _captureStorageSnapshot(address atomWalletAddress)
         internal
         view
         returns (StorageSnapshot memory snapshot)
     {
-        snapshot.mvSlot0 = vm.load(MULTIVAULT_PROXY, bytes32(uint256(0)));
-        snapshot.mvTotalUtilization = vm.load(MULTIVAULT_PROXY, _multiVaultTotalUtilizationSlot(epoch));
-        snapshot.mvPersonalUtilization = vm.load(MULTIVAULT_PROXY, _multiVaultPersonalUtilizationSlot(actor, epoch));
-        snapshot.mvUserEpoch0 = vm.load(MULTIVAULT_PROXY, _multiVaultUserEpochHistorySlot(actor, 0));
-
         snapshot.tbCoreSlots = _loadTrustCoreSlots();
         snapshot.atomWalletCoreSlots = _loadSlots3(atomWalletAddress, 0);
         snapshot.offsetCurveCoreSlots = _loadSlots5(OFFSET_PROGRESSIVE_CURVE_PROXY, 1);
     }
 
-    function _assertStorageSnapshot(
-        StorageSnapshot memory expected,
-        address actor,
-        uint256 epoch,
-        address atomWalletAddress
-    )
-        internal
-        view
-    {
-        assertEq(vm.load(MULTIVAULT_PROXY, bytes32(uint256(0))), expected.mvSlot0);
-        assertEq(vm.load(MULTIVAULT_PROXY, _multiVaultTotalUtilizationSlot(epoch)), expected.mvTotalUtilization);
-        assertEq(
-            vm.load(MULTIVAULT_PROXY, _multiVaultPersonalUtilizationSlot(actor, epoch)), expected.mvPersonalUtilization
-        );
-        assertEq(vm.load(MULTIVAULT_PROXY, _multiVaultUserEpochHistorySlot(actor, 0)), expected.mvUserEpoch0);
-
+    function _assertStorageSnapshot(StorageSnapshot memory expected, address atomWalletAddress) internal view {
         _assertTrustCoreSlots(expected.tbCoreSlots);
         _assertSlots3(atomWalletAddress, 0, expected.atomWalletCoreSlots);
         _assertSlots5(OFFSET_PROGRESSIVE_CURVE_PROXY, 1, expected.offsetCurveCoreSlots);
@@ -970,10 +1151,6 @@ contract CoreMainnetUpgradeRegressionTest is Test {
         for (uint256 i = 0; i < 5; ++i) {
             assertEq(vm.load(account, bytes32(startSlot + i)), expected[i]);
         }
-    }
-
-    function _multiVaultTotalUtilizationSlot(uint256 epoch) internal pure returns (bytes32) {
-        return keccak256(abi.encode(epoch, uint256(30)));
     }
 
     function _multiVaultPersonalUtilizationSlot(address user, uint256 epoch) internal pure returns (bytes32) {

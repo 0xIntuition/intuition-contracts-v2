@@ -12,7 +12,7 @@ import { BaseEmissionsController } from "src/protocol/emissions/BaseEmissionsCon
 
 /*
 MAINNET (Base)
-forge script script/base/DeployBaseUpgradeImplementations.s.sol:DeployBaseUpgradeImplementations \
+forge script script/base/v1.0.2/DeployBaseUpgradeImplementations.s.sol:DeployBaseUpgradeImplementations \
 --optimizer-runs 10000 \
 --rpc-url base \
 --broadcast \
