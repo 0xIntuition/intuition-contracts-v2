@@ -5,6 +5,7 @@ import { console2 } from "forge-std/src/console2.sol";
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
+import { GeneralConfig } from "src/interfaces/IMultiVaultCore.sol";
 
 /* -------------------------------------------------------------------------- */
 /*                              Local test events                              */
@@ -25,6 +26,28 @@ contract AtomWalletOwnerMock {
 
     constructor(address _owner) {
         owner = _owner;
+    }
+}
+
+contract ProtocolFeeSweepReentrantReceiver {
+    IMultiVault public immutable mv;
+    uint256 public epoch;
+    uint256 public receiveCount;
+    bool public armed;
+
+    constructor(IMultiVault _mv) {
+        mv = _mv;
+    }
+
+    function arm(uint256 _epoch) external {
+        epoch = _epoch;
+        armed = true;
+    }
+
+    receive() external payable {
+        ++receiveCount;
+        if (!armed || receiveCount != 1) return;
+        mv.sweepAccumulatedProtocolFees(epoch);
     }
 }
 
@@ -159,6 +182,28 @@ contract ClaimTest is BaseTest, ClaimEvents {
         // Assert: mapping zeroed and multisig funded
         assertEq(protocol.multiVault.accumulatedProtocolFees(epoch), 0, "accumulated fees should be zero");
         assertEq(multisig.balance, beforeMultisigBal + accrued, "multisig should receive swept fees");
+    }
+
+    function test_sweepAccumulatedProtocolFees_ReentrantReceiverCannotSweepTwice() public {
+        uint256 epoch = protocol.multiVault.currentEpoch();
+        ProtocolFeeSweepReentrantReceiver malicious =
+            new ProtocolFeeSweepReentrantReceiver(IMultiVault(address(protocol.multiVault)));
+
+        GeneralConfig memory generalConfig = protocol.multiVault.getGeneralConfig();
+        generalConfig.protocolMultisig = address(malicious);
+        resetPrank(users.timelock);
+        protocol.multiVault.setGeneralConfig(generalConfig);
+
+        createSimpleAtom("protocol-fee-reentry-atom", ATOM_COST[0], users.charlie);
+        uint256 accrued = protocol.multiVault.accumulatedProtocolFees(epoch);
+        assertGt(accrued, 0, "expected static protocol fee accrued");
+
+        malicious.arm(epoch);
+        protocol.multiVault.sweepAccumulatedProtocolFees(epoch);
+
+        assertEq(protocol.multiVault.accumulatedProtocolFees(epoch), 0, "fees must remain zero after reentry");
+        assertEq(address(malicious).balance, accrued, "malicious receiver must only receive one sweep");
+        assertEq(malicious.receiveCount(), 1, "reentrant sweep must not perform a second transfer");
     }
 
     /*//////////////////////////////////////////////////////////////////////////

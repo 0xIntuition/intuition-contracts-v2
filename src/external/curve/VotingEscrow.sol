@@ -366,7 +366,17 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
 
     /// @notice Deposit `_value` tokens for `_addr` and add to the lock
     /// @dev Anyone (even a smart contract) can deposit for someone else, but
-    ///      cannot extend their locktime and deposit for a brand new user
+    ///      cannot extend their locktime and deposit for a brand new user.
+    ///
+    ///      Token transfer source is the **lock holder** (`_addr`), not
+    ///      `msg.sender`. This matches the inherited Curve / Stargate
+    ///      VotingEscrow semantics and is preserved deliberately to stay
+    ///      reference-compatible with the upstream contracts. Lock holders
+    ///      that grant an ERC-20 allowance to this contract should size it
+    ///      tightly (or use `permit`-style flows) rather than relying on
+    ///      `type(uint256).max` approvals — a third party can call
+    ///      `deposit_for` against an unsuspecting holder and force-extend
+    ///      their position up to the allowance limit.
     /// @param _addr User's wallet address
     /// @param _value Amount to add to user's lock
     function deposit_for(address _addr, uint256 _value) external nonReentrant notUnlocked {

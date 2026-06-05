@@ -83,6 +83,19 @@ export const MultiVaultMigrationModeAbi = [
   },
   {
     "type": "function",
+    "name": "PAUSER_ROLE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "TRIPLE_SALT",
     "inputs": [],
     "outputs": [
@@ -183,6 +196,44 @@ export const MultiVaultMigrationModeAbi = [
         "name": "atomWalletDepositFee",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "atomCreatedAt",
+    "inputs": [
+      {
+        "name": "atomId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "createdAt",
+        "type": "uint48",
+        "internalType": "uint48"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "atomCreators",
+    "inputs": [
+      {
+        "name": "atomId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "creator",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -523,8 +574,76 @@ export const MultiVaultMigrationModeAbi = [
   },
   {
     "type": "function",
+    "name": "createAtomsFor",
+    "inputs": [
+      {
+        "name": "creator",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "data",
+        "type": "bytes[]",
+        "internalType": "bytes[]"
+      },
+      {
+        "name": "assets",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
     "name": "createTriples",
     "inputs": [
+      {
+        "name": "subjectIds",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      },
+      {
+        "name": "predicateIds",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      },
+      {
+        "name": "objectIds",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      },
+      {
+        "name": "assets",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "createTriplesFor",
+    "inputs": [
+      {
+        "name": "creator",
+        "type": "address",
+        "internalType": "address"
+      },
       {
         "name": "subjectIds",
         "type": "bytes32[]",
@@ -658,7 +777,7 @@ export const MultiVaultMigrationModeAbi = [
     ],
     "outputs": [
       {
-        "name": "shares",
+        "name": "",
         "type": "uint256[]",
         "internalType": "uint256[]"
       }
@@ -804,6 +923,44 @@ export const MultiVaultMigrationModeAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getAtomCreatedAt",
+    "inputs": [
+      {
+        "name": "termId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint48",
+        "internalType": "uint48"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getAtomCreator",
+    "inputs": [
+      {
+        "name": "termId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -1316,6 +1473,25 @@ export const MultiVaultMigrationModeAbi = [
   },
   {
     "type": "function",
+    "name": "hasRolledOverSystemUtilization",
+    "inputs": [
+      {
+        "name": "epoch",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "hasRolledOver",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "initialize",
     "inputs": [
       {
@@ -1471,6 +1647,78 @@ export const MultiVaultMigrationModeAbi = [
   },
   {
     "type": "function",
+    "name": "isApprovedToCreate",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "creator",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "approved",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isApprovedToDeposit",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "receiver",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "approved",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isApprovedToRedeem",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "receiver",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "approved",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "isAtom",
     "inputs": [
       {
@@ -1547,6 +1795,19 @@ export const MultiVaultMigrationModeAbi = [
   },
   {
     "type": "function",
+    "name": "lastSystemUtilizationEpoch",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "maxRedeem",
     "inputs": [
       {
@@ -1573,6 +1834,49 @@ export const MultiVaultMigrationModeAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "multicall",
+    "inputs": [
+      {
+        "name": "data",
+        "type": "bytes[]",
+        "internalType": "bytes[]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "results",
+        "type": "bytes[]",
+        "internalType": "bytes[]"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "multicallPayable",
+    "inputs": [
+      {
+        "name": "data",
+        "type": "bytes[]",
+        "internalType": "bytes[]"
+      },
+      {
+        "name": "values",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "results",
+        "type": "bytes[]",
+        "internalType": "bytes[]"
+      }
+    ],
+    "stateMutability": "payable"
   },
   {
     "type": "function",
@@ -1844,11 +2148,24 @@ export const MultiVaultMigrationModeAbi = [
     ],
     "outputs": [
       {
-        "name": "received",
+        "name": "",
         "type": "uint256[]",
         "internalType": "uint256[]"
       }
     ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "reinitialize",
+    "inputs": [
+      {
+        "name": "_timelock",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
     "stateMutability": "nonpayable"
   },
   {
@@ -2007,6 +2324,19 @@ export const MultiVaultMigrationModeAbi = [
   },
   {
     "type": "function",
+    "name": "setTimelock",
+    "inputs": [
+      {
+        "name": "_timelock",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setTripleConfig",
     "inputs": [
       {
@@ -2126,6 +2456,19 @@ export const MultiVaultMigrationModeAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "timelock",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -2867,6 +3210,19 @@ export const MultiVaultMigrationModeAbi = [
   },
   {
     "type": "event",
+    "name": "TimelockSet",
+    "inputs": [
+      {
+        "name": "timelock",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "TotalUtilizationAdded",
     "inputs": [
       {
@@ -3199,6 +3555,11 @@ export const MultiVaultMigrationModeAbi = [
   },
   {
     "type": "error",
+    "name": "MultiVault_CreatorNotApproved",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "MultiVault_DefaultCurveMustBeInitializedViaCreatePaths",
     "inputs": []
   },
@@ -3270,12 +3631,32 @@ export const MultiVaultMigrationModeAbi = [
   },
   {
     "type": "error",
+    "name": "MultiVault_MulticallValueMismatch",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MultiVault_NestedMulticall",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "MultiVault_NoAtomDataProvided",
     "inputs": []
   },
   {
     "type": "error",
     "name": "MultiVault_OnlyAssociatedAtomWallet",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MultiVault_OnlyTimelock",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MultiVault_PayableMulticallSelectorNotAllowed",
     "inputs": []
   },
   {

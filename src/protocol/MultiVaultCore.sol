@@ -13,6 +13,7 @@ import {
     VaultFees,
     BondingCurveConfig
 } from "src/interfaces/IMultiVaultCore.sol";
+import { MultiVaultLib } from "src/libraries/MultiVaultLib.sol";
 
 /**
  * @title  MultiVaultCore
@@ -25,13 +26,20 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
     /* =================================================== */
 
     /// @notice Salt for atoms
-    bytes32 public constant ATOM_SALT = keccak256("ATOM_SALT");
+    /// @dev    Source of truth lives in {MultiVaultLib} so library-side ID derivation
+    ///         (`_calculateAtomId`) and this contract's reads stay in sync; this re-export
+    ///         preserves the `ATOM_SALT()` public-getter selector.
+    bytes32 public constant ATOM_SALT = MultiVaultLib.ATOM_SALT;
 
     /// @notice Salt used for positive triples
-    bytes32 public constant TRIPLE_SALT = keccak256("TRIPLE_SALT");
+    /// @dev    Source of truth lives in {MultiVaultLib}; re-export preserves the `TRIPLE_SALT()`
+    ///         public-getter selector.
+    bytes32 public constant TRIPLE_SALT = MultiVaultLib.TRIPLE_SALT;
 
     /// @notice Salt used for counter triples
-    bytes32 public constant COUNTER_SALT = keccak256("COUNTER_SALT");
+    /// @dev    Source of truth lives in {MultiVaultLib}; re-export preserves the `COUNTER_SALT()`
+    ///         public-getter selector.
+    bytes32 public constant COUNTER_SALT = MultiVaultLib.COUNTER_SALT;
 
     /* =================================================== */
     /*                  STATE VARIABLES                    */

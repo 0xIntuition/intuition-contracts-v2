@@ -155,6 +155,10 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /// @inheritdoc ITrustBonding
+    /// @dev Returns `floor(YEAR / epochLength)` — integer-truncated. Useful as
+    ///      a size hint, but **not** suitable for precise APY math: prefer the
+    ///      inline `value * YEAR / epochLength` reordering at the call site,
+    ///      which is what `getSystemApy` and `getUserApy` now use.
     function epochsPerYear() public view returns (uint256) {
         return _epochsPerYear();
     }
@@ -195,6 +199,17 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /// @inheritdoc ITrustBonding
+    /// @dev Point-in-time `_totalSupply` snapshot at `_epochTimestampEnd(epoch)`.
+    ///      A point-in-time snapshot is acceptable here because the
+    ///      VotingEscrow constructor enforces `MINTIME >= EPOCH_LENGTH`
+    ///      (production: both `= 2 weeks`). Any lock created or extended
+    ///      near a boundary is structurally committed for at least one full
+    ///      epoch, so "snipe-and-exit" is impossible — a participant whose
+    ///      lock contributes to this snapshot is forced to remain a real
+    ///      participant through the following epoch. The marginal
+    ///      undecayed-weight advantage of a last-second lock vs. an honest
+    ///      epoch-long locker is bounded by the per-epoch decay ratio
+    ///      `EPOCH_LENGTH / MAXTIME` (≈ 1.9% for 14-day epochs / 2-year max).
     function totalBondedBalanceAtEpochEnd(uint256 epoch) public view returns (uint256) {
         if (epoch > currentEpoch()) {
             revert TrustBonding_InvalidEpoch();
@@ -204,6 +219,9 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /// @inheritdoc ITrustBonding
+    /// @dev Point-in-time `_balanceOf` snapshot at `_epochTimestampEnd(epoch)`.
+    ///      See `totalBondedBalanceAtEpochEnd` for the `MINTIME >= EPOCH_LENGTH`
+    ///      invariant that makes point-in-time semantics safe here.
     function userBondedBalanceAtEpochEnd(address account, uint256 epoch) public view returns (uint256) {
         if (account == address(0)) {
             revert TrustBonding_ZeroAddress();
@@ -258,6 +276,13 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /// @inheritdoc ITrustBonding
+    /// @dev Annualisation here uses the inline `userRewards * YEAR / epochLength`
+    ///      form rather than `userRewards * _epochsPerYear()`. The latter would
+    ///      truncate `YEAR / epochLength` (e.g. `26.07... -> 26` for a 14-day
+    ///      epoch) before the multiply, dragging every reported APY below
+    ///      its analytical value. The reordered form defers the integer
+    ///      division to the final step, eliminating that ~0.27% systematic
+    ///      underestimate.
     function getUserApy(address account) external view returns (uint256 currentApy, uint256 maxApy) {
         uint256 currEpoch = _currentEpoch();
         uint256 userRewards = _userEligibleRewardsForEpoch(account, currEpoch);
@@ -268,7 +293,8 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
             return (currentApy, maxApy);
         }
 
-        uint256 userRewardsPerYear = userRewards * _epochsPerYear();
+        uint256 epochLength = ICoreEmissionsController(satelliteEmissionsController).getEpochLength();
+        uint256 userRewardsPerYear = userRewards * YEAR / epochLength;
         currentApy = (userRewardsPerYear * personalUtilization) / uint256(locked);
         maxApy = (userRewardsPerYear * BASIS_POINTS_DIVISOR) / uint256(locked);
         return (currentApy, maxApy);
@@ -306,15 +332,20 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /// @inheritdoc ITrustBonding
+    /// @dev Annualisation uses the inline `* YEAR / epochLength` form rather
+    ///      than the truncating `* _epochsPerYear()` helper. See `getUserApy`
+    ///      for the rationale; same reordering applied here to keep system-
+    ///      level and user-level APY reporting precision aligned.
     function getSystemApy() external view returns (uint256 currentApy, uint256 maxApy) {
         uint256 _supply = _totalSupply(block.timestamp);
         if (_supply == 0) {
             return (0, 0);
         }
         uint256 _currEpoch = _currentEpoch();
-        uint256 emissionsPerYear = _emissionsForEpoch(_currEpoch) * _epochsPerYear();
+        uint256 epochLength = ICoreEmissionsController(satelliteEmissionsController).getEpochLength();
+        uint256 emissionsPerYear = _emissionsForEpoch(_currEpoch) * YEAR / epochLength;
         uint256 maxEmissions = ICoreEmissionsController(satelliteEmissionsController).getEmissionsAtEpoch(_currEpoch);
-        uint256 maxEmissionsPerYear = maxEmissions * _epochsPerYear();
+        uint256 maxEmissionsPerYear = maxEmissions * YEAR / epochLength;
         currentApy = (emissionsPerYear * BASIS_POINTS_DIVISOR) / _supply;
         maxApy = (maxEmissionsPerYear * BASIS_POINTS_DIVISOR) / _supply;
         return (currentApy, maxApy);
@@ -412,6 +443,13 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc ITrustBonding
+    /// @dev The pause guard is intentionally scoped to `claimRewards` only.
+    ///      Inherited VotingEscrow mutators (`create_lock`, `increase_amount`,
+    ///      `increase_unlock_time`, `withdraw`) remain callable while paused —
+    ///      escrow state is allowed to continue evolving during a pause window.
+    ///      Operators relying on snapshots taken across a pause must account
+    ///      for incoming lock activity during the pause when reconciling
+    ///      post-unpause reward distribution.
     function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
     }
@@ -454,6 +492,11 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         return _epochAtTimestamp(block.timestamp);
     }
 
+    /// @dev Approximate epochs-per-year helper. Returns `floor(YEAR / epochLength)`
+    ///      so for the production 14-day epoch this truncates `26.0714...` to `26`.
+    ///      Adequate for size hints and rough integrations, but APY-precision
+    ///      paths (`getSystemApy`, `getUserApy`) bypass this and inline the
+    ///      multiply-first / divide-last formula instead.
     function _epochsPerYear() internal view returns (uint256) {
         return YEAR / ICoreEmissionsController(satelliteEmissionsController).getEpochLength();
     }

@@ -5,15 +5,12 @@ export const AtomWalletAbi = [
     "stateMutability": "nonpayable"
   },
   {
-    "type": "receive",
+    "type": "fallback",
     "stateMutability": "payable"
   },
   {
-    "type": "function",
-    "name": "acceptOwnership",
-    "inputs": [],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    "type": "receive",
+    "stateMutability": "payable"
   },
   {
     "type": "function",
@@ -24,8 +21,52 @@ export const AtomWalletAbi = [
   },
   {
     "type": "function",
+    "name": "addOwnerAddress",
+    "inputs": [
+      {
+        "name": "signer",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "addOwnerPublicKey",
+    "inputs": [
+      {
+        "name": "x",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "y",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "claimAtomWalletDepositFees",
     "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "completeClaim",
+    "inputs": [
+      {
+        "name": "newOwner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
     "outputs": [],
     "stateMutability": "nonpayable"
   },
@@ -182,6 +223,73 @@ export const AtomWalletAbi = [
   },
   {
     "type": "function",
+    "name": "isOwnerAddress",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isOwnerPublicKey",
+    "inputs": [
+      {
+        "name": "x",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "y",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isValidSignature",
+    "inputs": [
+      {
+        "name": "hash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "signature",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes4",
+        "internalType": "bytes4"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "multiVault",
     "inputs": [],
     "outputs": [
@@ -189,6 +297,19 @@ export const AtomWalletAbi = [
         "name": "",
         "type": "address",
         "internalType": "contract IMultiVault"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "nextOwnerIndex",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -208,23 +329,79 @@ export const AtomWalletAbi = [
   },
   {
     "type": "function",
-    "name": "pendingOwner",
-    "inputs": [],
+    "name": "ownerAtIndex",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "outputs": [
       {
         "name": "",
-        "type": "address",
-        "internalType": "address"
+        "type": "bytes",
+        "internalType": "bytes"
       }
     ],
     "stateMutability": "view"
   },
   {
     "type": "function",
+    "name": "ownerCount",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "removeOwnerAtIndex",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "ownr",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "renounceOwnership",
     "inputs": [],
     "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "supportsInterface",
+    "inputs": [
+      {
+        "name": "interfaceId",
+        "type": "bytes4",
+        "internalType": "bytes4"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "pure"
   },
   {
     "type": "function",
@@ -348,6 +525,44 @@ export const AtomWalletAbi = [
   },
   {
     "type": "event",
+    "name": "AddOwner",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "owner",
+        "type": "bytes",
+        "indexed": false,
+        "internalType": "bytes"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ClaimCompleted",
+    "inputs": [
+      {
+        "name": "previousOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "Initialized",
     "inputs": [
       {
@@ -361,16 +576,16 @@ export const AtomWalletAbi = [
   },
   {
     "type": "event",
-    "name": "OwnershipTransferStarted",
+    "name": "PrimaryOwnerTransferred",
     "inputs": [
       {
-        "name": "previousOwner",
+        "name": "previousClaimant",
         "type": "address",
         "indexed": true,
         "internalType": "address"
       },
       {
-        "name": "newOwner",
+        "name": "newClaimant",
         "type": "address",
         "indexed": true,
         "internalType": "address"
@@ -380,54 +595,53 @@ export const AtomWalletAbi = [
   },
   {
     "type": "event",
-    "name": "OwnershipTransferred",
+    "name": "RemoveOwner",
     "inputs": [
       {
-        "name": "previousOwner",
-        "type": "address",
+        "name": "index",
+        "type": "uint256",
         "indexed": true,
-        "internalType": "address"
+        "internalType": "uint256"
       },
       {
-        "name": "newOwner",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        "name": "owner",
+        "type": "bytes",
+        "indexed": false,
+        "internalType": "bytes"
       }
     ],
     "anonymous": false
   },
   {
     "type": "error",
-    "name": "AtomWallet_InvalidCallDataLength",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "AtomWallet_InvalidSignature",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "AtomWallet_InvalidSignatureLength",
+    "name": "AlreadyOwner",
     "inputs": [
       {
-        "name": "length",
-        "type": "uint256",
-        "internalType": "uint256"
+        "name": "owner",
+        "type": "bytes",
+        "internalType": "bytes"
       }
     ]
   },
   {
     "type": "error",
-    "name": "AtomWallet_InvalidSignatureS",
-    "inputs": [
-      {
-        "name": "s",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ]
+    "name": "AtomWallet_AlreadyClaimed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "AtomWallet_InvalidClaimOwner",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "AtomWallet_InvalidOwner",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "AtomWallet_OnlyAtomWarden",
+    "inputs": []
   },
   {
     "type": "error",
@@ -437,6 +651,16 @@ export const AtomWalletAbi = [
   {
     "type": "error",
     "name": "AtomWallet_OnlyOwnerOrEntryPoint",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "AtomWallet_OwnerCannotBeRemoved",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "AtomWallet_RenounceDisabled",
     "inputs": []
   },
   {
@@ -467,8 +691,29 @@ export const AtomWalletAbi = [
   },
   {
     "type": "error",
+    "name": "FnSelectorNotRecognized",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "InvalidInitialization",
     "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "LastOwner",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NoOwnerAtIndex",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
   },
   {
     "type": "error",
@@ -477,7 +722,7 @@ export const AtomWalletAbi = [
   },
   {
     "type": "error",
-    "name": "OwnableInvalidOwner",
+    "name": "OwnerNotFound",
     "inputs": [
       {
         "name": "owner",
@@ -488,18 +733,28 @@ export const AtomWalletAbi = [
   },
   {
     "type": "error",
-    "name": "OwnableUnauthorizedAccount",
-    "inputs": [
-      {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
+    "name": "ReentrancyGuardReentrantCall",
+    "inputs": []
   },
   {
     "type": "error",
-    "name": "ReentrancyGuardReentrantCall",
-    "inputs": []
+    "name": "WrongOwnerAtIndex",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "expectedOwner",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "actualOwner",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ]
   }
 ] as const;

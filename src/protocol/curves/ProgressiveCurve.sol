@@ -27,7 +27,13 @@ contract ProgressiveCurve is BaseCurve {
     /// @dev The maximum shares are sqrt(uint256.max / 1e18) to prevent overflow in calculations
     uint256 public MAX_SHARES;
 
-    /// @dev The maximum assets are derived from the maximum shares and slope to prevent overflow in calculations
+    /// @dev The maximum assets are derived from the maximum shares and slope to prevent overflow in calculations.
+    ///      This is a **theoretical domain bound**, not a reachability guarantee:
+    ///      the `previewMint` path rounds up (`squareUp` + `mulUp`) while
+    ///      `MAX_ASSETS` is computed round-down for safety at small share counts,
+    ///      so the exact `(MAX_SHARES, MAX_ASSETS)` pair is not jointly reachable.
+    ///      Under any realistic TRUST supply this is academic; integrators must
+    ///      not treat `MAX_ASSETS` as a guaranteed-reachable ceiling.
     uint256 public MAX_ASSETS;
 
     /* =================================================== */
@@ -79,6 +85,11 @@ contract ProgressiveCurve is BaseCurve {
     }
 
     /// @inheritdoc BaseCurve
+    /// @dev Returns the theoretical mathematical domain bound on assets for
+    ///      this curve. See `MAX_ASSETS` storage docs — the value is not a
+    ///      reachability guarantee, and a mint at the exact `(maxShares,
+    ///      maxAssets)` boundary may revert due to rounding-direction
+    ///      asymmetry between `initialize` and `previewMint`.
     function maxAssets() external view override returns (uint256) {
         return MAX_ASSETS;
     }

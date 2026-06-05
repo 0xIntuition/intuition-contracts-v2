@@ -159,6 +159,19 @@ contract CreateAtomsTest is BaseTest {
         assertTrue(totalShares > 0, "Shares should be minted");
     }
 
+    function test_createAtoms_recordsCreator() public {
+        bytes32 atomId = createSimpleAtom("Creator attribution test", ATOM_COST[0], users.alice);
+
+        assertEq(protocol.multiVault.getAtomCreator(atomId), users.alice, "Creator should be recorded");
+    }
+
+    function test_createAtoms_recordsCreatedAt() public {
+        uint48 expectedTimestamp = uint48(block.timestamp);
+        bytes32 atomId = createSimpleAtom("Created-at attribution test", ATOM_COST[0], users.alice);
+
+        assertEq(protocol.multiVault.getAtomCreatedAt(atomId), expectedTimestamp, "Creation time should be recorded");
+    }
+
     /*//////////////////////////////////////////////////////////////
                           INTEGRATION TESTS
     //////////////////////////////////////////////////////////////*/

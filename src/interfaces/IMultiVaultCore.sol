@@ -210,6 +210,20 @@ interface IMultiVaultCore {
     function getAtom(bytes32 atomId) external view returns (bytes memory data);
 
     /**
+     * @notice Returns the creator recorded for a given atom ID
+     * @param atomId The ID of the atom
+     * @return creator The recorded creator
+     */
+    function getAtomCreator(bytes32 atomId) external view returns (address creator);
+
+    /**
+     * @notice Returns the creation timestamp recorded for a given atom ID
+     * @param atomId The ID of the atom
+     * @return createdAt The recorded creation timestamp
+     */
+    function getAtomCreatedAt(bytes32 atomId) external view returns (uint48 createdAt);
+
+    /**
      * @notice Returns the atom configuration settings
      * @return AtomConfig struct containing atom creation fees and wallet deposit fee settings
      */

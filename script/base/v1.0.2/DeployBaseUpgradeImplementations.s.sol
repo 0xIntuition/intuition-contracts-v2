@@ -7,12 +7,13 @@ import {
     ITransparentUpgradeableProxy
 } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
+import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
 import { SetupScript } from "script/SetupScript.s.sol";
 import { BaseEmissionsController } from "src/protocol/emissions/BaseEmissionsController.sol";
 
 /*
 MAINNET (Base)
-forge script script/base/DeployBaseUpgradeImplementations.s.sol:DeployBaseUpgradeImplementations \
+forge script script/base/v1.0.2/DeployBaseUpgradeImplementations.s.sol:DeployBaseUpgradeImplementations \
 --optimizer-runs 10000 \
 --rpc-url base \
 --broadcast \
@@ -30,6 +31,8 @@ contract DeployBaseUpgradeImplementations is SetupScript {
     /// @dev Mainnet proxy addresses (Base, chain 8453)
     address internal constant BASE_EC_PROXY = 0x7745bDEe668501E5eeF7e9605C746f9cDfb60667;
     address internal constant BASE_EC_PROXY_ADMIN = 0x58dCdf3b6F5D03835CF6556EdC798bfd690B251a;
+    address internal constant BASE_UPGRADES_TIMELOCK = 0x1E442BbB08c98100b18fa830a88E8A57b5dF9157;
+    string internal constant OPERATIONS_ARTIFACT_PATH = "/script/upgrades/out/v1.0.2-base-8453-operations.json";
 
     BaseEmissionsController public baseEmissionsControllerImplementation;
 
@@ -52,6 +55,7 @@ contract DeployBaseUpgradeImplementations is SetupScript {
         contractInfo("BaseEmissionsController Implementation", address(baseEmissionsControllerImplementation));
 
         _logUpgradeCalldata();
+        _writeOperationsArtifact();
     }
 
     function _deployImplementations() internal {
@@ -73,5 +77,26 @@ contract DeployBaseUpgradeImplementations is SetupScript {
                 (ITransparentUpgradeableProxy(BASE_EC_PROXY), address(baseEmissionsControllerImplementation), "")
             )
         );
+    }
+
+    function _writeOperationsArtifact() internal {
+        bytes memory directUpgradeCalldata = abi.encodeCall(
+            ProxyAdmin.upgradeAndCall,
+            (ITransparentUpgradeableProxy(BASE_EC_PROXY), address(baseEmissionsControllerImplementation), "")
+        );
+        uint256 minDelay = TimelockController(payable(BASE_UPGRADES_TIMELOCK)).getMinDelay();
+        TimelockOperationArtifact[] memory operations = new TimelockOperationArtifact[](1);
+
+        operations[0] = TimelockOperationArtifact({
+            label: "BaseEmissionsController upgrade",
+            target: BASE_EC_PROXY_ADMIN,
+            value: ZERO_VALUE,
+            data: directUpgradeCalldata,
+            predecessor: ZERO_PREDECESSOR,
+            salt: ZERO_SALT,
+            delay: minDelay
+        });
+
+        _writeTimelockOperationsArtifact(OPERATIONS_ARTIFACT_PATH, BASE_UPGRADES_TIMELOCK, operations);
     }
 }

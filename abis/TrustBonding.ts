@@ -1906,6 +1906,11 @@ export const TrustBondingAbi = [
   },
   {
     "type": "error",
+    "name": "TrustBonding_EpochBudgetExhausted",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "TrustBonding_InvalidEpoch",
     "inputs": []
   },

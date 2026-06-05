@@ -13,8 +13,10 @@ import { ApprovalTypes } from "src/interfaces/IMultiVault.sol";
 contract BondingCurveRegistryMock {
     function previewDeposit(
         uint256 assets,
-        uint256, /*totalAssets*/
-        uint256, /*totalShares*/
+        uint256,
+        /*totalAssets*/
+        uint256,
+        /*totalShares*/
         uint256 /*curveId*/
     )
         external
@@ -26,8 +28,10 @@ contract BondingCurveRegistryMock {
 
     function previewRedeem(
         uint256 shares,
-        uint256, /*totalShares*/
-        uint256, /*totalAssets*/
+        uint256,
+        /*totalShares*/
+        uint256,
+        /*totalAssets*/
         uint256 /*curveId*/
     )
         external
@@ -156,6 +160,56 @@ contract RedeemTest is BaseTest {
         uint256 aliceShares = protocol.multiVault.getShares(users.alice, atomId, CURVE_ID);
         uint256 expectedShares = shares - redeemSharesAmount;
         assertApproxEqRel(aliceShares, expectedShares, 1e16, "Alice shares should be reduced");
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                  NEW ApprovalTypes VALUE COVERAGE
+    //////////////////////////////////////////////////////////////*/
+
+    function test_redeem_AllowedWith_RedemptionAndCreationApproval() public {
+        // REDEMPTION_AND_CREATION = 0b110 must satisfy the REDEMPTION bit.
+        bytes32 atomId = createSimpleAtom("rc-allows-redeem", ATOM_COST[0], users.alice);
+        uint256 shares = makeDeposit(users.alice, users.alice, atomId, CURVE_ID, 1000e18, 0);
+
+        setupApproval(users.alice, users.bob, ApprovalTypes.REDEMPTION_AND_CREATION);
+
+        uint256 assets = redeemShares(users.bob, users.alice, atomId, CURVE_ID, shares / 2, 0);
+        assertGt(assets, 0, "REDEMPTION_AND_CREATION must grant redeem");
+    }
+
+    function test_redeem_AllowedWith_AllApproval() public {
+        // ALL = 0b111 must satisfy REDEMPTION.
+        bytes32 atomId = createSimpleAtom("all-allows-redeem", ATOM_COST[0], users.alice);
+        uint256 shares = makeDeposit(users.alice, users.alice, atomId, CURVE_ID, 1000e18, 0);
+
+        setupApproval(users.alice, users.bob, ApprovalTypes.ALL);
+
+        uint256 assets = redeemShares(users.bob, users.alice, atomId, CURVE_ID, shares / 2, 0);
+        assertGt(assets, 0, "ALL must grant redeem");
+    }
+
+    function test_redeem_RevertWhen_OnlyCreationApproval() public {
+        // CREATION = 0b100 must NOT satisfy REDEMPTION.
+        bytes32 atomId = createSimpleAtom("creation-only-blocks-redeem", ATOM_COST[0], users.alice);
+        uint256 shares = makeDeposit(users.alice, users.alice, atomId, CURVE_ID, 1000e18, 0);
+
+        setupApproval(users.alice, users.bob, ApprovalTypes.CREATION);
+
+        resetPrank(users.bob);
+        vm.expectRevert(MultiVault.MultiVault_RedeemerNotApproved.selector);
+        protocol.multiVault.redeem(users.alice, atomId, CURVE_ID, shares / 2, 0);
+    }
+
+    function test_redeem_RevertWhen_OnlyDepositAndCreationApproval() public {
+        // DEPOSIT_AND_CREATION = 0b101 has no REDEMPTION bit.
+        bytes32 atomId = createSimpleAtom("dc-blocks-redeem", ATOM_COST[0], users.alice);
+        uint256 shares = makeDeposit(users.alice, users.alice, atomId, CURVE_ID, 1000e18, 0);
+
+        setupApproval(users.alice, users.bob, ApprovalTypes.DEPOSIT_AND_CREATION);
+
+        resetPrank(users.bob);
+        vm.expectRevert(MultiVault.MultiVault_RedeemerNotApproved.selector);
+        protocol.multiVault.redeem(users.alice, atomId, CURVE_ID, shares / 2, 0);
     }
 
     function test_redeem_FromTriple_Success() public {
@@ -481,6 +535,114 @@ contract RedeemTest is BaseTest {
 
         vm.expectRevert(MultiVault.MultiVault_BurnInsufficientBalance.selector);
         h.burnForTest(users.alice, termId, curveId, 2e18);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                COUNTER-FIRST BOOTSTRAP: 4-COMBINATION REDEEM MATRIX
+    //////////////////////////////////////////////////////////////*/
+
+    struct MatrixShares {
+        address dan;
+        uint256 bobCounterNonDef;
+        uint256 charliePosNonDef;
+        uint256 danCounterDef;
+        uint256 alicePosDef;
+    }
+
+    /// @notice After a counter-first bootstrap on a non-default curve, all four
+    ///         (positive/counter × default/non-default) vaults must be redeemable by their
+    ///         respective depositors. The min-share burn-to-zero seed on both bootstrap-seeded
+    ///         vaults must remain unredeemable by anyone other than `BURN`.
+    function test_redeem_AfterCounterFirstBootstrap_AllFourCombinationsRedeemable() public {
+        (bytes32 tripleId,) = createTripleWithAtoms(
+            "S-redeem-matrix", "P-redeem-matrix", "O-redeem-matrix", ATOM_COST[0], TRIPLE_COST[0], users.alice
+        );
+        bytes32 counterId = protocol.multiVault.getCounterIdFromTripleId(tripleId);
+
+        MatrixShares memory s = _seedRedeemMatrix(tripleId, counterId, 3 ether);
+        _redeemRedeemMatrix(tripleId, counterId, s);
+        _assertSeedsPreservedAfterMatrix(tripleId, counterId);
+    }
+
+    /// @dev Seeds the four positive/counter × default/non-default vaults. Returns the share amounts
+    ///      and the fresh `dan` address used for the counter-default deposit.
+    function _seedRedeemMatrix(
+        bytes32 tripleId,
+        bytes32 counterId,
+        uint256 dep
+    )
+        internal
+        returns (MatrixShares memory s)
+    {
+        // 1) Bob: counter-first on non-default curve — previously blocked, now allowed.
+        vm.deal(users.bob, dep);
+        s.bobCounterNonDef = makeDeposit(users.bob, users.bob, counterId, OFFSET_PROGRESSIVE_CURVE_ID, dep, 0);
+
+        // 2) Charlie: positive-side on the same non-default curve (uses Bob's symmetric seed).
+        vm.deal(users.charlie, dep);
+        s.charliePosNonDef = makeDeposit(users.charlie, users.charlie, tripleId, OFFSET_PROGRESSIVE_CURVE_ID, dep, 0);
+
+        // 3) Dan (fresh address): counter-side on the default curve (auto-seeded at creation).
+        s.dan = makeAddr("dan-redeem-matrix");
+        vm.deal(s.dan, dep);
+        s.danCounterDef = makeDeposit(s.dan, s.dan, counterId, CURVE_ID, dep, 0);
+
+        // 4) Alice: deposit on positive-default to seed her own redeemable position. {createTripleWithAtoms}
+        //    pays exactly `tripleCost`, leaving no post-fee assets for share minting at creation time,
+        //    so the redeemable balance is established with an explicit deposit.
+        vm.deal(users.alice, dep);
+        s.alicePosDef = makeDeposit(users.alice, users.alice, tripleId, CURVE_ID, dep, 0);
+        assertGt(s.alicePosDef, 0, "alice positive-default deposit must mint shares");
+    }
+
+    function _redeemRedeemMatrix(bytes32 tripleId, bytes32 counterId, MatrixShares memory s) internal {
+        assertGt(
+            redeemShares(users.alice, users.alice, tripleId, CURVE_ID, s.alicePosDef, 0),
+            0,
+            "alice positive-default redeem must return assets"
+        );
+        assertGt(
+            redeemShares(s.dan, s.dan, counterId, CURVE_ID, s.danCounterDef, 0),
+            0,
+            "dan counter-default redeem must return assets"
+        );
+        assertGt(
+            redeemShares(users.charlie, users.charlie, tripleId, OFFSET_PROGRESSIVE_CURVE_ID, s.charliePosNonDef, 0),
+            0,
+            "charlie positive non-default redeem must return assets"
+        );
+        assertGt(
+            redeemShares(users.bob, users.bob, counterId, OFFSET_PROGRESSIVE_CURVE_ID, s.bobCounterNonDef, 0),
+            0,
+            "bob counter non-default redeem must return assets"
+        );
+    }
+
+    function _assertSeedsPreservedAfterMatrix(bytes32 tripleId, bytes32 counterId) internal view {
+        uint256 minShare = protocol.multiVault.getGeneralConfig().minShare;
+
+        assertEq(protocol.multiVault.getShares(BURN, counterId, CURVE_ID), minShare, "counter-default BURN seed");
+        assertEq(
+            protocol.multiVault.getShares(BURN, counterId, OFFSET_PROGRESSIVE_CURVE_ID),
+            minShare,
+            "counter non-default BURN seed"
+        );
+        assertEq(
+            protocol.multiVault.getShares(BURN, tripleId, OFFSET_PROGRESSIVE_CURVE_ID),
+            minShare,
+            "positive non-default BURN seed (from counter-first bootstrap)"
+        );
+
+        assertEq(
+            protocol.multiVault.getShares(users.bob, tripleId, OFFSET_PROGRESSIVE_CURVE_ID),
+            0,
+            "bob holds none of the positive non-default seed"
+        );
+        assertEq(
+            protocol.multiVault.getShares(users.charlie, counterId, OFFSET_PROGRESSIVE_CURVE_ID),
+            0,
+            "charlie holds none of the counter non-default seed"
+        );
     }
 
     function test_redeem_ValidateRedeem_RevertWhen_InsufficientRemainingShares() public {
