@@ -138,6 +138,25 @@ contract NormalizedUtilizationRatioTest is TrustBondingBase {
         assertEq(result, BASIS_POINTS_DIVISOR, "Minimal values should result in maximum utilization");
     }
 
+    function test_getNormalizedUtilizationRatio_zeroTarget_returnsMaxRatioWithoutReverting() external view {
+        // A zero target means there is no prior-epoch baseline. Every production caller already
+        // early-returns 100% before reaching this helper in that case (the `delta >= target` branch),
+        // so this exercises the helper's internal zero-target guard directly: it must return
+        // BASIS_POINTS_DIVISOR and never revert with a division-by-zero.
+        uint256 lowerBound = MINIMUM_SYSTEM_UTILIZATION_LOWER_BOUND;
+
+        assertEq(
+            trustBondingMock.exposed_getNormalizedUtilizationRatio(0, 0, lowerBound),
+            BASIS_POINTS_DIVISOR,
+            "Zero target with zero delta should return max ratio"
+        );
+        assertEq(
+            trustBondingMock.exposed_getNormalizedUtilizationRatio(1000, 0, lowerBound),
+            BASIS_POINTS_DIVISOR,
+            "Zero target with nonzero delta should return max ratio"
+        );
+    }
+
     function test_getNormalizedUtilizationRatio_withMaximalLowerBound() external view {
         uint256 delta = 500;
         uint256 target = 1000;

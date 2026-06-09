@@ -658,6 +658,12 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         pure
         returns (uint256)
     {
+        // Defense-in-depth: every caller already early-returns 100% before reaching this helper when
+        // `target == 0` (the `delta >= target` branch), so this guard is unreachable today. It keeps the
+        // helper safe in isolation if a future caller is added, matching the callers' zero-target result.
+        if (target == 0) {
+            return BASIS_POINTS_DIVISOR;
+        }
         uint256 ratioRange = BASIS_POINTS_DIVISOR - lowerBound;
         uint256 utilizationRatio = lowerBound + (delta * ratioRange) / target;
         return utilizationRatio;
