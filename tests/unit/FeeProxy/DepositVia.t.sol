@@ -4,6 +4,7 @@ pragma solidity 0.8.29;
 import { FeeProxyBaseTest } from "tests/unit/FeeProxy/FeeProxyBase.t.sol";
 import { ApprovalTypes } from "src/interfaces/IMultiVault.sol";
 import { IFeeProxy, FeeConfig, FeeGuard } from "src/interfaces/IFeeProxy.sol";
+import { MultiVault } from "src/protocol/MultiVault.sol";
 
 contract DepositViaTest is FeeProxyBaseTest {
     uint256 internal constant BPS_DIVISOR = 10_000;
@@ -85,7 +86,7 @@ contract DepositViaTest is FeeProxyBaseTest {
 
         vm.deal(users.alice, gross);
         vm.startPrank(users.alice);
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_SlippageExceeded.selector));
         feeProxy.depositVia{ value: gross }(
             affiliate, users.alice, atomId, CURVE_ID, gross, minShares, _looseFeeGuard()
         );
