@@ -60,6 +60,16 @@ contract AtomWallet is Initializable, BaseAccount, ReentrancyGuardUpgradeable, I
     event PrimaryOwnerTransferred(address indexed previousClaimant, address indexed newClaimant);
 
     /* =================================================== */
+    /*                     CONSTANTS                       */
+    /* =================================================== */
+
+    /// @dev ERC-1271 magic value returned for a valid signature (`IERC1271.isValidSignature.selector`).
+    bytes4 private constant ERC1271_MAGIC_VALUE = 0x1626ba7e;
+
+    /// @dev ERC-1271 sentinel returned for an invalid signature.
+    bytes4 private constant ERC1271_INVALID_SIGNATURE = 0xffffffff;
+
+    /* =================================================== */
     /*                  STATE VARIABLES                    */
     /* =================================================== */
 
@@ -330,9 +340,9 @@ contract AtomWallet is Initializable, BaseAccount, ReentrancyGuardUpgradeable, I
      */
     function isValidSignature(bytes32 hash, bytes calldata signature) external view override returns (bytes4) {
         if (CoinbaseSmartWalletLib.isValidSignature(hash, signature)) {
-            return bytes4(0x1626ba7e);
+            return ERC1271_MAGIC_VALUE;
         }
-        return bytes4(0xffffffff);
+        return ERC1271_INVALID_SIGNATURE;
     }
 
     /// @notice Returns the deposit of the account in the entry point contract

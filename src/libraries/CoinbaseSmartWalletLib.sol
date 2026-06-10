@@ -120,12 +120,17 @@ library CoinbaseSmartWalletLib {
         uint256 paddedDataLen = (dataLen + 31) & ~uint256(31);
         if (signature.length < 96 + paddedDataLen) return false;
 
-        // Now safe to decode
-        SignatureWrapper memory sigWrapper = abi.decode(signature, (SignatureWrapper));
+        // Now safe to decode. Decode as the inline (uint256, bytes) tuple that every producer in
+        // this codebase emits via `abi.encode(ownerIndex, signatureData)`. Decoding as the
+        // `SignatureWrapper` struct would treat the first word as an offset-to-struct (it is the
+        // `ownerIndex`), which only coincides with the buffer start when `ownerIndex == 0` and
+        // reverts for any owner index >= 1. The tuple decode is the layout the pre-checks above
+        // already validate, so it cannot revert post-checks and works for every owner index.
+        (uint256 ownerIndex, bytes memory signatureData) = abi.decode(signature, (uint256, bytes));
 
         // ── Check owner exists at index (non-reverting) ──
         MultiOwnableStorage storage $ = _getStorage();
-        bytes memory ownerBytes = $.ownerAtIndex[sigWrapper.ownerIndex];
+        bytes memory ownerBytes = $.ownerAtIndex[ownerIndex];
         if (ownerBytes.length == 0) return false;
 
         // ── Dispatch based on owner type ──
@@ -138,7 +143,7 @@ library CoinbaseSmartWalletLib {
                 ownerAddr := mload(add(ownerBytes, 32))
             }
 
-            return SignatureCheckerLib.isValidSignatureNow(ownerAddr, hash, sigWrapper.signatureData);
+            return SignatureCheckerLib.isValidSignatureNow(ownerAddr, hash, signatureData);
         }
 
         if (ownerBytes.length == 64) {
@@ -146,7 +151,7 @@ library CoinbaseSmartWalletLib {
             (bytes32 x, bytes32 y) = abi.decode(ownerBytes, (bytes32, bytes32));
 
             // Non-reverting decode via Solady's tryDecodeAuth
-            WebAuthn.WebAuthnAuth memory auth = WebAuthn.tryDecodeAuth(sigWrapper.signatureData);
+            WebAuthn.WebAuthnAuth memory auth = WebAuthn.tryDecodeAuth(signatureData);
 
             return
                 WebAuthn.verify({ challenge: abi.encode(hash), requireUserVerification: false, auth: auth, x: x, y: y });
