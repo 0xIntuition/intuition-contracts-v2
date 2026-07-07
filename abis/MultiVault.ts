@@ -1198,6 +1198,25 @@ export const MultiVaultAbi = [
   },
   {
     "type": "function",
+    "name": "hasRolledOverSystemUtilization",
+    "inputs": [
+      {
+        "name": "epoch",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "hasRolledOver",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "initialize",
     "inputs": [
       {

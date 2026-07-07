@@ -28,8 +28,8 @@ interface ContractArtifact {
 }
 
 function extractBytecodes() {
-  const outDir = path.join(__dirname, 'out');
-  const bytecodesDir = path.join(__dirname, 'bytecodes');
+  const outDir = path.join(import.meta.dirname, 'out');
+  const bytecodesDir = path.join(import.meta.dirname, 'bytecodes');
 
   // Create bytecodes directory if it doesn't exist
   if (!fs.existsSync(bytecodesDir)) {
@@ -57,10 +57,12 @@ function extractBytecodes() {
         continue;
       }
 
-      const bytecode = artifact.bytecode.object;
+      const bytecode = artifact.bytecode.object.startsWith('0x')
+        ? artifact.bytecode.object
+        : `0x${artifact.bytecode.object}`;
 
       // Generate TypeScript content
-      const tsContent = `import type { Hex } from 'viem'\n\nexport const ${contractName}Bytecode: Hex =\n  '0x${bytecode}'\n`;
+      const tsContent = `export const ${contractName}Bytecode: \`0x\${string}\` =\n  '${bytecode}';\n`;
 
       // Write to TypeScript file
       const outputFile = path.join(bytecodesDir, `${contractName}.ts`);
@@ -99,8 +101,6 @@ function generateIndexFile(bytecodesDir: string) {
 }
 
 // Run the extraction
-if (require.main === module) {
-  extractBytecodes();
-}
+extractBytecodes();
 
 export { extractBytecodes, CONTRACTS_TO_EXTRACT };

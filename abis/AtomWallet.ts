@@ -399,38 +399,6 @@ export const AtomWalletAbi = [
   },
   {
     "type": "error",
-    "name": "AtomWallet_InvalidCallDataLength",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "AtomWallet_InvalidSignature",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "AtomWallet_InvalidSignatureLength",
-    "inputs": [
-      {
-        "name": "length",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "AtomWallet_InvalidSignatureS",
-    "inputs": [
-      {
-        "name": "s",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "AtomWallet_OnlyOwner",
     "inputs": []
   },

@@ -1,6 +1,7 @@
 # directories
 cache
 coverage
+dist
 node_modules
 out
 .wake
@@ -9,6 +10,7 @@ private
 # files
 *.env
 *.log
+*.tgz
 .DS_Store
 .pnp.*
 lcov.info
