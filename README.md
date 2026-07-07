@@ -39,23 +39,25 @@ import { MultiVault } from "@0xintuition/contracts-v2/src/protocol/MultiVault.so
 import { IMultiVault } from "@0xintuition/contracts-v2/src/interfaces/IMultiVault.sol";
 ```
 
-**Foundry** users need remappings pointing into `node_modules` (e.g. in `remappings.txt`):
+Every import path in the sources matches the npm layout of its dependency, so:
+
+**Hardhat** resolves everything through `node_modules` with no extra configuration.
+
+**Foundry** users need remappings pointing each prefix into `node_modules` (e.g. in `remappings.txt`):
 
 ```text
 @0xintuition/contracts-v2/=node_modules/@0xintuition/contracts-v2/
 @openzeppelin/contracts/=node_modules/@openzeppelin/contracts/
 @openzeppelin/contracts-upgradeable/=node_modules/@openzeppelin/contracts-upgradeable/
-@openzeppelinV4/contracts/=node_modules/@openzeppelin-v4/contracts/
-@openzeppelinV4/contracts-upgradeable/=node_modules/@openzeppelin-v4/contracts-upgradeable/
-solady/=node_modules/solady/src/
+@openzeppelin-v4/contracts-upgradeable/=node_modules/@openzeppelin-v4/contracts-upgradeable/
+solady/=node_modules/solady/
 @prb/math/=node_modules/@prb/math/
-@account-abstraction/=node_modules/@account-abstraction/contracts/
+@account-abstraction/contracts/=node_modules/@account-abstraction/contracts/
 ```
 
-(The `@openzeppelinV4` remappings are only needed if you compile the legacy `TrustToken` contract.)
+(The `@openzeppelin-v4` remapping is only needed if you compile the legacy `Trust`/`TrustToken` contracts.)
 
-**Hardhat** resolves imports through `node_modules`, so the imports above work without extra configuration. The
-contracts are compiled with Solidity `0.8.29`, optimizer enabled at 10,000 runs, EVM version `cancun`.
+The contracts are compiled with Solidity `0.8.29`, optimizer enabled at 10,000 runs, EVM version `cancun`.
 
 ## What's Inside
 

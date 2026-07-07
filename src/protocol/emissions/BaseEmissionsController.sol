@@ -6,12 +6,12 @@ import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 
-import { IBaseEmissionsController } from "src/interfaces/IBaseEmissionsController.sol";
-import { ITrust } from "src/interfaces/ITrust.sol";
-import { MetaERC20DispatchInit } from "src/interfaces/IMetaLayer.sol";
-import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";
-import { CoreEmissionsController } from "src/protocol/emissions/CoreEmissionsController.sol";
-import { FinalityState, MetaERC20Dispatcher } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
+import { IBaseEmissionsController } from "../../interfaces/IBaseEmissionsController.sol";
+import { ITrust } from "../../interfaces/ITrust.sol";
+import { MetaERC20DispatchInit } from "../../interfaces/IMetaLayer.sol";
+import { CoreEmissionsControllerInit } from "../../interfaces/ICoreEmissionsController.sol";
+import { CoreEmissionsController } from "./CoreEmissionsController.sol";
+import { FinalityState, MetaERC20Dispatcher } from "./MetaERC20Dispatcher.sol";
 
 /**
  * @title  BaseEmissionsController

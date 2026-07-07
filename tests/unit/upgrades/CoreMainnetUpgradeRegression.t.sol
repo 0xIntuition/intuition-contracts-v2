@@ -8,8 +8,8 @@ import {
     TransparentUpgradeableProxy
 } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
-import { PackedUserOperation } from "@account-abstraction/interfaces/PackedUserOperation.sol";
-import { SIG_VALIDATION_FAILED, _packValidationData } from "@account-abstraction/core/Helpers.sol";
+import { PackedUserOperation } from "@account-abstraction/contracts/interfaces/PackedUserOperation.sol";
+import { SIG_VALIDATION_FAILED, _packValidationData } from "@account-abstraction/contracts/core/Helpers.sol";
 
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
@@ -197,10 +197,9 @@ contract CoreMainnetUpgradeRegressionTest is Test {
         address baseProxyAdminOwner = ProxyAdmin(BASE_EMISSIONS_CONTROLLER_PROXY_ADMIN).owner();
 
         vm.prank(baseProxyAdminOwner);
-        ProxyAdmin(BASE_EMISSIONS_CONTROLLER_PROXY_ADMIN)
-            .upgradeAndCall(
-                ITransparentUpgradeableProxy(payable(BASE_EMISSIONS_CONTROLLER_PROXY)), address(newBaseImpl), bytes("")
-            );
+        ProxyAdmin(BASE_EMISSIONS_CONTROLLER_PROXY_ADMIN).upgradeAndCall(
+            ITransparentUpgradeableProxy(payable(BASE_EMISSIONS_CONTROLLER_PROXY)), address(newBaseImpl), bytes("")
+        );
 
         controller = ICoreEmissionsController(BASE_EMISSIONS_CONTROLLER_PROXY);
         epochLength = controller.getEpochLength();
@@ -627,25 +626,25 @@ contract CoreMainnetUpgradeRegressionTest is Test {
     function _upgradeCoreInUnison(CoreImplementations memory impls) internal {
         vm.startPrank(UPGRADES_TIMELOCK);
 
-        ProxyAdmin(MULTIVAULT_PROXY_ADMIN)
-            .upgradeAndCall(ITransparentUpgradeableProxy(payable(MULTIVAULT_PROXY)), impls.multiVault, bytes(""));
+        ProxyAdmin(MULTIVAULT_PROXY_ADMIN).upgradeAndCall(
+            ITransparentUpgradeableProxy(payable(MULTIVAULT_PROXY)), impls.multiVault, bytes("")
+        );
 
-        ProxyAdmin(TRUST_BONDING_PROXY_ADMIN)
-            .upgradeAndCall(ITransparentUpgradeableProxy(payable(TRUST_BONDING_PROXY)), impls.trustBonding, bytes(""));
+        ProxyAdmin(TRUST_BONDING_PROXY_ADMIN).upgradeAndCall(
+            ITransparentUpgradeableProxy(payable(TRUST_BONDING_PROXY)), impls.trustBonding, bytes("")
+        );
 
-        ProxyAdmin(OFFSET_PROGRESSIVE_CURVE_PROXY_ADMIN)
-            .upgradeAndCall(
-                ITransparentUpgradeableProxy(payable(OFFSET_PROGRESSIVE_CURVE_PROXY)),
-                impls.offsetProgressiveCurve,
-                bytes("")
-            );
+        ProxyAdmin(OFFSET_PROGRESSIVE_CURVE_PROXY_ADMIN).upgradeAndCall(
+            ITransparentUpgradeableProxy(payable(OFFSET_PROGRESSIVE_CURVE_PROXY)),
+            impls.offsetProgressiveCurve,
+            bytes("")
+        );
 
-        ProxyAdmin(SATELLITE_EMISSIONS_CONTROLLER_PROXY_ADMIN)
-            .upgradeAndCall(
-                ITransparentUpgradeableProxy(payable(SATELLITE_EMISSIONS_CONTROLLER_PROXY)),
-                impls.satelliteEmissionsController,
-                bytes("")
-            );
+        ProxyAdmin(SATELLITE_EMISSIONS_CONTROLLER_PROXY_ADMIN).upgradeAndCall(
+            ITransparentUpgradeableProxy(payable(SATELLITE_EMISSIONS_CONTROLLER_PROXY)),
+            impls.satelliteEmissionsController,
+            bytes("")
+        );
 
         UpgradeableBeacon(ATOM_WALLET_BEACON).upgradeTo(impls.atomWallet);
 

@@ -3,7 +3,7 @@ pragma solidity 0.8.29;
 
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
-import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
+import { IBaseCurve } from "../../interfaces/IBaseCurve.sol";
 
 /**
  * @title  BaseCurve
@@ -160,7 +160,14 @@ abstract contract BaseCurve is IBaseCurve, Initializable {
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @return sharePrice The current price of a share, scaled by 1e18
-    function currentPrice(uint256 totalShares, uint256 totalAssets) external view virtual returns (uint256 sharePrice);
+    function currentPrice(
+        uint256 totalShares,
+        uint256 totalAssets
+    )
+        external
+        view
+        virtual
+        returns (uint256 sharePrice);
 
     /* =================================================== */
     /*                  INTERNAL FUNCTIONS                 */

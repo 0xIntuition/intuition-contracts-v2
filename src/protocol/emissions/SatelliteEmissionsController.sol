@@ -5,12 +5,12 @@ import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/ac
 import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
-import { ISatelliteEmissionsController } from "src/interfaces/ISatelliteEmissionsController.sol";
-import { ITrustBonding } from "src/interfaces/ITrustBonding.sol";
-import { MetaERC20DispatchInit } from "src/interfaces/IMetaLayer.sol";
-import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";
-import { CoreEmissionsController } from "src/protocol/emissions/CoreEmissionsController.sol";
-import { FinalityState, MetaERC20Dispatcher } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
+import { ISatelliteEmissionsController } from "../../interfaces/ISatelliteEmissionsController.sol";
+import { ITrustBonding } from "../../interfaces/ITrustBonding.sol";
+import { MetaERC20DispatchInit } from "../../interfaces/IMetaLayer.sol";
+import { CoreEmissionsControllerInit } from "../../interfaces/ICoreEmissionsController.sol";
+import { CoreEmissionsController } from "./CoreEmissionsController.sol";
+import { FinalityState, MetaERC20Dispatcher } from "./MetaERC20Dispatcher.sol";
 
 /**
  * @title  SatelliteEmissionsController

@@ -2,13 +2,8 @@
 pragma solidity 0.8.29;
 
 import {
-    BondingCurveConfig,
-    GeneralConfig,
-    AtomConfig,
-    TripleConfig,
-    WalletConfig,
-    VaultFees
-} from "src/interfaces/IMultiVaultCore.sol";
+    BondingCurveConfig, GeneralConfig, AtomConfig, TripleConfig, WalletConfig, VaultFees
+} from "./IMultiVaultCore.sol";
 
 /* =================================================== */
 /*                          STRUCTS                    */

@@ -3,9 +3,9 @@ pragma solidity 0.8.29;
 
 import { Test, console } from "forge-std/src/Test.sol";
 import { BeaconProxy } from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
-import { IEntryPoint } from "@account-abstraction/interfaces/IEntryPoint.sol";
-import { PackedUserOperation } from "@account-abstraction/interfaces/PackedUserOperation.sol";
-import { SIG_VALIDATION_FAILED, _packValidationData } from "@account-abstraction/core/Helpers.sol";
+import { IEntryPoint } from "@account-abstraction/contracts/interfaces/IEntryPoint.sol";
+import { PackedUserOperation } from "@account-abstraction/contracts/interfaces/PackedUserOperation.sol";
+import { SIG_VALIDATION_FAILED, _packValidationData } from "@account-abstraction/contracts/core/Helpers.sol";
 import {
     Ownable2StepUpgradeable,
     OwnableUpgradeable

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { VaultType } from "src/interfaces/IMultiVault.sol";
+import { VaultType } from "./IMultiVault.sol";
 
 /// @notice General configuration struct
 struct GeneralConfig {
@@ -203,7 +203,14 @@ interface IMultiVaultCore {
     /// @param predicateId The ID of the predicate atom
     /// @param objectId The ID of the object atom
     /// @return id The calculated triple ID
-    function calculateTripleId(bytes32 subjectId, bytes32 predicateId, bytes32 objectId) external pure returns (bytes32);
+    function calculateTripleId(
+        bytes32 subjectId,
+        bytes32 predicateId,
+        bytes32 objectId
+    )
+        external
+        pure
+        returns (bytes32);
 
     /// @notice Returns the atom data for a given atom ID
     /// @dev If the atom does not exist, this function reverts

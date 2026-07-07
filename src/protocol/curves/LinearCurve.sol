@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
+import { FixedPointMathLib } from "solady/src/utils/FixedPointMathLib.sol";
 
-import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
+import { BaseCurve } from "./BaseCurve.sol";
 
 /**
  * @title  LinearCurve
@@ -162,7 +162,10 @@ contract LinearCurve is BaseCurve {
     }
 
     /// @inheritdoc BaseCurve
-    function currentPrice(uint256 totalShares, uint256 totalAssets)
+    function currentPrice(
+        uint256 totalShares,
+        uint256 totalAssets
+    )
         external
         pure
         override

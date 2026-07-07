@@ -5,13 +5,13 @@ import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
-import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
+import { FixedPointMathLib } from "solady/src/utils/FixedPointMathLib.sol";
 
-import { IMultiVault, ApprovalTypes, VaultState, VaultType } from "src/interfaces/IMultiVault.sol";
-import { IAtomWalletFactory } from "src/interfaces/IAtomWalletFactory.sol";
-import { IBondingCurveRegistry } from "src/interfaces/IBondingCurveRegistry.sol";
-import { IAtomWallet } from "src/interfaces/IAtomWallet.sol";
-import { ITrustBonding } from "src/interfaces/ITrustBonding.sol";
+import { IMultiVault, ApprovalTypes, VaultState, VaultType } from "../interfaces/IMultiVault.sol";
+import { IAtomWalletFactory } from "../interfaces/IAtomWalletFactory.sol";
+import { IBondingCurveRegistry } from "../interfaces/IBondingCurveRegistry.sol";
+import { IAtomWallet } from "../interfaces/IAtomWallet.sol";
+import { ITrustBonding } from "../interfaces/ITrustBonding.sol";
 import {
     GeneralConfig,
     AtomConfig,
@@ -19,9 +19,9 @@ import {
     WalletConfig,
     VaultFees,
     BondingCurveConfig
-} from "src/interfaces/IMultiVaultCore.sol";
+} from "../interfaces/IMultiVaultCore.sol";
 
-import { MultiVaultCore } from "src/protocol/MultiVaultCore.sol";
+import { MultiVaultCore } from "./MultiVaultCore.sol";
 
 /**
  * @title  MultiVault
@@ -295,8 +295,9 @@ contract MultiVault is
     /// @inheritdoc IMultiVault
     function currentSharePrice(bytes32 termId, uint256 curveId) external view returns (uint256) {
         VaultState storage vaultState = _vaults[termId][curveId];
-        return IBondingCurveRegistry(bondingCurveConfig.registry)
-            .currentPrice(curveId, vaultState.totalShares, vaultState.totalAssets);
+        return IBondingCurveRegistry(bondingCurveConfig.registry).currentPrice(
+            curveId, vaultState.totalShares, vaultState.totalAssets
+        );
     }
 
     /// @inheritdoc IMultiVault
@@ -645,7 +646,13 @@ contract MultiVault is
     /// @param tripleId The ID of the triple
     /// @param counterTripleId The ID of the counter triple
     /// @param _atomsArray The array of atom IDs that make up the triple
-    function _initializeTripleState(bytes32 tripleId, bytes32 counterTripleId, bytes32[3] memory _atomsArray) internal {
+    function _initializeTripleState(
+        bytes32 tripleId,
+        bytes32 counterTripleId,
+        bytes32[3] memory _atomsArray
+    )
+        internal
+    {
         _triples[tripleId] = _atomsArray;
         _isTriple[tripleId] = true;
 
@@ -1170,13 +1177,9 @@ contract MultiVault is
         // If it's an initial deposit into a non-default curve vault, we calculate user's shares as if minShare was
         // already minted
         uint256 shares = _isNewVault(termId, curveId)
-            ? IBondingCurveRegistry(bondingCurveConfig.registry)
-                .previewDeposit(
-                    assetsAfterFees,
-                    _minAssetsForCurve(curveId, generalConfig.minShare),
-                    generalConfig.minShare,
-                    curveId
-                )
+            ? IBondingCurveRegistry(bondingCurveConfig.registry).previewDeposit(
+                assetsAfterFees, _minAssetsForCurve(curveId, generalConfig.minShare), generalConfig.minShare, curveId
+            )
             : _convertToShares(termId, curveId, assetsAfterFees);
         return (shares, assetsAfterMinSharesCost, assetsAfterFees);
     }
@@ -1248,13 +1251,9 @@ contract MultiVault is
         // If it's an initial deposit into a non-default curve vault, we calculate user's shares as if minShare was
         // already minted
         uint256 shares = _isNewVault(termId, curveId)
-            ? IBondingCurveRegistry(bondingCurveConfig.registry)
-                .previewDeposit(
-                    assetsAfterFees,
-                    _minAssetsForCurve(curveId, generalConfig.minShare),
-                    generalConfig.minShare,
-                    curveId
-                )
+            ? IBondingCurveRegistry(bondingCurveConfig.registry).previewDeposit(
+                assetsAfterFees, _minAssetsForCurve(curveId, generalConfig.minShare), generalConfig.minShare, curveId
+            )
             : _convertToShares(termId, curveId, assetsAfterFees);
         return (shares, assetsAfterMinSharesCost, assetsAfterFees);
     }

@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { BaseAccount } from "@account-abstraction/core/BaseAccount.sol";
-import { PackedUserOperation } from "@account-abstraction/interfaces/PackedUserOperation.sol";
+import { BaseAccount } from "@account-abstraction/contracts/core/BaseAccount.sol";
+import { PackedUserOperation } from "@account-abstraction/contracts/interfaces/PackedUserOperation.sol";
 import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import { IEntryPoint } from "@account-abstraction/interfaces/IEntryPoint.sol";
+import { IEntryPoint } from "@account-abstraction/contracts/interfaces/IEntryPoint.sol";
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
-import { IMultiVault } from "src/interfaces/IMultiVault.sol";
+import { IMultiVault } from "../../interfaces/IMultiVault.sol";
 
 // For SIG_VALIDATION_FAILED
-import "@account-abstraction/core/Helpers.sol";
+import "@account-abstraction/contracts/core/Helpers.sol";
 
 /**
  * @title  AtomWallet

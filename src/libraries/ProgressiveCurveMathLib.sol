@@ -2,7 +2,7 @@
 pragma solidity 0.8.29;
 
 import { UD60x18, wrap, unwrap, uUNIT, mul } from "@prb/math/src/UD60x18.sol";
-import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
+import { FixedPointMathLib } from "solady/src/utils/FixedPointMathLib.sol";
 
 /**
  * @title  ProgressiveCurveMathLib

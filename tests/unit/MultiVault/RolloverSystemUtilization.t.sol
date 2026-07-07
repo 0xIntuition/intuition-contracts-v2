@@ -63,7 +63,10 @@ contract RolloverSystemUtilizationTest is Test {
         TripleConfig memory tripleConfig =
             TripleConfig({ tripleCreationProtocolFee: 0, atomDepositFractionForTriple: 0 });
         WalletConfig memory walletConfig = WalletConfig({
-            entryPoint: address(1), atomWarden: address(1), atomWalletBeacon: address(1), atomWalletFactory: address(1)
+            entryPoint: address(1),
+            atomWarden: address(1),
+            atomWalletBeacon: address(1),
+            atomWalletFactory: address(1)
         });
         VaultFees memory vaultFees = VaultFees({ entryFee: 0, exitFee: 0, protocolFee: 0 });
         BondingCurveConfig memory bondingCurveConfig = BondingCurveConfig({ registry: address(1), defaultCurveId: 1 });

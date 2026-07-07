@@ -3,12 +3,12 @@ pragma solidity 0.8.29;
 
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
-import { ICoreEmissionsController } from "src/interfaces/ICoreEmissionsController.sol";
-import { IMultiVault } from "src/interfaces/IMultiVault.sol";
-import { ITrustBonding, UserInfo } from "src/interfaces/ITrustBonding.sol";
-import { ISatelliteEmissionsController } from "src/interfaces/ISatelliteEmissionsController.sol";
+import { ICoreEmissionsController } from "../../interfaces/ICoreEmissionsController.sol";
+import { IMultiVault } from "../../interfaces/IMultiVault.sol";
+import { ITrustBonding, UserInfo } from "../../interfaces/ITrustBonding.sol";
+import { ISatelliteEmissionsController } from "../../interfaces/ISatelliteEmissionsController.sol";
 
-import { VotingEscrow, LockedBalance } from "src/external/curve/VotingEscrow.sol";
+import { VotingEscrow, LockedBalance } from "../../external/curve/VotingEscrow.sol";
 
 /**
  * @title  TrustBonding

@@ -3,7 +3,7 @@ pragma solidity 0.8.29;
 
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
-import { IMultiVault, VaultType } from "src/interfaces/IMultiVault.sol";
+import { IMultiVault, VaultType } from "../interfaces/IMultiVault.sol";
 import {
     IMultiVaultCore,
     GeneralConfig,
@@ -12,7 +12,7 @@ import {
     WalletConfig,
     VaultFees,
     BondingCurveConfig
-} from "src/interfaces/IMultiVaultCore.sol";
+} from "../interfaces/IMultiVaultCore.sol";
 
 /**
  * @title  MultiVaultCore

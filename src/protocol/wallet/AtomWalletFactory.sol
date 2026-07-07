@@ -2,13 +2,13 @@
 pragma solidity 0.8.29;
 
 import { BeaconProxy } from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
-import { IEntryPoint } from "@account-abstraction/interfaces/IEntryPoint.sol";
+import { IEntryPoint } from "@account-abstraction/contracts/interfaces/IEntryPoint.sol";
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
-import { AtomWallet } from "src/protocol/wallet/AtomWallet.sol";
-import { IAtomWalletFactory } from "src/interfaces/IAtomWalletFactory.sol";
-import { IMultiVault } from "src/interfaces/IMultiVault.sol";
-import { IMultiVaultCore } from "src/interfaces/IMultiVaultCore.sol";
+import { AtomWallet } from "./AtomWallet.sol";
+import { IAtomWalletFactory } from "../../interfaces/IAtomWalletFactory.sol";
+import { IMultiVault } from "../../interfaces/IMultiVault.sol";
+import { IMultiVaultCore } from "../../interfaces/IMultiVaultCore.sol";
 
 /**
  * @title AtomWalletFactory
@@ -149,9 +149,8 @@ contract AtomWalletFactory is IAtomWalletFactory, Initializable {
         bytes memory code = type(BeaconProxy).creationCode;
 
         // encode the init function of the AtomWallet contract with the correct initialization arguments
-        bytes memory initData = abi.encodeWithSelector(
-            AtomWallet.initialize.selector, IEntryPoint(entryPoint), address(multiVault), atomId
-        );
+        bytes memory initData =
+            abi.encodeWithSelector(AtomWallet.initialize.selector, IEntryPoint(entryPoint), address(multiVault), atomId);
 
         // encode constructor arguments of the BeaconProxy contract (address beacon, bytes memory data)
         bytes memory encodedArgs = abi.encode(atomWalletBeacon, initData);

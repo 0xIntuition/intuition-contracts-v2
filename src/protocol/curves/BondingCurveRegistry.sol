@@ -4,8 +4,8 @@ pragma solidity 0.8.29;
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 
-import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
-import { IBondingCurveRegistry } from "src/interfaces/IBondingCurveRegistry.sol";
+import { IBaseCurve } from "../../interfaces/IBaseCurve.sol";
+import { IBondingCurveRegistry } from "../../interfaces/IBondingCurveRegistry.sol";
 
 /**
  * @title  BondingCurveRegistry

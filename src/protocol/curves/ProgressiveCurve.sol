@@ -3,8 +3,8 @@ pragma solidity 0.8.29;
 
 import { UD60x18, wrap, unwrap, add, sub, mul, div, sqrt, uUNIT, uMAX_UD60x18 } from "@prb/math/src/UD60x18.sol";
 
-import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
-import { ProgressiveCurveMathLib as PCMath } from "src/libraries/ProgressiveCurveMathLib.sol";
+import { BaseCurve } from "./BaseCurve.sol";
+import { ProgressiveCurveMathLib as PCMath } from "../../libraries/ProgressiveCurveMathLib.sol";
 
 /**
  * @title  ProgressiveCurve
@@ -186,7 +186,10 @@ contract ProgressiveCurve is BaseCurve {
     }
 
     /// @inheritdoc BaseCurve
-    function currentPrice(uint256 totalShares, uint256 totalAssets)
+    function currentPrice(
+        uint256 totalShares,
+        uint256 totalAssets
+    )
         external
         view
         override

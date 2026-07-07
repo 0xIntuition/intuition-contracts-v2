@@ -20,11 +20,11 @@
     "forge-std/=lib/forge-std/",
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
     "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
-    "@openzeppelinV4/contracts/=node_modules/@openzeppelin-v4/contracts/",
-    "@openzeppelinV4/contracts-upgradeable/=node_modules/@openzeppelin-v4/contracts-upgradeable/",
-    "solady/=lib/solady/src/",
+    "@openzeppelin-v4/contracts/=node_modules/@openzeppelin-v4/contracts/",
+    "@openzeppelin-v4/contracts-upgradeable/=node_modules/@openzeppelin-v4/contracts-upgradeable/",
+    "solady/=lib/solady/",
     "@prb/math/=lib/prb-math/",
-    "@account-abstraction/=lib/account-abstraction/contracts/",
+    "@account-abstraction/contracts/=lib/account-abstraction/contracts/",
     "permit2/=lib/permit2/src/"
   ]
 

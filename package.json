@@ -1,7 +1,7 @@
 {
   "name": "@0xintuition/contracts-v2",
   "description": "Intuition Protocol V2 smart contracts, ABIs, and bytecode",
-  "version": "1.0.0",
+  "version": "1.0.0-alpha.0",
   "license": "BUSL-1.1",
   "author": {
     "name": "0xIntuition",
@@ -57,7 +57,8 @@
   ],
   "sideEffects": false,
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "tag": "alpha"
   },
   "dependencies": {
     "@account-abstraction/contracts": "^0.8.0",
@@ -92,6 +93,7 @@
     "extract": "tsx extract-abis.ts && tsx extract-bytecodes.ts",
     "build:package": "bun run build && bun run extract && bun run build:ts",
     "prepublishOnly": "bun run build:package",
+    "release:alpha": "npm publish --tag alpha",
     "fmt": "forge fmt",
     "fmt:check": "forge fmt --check",
     "lint": "bun run lint:sol && bun run prettier:check",

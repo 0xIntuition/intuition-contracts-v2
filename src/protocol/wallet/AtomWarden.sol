@@ -4,10 +4,10 @@ pragma solidity 0.8.29;
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 
-import { IAtomWarden } from "src/interfaces/IAtomWarden.sol";
-import { IAtomWallet } from "src/interfaces/IAtomWallet.sol";
-import { IMultiVault } from "src/interfaces/IMultiVault.sol";
-import { IMultiVaultCore } from "src/interfaces/IMultiVaultCore.sol";
+import { IAtomWarden } from "../../interfaces/IAtomWarden.sol";
+import { IAtomWallet } from "../../interfaces/IAtomWallet.sol";
+import { IMultiVault } from "../../interfaces/IMultiVault.sol";
+import { IMultiVaultCore } from "../../interfaces/IMultiVaultCore.sol";
 
 /**
  * @title  AtomWarden
