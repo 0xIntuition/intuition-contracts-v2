@@ -3,11 +3,11 @@ pragma solidity 0.8.29;
 
 import { Test } from "forge-std/src/Test.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { ProxyAdmin } from "@openzeppelinV4/contracts/proxy/transparent/ProxyAdmin.sol";
+import { ProxyAdmin } from "@openzeppelin-v4/contracts/proxy/transparent/ProxyAdmin.sol";
 import {
     TransparentUpgradeableProxy,
     ITransparentUpgradeableProxy
-} from "@openzeppelinV4/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+} from "@openzeppelin-v4/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 import { ITrust } from "src/interfaces/ITrust.sol";
 import { Trust } from "src/Trust.sol";

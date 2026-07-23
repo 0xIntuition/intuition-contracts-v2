@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.29;
 
-import { ERC20Upgradeable } from "@openzeppelinV4/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
-import { Initializable } from "@openzeppelinV4/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { ERC20Upgradeable } from "@openzeppelin-v4/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import { Initializable } from "@openzeppelin-v4/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 contract TrustToken is Initializable, ERC20Upgradeable {
     error NotAllowedToMint();

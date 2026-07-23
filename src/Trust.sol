@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { AccessControlUpgradeable } from "@openzeppelinV4/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { AccessControlUpgradeable } from "@openzeppelin-v4/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 
 import { ITrust } from "src/interfaces/ITrust.sol";
 import { TrustToken } from "src/legacy/TrustToken.sol";
