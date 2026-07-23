@@ -2,6 +2,8 @@
 broadcast
 cache
 coverage
+dist
+lib
 node_modules
 out
 

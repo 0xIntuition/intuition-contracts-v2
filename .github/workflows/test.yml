@@ -11,10 +11,11 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  FOUNDRY_PROFILE: 'ci'
+  FOUNDRY_PROFILE: "ci"
+  FOUNDRY_DISABLE_NIGHTLY_WARNING: "true"
   API_KEY_ALCHEMY: ${{ secrets.API_KEY_ALCHEMY }}
-  SEPOLIA_RPC_URL: 'https://sepolia.base.org'
-  BASE_RPC_URL: 'https://mainnet.base.org'
+  SEPOLIA_RPC_URL: "https://sepolia.base.org"
+  BASE_RPC_URL: "https://mainnet.base.org"
 
 jobs:
   lint:
@@ -22,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -34,15 +35,15 @@ jobs:
       - name: Install Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 'latest'
+          bun-version: "latest"
 
       - name: Cache Bun dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v6
         with:
           path: |
             ~/.bun/install/cache
             node_modules
-          key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
+          key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lock') }}
           restore-keys: |
             bun-${{ runner.os }}-
 
@@ -60,7 +61,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -70,7 +71,7 @@ jobs:
           version: v1.5.1
 
       - name: Cache Foundry dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v6
         with:
           path: |
             ~/.foundry/cache
@@ -82,15 +83,15 @@ jobs:
       - name: Install Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 'latest'
+          bun-version: "latest"
 
       - name: Cache Bun dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v6
         with:
           path: |
             ~/.bun/install/cache
             node_modules
-          key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
+          key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lock') }}
           restore-keys: |
             bun-${{ runner.os }}-
 
@@ -111,12 +112,10 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results
-          path: |
-            artifacts/forge-test-results/forge-test-results.txt
-            artifacts/forge-test-results/forge-build-sizes.txt
+          path: artifacts/forge-test-results/forge-test-results.txt
 
   gas:
     name: Gas Analysis
@@ -128,7 +127,7 @@ jobs:
       FOUNDRY_FUZZ_RUNS: 256
       FOUNDRY_FUZZ_MAX_TEST_REJECTS: 65536
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -138,7 +137,7 @@ jobs:
           version: v1.5.1
 
       - name: Cache Foundry dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v6
         with:
           path: |
             ~/.foundry/cache
@@ -150,15 +149,15 @@ jobs:
       - name: Install Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 'latest'
+          bun-version: "latest"
 
       - name: Cache Bun dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v6
         with:
           path: |
             ~/.bun/install/cache
             node_modules
-          key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
+          key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lock') }}
           restore-keys: |
             bun-${{ runner.os }}-
 
@@ -193,7 +192,7 @@ jobs:
 
       - name: Upload gas reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: gas-reports
           path: snapshots/

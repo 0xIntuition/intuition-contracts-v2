@@ -25,8 +25,8 @@ interface ContractArtifact {
 }
 
 function extractAbis() {
-  const outDir = path.join(__dirname, 'out');
-  const abisDir = path.join(__dirname, 'abis');
+  const outDir = path.join(import.meta.dirname, 'out');
+  const abisDir = path.join(import.meta.dirname, 'abis');
 
   // Create abis directory if it doesn't exist
   if (!fs.existsSync(abisDir)) {
@@ -94,8 +94,6 @@ function generateIndexFile(abisDir: string) {
 }
 
 // Run the extraction
-if (require.main === module) {
-  extractAbis();
-}
+extractAbis();
 
 export { extractAbis, CONTRACTS_TO_EXTRACT };
