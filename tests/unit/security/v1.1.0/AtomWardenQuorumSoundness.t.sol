@@ -40,6 +40,8 @@ contract AtomWardenQuorumSoundnessTest is Test {
     uint256 internal constant MIN_FEE = 0.25 ether;
     uint48 internal constant MAX_VALID_AFTER = uint48(1 hours);
     uint48 internal constant MAX_VALID_UNTIL = uint48(7 days);
+    uint256 internal constant MAX_CLAIMS_PER_WINDOW = 100;
+    uint256 internal constant CLAIM_CAP_WINDOW = 1 days;
 
     function setUp() external {
         admin = makeAddr("admin");
@@ -51,7 +53,17 @@ contract AtomWardenQuorumSoundnessTest is Test {
         AtomWarden impl = new AtomWarden();
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(address(impl), admin, "");
         atomWarden = AtomWarden(address(proxy));
-        atomWarden.initialize(admin, address(multiVault), CLAIM_WINDOW, MIN_FEE, 1, MAX_VALID_AFTER, MAX_VALID_UNTIL);
+        atomWarden.initialize(
+            admin,
+            address(multiVault),
+            CLAIM_WINDOW,
+            MIN_FEE,
+            1,
+            MAX_VALID_AFTER,
+            MAX_VALID_UNTIL,
+            MAX_CLAIMS_PER_WINDOW,
+            CLAIM_CAP_WINDOW
+        );
     }
 
     /// @dev Raising the threshold after a single-signer signature is produced makes the previously

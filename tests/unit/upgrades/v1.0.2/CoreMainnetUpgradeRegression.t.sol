@@ -123,6 +123,9 @@ contract CoreMainnetUpgradeRegressionTest is Test {
     uint256 internal constant DEFAULT_WARDEN_SIGNATURE_THRESHOLD = 1;
     uint48 internal constant DEFAULT_WARDEN_MAX_VALID_AFTER = uint48(1 hours);
     uint48 internal constant DEFAULT_WARDEN_MAX_VALID_UNTIL = uint48(1 days);
+    /// @dev 0 = authorized-claim cap disabled (baseline parity with the pre-cap deploy defaults).
+    uint256 internal constant DEFAULT_WARDEN_MAX_CLAIMS_PER_WINDOW = 0;
+    uint256 internal constant DEFAULT_WARDEN_CLAIM_CAP_WINDOW = 1 days;
 
     // Fork block numbers
     uint256 internal constant INTUITION_FORK_BLOCK = 3_208_388;
@@ -1032,7 +1035,9 @@ contract CoreMainnetUpgradeRegressionTest is Test {
                 DEFAULT_WARDEN_MIN_FEE_THRESHOLD,
                 DEFAULT_WARDEN_SIGNATURE_THRESHOLD,
                 DEFAULT_WARDEN_MAX_VALID_AFTER,
-                DEFAULT_WARDEN_MAX_VALID_UNTIL
+                DEFAULT_WARDEN_MAX_VALID_UNTIL,
+                DEFAULT_WARDEN_MAX_CLAIMS_PER_WINDOW,
+                DEFAULT_WARDEN_CLAIM_CAP_WINDOW
             );
     }
 

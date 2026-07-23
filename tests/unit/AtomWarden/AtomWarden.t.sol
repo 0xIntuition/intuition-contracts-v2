@@ -126,6 +126,10 @@ contract AtomWardenTest is Test {
     ///      `validUntil = now + 1 days`) pass; targeted cap tests override via setters.
     uint48 internal constant DEFAULT_MAX_VALID_AFTER = uint48(1 hours);
     uint48 internal constant DEFAULT_MAX_VALID_UNTIL = uint48(7 days);
+    /// @dev Armed by default so the whole suite exercises cap accounting; high enough
+    ///      that only the targeted cap tests can exhaust it.
+    uint256 internal constant DEFAULT_MAX_CLAIMS_PER_WINDOW = 100;
+    uint256 internal constant DEFAULT_CLAIM_CAP_WINDOW = 1 days;
 
     function setUp() external {
         admin = makeAddr("admin");
@@ -148,7 +152,9 @@ contract AtomWardenTest is Test {
             DEFAULT_MIN_FEE_THRESHOLD,
             DEFAULT_SIGNATURE_THRESHOLD,
             DEFAULT_MAX_VALID_AFTER,
-            DEFAULT_MAX_VALID_UNTIL
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            DEFAULT_CLAIM_CAP_WINDOW
         );
 
         bytes32 operatorRole = atomWarden.OPERATOR_ROLE();
@@ -186,7 +192,9 @@ contract AtomWardenTest is Test {
             DEFAULT_MIN_FEE_THRESHOLD,
             DEFAULT_SIGNATURE_THRESHOLD,
             DEFAULT_MAX_VALID_AFTER,
-            DEFAULT_MAX_VALID_UNTIL
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            DEFAULT_CLAIM_CAP_WINDOW
         );
     }
 
@@ -203,7 +211,9 @@ contract AtomWardenTest is Test {
             DEFAULT_MIN_FEE_THRESHOLD,
             DEFAULT_SIGNATURE_THRESHOLD,
             DEFAULT_MAX_VALID_AFTER,
-            DEFAULT_MAX_VALID_UNTIL
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            DEFAULT_CLAIM_CAP_WINDOW
         );
     }
 
@@ -220,7 +230,9 @@ contract AtomWardenTest is Test {
             DEFAULT_MIN_FEE_THRESHOLD,
             0,
             DEFAULT_MAX_VALID_AFTER,
-            DEFAULT_MAX_VALID_UNTIL
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            DEFAULT_CLAIM_CAP_WINDOW
         );
     }
 
@@ -236,7 +248,9 @@ contract AtomWardenTest is Test {
             DEFAULT_MIN_FEE_THRESHOLD,
             5,
             DEFAULT_MAX_VALID_AFTER,
-            DEFAULT_MAX_VALID_UNTIL
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            DEFAULT_CLAIM_CAP_WINDOW
         );
         assertEq(freshWarden.signatureThreshold(), 5);
         // signerCount stays 0 until SIGNER_ROLE grants land; claims revert until then.
@@ -264,7 +278,9 @@ contract AtomWardenTest is Test {
             DEFAULT_MIN_FEE_THRESHOLD,
             DEFAULT_SIGNATURE_THRESHOLD,
             DEFAULT_MAX_VALID_AFTER,
-            DEFAULT_MAX_VALID_UNTIL
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            DEFAULT_CLAIM_CAP_WINDOW
         );
 
         uint256 newClaimWindow = 21 days;
@@ -272,10 +288,18 @@ contract AtomWardenTest is Test {
         uint256 newSignatureThreshold = 3;
         uint48 newMaxValidAfter = uint48(30 minutes);
         uint48 newMaxValidUntil = uint48(3 days);
+        uint256 newMaxClaimsPerWindow = 42;
+        uint256 newClaimCapWindow = 12 hours;
 
         vm.prank(admin);
         freshWarden.reinitialize(
-            newClaimWindow, newMinFeeThreshold, newSignatureThreshold, newMaxValidAfter, newMaxValidUntil
+            newClaimWindow,
+            newMinFeeThreshold,
+            newSignatureThreshold,
+            newMaxValidAfter,
+            newMaxValidUntil,
+            newMaxClaimsPerWindow,
+            newClaimCapWindow
         );
 
         assertTrue(freshWarden.hasRole(freshWarden.DEFAULT_ADMIN_ROLE(), admin));
@@ -285,6 +309,8 @@ contract AtomWardenTest is Test {
         assertEq(freshWarden.signatureThreshold(), newSignatureThreshold);
         assertEq(freshWarden.maxValidAfter(), newMaxValidAfter);
         assertEq(freshWarden.maxValidUntil(), newMaxValidUntil);
+        assertEq(freshWarden.maxClaimsPerWindow(), newMaxClaimsPerWindow);
+        assertEq(freshWarden.claimCapWindow(), newClaimCapWindow);
         assertFalse(freshWarden.paused());
     }
 
@@ -298,7 +324,9 @@ contract AtomWardenTest is Test {
             DEFAULT_MIN_FEE_THRESHOLD,
             DEFAULT_SIGNATURE_THRESHOLD,
             DEFAULT_MAX_VALID_AFTER,
-            DEFAULT_MAX_VALID_UNTIL
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            DEFAULT_CLAIM_CAP_WINDOW
         );
     }
 
@@ -308,7 +336,13 @@ contract AtomWardenTest is Test {
         vm.prank(admin);
         vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_InvalidThreshold.selector));
         freshWarden.reinitialize(
-            DEFAULT_CLAIM_WINDOW, DEFAULT_MIN_FEE_THRESHOLD, 0, DEFAULT_MAX_VALID_AFTER, DEFAULT_MAX_VALID_UNTIL
+            DEFAULT_CLAIM_WINDOW,
+            DEFAULT_MIN_FEE_THRESHOLD,
+            0,
+            DEFAULT_MAX_VALID_AFTER,
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            DEFAULT_CLAIM_CAP_WINDOW
         );
     }
 
@@ -321,7 +355,9 @@ contract AtomWardenTest is Test {
             DEFAULT_MIN_FEE_THRESHOLD,
             DEFAULT_SIGNATURE_THRESHOLD,
             DEFAULT_MAX_VALID_AFTER,
-            DEFAULT_MAX_VALID_UNTIL
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            DEFAULT_CLAIM_CAP_WINDOW
         );
 
         vm.prank(admin);
@@ -331,7 +367,9 @@ contract AtomWardenTest is Test {
             DEFAULT_MIN_FEE_THRESHOLD,
             DEFAULT_SIGNATURE_THRESHOLD,
             DEFAULT_MAX_VALID_AFTER,
-            DEFAULT_MAX_VALID_UNTIL
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            DEFAULT_CLAIM_CAP_WINDOW
         );
     }
 
@@ -659,7 +697,13 @@ contract AtomWardenTest is Test {
 
         vm.prank(admin);
         freshWarden.reinitialize(
-            DEFAULT_CLAIM_WINDOW, DEFAULT_MIN_FEE_THRESHOLD, 4, DEFAULT_MAX_VALID_AFTER, DEFAULT_MAX_VALID_UNTIL
+            DEFAULT_CLAIM_WINDOW,
+            DEFAULT_MIN_FEE_THRESHOLD,
+            4,
+            DEFAULT_MAX_VALID_AFTER,
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            DEFAULT_CLAIM_CAP_WINDOW
         );
 
         assertEq(freshWarden.signatureThreshold(), 4);
@@ -677,7 +721,9 @@ contract AtomWardenTest is Test {
             DEFAULT_MIN_FEE_THRESHOLD,
             DEFAULT_SIGNATURE_THRESHOLD,
             DEFAULT_MAX_VALID_AFTER,
-            DEFAULT_MAX_VALID_UNTIL
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            DEFAULT_CLAIM_CAP_WINDOW
         );
 
         assertEq(freshWarden.signerCount(), 0);
@@ -1068,7 +1114,17 @@ contract AtomWardenTest is Test {
         //   slot 4: signatureThreshold (uint256, v2-appended)
         //   slot 5: signerCount (uint256, v2-appended)
         //   slot 6: maxValidAfter (uint48 low) || maxValidUntil (uint48 next), v3-appended
-        //   slot 7+: unused — must remain zero, asserted as the boundary check below.
+        //   slot 7: maxClaimsPerWindow (uint256, cap-appended)
+        //   slot 8: claimCapWindow (uint256, cap-appended)
+        //   slot 9: currentClaimWindowId (uint256, cap-appended)
+        //   slot 10: claimsInWindow (uint256, cap-appended)
+        //   slots 11-60: __gap (uint256[50] reserve; shrink on future appends)
+        //   slot 61+: past the declared layout — must remain zero.
+        //
+        // Execute one signed claim FIRST (while the mock MultiVault is still wired) so
+        // `claimsInWindow` carries a nonzero positive anchor into the slot assertions.
+        _executeSignedClaim("layout-claim");
+
         address newMultiVault = makeAddr("layout-mv");
         uint48 newMaxValidAfter = uint48(0xAAAAAAAAAAAA); // distinctive 48-bit pattern
         uint48 newMaxValidUntil = uint48(0xBBBBBBBBBBBB);
@@ -1082,6 +1138,13 @@ contract AtomWardenTest is Test {
         atomWarden.setMaxValidAfter(newMaxValidAfter);
         vm.prank(admin);
         atomWarden.setMaxValidUntil(newMaxValidUntil);
+        // The cap slots: distinctive values via the admin setters. setClaimCapWindow
+        // re-anchors currentClaimWindowId under the new divisor while preserving the
+        // in-window count from the claim above.
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(31_337);
+        vm.prank(admin);
+        atomWarden.setClaimCapWindow(4242);
         // Touch the claimNonces mapping so a reorder that demotes slot 1 to a
         // non-mapping field surfaces via the mapping-entry assertion below.
         vm.prank(operator);
@@ -1095,12 +1158,13 @@ contract AtomWardenTest is Test {
         );
         // slot 1: claimNonces (mapping base — always zero; entries are at keccak(key, slot))
         assertEq(uint256(vm.load(address(atomWarden), bytes32(uint256(1)))), 0, "slot 1 must be mapping base (zero)");
-        // The mapping entry for `claimant` after one increment must equal 1, which
-        // doubles as a positive anchor that slot 1 is genuinely the mapping base.
+        // The mapping entry for `claimant` after one signed claim + one operator
+        // increment must equal 2, which doubles as a positive anchor that slot 1 is
+        // genuinely the mapping base.
         bytes32 mappingEntrySlot = keccak256(abi.encode(claimant, uint256(1)));
         assertEq(
             uint256(vm.load(address(atomWarden), mappingEntrySlot)),
-            1,
+            2,
             "claimNonces[claimant] must live at keccak(key,1)"
         );
         // slot 2: claimWindow
@@ -1120,8 +1184,26 @@ contract AtomWardenTest is Test {
         // Upper 160 bits of slot 6 must stay zero — otherwise the uint48 packing
         // bled, or an unintended field shares the slot.
         assertEq(slot6 >> 96, 0, "slot 6 upper 160 bits must be zero (packing boundary)");
-        // slot 7: boundary check — nothing should land past the declared layout.
-        assertEq(uint256(vm.load(address(atomWarden), bytes32(uint256(7)))), 0, "slot 7 must be zero (no spill)");
+        // slot 7: maxClaimsPerWindow
+        assertEq(
+            uint256(vm.load(address(atomWarden), bytes32(uint256(7)))), 31_337, "slot 7 must be maxClaimsPerWindow"
+        );
+        // slot 8: claimCapWindow
+        assertEq(uint256(vm.load(address(atomWarden), bytes32(uint256(8)))), 4242, "slot 8 must be claimCapWindow");
+        // slot 9: currentClaimWindowId — re-anchored by setClaimCapWindow(4242).
+        assertEq(
+            uint256(vm.load(address(atomWarden), bytes32(uint256(9)))),
+            block.timestamp / 4242,
+            "slot 9 must be currentClaimWindowId"
+        );
+        // slot 10: claimsInWindow — the single signed claim above, preserved across the
+        // window-length change by design.
+        assertEq(uint256(vm.load(address(atomWarden), bytes32(uint256(10)))), 1, "slot 10 must be claimsInWindow");
+        // slots 11-60: the __gap reserve must stay untouched; slot 61 is the boundary
+        // check one past the declared layout.
+        for (uint256 slot = 11; slot <= 61; slot++) {
+            assertEq(uint256(vm.load(address(atomWarden), bytes32(slot))), 0, "gap/boundary slot must be zero");
+        }
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -1464,8 +1546,352 @@ contract AtomWardenTest is Test {
     }
 
     /*//////////////////////////////////////////////////////////////
+                         AUTHORIZED-CLAIM CAP
+    //////////////////////////////////////////////////////////////*/
+
+    function test_initialize_setsClaimCapConfig() external view {
+        assertEq(atomWarden.maxClaimsPerWindow(), DEFAULT_MAX_CLAIMS_PER_WINDOW);
+        assertEq(atomWarden.claimCapWindow(), DEFAULT_CLAIM_CAP_WINDOW);
+        assertEq(atomWarden.currentClaimWindowId(), block.timestamp / DEFAULT_CLAIM_CAP_WINDOW);
+        assertEq(atomWarden.claimsInWindow(), 0);
+    }
+
+    function test_initialize_revertsOnZeroClaimCapWindow() external {
+        AtomWarden implementation = new AtomWarden();
+        TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(address(implementation), admin, "");
+        AtomWarden freshWarden = AtomWarden(address(proxy));
+
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_InvalidClaimCapWindow.selector));
+        freshWarden.initialize(
+            admin,
+            address(multiVault),
+            DEFAULT_CLAIM_WINDOW,
+            DEFAULT_MIN_FEE_THRESHOLD,
+            DEFAULT_SIGNATURE_THRESHOLD,
+            DEFAULT_MAX_VALID_AFTER,
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            0
+        );
+    }
+
+    function test_reinitialize_revertsOnZeroClaimCapWindow() external {
+        AtomWarden freshWarden = _freshUnreinitializedWarden();
+
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_InvalidClaimCapWindow.selector));
+        freshWarden.reinitialize(
+            DEFAULT_CLAIM_WINDOW,
+            DEFAULT_MIN_FEE_THRESHOLD,
+            DEFAULT_SIGNATURE_THRESHOLD,
+            DEFAULT_MAX_VALID_AFTER,
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            0
+        );
+    }
+
+    function test_claimWithAuthorization_capBoundary() external {
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(3);
+
+        _executeSignedClaim("cap-boundary-1");
+        _executeSignedClaim("cap-boundary-2");
+        _executeSignedClaim("cap-boundary-3");
+        assertEq(atomWarden.claimsInWindow(), 3);
+
+        (IAtomWarden.ClaimAuthorization memory authorization, bytes memory signature, bytes32 atomId) =
+            _preparedSignedClaim("cap-boundary-4");
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_ClaimCapExceeded.selector));
+        atomWarden.claimWithAuthorization(authorization, signature);
+
+        // The rejected claim consumed nothing: no ownership transfer, no nonce burn.
+        assertFalse(MockAtomWallet(multiVault.atomWallets(atomId)).isClaimed());
+        assertEq(atomWarden.claimNonces(claimant), 3);
+        assertEq(atomWarden.claimsInWindow(), 3);
+    }
+
+    function test_claimWithAuthorization_capWindowRolloverResetsBudget() external {
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(1);
+
+        _executeSignedClaim("rollover-1");
+        assertEq(atomWarden.claimsInWindow(), 1);
+
+        (IAtomWarden.ClaimAuthorization memory blockedAuthorization, bytes memory blockedSignature,) =
+            _preparedSignedClaim("rollover-blocked");
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_ClaimCapExceeded.selector));
+        atomWarden.claimWithAuthorization(blockedAuthorization, blockedSignature);
+
+        // Cross the fixed-window boundary: budget resets and the next claim lands.
+        vm.warp((block.timestamp / DEFAULT_CLAIM_CAP_WINDOW + 1) * DEFAULT_CLAIM_CAP_WINDOW);
+        _executeSignedClaim("rollover-2");
+        assertEq(atomWarden.claimsInWindow(), 1);
+        assertEq(atomWarden.currentClaimWindowId(), block.timestamp / DEFAULT_CLAIM_CAP_WINDOW);
+    }
+
+    function test_claimWithAuthorization_capSkipsIdleWindowsWithoutBanking() external {
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(1);
+
+        _executeSignedClaim("idle-1");
+
+        // Five idle windows must not accumulate budget: exactly one claim fits afterwards.
+        vm.warp(block.timestamp + 5 * DEFAULT_CLAIM_CAP_WINDOW);
+        _executeSignedClaim("idle-2");
+        assertEq(atomWarden.claimsInWindow(), 1);
+
+        (IAtomWarden.ClaimAuthorization memory authorization, bytes memory signature,) =
+            _preparedSignedClaim("idle-blocked");
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_ClaimCapExceeded.selector));
+        atomWarden.claimWithAuthorization(authorization, signature);
+    }
+
+    function test_claimWithAuthorization_capDisabledSkipsAccounting() external {
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(0);
+
+        _executeSignedClaim("uncapped-1");
+        _executeSignedClaim("uncapped-2");
+        _executeSignedClaim("uncapped-3");
+
+        // Disabled cap performs no window accounting at all.
+        assertEq(atomWarden.claimsInWindow(), 0);
+    }
+
+    function test_claimWithAuthorization_failedQuorumDoesNotConsumeBudget() external {
+        uint256[] memory keys = new uint256[](2);
+        keys[0] = 0xA11CE;
+        keys[1] = 0xB0B;
+        _grantSignerKeys(keys);
+        _setSignatureThreshold(2);
+
+        // Submit only 1 signature against threshold 2 — reverts before cap accounting.
+        uint256[] memory only = new uint256[](1);
+        only[0] = keys[0];
+
+        bytes32 atomId = _setAtom("cap-no-burn", claimant, false, address(0), 0);
+        IAtomWarden.ClaimAuthorization memory authorization = _defaultAuthorization(atomId, 0);
+        bytes memory bundle = _buildSortedSignatures(authorization, only);
+
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_InsufficientSigners.selector));
+        atomWarden.claimWithAuthorization(authorization, bundle);
+
+        assertEq(atomWarden.claimsInWindow(), 0);
+    }
+
+    function test_pause_blocksClaimWithAuthorizationEvenWithCapBudget() external {
+        vm.startPrank(admin);
+        atomWarden.setMaxClaimsPerWindow(10);
+        atomWarden.pause();
+        vm.stopPrank();
+
+        (IAtomWarden.ClaimAuthorization memory authorization, bytes memory signature,) =
+            _preparedSignedClaim("paused-with-budget");
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(PausableUpgradeable.EnforcedPause.selector));
+        atomWarden.claimWithAuthorization(authorization, signature);
+
+        assertEq(atomWarden.claimsInWindow(), 0);
+    }
+
+    function test_setMaxClaimsPerWindow_raiseMidWindowUnblocksImmediately() external {
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(1);
+
+        _executeSignedClaim("retune-raise-1");
+
+        (IAtomWarden.ClaimAuthorization memory authorization, bytes memory signature,) =
+            _preparedSignedClaim("retune-raise-blocked");
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_ClaimCapExceeded.selector));
+        atomWarden.claimWithAuthorization(authorization, signature);
+
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(2);
+
+        _executeSignedClaim("retune-raise-2");
+        assertEq(atomWarden.claimsInWindow(), 2);
+    }
+
+    function test_setMaxClaimsPerWindow_lowerBelowInWindowCountBlocksUntilRollover() external {
+        _executeSignedClaim("retune-lower-1");
+        _executeSignedClaim("retune-lower-2");
+        assertEq(atomWarden.claimsInWindow(), 2);
+
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(1);
+
+        (IAtomWarden.ClaimAuthorization memory authorization, bytes memory signature,) =
+            _preparedSignedClaim("retune-lower-blocked");
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_ClaimCapExceeded.selector));
+        atomWarden.claimWithAuthorization(authorization, signature);
+
+        vm.warp((block.timestamp / DEFAULT_CLAIM_CAP_WINDOW + 1) * DEFAULT_CLAIM_CAP_WINDOW);
+        _executeSignedClaim("retune-lower-3");
+        assertEq(atomWarden.claimsInWindow(), 1);
+    }
+
+    function test_setMaxClaimsPerWindow_zeroDisablesMidWindow() external {
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(1);
+
+        _executeSignedClaim("retune-disable-1");
+
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(0);
+
+        _executeSignedClaim("retune-disable-2");
+        // Accounting stops the moment the cap is disabled; the stale count is inert.
+        assertEq(atomWarden.claimsInWindow(), 1);
+    }
+
+    function test_setMaxClaimsPerWindow_emitsEvent() external {
+        vm.expectEmit(false, false, false, true, address(atomWarden));
+        emit IAtomWarden.MaxClaimsPerWindowSet(DEFAULT_MAX_CLAIMS_PER_WINDOW, 7);
+
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(7);
+        assertEq(atomWarden.maxClaimsPerWindow(), 7);
+    }
+
+    function test_setMaxClaimsPerWindow_revertsForNonAdmin() external {
+        address nobody = makeAddr("not-admin");
+        bytes32 adminRole = atomWarden.DEFAULT_ADMIN_ROLE();
+        vm.prank(nobody);
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, nobody, adminRole)
+        );
+        atomWarden.setMaxClaimsPerWindow(7);
+    }
+
+    function test_setMaxClaimsPerWindow_revertsWhenArmingWithZeroWindow() external {
+        // Simulate the upgraded-without-reinitialize state: roles exist from the v1 init
+        // but the appended cap slots are zero. Arming the cap while claimCapWindow == 0
+        // must revert instead of setting up a division-by-zero on the claim path.
+        vm.store(address(atomWarden), bytes32(uint256(8)), bytes32(0)); // claimCapWindow slot
+
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_InvalidClaimCapWindow.selector));
+        atomWarden.setMaxClaimsPerWindow(1);
+    }
+
+    function test_setClaimCapWindow_emitsEventAndReanchors() external {
+        uint256 newWindow = 12 hours;
+
+        vm.expectEmit(false, false, false, true, address(atomWarden));
+        emit IAtomWarden.ClaimCapWindowSet(DEFAULT_CLAIM_CAP_WINDOW, newWindow);
+
+        vm.prank(admin);
+        atomWarden.setClaimCapWindow(newWindow);
+        assertEq(atomWarden.claimCapWindow(), newWindow);
+        assertEq(atomWarden.currentClaimWindowId(), block.timestamp / newWindow);
+    }
+
+    function test_setClaimCapWindow_revertsOnZero() external {
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_InvalidClaimCapWindow.selector));
+        atomWarden.setClaimCapWindow(0);
+    }
+
+    function test_setClaimCapWindow_revertsForNonAdmin() external {
+        address nobody = makeAddr("not-admin");
+        bytes32 adminRole = atomWarden.DEFAULT_ADMIN_ROLE();
+        vm.prank(nobody);
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, nobody, adminRole)
+        );
+        atomWarden.setClaimCapWindow(1 hours);
+    }
+
+    function test_setClaimCapWindow_preservesInWindowCount() external {
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(2);
+
+        _executeSignedClaim("window-switch-1");
+        _executeSignedClaim("window-switch-2");
+
+        // Shrinking the window re-anchors the id but keeps the spent count — a retune
+        // must never mint fresh budget mid-window.
+        vm.prank(admin);
+        atomWarden.setClaimCapWindow(1 hours);
+        assertEq(atomWarden.claimsInWindow(), 2);
+        assertEq(atomWarden.currentClaimWindowId(), block.timestamp / 1 hours);
+
+        (IAtomWarden.ClaimAuthorization memory authorization, bytes memory signature,) =
+            _preparedSignedClaim("window-switch-blocked");
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_ClaimCapExceeded.selector));
+        atomWarden.claimWithAuthorization(authorization, signature);
+
+        // The re-anchored (shorter) window rolls over naturally and frees the budget.
+        vm.warp((block.timestamp / 1 hours + 1) * 1 hours);
+        _executeSignedClaim("window-switch-3");
+        assertEq(atomWarden.claimsInWindow(), 1);
+    }
+
+    function testFuzz_setMaxClaimsPerWindow(uint256 newValue) external {
+        vm.expectEmit(false, false, false, true, address(atomWarden));
+        emit IAtomWarden.MaxClaimsPerWindowSet(DEFAULT_MAX_CLAIMS_PER_WINDOW, newValue);
+
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(newValue);
+        assertEq(atomWarden.maxClaimsPerWindow(), newValue);
+    }
+
+    function testFuzz_setClaimCapWindow(uint256 newWindow) external {
+        newWindow = bound(newWindow, 1, 365 days);
+
+        vm.prank(admin);
+        atomWarden.setClaimCapWindow(newWindow);
+        assertEq(atomWarden.claimCapWindow(), newWindow);
+        assertEq(atomWarden.currentClaimWindowId(), block.timestamp / newWindow);
+    }
+
+    function testFuzz_claimCapBoundary(uint256 cap) external {
+        cap = bound(cap, 1, 5);
+
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(cap);
+
+        for (uint256 i = 0; i < cap; i++) {
+            _executeSignedClaim(string.concat("fuzz-cap-", vm.toString(i)));
+        }
+        assertEq(atomWarden.claimsInWindow(), cap);
+
+        (IAtomWarden.ClaimAuthorization memory authorization, bytes memory signature,) =
+            _preparedSignedClaim("fuzz-cap-overflow");
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_ClaimCapExceeded.selector));
+        atomWarden.claimWithAuthorization(authorization, signature);
+    }
+
+    /*//////////////////////////////////////////////////////////////
                                 HELPERS
     //////////////////////////////////////////////////////////////*/
+
+    /// @dev Creates a fresh unclaimed atom + wallet under `label` and returns a
+    ///      single-signer authorization/signature pair for `claimant` at the live nonce.
+    function _preparedSignedClaim(string memory label)
+        internal
+        returns (IAtomWarden.ClaimAuthorization memory authorization, bytes memory signature, bytes32 atomId)
+    {
+        atomId = _setAtom(label, claimant, false, address(0), 0);
+        authorization = _defaultAuthorization(atomId, atomWarden.claimNonces(claimant));
+        signature = _signAuthorization(authorization, signerPrivateKey);
+    }
+
+    /// @dev Executes a full happy-path signed claim for `claimant` on a fresh atom.
+    function _executeSignedClaim(string memory label) internal {
+        (IAtomWarden.ClaimAuthorization memory authorization, bytes memory signature,) = _preparedSignedClaim(label);
+        vm.prank(claimant);
+        atomWarden.claimWithAuthorization(authorization, signature);
+    }
 
     function _setAddressAtom(address account, bool claimed, bool checksumFormat) internal returns (bytes32) {
         string memory atomData = checksumFormat ? Strings.toChecksumHexString(account) : Strings.toHexString(account);
@@ -1550,7 +1976,9 @@ contract AtomWardenTest is Test {
             DEFAULT_MIN_FEE_THRESHOLD,
             DEFAULT_SIGNATURE_THRESHOLD,
             DEFAULT_MAX_VALID_AFTER,
-            DEFAULT_MAX_VALID_UNTIL
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            DEFAULT_CLAIM_CAP_WINDOW
         );
         return freshWarden;
     }

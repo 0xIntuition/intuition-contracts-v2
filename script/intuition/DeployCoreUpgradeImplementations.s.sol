@@ -151,14 +151,25 @@ contract DeployCoreUpgradeImplementations is SetupScript {
             "AtomWarden upgrade STEP 2 (target: AtomWarden proxy %s, sender: MultiVault admin):", ATOM_WARDEN_PROXY
         );
         console2.log(
-            "        Pass operational claimWindow / minFeeThreshold / signatureThreshold / maxValidAfter / maxValidUntil."
+            "        Pass operational claimWindow / minFeeThreshold / signatureThreshold / maxValidAfter / maxValidUntil / maxClaimsPerWindow / claimCapWindow."
         );
         console2.log("        Defaults below mirror IntuitionDeployAndSetup parity values; admin can");
         console2.log("        rotate via setClaimWindow / setMinFeeThreshold / setSignatureThreshold /");
-        console2.log("        setMaxValidAfter / setMaxValidUntil.");
+        console2.log("        setMaxValidAfter / setMaxValidUntil / setMaxClaimsPerWindow / setClaimCapWindow.");
+        console2.log("        maxClaimsPerWindow = 0 ships the authorized-claim cap disabled; arm it");
+        console2.log("        deliberately via setMaxClaimsPerWindow once a budget is chosen.");
         console2.logBytes(
             abi.encodeCall(
-                AtomWarden.reinitialize, (uint256(365 days), uint256(0), uint256(1), uint48(1 hours), uint48(1 days))
+                AtomWarden.reinitialize,
+                (
+                    uint256(365 days),
+                    uint256(0),
+                    uint256(1),
+                    uint48(1 hours),
+                    uint48(1 days),
+                    uint256(0),
+                    uint256(1 days)
+                )
             )
         );
 

@@ -439,17 +439,60 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /*//////////////////////////////////////////////////////////////
+                    PAUSABLE VOTING ESCROW OVERRIDES
+    //////////////////////////////////////////////////////////////*/
+
+    /// @inheritdoc VotingEscrow
+    /// @dev Pause gate: reverts while the contract is paused. Applies to third-party
+    ///      depositors as well, since the token transfer source is the lock holder.
+    function deposit_for(address _addr, uint256 _value) public override whenNotPaused {
+        super.deposit_for(_addr, _value);
+    }
+
+    /// @inheritdoc VotingEscrow
+    /// @dev Pause gate: reverts while the contract is paused.
+    function create_lock(uint256 _value, uint256 _unlock_time) public override whenNotPaused {
+        super.create_lock(_value, _unlock_time);
+    }
+
+    /// @inheritdoc VotingEscrow
+    /// @dev Pause gate: reverts while the contract is paused.
+    function increase_amount(uint256 _value) public override whenNotPaused {
+        super.increase_amount(_value);
+    }
+
+    /// @inheritdoc VotingEscrow
+    /// @dev Pause gate: reverts while the contract is paused.
+    function increase_unlock_time(uint256 _unlock_time) public override whenNotPaused {
+        super.increase_unlock_time(_unlock_time);
+    }
+
+    /// @inheritdoc VotingEscrow
+    /// @dev Pause gate: reverts while the contract is paused.
+    function increase_amount_and_time(uint256 _value, uint256 _unlock_time) public override whenNotPaused {
+        super.increase_amount_and_time(_value, _unlock_time);
+    }
+
+    /// @inheritdoc VotingEscrow
+    /// @dev Pause gate: reverts while the contract is paused. Although this method also
+    ///      withdraws an expired lock, its lock-creating half governs the gate; plain
+    ///      `withdraw` remains un-gated as the escape hatch, so no funds are ever trapped
+    ///      by a pause.
+    function withdraw_and_create_lock(uint256 _value, uint256 _unlock_time) public override whenNotPaused {
+        super.withdraw_and_create_lock(_value, _unlock_time);
+    }
+
+    /*//////////////////////////////////////////////////////////////
                          ACCESS-RESTRICTED FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc ITrustBonding
-    /// @dev The pause guard is intentionally scoped to `claimRewards` only.
-    ///      Inherited VotingEscrow mutators (`create_lock`, `increase_amount`,
-    ///      `increase_unlock_time`, `withdraw`) remain callable while paused —
-    ///      escrow state is allowed to continue evolving during a pause window.
-    ///      Operators relying on snapshots taken across a pause must account
-    ///      for incoming lock activity during the pause when reconciling
-    ///      post-unpause reward distribution.
+    /// @dev Pausing gates `claimRewards` and the bonding entry points (`deposit_for`,
+    ///      `create_lock`, `increase_amount`, `increase_unlock_time`,
+    ///      `increase_amount_and_time`, `withdraw_and_create_lock`). `withdraw` and
+    ///      `checkpoint` deliberately remain callable while paused: a pause must never
+    ///      trap users' locked TRUST, and global bookkeeping must stay current so
+    ///      supply/voting-power accounting does not go stale across a pause window.
     function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
     }

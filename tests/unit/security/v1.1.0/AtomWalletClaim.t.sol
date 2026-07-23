@@ -20,6 +20,8 @@ contract AtomWalletClaimTest is BaseTest {
     uint256 internal constant CLAIM_WINDOW = 7 days;
     uint48 internal constant MAX_VALID_AFTER = uint48(1 hours);
     uint48 internal constant MAX_VALID_UNTIL = uint48(7 days);
+    uint256 internal constant MAX_CLAIMS_PER_WINDOW = 100;
+    uint256 internal constant CLAIM_CAP_WINDOW = 1 days;
 
     AtomWarden internal atomWarden;
     address internal signer;
@@ -34,7 +36,15 @@ contract AtomWalletClaimTest is BaseTest {
             new TransparentUpgradeableProxy(address(atomWardenImpl), users.admin, "");
         atomWarden = AtomWarden(address(atomWardenProxy));
         atomWarden.initialize(
-            users.admin, address(protocol.multiVault), CLAIM_WINDOW, 0, 1, MAX_VALID_AFTER, MAX_VALID_UNTIL
+            users.admin,
+            address(protocol.multiVault),
+            CLAIM_WINDOW,
+            0,
+            1,
+            MAX_VALID_AFTER,
+            MAX_VALID_UNTIL,
+            MAX_CLAIMS_PER_WINDOW,
+            CLAIM_CAP_WINDOW
         );
 
         bytes32 signerRole = atomWarden.SIGNER_ROLE();

@@ -14,7 +14,6 @@ import {
 	EIP1967_IMPLEMENTATION_SLOT,
 	loadFoundryReceipt,
 	resolveImplementationDeployment,
-	type UpgradeTargetConfig,
 	ZERO_BYTES32,
 } from '../upgrades/safe-upgrade-lib';
 
@@ -440,7 +439,7 @@ const createTransparentProxyChainReader = ({
 	]);
 
 	return {
-		call: async (address: string, data: string) => {
+		call: async (address: string, _data: string) => {
 			if (address === ethers.utils.getAddress(PROXY_ADMIN_ADDRESS)) {
 				return ownableInterface.encodeFunctionResult('owner', [executorOwner]);
 			}

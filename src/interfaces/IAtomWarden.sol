@@ -29,6 +29,8 @@ interface IAtomWarden {
     event SignatureThresholdSet(uint256 oldValue, uint256 newValue);
     event MaxValidAfterSet(uint48 oldValue, uint48 newValue);
     event MaxValidUntilSet(uint48 oldValue, uint48 newValue);
+    event MaxClaimsPerWindowSet(uint256 oldValue, uint256 newValue);
+    event ClaimCapWindowSet(uint256 oldValue, uint256 newValue);
 
     event AtomWalletOwnershipClaimed(bytes32 indexed atomId, address indexed claimant);
 
@@ -72,6 +74,8 @@ interface IAtomWarden {
     error AtomWarden_CreatorClaimDisabled();
     error AtomWarden_UnauthorizedReinitializer();
     error AtomWarden_ValidityWindowTooLong();
+    error AtomWarden_ClaimCapExceeded();
+    error AtomWarden_InvalidClaimCapWindow();
 
     /* =================================================== */
     /*                      FUNCTIONS                      */
@@ -89,6 +93,10 @@ interface IAtomWarden {
     function signerCount() external view returns (uint256);
     function maxValidAfter() external view returns (uint48);
     function maxValidUntil() external view returns (uint48);
+    function maxClaimsPerWindow() external view returns (uint256);
+    function claimCapWindow() external view returns (uint256);
+    function currentClaimWindowId() external view returns (uint256);
+    function claimsInWindow() external view returns (uint256);
 
     function claimOwnershipOverAddressAtom(bytes32 atomId) external;
 
@@ -124,4 +132,18 @@ interface IAtomWarden {
     ///         `ClaimAuthorization`. `0` makes every signed claim instantly expired;
     ///         `type(uint48).max` disables the cap. Admin-only.
     function setMaxValidUntil(uint48 newValue) external;
+
+    /// @notice Sets the maximum number of `claimWithAuthorization` claims allowed per
+    ///         `claimCapWindow`-length window. `0` disables the cap entirely (no window
+    ///         accounting). Lowering the cap below the current in-window count blocks
+    ///         further authorized claims until the window rolls over. Admin-only.
+    function setMaxClaimsPerWindow(uint256 newValue) external;
+
+    /// @notice Sets the length (seconds) of the fixed window used by the authorized-claim
+    ///         cap. Must be nonzero — reverts with `AtomWarden_InvalidClaimCapWindow`
+    ///         otherwise. Not related to the creator-fallback `claimWindow`. Changing the
+    ///         window length re-anchors the current window id under the new length while
+    ///         preserving the in-window claim count, so a retune never grants fresh
+    ///         budget mid-window. Admin-only.
+    function setClaimCapWindow(uint256 newValue) external;
 }

@@ -82,6 +82,18 @@ contract AtomWardenUpgradeRegressionTest is Test {
     uint256 internal constant REINIT_SIGNATURE_THRESHOLD = 1;
     uint48 internal constant REINIT_MAX_VALID_AFTER = uint48(1 hours);
     uint48 internal constant REINIT_MAX_VALID_UNTIL = uint48(2 days);
+    /// @dev Armed (nonzero) in this suite so the regression exercises live cap accounting
+    ///      on the fork; production defaults may ship with the cap disabled instead.
+    uint256 internal constant REINIT_MAX_CLAIMS_PER_WINDOW = 100;
+    uint256 internal constant REINIT_CLAIM_CAP_WINDOW = 1 days;
+
+    /// @dev Contract-own storage slot indices (OZ parents use ERC-7201 namespaced storage,
+    ///      so AtomWarden's own variables start at slot 0). The four cap slots are the
+    ///      v1.1.0 tail append — verified against `forge inspect AtomWarden storageLayout`.
+    uint256 internal constant MAX_CLAIMS_PER_WINDOW_SLOT = 7;
+    uint256 internal constant CLAIM_CAP_WINDOW_SLOT = 8;
+    uint256 internal constant CURRENT_CLAIM_WINDOW_ID_SLOT = 9;
+    uint256 internal constant CLAIMS_IN_WINDOW_SLOT = 10;
 
     function test_reinitialize_bootstrapsQuorumStateAndPreservesMultiVault() external {
         address preMultiVault = atomWarden.multiVault();
@@ -108,6 +120,39 @@ contract AtomWardenUpgradeRegressionTest is Test {
         // Time-window caps land atomically with the reinit args.
         assertEq(atomWarden.maxValidAfter(), REINIT_MAX_VALID_AFTER, "maxValidAfter must match reinit arg");
         assertEq(atomWarden.maxValidUntil(), REINIT_MAX_VALID_UNTIL, "maxValidUntil must match reinit arg");
+
+        // Authorized-claim cap config lands atomically with the reinit args; window
+        // accounting starts anchored at the current window with a zero count.
+        assertEq(atomWarden.maxClaimsPerWindow(), REINIT_MAX_CLAIMS_PER_WINDOW, "maxClaimsPerWindow must match arg");
+        assertEq(atomWarden.claimCapWindow(), REINIT_CLAIM_CAP_WINDOW, "claimCapWindow must match reinit arg");
+        assertEq(
+            atomWarden.currentClaimWindowId(),
+            block.timestamp / REINIT_CLAIM_CAP_WINDOW,
+            "currentClaimWindowId must anchor to the live window"
+        );
+        assertEq(atomWarden.claimsInWindow(), 0, "claimsInWindow must start at 0");
+
+        // Slot-level triangulation for the four appended cap slots: the raw storage the
+        // auto-getters resolve must be the tail slots, proving the append did not shift
+        // or collide with any pre-upgrade variable.
+        assertEq(
+            uint256(vm.load(ATOM_WARDEN_PROXY, bytes32(MAX_CLAIMS_PER_WINDOW_SLOT))),
+            REINIT_MAX_CLAIMS_PER_WINDOW,
+            "slot 7 must hold maxClaimsPerWindow"
+        );
+        assertEq(
+            uint256(vm.load(ATOM_WARDEN_PROXY, bytes32(CLAIM_CAP_WINDOW_SLOT))),
+            REINIT_CLAIM_CAP_WINDOW,
+            "slot 8 must hold claimCapWindow"
+        );
+        assertEq(
+            uint256(vm.load(ATOM_WARDEN_PROXY, bytes32(CURRENT_CLAIM_WINDOW_ID_SLOT))),
+            block.timestamp / REINIT_CLAIM_CAP_WINDOW,
+            "slot 9 must hold currentClaimWindowId"
+        );
+        assertEq(
+            uint256(vm.load(ATOM_WARDEN_PROXY, bytes32(CLAIMS_IN_WINDOW_SLOT))), 0, "slot 10 must hold claimsInWindow"
+        );
 
         // Pausable state is bootstrapped to unpaused.
         assertFalse(atomWarden.paused(), "Pausable must initialize as unpaused");
@@ -179,6 +224,7 @@ contract AtomWardenUpgradeRegressionTest is Test {
         assertTrue(wallet.isClaimed(), "wallet should be marked claimed after quorum=1 signed claim");
         assertEq(wallet.owner(), claimant, "wallet owner must equal claimant");
         assertEq(atomWarden.claimNonces(claimant), authorization.nonce + 1, "nonce must increment by 1");
+        assertEq(atomWarden.claimsInWindow(), 1, "authorized claim must consume one unit of the window budget");
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -240,7 +286,9 @@ contract AtomWardenUpgradeRegressionTest is Test {
             REINIT_MIN_FEE_THRESHOLD,
             REINIT_SIGNATURE_THRESHOLD,
             REINIT_MAX_VALID_AFTER,
-            REINIT_MAX_VALID_UNTIL
+            REINIT_MAX_VALID_UNTIL,
+            REINIT_MAX_CLAIMS_PER_WINDOW,
+            REINIT_CLAIM_CAP_WINDOW
         );
 
         // Sanity: implementation slot now points at the freshly-deployed contract.

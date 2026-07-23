@@ -20,7 +20,8 @@ import { AtomWarden } from "src/protocol/wallet/AtomWarden.sol";
  *       Submitted through the upgrades-timelock multisig because the proxy admin
  *       is the timelock controller.
  *
- *   (2) `AtomWarden.reinitialize(claimWindow, minFeeThreshold, signatureThreshold)`
+ *   (2) `AtomWarden.reinitialize(claimWindow, minFeeThreshold, signatureThreshold,
+ *       maxValidAfter, maxValidUntil, maxClaimsPerWindow, claimCapWindow)`
  *       — submitted by the MultiVault-resolved admin (the same admin granted on
  *       AtomWarden in v1 initialize). The reinitialize is gated to that admin,
  *       so this MUST be a separate tx from the proxy admin path.
@@ -62,6 +63,9 @@ contract UpgradeAtomWardenQuorum is SetupScript {
     uint256 internal constant DEFAULT_SIGNATURE_THRESHOLD = 1;
     uint48 internal constant DEFAULT_MAX_VALID_AFTER = uint48(1 hours);
     uint48 internal constant DEFAULT_MAX_VALID_UNTIL = uint48(1 days);
+    /// @dev 0 = authorized-claim cap disabled; arm deliberately via env or the admin setter.
+    uint256 internal constant DEFAULT_MAX_CLAIMS_PER_WINDOW = 0;
+    uint256 internal constant DEFAULT_CLAIM_CAP_WINDOW = 1 days;
 
     address public atomWardenProxy;
     address public atomWardenProxyAdmin;
@@ -72,6 +76,8 @@ contract UpgradeAtomWardenQuorum is SetupScript {
     uint256 internal reinitSignatureThreshold;
     uint48 internal reinitMaxValidAfter;
     uint48 internal reinitMaxValidUntil;
+    uint256 internal reinitMaxClaimsPerWindow;
+    uint256 internal reinitClaimCapWindow;
 
     function setUp() public override {
         super.setUp();
@@ -93,6 +99,8 @@ contract UpgradeAtomWardenQuorum is SetupScript {
         reinitMaxValidAfter = uint48(vm.envOr("ATOM_WARDEN_MAX_VALID_AFTER", uint256(DEFAULT_MAX_VALID_AFTER)));
         // forge-lint: disable-next-line(unsafe-typecast)
         reinitMaxValidUntil = uint48(vm.envOr("ATOM_WARDEN_MAX_VALID_UNTIL", uint256(DEFAULT_MAX_VALID_UNTIL)));
+        reinitMaxClaimsPerWindow = vm.envOr("ATOM_WARDEN_MAX_CLAIMS_PER_WINDOW", DEFAULT_MAX_CLAIMS_PER_WINDOW);
+        reinitClaimCapWindow = vm.envOr("ATOM_WARDEN_CLAIM_CAP_WINDOW", DEFAULT_CLAIM_CAP_WINDOW);
     }
 
     function run() public broadcast {
@@ -121,6 +129,8 @@ contract UpgradeAtomWardenQuorum is SetupScript {
         info("Reinit signatureThreshold", reinitSignatureThreshold);
         info("Reinit maxValidAfter", uint256(reinitMaxValidAfter));
         info("Reinit maxValidUntil", uint256(reinitMaxValidUntil));
+        info("Reinit maxClaimsPerWindow", reinitMaxClaimsPerWindow);
+        info("Reinit claimCapWindow", reinitClaimCapWindow);
 
         console2.log("");
         console2.log("STEP 1 - ProxyAdmin.upgradeAndCall(proxy, impl, ''):");
@@ -133,7 +143,7 @@ contract UpgradeAtomWardenQuorum is SetupScript {
 
         console2.log("");
         console2.log(
-            "STEP 2 - AtomWarden(proxy).reinitialize(claimWindow, minFeeThreshold, signatureThreshold, maxValidAfter, maxValidUntil):"
+            "STEP 2 - AtomWarden(proxy).reinitialize(claimWindow, minFeeThreshold, signatureThreshold, maxValidAfter, maxValidUntil, maxClaimsPerWindow, claimCapWindow):"
         );
         console2.log("        Submit from the MultiVault admin EOA/multisig, target=%s", atomWardenProxy);
         console2.logBytes(
@@ -144,7 +154,9 @@ contract UpgradeAtomWardenQuorum is SetupScript {
                     reinitMinFeeThreshold,
                     reinitSignatureThreshold,
                     reinitMaxValidAfter,
-                    reinitMaxValidUntil
+                    reinitMaxValidUntil,
+                    reinitMaxClaimsPerWindow,
+                    reinitClaimCapWindow
                 )
             )
         );

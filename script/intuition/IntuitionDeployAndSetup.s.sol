@@ -86,6 +86,8 @@ contract IntuitionDeployAndSetup is SetupScript {
     uint256 internal atomWardenSignatureThreshold;
     uint48 internal atomWardenMaxValidAfter;
     uint48 internal atomWardenMaxValidUntil;
+    uint256 internal atomWardenMaxClaimsPerWindow;
+    uint256 internal atomWardenClaimCapWindow;
 
     function setUp() public override {
         super.setUp();
@@ -98,6 +100,9 @@ contract IntuitionDeployAndSetup is SetupScript {
         atomWardenMaxValidAfter = uint48(vm.envOr("ATOM_WARDEN_MAX_VALID_AFTER", uint256(1 hours)));
         // forge-lint: disable-next-line(unsafe-typecast)
         atomWardenMaxValidUntil = uint48(vm.envOr("ATOM_WARDEN_MAX_VALID_UNTIL", uint256(1 days)));
+        // Default 0 = cap disabled; arm deliberately via env or the admin setter.
+        atomWardenMaxClaimsPerWindow = vm.envOr("ATOM_WARDEN_MAX_CLAIMS_PER_WINDOW", uint256(0));
+        atomWardenClaimCapWindow = vm.envOr("ATOM_WARDEN_CLAIM_CAP_WINDOW", uint256(1 days));
 
         if (block.chainid == NETWORK_ANVIL) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("ANVIL_BASE_EMISSIONS_CONTROLLER");
@@ -340,7 +345,9 @@ contract IntuitionDeployAndSetup is SetupScript {
             atomWardenMinFeeThreshold,
             atomWardenSignatureThreshold,
             atomWardenMaxValidAfter,
-            atomWardenMaxValidUntil
+            atomWardenMaxValidUntil,
+            atomWardenMaxClaimsPerWindow,
+            atomWardenClaimCapWindow
         );
 
         // Set the MultiVault and parameters Timelock addresses in TrustBonding only if we are not on the Intuition

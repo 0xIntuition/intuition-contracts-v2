@@ -379,7 +379,7 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     ///      their position up to the allowance limit.
     /// @param _addr User's wallet address
     /// @param _value Amount to add to user's lock
-    function deposit_for(address _addr, uint256 _value) external nonReentrant notUnlocked {
+    function deposit_for(address _addr, uint256 _value) public virtual nonReentrant notUnlocked {
         LockedBalance memory _locked = locked[_addr];
 
         require(_value > 0); // dev: need non-zero value
@@ -407,13 +407,22 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     /// @notice External function for _create_lock
     /// @param _value Amount to deposit
     /// @param _unlock_time Epoch time when tokens unlock, rounded down to whole weeks
-    function create_lock(uint256 _value, uint256 _unlock_time) external nonReentrant onlyUserOrWhitelist notUnlocked {
+    function create_lock(
+        uint256 _value,
+        uint256 _unlock_time
+    )
+        public
+        virtual
+        nonReentrant
+        onlyUserOrWhitelist
+        notUnlocked
+    {
         _create_lock(_value, _unlock_time);
     }
 
     /// @notice Deposit `_value` additional tokens for `msg.sender` without modifying the unlock time
     /// @param _value Amount of tokens to deposit and add to the lock
-    function increase_amount(uint256 _value) external nonReentrant onlyUserOrWhitelist notUnlocked {
+    function increase_amount(uint256 _value) public virtual nonReentrant onlyUserOrWhitelist notUnlocked {
         _increase_amount(_value);
     }
 
@@ -429,7 +438,7 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
 
     /// @notice Extend the unlock time for `msg.sender` to `_unlock_time`
     /// @param _unlock_time New epoch time for unlocking
-    function increase_unlock_time(uint256 _unlock_time) external nonReentrant onlyUserOrWhitelist notUnlocked {
+    function increase_unlock_time(uint256 _unlock_time) public virtual nonReentrant onlyUserOrWhitelist notUnlocked {
         _increase_unlock_time(_unlock_time);
     }
 
@@ -451,7 +460,8 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         uint256 _value,
         uint256 _unlock_time
     )
-        external
+        public
+        virtual
         nonReentrant
         onlyUserOrWhitelist
         notUnlocked
@@ -503,7 +513,8 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         uint256 _value,
         uint256 _unlock_time
     )
-        external
+        public
+        virtual
         nonReentrant
         onlyUserOrWhitelist
         notUnlocked

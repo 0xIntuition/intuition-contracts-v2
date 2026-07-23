@@ -42,6 +42,8 @@ import { IMultiVault } from "src/interfaces/IMultiVault.sol";
     - ATOM_WARDEN_SIGNATURE_THRESHOLD  -> AtomWarden.reinitialize (default 1, must be > 0)
     - ATOM_WARDEN_MAX_VALID_AFTER      -> AtomWarden.reinitialize (default 1 hours)
     - ATOM_WARDEN_MAX_VALID_UNTIL      -> AtomWarden.reinitialize (default 1 days)
+    - ATOM_WARDEN_MAX_CLAIMS_PER_WINDOW-> AtomWarden.reinitialize (default 0 = cap disabled)
+    - ATOM_WARDEN_CLAIM_CAP_WINDOW     -> AtomWarden.reinitialize (default 1 days, must be > 0)
 
   --------------------------------------------------------------------------
   MODE 1 — PRINT (default). Deploys MultiVaultLib (auto-linked by Foundry) and
@@ -96,7 +98,7 @@ import { IMultiVault } from "src/interfaces/IMultiVault.sol";
   proxy would execute embedded reinit calldata via delegatecall with
   `msg.sender == ProxyAdmin`, which holds neither role and reverts:
     - `MultiVault.reinitialize(address)`           — onlyRole(DEFAULT_ADMIN_ROLE)
-    - `AtomWarden.reinitialize(uint256,uint256,uint256,uint48,uint48)`
+    - `AtomWarden.reinitialize(uint256,uint256,uint256,uint48,uint48,uint256,uint256)`
           — gated to `MultiVault.generalConfig().admin`
   So per proxy: (1) Upgrades Timelock -> upgradeAndCall(proxy, impl, "");
   (2) Admin Safe -> <contract>.reinitialize(...). TrustBonding needs no
@@ -130,6 +132,9 @@ contract DeployCoreUpgradeImplementations is Script {
     uint256 internal constant DEFAULT_SIGNATURE_THRESHOLD = 1;
     uint48 internal constant DEFAULT_MAX_VALID_AFTER = uint48(1 hours);
     uint48 internal constant DEFAULT_MAX_VALID_UNTIL = uint48(1 days);
+    /// @dev 0 = authorized-claim cap disabled; arm deliberately via env or the admin setter.
+    uint256 internal constant DEFAULT_MAX_CLAIMS_PER_WINDOW = 0;
+    uint256 internal constant DEFAULT_CLAIM_CAP_WINDOW = 1 days;
 
     /// @dev Per-chain proxy / governance address book. Sourced from
     ///      contracts/core/README.md (deployed-contracts tables) and the
@@ -160,6 +165,8 @@ contract DeployCoreUpgradeImplementations is Script {
     uint256 internal reinitSignatureThreshold;
     uint48 internal reinitMaxValidAfter;
     uint48 internal reinitMaxValidUntil;
+    uint256 internal reinitMaxClaimsPerWindow;
+    uint256 internal reinitClaimCapWindow;
 
     /* =================================================== */
     /*                  Deploy Artifacts                   */
@@ -192,6 +199,8 @@ contract DeployCoreUpgradeImplementations is Script {
         reinitMaxValidAfter = uint48(vm.envOr("ATOM_WARDEN_MAX_VALID_AFTER", uint256(DEFAULT_MAX_VALID_AFTER)));
         // forge-lint: disable-next-line(unsafe-typecast)
         reinitMaxValidUntil = uint48(vm.envOr("ATOM_WARDEN_MAX_VALID_UNTIL", uint256(DEFAULT_MAX_VALID_UNTIL)));
+        reinitMaxClaimsPerWindow = vm.envOr("ATOM_WARDEN_MAX_CLAIMS_PER_WINDOW", DEFAULT_MAX_CLAIMS_PER_WINDOW);
+        reinitClaimCapWindow = vm.envOr("ATOM_WARDEN_CLAIM_CAP_WINDOW", DEFAULT_CLAIM_CAP_WINDOW);
     }
 
     /// @notice Default entry point. Print mode unless `FORK_DRY_RUN=true`.
@@ -286,6 +295,11 @@ contract DeployCoreUpgradeImplementations is Script {
             uint256(reinitMaxValidAfter),
             uint256(reinitMaxValidUntil)
         );
+        console2.log(
+            "    maxClaimsPerWindow=%s (0 = cap disabled) claimCapWindow=%s",
+            reinitMaxClaimsPerWindow,
+            reinitClaimCapWindow
+        );
         console2.logBytes(
             abi.encodeCall(
                 AtomWarden.reinitialize,
@@ -294,7 +308,9 @@ contract DeployCoreUpgradeImplementations is Script {
                     reinitMinFeeThreshold,
                     reinitSignatureThreshold,
                     reinitMaxValidAfter,
-                    reinitMaxValidUntil
+                    reinitMaxValidUntil,
+                    reinitMaxClaimsPerWindow,
+                    reinitClaimCapWindow
                 )
             )
         );
@@ -352,7 +368,13 @@ contract DeployCoreUpgradeImplementations is Script {
         vm.startPrank(adminSafe);
         multiVault.reinitialize(parametersTimelock);
         atomWarden.reinitialize(
-            reinitClaimWindow, reinitMinFeeThreshold, reinitSignatureThreshold, reinitMaxValidAfter, reinitMaxValidUntil
+            reinitClaimWindow,
+            reinitMinFeeThreshold,
+            reinitSignatureThreshold,
+            reinitMaxValidAfter,
+            reinitMaxValidUntil,
+            reinitMaxClaimsPerWindow,
+            reinitClaimCapWindow
         );
         vm.stopPrank();
 
@@ -405,6 +427,12 @@ contract DeployCoreUpgradeImplementations is Script {
             revert DryRunAssertionFailed("AtomWarden admin role");
         }
         if (atomWarden.signerCount() != 0) revert DryRunAssertionFailed("AtomWarden signerCount seed");
+        if (atomWarden.maxClaimsPerWindow() != reinitMaxClaimsPerWindow) {
+            revert DryRunAssertionFailed("AtomWarden maxClaimsPerWindow");
+        }
+        if (atomWarden.claimCapWindow() != reinitClaimCapWindow || reinitClaimCapWindow == 0) {
+            revert DryRunAssertionFailed("AtomWarden claimCapWindow");
+        }
 
         // Precompute the role id outside the prank: `vm.prank` arms only the next
         // CALL, and `SIGNER_ROLE()` would otherwise consume it before `grantRole`.

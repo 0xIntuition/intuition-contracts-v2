@@ -90,6 +90,38 @@ contract AtomWarden is IAtomWarden, Initializable, AccessControlUpgradeable, EIP
     /// @dev Packed with `maxValidAfter` in the slot appended after `signerCount`.
     uint48 public maxValidUntil;
 
+    /// @notice Maximum number of `claimWithAuthorization` claims allowed per fixed
+    ///         `claimCapWindow`-length window. A value of `0` disables the cap entirely
+    ///         (no window accounting is performed). Bounds the damage of a signer-key
+    ///         compromise: even a valid quorum can only claim this many wallets per
+    ///         window before the path throttles.
+    /// @dev Appended after the `maxValidAfter`/`maxValidUntil` slot for storage-layout
+    ///      compatibility.
+    uint256 public maxClaimsPerWindow;
+
+    /// @notice Length (seconds) of the fixed window used by the authorized-claim cap.
+    ///         Must be nonzero. Unrelated to `claimWindow`, which governs the
+    ///         creator-expiry fallback path.
+    /// @dev Appended after `maxClaimsPerWindow` for storage-layout compatibility.
+    uint256 public claimCapWindow;
+
+    /// @notice Fixed-window id (`block.timestamp / claimCapWindow`) as of the last
+    ///         counted authorized claim or window-length change.
+    /// @dev Appended after `claimCapWindow` for storage-layout compatibility.
+    uint256 public currentClaimWindowId;
+
+    /// @notice Number of authorized claims counted in the window identified by
+    ///         `currentClaimWindowId`. Resets when the window rolls over; deliberately
+    ///         preserved across `setClaimCapWindow` so a retune never grants fresh
+    ///         budget mid-window.
+    /// @dev Appended after `currentClaimWindowId` for storage-layout compatibility.
+    uint256 public claimsInWindow;
+
+    /// @dev Gap for upgrade safety: reserves 50 free slots after the in-use slots 0-10.
+    ///      Shrink this array by one slot for every future variable appended above it —
+    ///      never insert before it.
+    uint256[50] private __gap;
+
     /* =================================================== */
     /*                      CONSTRUCTOR                    */
     /* =================================================== */
@@ -119,6 +151,9 @@ contract AtomWarden is IAtomWarden, Initializable, AccessControlUpgradeable, EIP
      *        See `maxValidAfter` for semantics. `0` disables delayed activation entirely.
      * @param _maxValidUntil Max allowed `validUntil - block.timestamp` on a claim auth (seconds).
      *        See `maxValidUntil` for semantics. `0` makes every signed claim instantly expired.
+     * @param _maxClaimsPerWindow Max `claimWithAuthorization` claims per cap window.
+     *        `0` disables the cap entirely (see `maxClaimsPerWindow`).
+     * @param _claimCapWindow Length (seconds) of the fixed cap window (must be > 0).
      */
     function initialize(
         address admin,
@@ -127,7 +162,9 @@ contract AtomWarden is IAtomWarden, Initializable, AccessControlUpgradeable, EIP
         uint256 _minFeeThreshold,
         uint256 _signatureThreshold,
         uint48 _maxValidAfter,
-        uint48 _maxValidUntil
+        uint48 _maxValidUntil,
+        uint256 _maxClaimsPerWindow,
+        uint256 _claimCapWindow
     )
         external
         initializer
@@ -148,6 +185,8 @@ contract AtomWarden is IAtomWarden, Initializable, AccessControlUpgradeable, EIP
         _setMinFeeThreshold(_minFeeThreshold);
         _setMaxValidAfter(_maxValidAfter);
         _setMaxValidUntil(_maxValidUntil);
+        _setClaimCapWindow(_claimCapWindow);
+        _setMaxClaimsPerWindow(_maxClaimsPerWindow);
 
         signatureThreshold = _signatureThreshold;
         emit SignatureThresholdSet(0, _signatureThreshold);
@@ -168,13 +207,18 @@ contract AtomWarden is IAtomWarden, Initializable, AccessControlUpgradeable, EIP
      * @param _signatureThreshold New quorum size for `claimWithAuthorization` (must be > 0).
      * @param _maxValidAfter New cap on `validAfter - block.timestamp` for claim auths.
      * @param _maxValidUntil New cap on `validUntil - block.timestamp` for claim auths.
+     * @param _maxClaimsPerWindow Max `claimWithAuthorization` claims per cap window.
+     *        `0` disables the cap entirely (see `maxClaimsPerWindow`).
+     * @param _claimCapWindow Length (seconds) of the fixed cap window (must be > 0).
      */
     function reinitialize(
         uint256 _claimWindow,
         uint256 _minFeeThreshold,
         uint256 _signatureThreshold,
         uint48 _maxValidAfter,
-        uint48 _maxValidUntil
+        uint48 _maxValidUntil,
+        uint256 _maxClaimsPerWindow,
+        uint256 _claimCapWindow
     )
         external
         reinitializer(2)
@@ -198,6 +242,8 @@ contract AtomWarden is IAtomWarden, Initializable, AccessControlUpgradeable, EIP
         _setMinFeeThreshold(_minFeeThreshold);
         _setMaxValidAfter(_maxValidAfter);
         _setMaxValidUntil(_maxValidUntil);
+        _setClaimCapWindow(_claimCapWindow);
+        _setMaxClaimsPerWindow(_maxClaimsPerWindow);
 
         signatureThreshold = _signatureThreshold;
         emit SignatureThresholdSet(0, _signatureThreshold);
@@ -262,11 +308,16 @@ contract AtomWarden is IAtomWarden, Initializable, AccessControlUpgradeable, EIP
 
         (address firstSigner, uint16 verifiedSigners) = _verifyQuorum(authorization, signature);
 
-        IAtomWallet(atomWalletAddress).completeClaim(authorization.claimant);
+        _consumeClaimCapBudget();
 
+        // Effects before interaction: burn the nonce ahead of the external wallet call so
+        // even a misbehaving wallet implementation reentering this function cannot replay
+        // the same authorization within the transaction.
         unchecked {
             ++claimNonces[authorization.claimant];
         }
+
+        IAtomWallet(atomWalletAddress).completeClaim(authorization.claimant);
 
         emit AtomWalletOwnershipClaimedByAuthorization(
             authorization.atomId, authorization.claimant, firstSigner, authorization.claimType, verifiedSigners
@@ -397,6 +448,16 @@ contract AtomWarden is IAtomWarden, Initializable, AccessControlUpgradeable, EIP
     /// @inheritdoc IAtomWarden
     function setMaxValidUntil(uint48 newValue) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _setMaxValidUntil(newValue);
+    }
+
+    /// @inheritdoc IAtomWarden
+    function setMaxClaimsPerWindow(uint256 newValue) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _setMaxClaimsPerWindow(newValue);
+    }
+
+    /// @inheritdoc IAtomWarden
+    function setClaimCapWindow(uint256 newValue) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _setClaimCapWindow(newValue);
     }
 
     /// @notice Halts all user-driven claim entry points (`claimOwnershipOverAddressAtom`,
@@ -644,5 +705,65 @@ contract AtomWarden is IAtomWarden, Initializable, AccessControlUpgradeable, EIP
         uint48 oldValue = maxValidUntil;
         maxValidUntil = newValue;
         emit MaxValidUntilSet(oldValue, newValue);
+    }
+
+    /// @dev Setting the cap (`newValue != 0`) requires `claimCapWindow` to already be
+    ///      nonzero, so the claim path can never divide by an unset window length
+    ///      (relevant for a proxy upgraded without reinitializing — set the window
+    ///      before setting the cap).
+    function _setMaxClaimsPerWindow(uint256 newValue) internal {
+        if (newValue != 0 && claimCapWindow == 0) {
+            revert AtomWarden_InvalidClaimCapWindow();
+        }
+        uint256 oldValue = maxClaimsPerWindow;
+        maxClaimsPerWindow = newValue;
+        emit MaxClaimsPerWindowSet(oldValue, newValue);
+    }
+
+    /// @dev Re-anchors `currentClaimWindowId` under the new window length — a stale id
+    ///      computed with the old divisor is meaningless under the new one — while
+    ///      deliberately preserving `claimsInWindow`, so changing the window length never
+    ///      grants fresh budget mid-window. Spent claims keep counting against the cap
+    ///      until the re-anchored window rolls over naturally.
+    function _setClaimCapWindow(uint256 newValue) internal {
+        if (newValue == 0) {
+            revert AtomWarden_InvalidClaimCapWindow();
+        }
+        uint256 oldValue = claimCapWindow;
+        claimCapWindow = newValue;
+        currentClaimWindowId = block.timestamp / newValue;
+        emit ClaimCapWindowSet(oldValue, newValue);
+    }
+
+    /**
+     * @notice Enforces the per-window cap on authorized claims and consumes one unit of
+     *         the current window's budget.
+     * @dev No-op when `maxClaimsPerWindow == 0` (cap disabled). Uses fixed windows
+     *      identified by `block.timestamp / claimCapWindow`: on rollover the counter
+     *      resets, so idle windows never bank unused budget, and at most
+     *      `2 * maxClaimsPerWindow` claims can land in a short span straddling a window
+     *      boundary (inherent to fixed-window limiters — size the cap accordingly).
+     *      Called after quorum verification (invalid claims never consume budget) and
+     *      before the external `completeClaim` call (checks-effects-interactions).
+     *      Reverts with `AtomWarden_ClaimCapExceeded` once the window's budget is spent.
+     */
+    function _consumeClaimCapBudget() internal {
+        uint256 cap = maxClaimsPerWindow;
+        if (cap == 0) {
+            return;
+        }
+
+        uint256 windowId = block.timestamp / claimCapWindow;
+        if (windowId != currentClaimWindowId) {
+            currentClaimWindowId = windowId;
+            claimsInWindow = 0;
+        }
+
+        if (claimsInWindow >= cap) {
+            revert AtomWarden_ClaimCapExceeded();
+        }
+        unchecked {
+            ++claimsInWindow;
+        }
     }
 }
