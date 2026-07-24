@@ -1,0 +1,4 @@
+# Regenerable per-job description previews (duplicate in-scope source verbatim).
+dry-run/
+
+# Keep manifest.json (job ids / provenance) and any downloaded report dirs.
