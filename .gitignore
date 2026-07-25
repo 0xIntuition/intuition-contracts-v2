@@ -33,3 +33,5 @@ audits/handoffs/
 audits/templates/
 audits/internal-audits/**/working-logs/
 audits/internal-audits/**/README.md
+# process instructions/templates live in the monorepo only, never the public mirror
+audits/internal-audits/instructions/
