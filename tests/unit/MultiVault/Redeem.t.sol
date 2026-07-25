@@ -92,13 +92,7 @@ contract MultiVaultHarness is MultiVault {
         return _burn(from, termId, curveId, amount);
     }
 
-    function validateRedeemForTest(
-        bytes32 termId,
-        uint256 curveId,
-        address account,
-        uint256 shares,
-        uint256 minAssets
-    )
+    function validateRedeemForTest(bytes32 termId, uint256 curveId, address account, uint256 shares, uint256 minAssets)
         external
         view
     {
@@ -566,11 +560,7 @@ contract RedeemTest is BaseTest {
 
     /// @dev Seeds the four positive/counter × default/non-default vaults. Returns the share amounts
     ///      and the fresh `dan` address used for the counter-default deposit.
-    function _seedRedeemMatrix(
-        bytes32 tripleId,
-        bytes32 counterId,
-        uint256 dep
-    )
+    function _seedRedeemMatrix(bytes32 tripleId, bytes32 counterId, uint256 dep)
         internal
         returns (MatrixShares memory s)
     {

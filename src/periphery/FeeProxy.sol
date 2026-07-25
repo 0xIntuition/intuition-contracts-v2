@@ -140,10 +140,7 @@ contract FeeProxy is
         uint256 maxBps_,
         uint256 maxFixedFee_,
         uint256 registrationFee_
-    )
-        external
-        initializer
-    {
+    ) external initializer {
         if (multiVault_ == address(0) || treasury_ == address(0) || admin_ == address(0)) {
             revert FeeProxy_ZeroAddress();
         }
@@ -168,10 +165,7 @@ contract FeeProxy is
     /* =================================================== */
 
     /// @inheritdoc IFeeProxy
-    function registerAffiliate(
-        FeeConfig calldata fees,
-        address feeRecipient
-    )
+    function registerAffiliate(FeeConfig calldata fees, address feeRecipient)
         external
         payable
         whenNotPaused
@@ -271,13 +265,7 @@ contract FeeProxy is
         uint256 grossAssets,
         uint256 minShares,
         FeeGuard calldata feeGuard
-    )
-        external
-        payable
-        whenNotPaused
-        nonReentrant
-        returns (uint256 shares)
-    {
+    ) external payable whenNotPaused nonReentrant returns (uint256 shares) {
         if (receiver == address(0)) revert FeeProxy_ZeroAddress();
         _assertDepositReceiverApproved(receiver);
         if (grossAssets == 0) revert FeeProxy_ZeroValue();
@@ -310,13 +298,7 @@ contract FeeProxy is
         uint256[] calldata assets,
         uint256[] calldata minShares,
         FeeGuard calldata feeGuard
-    )
-        external
-        payable
-        whenNotPaused
-        nonReentrant
-        returns (uint256[] memory shares)
-    {
+    ) external payable whenNotPaused nonReentrant returns (uint256[] memory shares) {
         if (receiver == address(0)) revert FeeProxy_ZeroAddress();
         _assertDepositReceiverApproved(receiver);
         if (
@@ -344,13 +326,7 @@ contract FeeProxy is
         bytes[] calldata atomDatas,
         uint256[] calldata assets,
         FeeGuard calldata feeGuard
-    )
-        external
-        payable
-        whenNotPaused
-        nonReentrant
-        returns (bytes32[] memory termIds)
-    {
+    ) external payable whenNotPaused nonReentrant returns (bytes32[] memory termIds) {
         if (atomDatas.length == 0 || atomDatas.length != assets.length) {
             revert FeeProxy_LengthMismatch();
         }
@@ -378,13 +354,7 @@ contract FeeProxy is
         bytes32[] calldata objectIds,
         uint256[] calldata assets,
         FeeGuard calldata feeGuard
-    )
-        external
-        payable
-        whenNotPaused
-        nonReentrant
-        returns (bytes32[] memory termIds)
-    {
+    ) external payable whenNotPaused nonReentrant returns (bytes32[] memory termIds) {
         if (
             subjectIds.length == 0 || subjectIds.length != predicateIds.length || subjectIds.length != objectIds.length
                 || subjectIds.length != assets.length
@@ -405,10 +375,7 @@ contract FeeProxy is
         bytes32[] calldata predicateIds,
         bytes32[] calldata objectIds,
         RoutingFlow memory flow
-    )
-        private
-        returns (bytes32[] memory termIds)
-    {
+    ) private returns (bytes32[] memory termIds) {
         _payAffiliate(flow.feeRecipient, affiliate, msg.sender, flow.fee);
 
         termIds = IMultiVault(multiVault).createTriplesFor{ value: flow.totalForwarded }(
@@ -496,10 +463,7 @@ contract FeeProxy is
     }
 
     /// @inheritdoc IFeeProxy
-    function previewDepositFee(
-        address affiliate,
-        uint256 grossAssets
-    )
+    function previewDepositFee(address affiliate, uint256 grossAssets)
         external
         view
         returns (uint256 fee, uint256 forwarded)
@@ -510,10 +474,7 @@ contract FeeProxy is
     }
 
     /// @inheritdoc IFeeProxy
-    function previewCreationFee(
-        address affiliate,
-        uint256 grossAssets
-    )
+    function previewCreationFee(address affiliate, uint256 grossAssets)
         external
         view
         returns (uint256 fee, uint256 forwarded)
@@ -529,10 +490,7 @@ contract FeeProxy is
     }
 
     /// @inheritdoc IFeeProxy
-    function affiliateUserStats(
-        address affiliate,
-        address user
-    )
+    function affiliateUserStats(address affiliate, address user)
         external
         view
         returns (AffiliateUserStats memory stats)
@@ -578,11 +536,7 @@ contract FeeProxy is
         uint256[] calldata assets,
         FeeGuard calldata feeGuard,
         bool useCreationFees
-    )
-        internal
-        view
-        returns (RoutingFlow memory flow)
-    {
+    ) internal view returns (RoutingFlow memory flow) {
         AffiliateConfig storage row = _requireActiveAffiliate(affiliate);
         uint256 bps = useCreationFees ? row.fees.creationBps : row.fees.depositBps;
         uint256 fixedFee = useCreationFees ? row.fees.creationFixedFee : row.fees.depositFixedFee;
@@ -630,9 +584,7 @@ contract FeeProxy is
         uint256 fee,
         uint256 forwardedAssets,
         bool isCreation
-    )
-        internal
-    {
+    ) internal {
         AffiliateStats storage aggregate = _affiliateStats[affiliate];
         AffiliateUserStats storage userStats = _affiliateUserStats[affiliate][user];
 
@@ -786,11 +738,7 @@ contract FeeProxy is
     ///      pre-fee asset share, with the rounding dust assigned to the last
     ///      leg so the per-leg sum matches `totalForwarded` exactly. Caller
     ///      guarantees `totalGross > 0` and `assets.length > 0`.
-    function _allocate(
-        uint256[] calldata assets,
-        uint256 totalForwarded,
-        uint256 totalGross
-    )
+    function _allocate(uint256[] calldata assets, uint256 totalForwarded, uint256 totalGross)
         internal
         pure
         returns (uint256[] memory forwardedAssets)

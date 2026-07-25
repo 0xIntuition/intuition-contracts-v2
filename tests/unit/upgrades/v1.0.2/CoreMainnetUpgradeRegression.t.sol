@@ -657,9 +657,7 @@ contract CoreMainnetUpgradeRegressionTest is Test {
         address atomWalletAddress,
         uint256 signerPrivateKey,
         bytes32 userOpHash
-    )
-        internal
-    {
+    ) internal {
         bytes memory wrappedSig = abi.encode(uint256(0), _signUserOpHash(signerPrivateKey, userOpHash));
         PackedUserOperation memory wrappedOp = _buildUserOperationWithSignature(atomWalletAddress, wrappedSig);
         vm.prank(ENTRY_POINT);
@@ -1087,10 +1085,7 @@ contract CoreMainnetUpgradeRegressionTest is Test {
         uint256 startTimestamp,
         bool expectClosedInterval,
         string memory phaseLabel
-    )
-        internal
-        view
-    {
+    ) internal view {
         uint256 epochStart = controller.getEpochTimestampStart(epoch);
         uint256 epochEnd = controller.getEpochTimestampEnd(epoch);
         uint256 nextEpochStart = controller.getEpochTimestampStart(epoch + 1);
@@ -1163,11 +1158,7 @@ contract CoreMainnetUpgradeRegressionTest is Test {
         atomId = atomIds[0];
     }
 
-    function _capturePreviewDepositSeries(
-        bytes32 termId,
-        uint256 curveId,
-        uint256[4] memory assetSamples
-    )
+    function _capturePreviewDepositSeries(bytes32 termId, uint256 curveId, uint256[4] memory assetSamples)
         internal
         view
         returns (uint256[4] memory sharesOut, uint256[4] memory netAssetsOut)
@@ -1194,10 +1185,7 @@ contract CoreMainnetUpgradeRegressionTest is Test {
         uint256[4] memory assetSamples,
         uint256[4] memory expectedShares,
         uint256[4] memory expectedNetAssets
-    )
-        internal
-        view
-    {
+    ) internal view {
         (uint256[4] memory sharesOut, uint256[4] memory netAssetsOut) =
             _capturePreviewDepositSeries(termId, curveId, assetSamples);
 
@@ -1270,10 +1258,7 @@ contract CoreMainnetUpgradeRegressionTest is Test {
         });
     }
 
-    function _buildUserOperationWithSignature(
-        address sender,
-        bytes memory signature
-    )
+    function _buildUserOperationWithSignature(address sender, bytes memory signature)
         internal
         pure
         returns (PackedUserOperation memory userOp)
@@ -1304,10 +1289,7 @@ contract CoreMainnetUpgradeRegressionTest is Test {
         bytes32 userOpHash,
         uint48 validUntil,
         uint48 validAfter
-    )
-        internal
-        returns (bytes memory)
-    {
+    ) internal returns (bytes memory) {
         bytes32 signedPayload = keccak256(abi.encodePacked(userOpHash, validUntil, validAfter));
         bytes memory rawSignature = _signUserOpHash(signerPrivateKey, signedPayload);
         return abi.encodePacked(rawSignature, validUntil, validAfter);
@@ -1329,11 +1311,7 @@ contract CoreMainnetUpgradeRegressionTest is Test {
         return hex"134008d3000000000000000000000000c23cd55cf924b3fe4b97deaa0eaf222a5082a1ff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000243659cfe6000000000000000000000000bcb1526a8de4a155e4de003361b122ede2f2290800000000000000000000000000000000000000000000000000000000";
     }
 
-    function _deployOffsetCurve(
-        string memory name,
-        uint256 slope,
-        uint256 offset
-    )
+    function _deployOffsetCurve(string memory name, uint256 slope, uint256 offset)
         internal
         returns (OffsetProgressiveCurve)
     {

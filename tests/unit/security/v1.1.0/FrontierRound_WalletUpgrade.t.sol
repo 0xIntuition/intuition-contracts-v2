@@ -4,11 +4,9 @@ pragma solidity 0.8.29;
 import { BaseAccount } from "@account-abstraction/core/BaseAccount.sol";
 import { IEntryPoint } from "@account-abstraction/interfaces/IEntryPoint.sol";
 import { PackedUserOperation } from "@account-abstraction/interfaces/PackedUserOperation.sol";
-import { Ownable2StepUpgradeable } from
-    "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
+import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { ReentrancyGuardUpgradeable } from
-    "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { BeaconProxy } from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import { Test } from "forge-std/src/Test.sol";
@@ -62,10 +60,7 @@ contract FrontierRoundLegacyAtomWallet is
         return _entryPoint;
     }
 
-    function _validateSignature(
-        PackedUserOperation calldata,
-        bytes32
-    )
+    function _validateSignature(PackedUserOperation calldata, bytes32)
         internal
         pure
         override
@@ -101,9 +96,8 @@ contract FrontierRound_WalletUpgradeTest is Test {
         FrontierRoundLegacyAtomWallet legacyImplementation = new FrontierRoundLegacyAtomWallet();
         atomWalletBeacon = new UpgradeableBeacon(address(legacyImplementation), address(this));
 
-        bytes memory initializationData = abi.encodeCall(
-            FrontierRoundLegacyAtomWallet.initialize, (ENTRY_POINT, address(multiVault), ATOM_ID)
-        );
+        bytes memory initializationData =
+            abi.encodeCall(FrontierRoundLegacyAtomWallet.initialize, (ENTRY_POINT, address(multiVault), ATOM_ID));
         BeaconProxy proxy = new BeaconProxy(address(atomWalletBeacon), initializationData);
         FrontierRoundLegacyAtomWallet legacyWallet = FrontierRoundLegacyAtomWallet(payable(address(proxy)));
 
@@ -125,42 +119,47 @@ contract FrontierRound_WalletUpgradeTest is Test {
         atomWallet = AtomWallet(payable(address(proxy)));
     }
 
-    function test_beaconUpgrade_claimedLegacyWalletLosesAllExecutableOwners() external {
+    function test_beaconUpgrade_claimedLegacyWalletPreservesOwnerAndExecution() external {
         assertTrue(atomWallet.isClaimed());
-        assertEq(atomWallet.owner(), address(0));
+        assertEq(atomWallet.owner(), claimant);
         assertEq(atomWallet.ownerCount(), 0);
         assertFalse(atomWallet.isOwnerAddress(claimant));
 
-        address legacyOwner =
-            address(uint160(uint256(vm.load(address(atomWallet), OWNABLE_STORAGE_LOCATION))));
+        address legacyOwner = address(uint160(uint256(vm.load(address(atomWallet), OWNABLE_STORAGE_LOCATION))));
         assertEq(legacyOwner, claimant);
         assertEq(vm.load(address(atomWallet), MULTI_OWNABLE_STORAGE_LOCATION), bytes32(0));
 
         vm.startPrank(claimant);
-        vm.expectRevert(abi.encodeWithSelector(AtomWallet.AtomWallet_OnlyOwnerOrEntryPoint.selector));
         atomWallet.execute(RECIPIENT, TRANSFER_AMOUNT, "");
         vm.stopPrank();
 
-        assertEq(address(atomWallet).balance, WALLET_BALANCE);
-        assertEq(RECIPIENT.balance, 0);
+        assertEq(address(atomWallet).balance, WALLET_BALANCE - TRANSFER_AMOUNT);
+        assertEq(RECIPIENT.balance, TRANSFER_AMOUNT);
+        assertEq(atomWallet.owner(), claimant);
+        assertEq(atomWallet.ownerCount(), 1);
+        assertTrue(atomWallet.isOwnerAddress(claimant));
     }
 
-    function test_beaconUpgrade_completeClaimCannotMigrateClaimedLegacyWallet() external {
-        vm.startPrank(ATOM_WARDEN);
-        vm.expectRevert(abi.encodeWithSelector(AtomWallet.AtomWallet_AlreadyClaimed.selector));
-        atomWallet.completeClaim(claimant);
+    function test_beaconUpgrade_claimedLegacyOwnerCanExplicitlyMigrate() external {
+        vm.startPrank(claimant);
+        atomWallet.migrateLegacyOwner();
         vm.stopPrank();
 
-        assertEq(atomWallet.owner(), address(0));
-        assertEq(atomWallet.ownerCount(), 0);
+        assertEq(atomWallet.owner(), claimant);
+        assertEq(atomWallet.ownerCount(), 1);
+        assertTrue(atomWallet.isOwnerAddress(claimant));
     }
 
-    function test_beaconUpgrade_legacyOwnerSignatureCannotSeedMultiOwnableRegistry() external {
-        bytes32 hash = keccak256("frontier-wallet-upgrade-signature");
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(CLAIMANT_PRIVATE_KEY, hash);
-        bytes memory wrappedSignature = abi.encode(uint256(0), abi.encodePacked(r, s, v));
+    function test_beaconUpgrade_transferOwnershipMigratesBeforeRotation() external {
+        address newOwner = makeAddr("newOwner");
 
-        assertEq(atomWallet.isValidSignature(hash, wrappedSignature), bytes4(0xffffffff));
-        assertEq(atomWallet.ownerCount(), 0);
+        vm.startPrank(claimant);
+        atomWallet.transferOwnership(newOwner);
+        vm.stopPrank();
+
+        assertEq(atomWallet.owner(), newOwner);
+        assertEq(atomWallet.ownerCount(), 1);
+        assertFalse(atomWallet.isOwnerAddress(claimant));
+        assertTrue(atomWallet.isOwnerAddress(newOwner));
     }
 }

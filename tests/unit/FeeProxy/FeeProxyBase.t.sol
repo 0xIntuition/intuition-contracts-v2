@@ -177,13 +177,7 @@ abstract contract FeeProxyBaseTest is BaseTest {
     }
 
     /// @dev Wrapper around {BaseTest.makeDeposit} that closes the prank started by the helper.
-    function _makeDepositDirect(
-        address depositor,
-        address receiver,
-        bytes32 termId,
-        uint256 curveId,
-        uint256 amount
-    )
+    function _makeDepositDirect(address depositor, address receiver, bytes32 termId, uint256 curveId, uint256 amount)
         internal
         returns (uint256 shares)
     {

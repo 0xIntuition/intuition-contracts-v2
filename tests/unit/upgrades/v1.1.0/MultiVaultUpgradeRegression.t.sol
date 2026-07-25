@@ -419,10 +419,7 @@ contract MultiVaultUpgradeRegressionTest is Test {
         return multiVault.computeAtomWalletAddr(multiVault.calculateAtomId(bytes(string.concat(label, "-atom-one"))));
     }
 
-    function _captureLegacyBaseline(
-        address user,
-        address atomWallet
-    )
+    function _captureLegacyBaseline(address user, address atomWallet)
         internal
         view
         returns (LegacyBaseline memory baseline)
@@ -435,11 +432,7 @@ contract MultiVaultUpgradeRegressionTest is Test {
         baseline.userUtilization = multiVault.getUserUtilizationForEpoch(user, baseline.epoch);
     }
 
-    function _createLegacyTerms(
-        string memory label,
-        address user,
-        address atomWallet
-    )
+    function _createLegacyTerms(string memory label, address user, address atomWallet)
         internal
         returns (LegacyTerms memory terms)
     {
@@ -470,11 +463,7 @@ contract MultiVaultUpgradeRegressionTest is Test {
         terms.tripleId = tripleIds[0];
     }
 
-    function _runLegacyActions(
-        address user,
-        LegacyTerms memory terms,
-        uint256 defaultCurveId
-    )
+    function _runLegacyActions(address user, LegacyTerms memory terms, uint256 defaultCurveId)
         internal
         returns (LegacyActions memory actions)
     {
@@ -599,11 +588,7 @@ contract MultiVaultUpgradeRegressionTest is Test {
         atomId = atomIds[0];
     }
 
-    function _vaultCheckpoint(
-        address user,
-        bytes32 termId,
-        uint256 curveId
-    )
+    function _vaultCheckpoint(address user, bytes32 termId, uint256 curveId)
         internal
         view
         returns (VaultCheckpoint memory checkpoint)
@@ -612,11 +597,7 @@ contract MultiVaultUpgradeRegressionTest is Test {
         checkpoint.userShares = multiVault.getShares(user, termId, curveId);
     }
 
-    function _singleTripleArrays(
-        bytes32 subjectId,
-        bytes32 predicateId,
-        bytes32 objectId
-    )
+    function _singleTripleArrays(bytes32 subjectId, bytes32 predicateId, bytes32 objectId)
         internal
         pure
         returns (bytes32[] memory subjectIds, bytes32[] memory predicateIds, bytes32[] memory objectIds)

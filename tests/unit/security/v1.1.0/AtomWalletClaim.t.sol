@@ -165,10 +165,7 @@ contract AtomWalletClaimTest is BaseTest {
         atomId = ids[0];
     }
 
-    function _authorization(
-        address claimant,
-        bytes32 atomId
-    )
+    function _authorization(address claimant, bytes32 atomId)
         internal
         view
         returns (IAtomWarden.ClaimAuthorization memory authorization)

@@ -66,10 +66,7 @@ contract BaseEmissionsController is
         address token,
         MetaERC20DispatchInit memory metaERC20DispatchInit,
         CoreEmissionsControllerInit memory checkpointInit
-    )
-        external
-        initializer
-    {
+    ) external initializer {
         if (admin == address(0) || controller == address(0) || token == address(0)) {
             revert BaseEmissionsController_InvalidAddress();
         }

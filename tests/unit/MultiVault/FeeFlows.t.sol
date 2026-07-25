@@ -73,12 +73,7 @@ contract FeeFlowsTest is BaseTest {
         }
     }
 
-    function _expectDeposit(
-        address who,
-        bytes32 termId,
-        uint256 curveId,
-        uint256 amount
-    )
+    function _expectDeposit(address who, bytes32 termId, uint256 curveId, uint256 amount)
         internal
         returns (uint256 sharesMinted, uint256 assetsAfterFees)
     {
@@ -89,12 +84,7 @@ contract FeeFlowsTest is BaseTest {
         assetsAfterFees = expNetAssets;
     }
 
-    function _expectRedeem(
-        address who,
-        bytes32 termId,
-        uint256 curveId,
-        uint256 shares
-    )
+    function _expectRedeem(address who, bytes32 termId, uint256 curveId, uint256 shares)
         internal
         returns (uint256 assetsAfterFees, uint256 rawAssetsBeforeFees)
     {

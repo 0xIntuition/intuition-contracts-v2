@@ -423,10 +423,7 @@ interface IMultiVault {
     /// @return assetsAfterFixedFees The net assets that will be added to the vault (after fixed fees, before dynamic
     /// fees)
     /// @return assetsAfterFees The net assets that will be added to the vault (after all fees)
-    function previewAtomCreate(
-        bytes32 termId,
-        uint256 assets
-    )
+    function previewAtomCreate(bytes32 termId, uint256 assets)
         external
         view
         returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees);
@@ -438,11 +435,7 @@ interface IMultiVault {
     /// @param assets The amount of assets the user would send
     /// @return shares The expected shares to be minted for the user
     /// @return assetsAfterFees The net assets that will be added to the vault (after all fees)
-    function previewDeposit(
-        bytes32 termId,
-        uint256 curveId,
-        uint256 assets
-    )
+    function previewDeposit(bytes32 termId, uint256 curveId, uint256 assets)
         external
         view
         returns (uint256 shares, uint256 assetsAfterFees);
@@ -454,11 +447,7 @@ interface IMultiVault {
     /// @param shares The amount of shares the user would redeem
     /// @return assetsAfterFees The net assets that would be sent to the user (after protocol and exit fees)
     /// @return sharesUsed The shares that would be burned (returned for convenience)
-    function previewRedeem(
-        bytes32 termId,
-        uint256 curveId,
-        uint256 shares
-    )
+    function previewRedeem(bytes32 termId, uint256 curveId, uint256 shares)
         external
         view
         returns (uint256 assetsAfterFees, uint256 sharesUsed);
@@ -471,10 +460,7 @@ interface IMultiVault {
     /// @return assetsAfterFixedFees The net assets that will be added to the vault (after fixed fees like protocol and
     /// entry fees)
     /// @return assetsAfterFees The net assets that will be added to the vault (after all fees)
-    function previewTripleCreate(
-        bytes32 termId,
-        uint256 assets
-    )
+    function previewTripleCreate(bytes32 termId, uint256 assets)
         external
         view
         returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees);
@@ -501,10 +487,7 @@ interface IMultiVault {
      * @param assets Array of asset amounts to deposit into each atom vault
      * @return Array of atom IDs (termIds) for the created atoms
      */
-    function createAtoms(
-        bytes[] calldata atomDatas,
-        uint256[] calldata assets
-    )
+    function createAtoms(bytes[] calldata atomDatas, uint256[] calldata assets)
         external
         payable
         returns (bytes32[] memory);
@@ -522,10 +505,7 @@ interface IMultiVault {
         bytes32[] calldata predicateIds,
         bytes32[] calldata objectIds,
         uint256[] calldata assets
-    )
-        external
-        payable
-        returns (bytes32[] memory);
+    ) external payable returns (bytes32[] memory);
 
     /**
      * @notice On-behalf-of variant of {createAtoms}. Creates multiple atom
@@ -546,11 +526,7 @@ interface IMultiVault {
      * @param  assets    Array of asset amounts to deposit into each atom vault.
      * @return Array of atom IDs (termIds) for the created atoms.
      */
-    function createAtomsFor(
-        address creator,
-        bytes[] calldata atomDatas,
-        uint256[] calldata assets
-    )
+    function createAtomsFor(address creator, bytes[] calldata atomDatas, uint256[] calldata assets)
         external
         payable
         returns (bytes32[] memory);
@@ -578,10 +554,7 @@ interface IMultiVault {
         bytes32[] calldata predicateIds,
         bytes32[] calldata objectIds,
         uint256[] calldata assets
-    )
-        external
-        payable
-        returns (bytes32[] memory);
+    ) external payable returns (bytes32[] memory);
 
     /**
      * @notice Deposits assets into a vault and mints shares to the receiver
@@ -591,12 +564,7 @@ interface IMultiVault {
      * @param minShares Minimum number of shares expected to be minted
      * @return Number of shares minted to the receiver
      */
-    function deposit(
-        address receiver,
-        bytes32 termId,
-        uint256 curveId,
-        uint256 minShares
-    )
+    function deposit(address receiver, bytes32 termId, uint256 curveId, uint256 minShares)
         external
         payable
         returns (uint256);
@@ -616,10 +584,7 @@ interface IMultiVault {
         uint256[] calldata curveIds,
         uint256[] calldata assets,
         uint256[] calldata minShares
-    )
-        external
-        payable
-        returns (uint256[] memory);
+    ) external payable returns (uint256[] memory);
 
     /**
      * @notice Redeems shares from a vault and returns assets to the receiver
@@ -630,13 +595,7 @@ interface IMultiVault {
      * @param minAssets Minimum number of assets expected to be returned
      * @return Number of assets returned to the receiver
      */
-    function redeem(
-        address receiver,
-        bytes32 termId,
-        uint256 curveId,
-        uint256 shares,
-        uint256 minAssets
-    )
+    function redeem(address receiver, bytes32 termId, uint256 curveId, uint256 shares, uint256 minAssets)
         external
         returns (uint256);
 
@@ -655,9 +614,7 @@ interface IMultiVault {
         uint256[] calldata curveIds,
         uint256[] calldata shares,
         uint256[] calldata minAssets
-    )
-        external
-        returns (uint256[] memory);
+    ) external returns (uint256[] memory);
 
     /**
      * @notice Executes a batch of non-payable calls on this contract atomically.
@@ -689,10 +646,7 @@ interface IMultiVault {
      * @param  values The array of per-sub-call value allocations
      * @return results The array of return data from each sub-call
      */
-    function multicallPayable(
-        bytes[] calldata data,
-        uint256[] calldata values
-    )
+    function multicallPayable(bytes[] calldata data, uint256[] calldata values)
         external
         payable
         returns (bytes[] memory results);

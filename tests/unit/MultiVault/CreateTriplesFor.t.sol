@@ -282,11 +282,7 @@ contract CreateTriplesForTest is BaseTest {
     /*                       HELPERS                       */
     /* =================================================== */
 
-    function _createUnderlyingAtoms(
-        string memory s,
-        string memory p,
-        string memory o
-    )
+    function _createUnderlyingAtoms(string memory s, string memory p, string memory o)
         internal
         returns (bytes32[] memory atomIds)
     {
@@ -301,12 +297,7 @@ contract CreateTriplesForTest is BaseTest {
         return _createOneTripleForWithPayment(creator, sender, atomIds, TRIPLE_COST[0]);
     }
 
-    function _createOneTripleForWithPayment(
-        address creator,
-        address sender,
-        bytes32[] memory atomIds,
-        uint256 payment
-    )
+    function _createOneTripleForWithPayment(address creator, address sender, bytes32[] memory atomIds, uint256 payment)
         internal
         returns (bytes32)
     {

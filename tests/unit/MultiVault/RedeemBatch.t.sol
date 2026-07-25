@@ -26,10 +26,7 @@ contract RedeemBatchTest is BaseTest {
                             HELPER FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    function _setupAtomsWithDeposits(
-        uint256 count,
-        uint256 depositAmount
-    )
+    function _setupAtomsWithDeposits(uint256 count, uint256 depositAmount)
         internal
         returns (bytes32[] memory atomIds, uint256[] memory shares)
     {

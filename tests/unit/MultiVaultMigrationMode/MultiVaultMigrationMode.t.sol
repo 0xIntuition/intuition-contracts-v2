@@ -371,9 +371,7 @@ contract MultiVaultMigrationModeTest is BaseTest {
         uint256 totalShares1,
         uint256 totalAssets2,
         uint256 totalShares2
-    )
-        external
-    {
+    ) external {
         totalAssets1 = bound(totalAssets1, 1e6, type(uint128).max);
         totalShares1 = bound(totalShares1, 1e6, type(uint128).max);
         totalAssets2 = bound(totalAssets2, 1e6, type(uint128).max);

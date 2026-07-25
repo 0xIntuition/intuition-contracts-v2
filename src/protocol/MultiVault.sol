@@ -258,10 +258,7 @@ contract MultiVault is
         WalletConfig memory _walletConfig,
         VaultFees memory _vaultFees,
         BondingCurveConfig memory _bondingCurveConfig
-    )
-        external
-        initializer
-    {
+    ) external initializer {
         __AccessControl_init();
         __ReentrancyGuard_init();
         __Pausable_init();
@@ -399,10 +396,7 @@ contract MultiVault is
     }
 
     /// @inheritdoc IMultiVault
-    function previewAtomCreate(
-        bytes32 termId,
-        uint256 assets
-    )
+    function previewAtomCreate(bytes32 termId, uint256 assets)
         external
         view
         returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees)
@@ -411,10 +405,7 @@ contract MultiVault is
     }
 
     /// @inheritdoc IMultiVault
-    function previewTripleCreate(
-        bytes32 termId,
-        uint256 assets
-    )
+    function previewTripleCreate(bytes32 termId, uint256 assets)
         external
         view
         returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees)
@@ -423,11 +414,7 @@ contract MultiVault is
     }
 
     /// @inheritdoc IMultiVault
-    function previewDeposit(
-        bytes32 termId,
-        uint256 curveId,
-        uint256 assets
-    )
+    function previewDeposit(bytes32 termId, uint256 curveId, uint256 assets)
         public
         view
         returns (uint256 shares, uint256 assetsAfterFees)
@@ -438,11 +425,7 @@ contract MultiVault is
     }
 
     /// @inheritdoc IMultiVault
-    function previewRedeem(
-        bytes32 termId,
-        uint256 curveId,
-        uint256 shares
-    )
+    function previewRedeem(bytes32 termId, uint256 curveId, uint256 shares)
         public
         view
         returns (uint256 assetsAfterFees, uint256 sharesUsed)
@@ -568,10 +551,7 @@ contract MultiVault is
     /// @param  values The array of per-sub-call value allocations; must satisfy
     ///         `sum(values) == msg.value`
     /// @return results The array of return data from each sub-call
-    function multicallPayable(
-        bytes[] calldata data,
-        uint256[] calldata values
-    )
+    function multicallPayable(bytes[] calldata data, uint256[] calldata values)
         external
         payable
         returns (bytes[] memory results)
@@ -637,10 +617,7 @@ contract MultiVault is
        execute on this contract before the forward — they need slots on this contract's storage. */
 
     /// @inheritdoc IMultiVault
-    function createAtoms(
-        bytes[] calldata data,
-        uint256[] calldata assets
-    )
+    function createAtoms(bytes[] calldata data, uint256[] calldata assets)
         external
         payable
         whenNotPaused
@@ -656,22 +633,12 @@ contract MultiVault is
         bytes32[] calldata predicateIds,
         bytes32[] calldata objectIds,
         uint256[] calldata assets
-    )
-        external
-        payable
-        whenNotPaused
-        nonReentrant
-        returns (bytes32[] memory)
-    {
+    ) external payable whenNotPaused nonReentrant returns (bytes32[] memory) {
         return MultiVaultLib.createTriples(subjectIds, predicateIds, objectIds, assets, _effectiveMsgValue());
     }
 
     /// @inheritdoc IMultiVault
-    function createAtomsFor(
-        address creator,
-        bytes[] calldata data,
-        uint256[] calldata assets
-    )
+    function createAtomsFor(address creator, bytes[] calldata data, uint256[] calldata assets)
         external
         payable
         whenNotPaused
@@ -688,24 +655,14 @@ contract MultiVault is
         bytes32[] calldata predicateIds,
         bytes32[] calldata objectIds,
         uint256[] calldata assets
-    )
-        external
-        payable
-        whenNotPaused
-        nonReentrant
-        returns (bytes32[] memory)
-    {
-        return
-            MultiVaultLib.createTriplesFor(creator, subjectIds, predicateIds, objectIds, assets, _effectiveMsgValue());
+    ) external payable whenNotPaused nonReentrant returns (bytes32[] memory) {
+        return MultiVaultLib.createTriplesFor(
+            creator, subjectIds, predicateIds, objectIds, assets, _effectiveMsgValue()
+        );
     }
 
     /// @inheritdoc IMultiVault
-    function deposit(
-        address receiver,
-        bytes32 termId,
-        uint256 curveId,
-        uint256 minShares
-    )
+    function deposit(address receiver, bytes32 termId, uint256 curveId, uint256 minShares)
         external
         payable
         whenNotPaused
@@ -722,24 +679,12 @@ contract MultiVault is
         uint256[] calldata curveIds,
         uint256[] calldata assets,
         uint256[] calldata minShares
-    )
-        external
-        payable
-        whenNotPaused
-        nonReentrant
-        returns (uint256[] memory)
-    {
+    ) external payable whenNotPaused nonReentrant returns (uint256[] memory) {
         return MultiVaultLib.depositBatch(receiver, termIds, curveIds, assets, minShares, _effectiveMsgValue());
     }
 
     /// @inheritdoc IMultiVault
-    function redeem(
-        address receiver,
-        bytes32 termId,
-        uint256 curveId,
-        uint256 shares,
-        uint256 minAssets
-    )
+    function redeem(address receiver, bytes32 termId, uint256 curveId, uint256 shares, uint256 minAssets)
         external
         whenNotPaused
         nonReentrant
@@ -755,12 +700,7 @@ contract MultiVault is
         uint256[] calldata curveIds,
         uint256[] calldata shares,
         uint256[] calldata minAssets
-    )
-        external
-        whenNotPaused
-        nonReentrant
-        returns (uint256[] memory)
-    {
+    ) external whenNotPaused nonReentrant returns (uint256[] memory) {
         return MultiVaultLib.redeemBatch(receiver, termIds, curveIds, shares, minAssets);
     }
 
@@ -923,13 +863,7 @@ contract MultiVault is
 
     /// @dev Validate a redeem operation. Wrapped here so `MultiVaultHarness.validateRedeemForTest`
     ///      resolves through inheritance with no test edit.
-    function _validateRedeem(
-        bytes32 termId,
-        uint256 curveId,
-        address account,
-        uint256 shares,
-        uint256 minAssets
-    )
+    function _validateRedeem(bytes32 termId, uint256 curveId, address account, uint256 shares, uint256 minAssets)
         internal
         view
     {
@@ -944,9 +878,7 @@ contract MultiVault is
         uint256 totalAssets,
         uint256 totalShares,
         VaultType vaultType
-    )
-        internal
-    {
+    ) internal {
         MultiVaultLib.setVaultTotals(termId, curveId, totalAssets, totalShares, vaultType);
     }
 

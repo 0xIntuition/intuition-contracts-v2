@@ -54,9 +54,7 @@ contract FeeMathTest is FeeProxyBaseTest {
         uint256 depositBps,
         uint256 depositFixed,
         uint256 gross
-    )
-        external
-    {
+    ) external {
         depositBps = bound(depositBps, 0, INITIAL_MAX_BPS);
         depositFixed = bound(depositFixed, 0, INITIAL_MAX_FIXED_FEE);
         // Keep gross within a band that exercises real arithmetic without

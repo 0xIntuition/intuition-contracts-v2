@@ -448,9 +448,7 @@ abstract contract SetupScript is Script {
         string memory relativePath,
         address timelock,
         TimelockOperationArtifact[] memory operations
-    )
-        internal
-    {
+    ) internal {
         string memory fullPath = string.concat(vm.projectRoot(), relativePath);
         string memory output = string.concat(
             "{\n",

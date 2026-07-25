@@ -23,11 +23,7 @@ contract MultiSubcallCatcher {
     ///      `_virtualMsgValue = firstValue`), subcall 1 deposits 0 (reverts below-minimum). The whole
     ///      call reverts and the forwarded value returns here. Then a direct deposit of `directValue`
     ///      must be credited its own value — not the stale `firstValue` and not 0.
-    function catchMultiThenDeposit(
-        bytes32 atomId,
-        uint256 firstValue,
-        uint256 directValue
-    )
+    function catchMultiThenDeposit(bytes32 atomId, uint256 firstValue, uint256 directValue)
         external
         payable
         returns (uint256 directShares)

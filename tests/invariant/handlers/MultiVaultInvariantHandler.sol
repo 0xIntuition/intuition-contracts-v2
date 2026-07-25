@@ -173,9 +173,7 @@ contract MultiVaultInvariantHandler is Test {
         uint256 assetSeedB,
         bool useTripleA,
         bool useTripleB
-    )
-        public
-    {
+    ) public {
         bytes32 termA = _pickTerm(termSeedA, useTripleA);
         bytes32 termB = _pickTerm(termSeedB, useTripleB);
         if (termA == bytes32(0) || termB == bytes32(0)) return;
@@ -203,12 +201,7 @@ contract MultiVaultInvariantHandler is Test {
     /// @notice Drive `multicallPayable` batching a fresh `createAtoms` with a `deposit` into an existing
     ///         vault, each allocated its own slice of `msg.value`. Mixes a create and a deposit in one
     ///         payable batch — the multi-selector value-accounting path.
-    function multicallPayableCreateAndDeposit(
-        uint256 actorSeed,
-        uint256 termSeed,
-        uint256 assetSeed,
-        bool useTriple
-    )
+    function multicallPayableCreateAndDeposit(uint256 actorSeed, uint256 termSeed, uint256 assetSeed, bool useTriple)
         public
     {
         bytes32 termId = _pickTerm(termSeed, useTriple);
@@ -312,11 +305,7 @@ contract MultiVaultInvariantHandler is Test {
         }
     }
 
-    function _singletons(
-        bytes32 a,
-        bytes32 b,
-        bytes32 c
-    )
+    function _singletons(bytes32 a, bytes32 b, bytes32 c)
         internal
         pure
         returns (bytes32[] memory s, bytes32[] memory p, bytes32[] memory o)

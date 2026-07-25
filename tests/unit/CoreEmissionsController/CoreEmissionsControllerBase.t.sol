@@ -62,9 +62,7 @@ abstract contract CoreEmissionsControllerBase is Test {
         uint256 emissionsPerEpoch,
         uint256 cliff,
         uint256 reductionBp
-    )
-        internal
-    {
+    ) internal {
         controller.initCoreEmissionsController(startTimestamp, epochLength, emissionsPerEpoch, cliff, reductionBp);
     }
 

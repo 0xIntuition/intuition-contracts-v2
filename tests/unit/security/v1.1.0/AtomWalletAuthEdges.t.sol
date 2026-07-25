@@ -323,16 +323,13 @@ contract AtomWalletAuthEdgesTest is BaseTest {
 
     /// @dev Calls `isValidSignature` via low-level staticcall so a revert (rather than a returned
     ///      failure magic) is observable as `reverted == true`.
-    function _callIsValidSignature(
-        bytes32 hash,
-        bytes memory wrapper
-    )
+    function _callIsValidSignature(bytes32 hash, bytes memory wrapper)
         internal
         view
         returns (bool reverted, bytes4 ret)
     {
-        (bool ok, bytes memory out) =
-            address(wallet).staticcall(abi.encodeCall(wallet.isValidSignature, (hash, wrapper)));
+        (bool ok, bytes memory out) = address(wallet)
+            .staticcall(abi.encodeCall(wallet.isValidSignature, (hash, wrapper)));
         if (!ok) return (true, bytes4(0));
         return (false, abi.decode(out, (bytes4)));
     }

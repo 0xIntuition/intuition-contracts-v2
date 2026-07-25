@@ -207,10 +207,7 @@ contract DepositTest is BaseTest {
     /// @notice Fuzz: {previewDeposit} must agree with the actual shares minted by {deposit} for the
     ///         counter-first non-default path. Guards against preview/exec divergence after the
     ///         symmetric guard tightening across the execution and calc paths.
-    function testFuzz_deposit_CounterTripleNonDefault_PreviewMatchesExecution(
-        uint256 assets,
-        uint256 curveSeed
-    )
+    function testFuzz_deposit_CounterTripleNonDefault_PreviewMatchesExecution(uint256 assets, uint256 curveSeed)
         public
     {
         uint256 nonDefaultCurve = _pickNonDefaultCurveFromSeed(curveSeed);

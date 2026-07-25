@@ -49,10 +49,9 @@ contract CoreEmissionsController is ICoreEmissionsController {
         uint256 emissionsPerEpoch,
         uint256 emissionsReductionCliff,
         uint256 emissionsReductionBasisPoints
-    )
-        internal
-    {
+    ) internal {
         _validateTimestampStart(startTimestamp);
+        _validateEmissionsLength(emissionsLength);
         _validateEmissionsPerEpoch(emissionsPerEpoch);
         _validateCliff(emissionsReductionCliff);
         _validateReductionBasisPoints(emissionsReductionBasisPoints);
@@ -126,6 +125,12 @@ contract CoreEmissionsController is ICoreEmissionsController {
     /* =================================================== */
     /*                   VALIDATION                        */
     /* =================================================== */
+
+    function _validateEmissionsLength(uint256 emissionsLength) internal pure {
+        if (emissionsLength == 0) {
+            revert CoreEmissionsController_InvalidEmissionsLength();
+        }
+    }
 
     function _validateEmissionsPerEpoch(uint256 emissionsPerEpoch) internal pure {
         if (emissionsPerEpoch == 0) {
@@ -224,11 +229,7 @@ contract CoreEmissionsController is ICoreEmissionsController {
      * @param cliffsToApply Number of cliff reductions to apply
      * @return Final emissions after all cliff reductions
      */
-    function _applyCliffReductions(
-        uint256 baseEmissions,
-        uint256 retentionFactor,
-        uint256 cliffsToApply
-    )
+    function _applyCliffReductions(uint256 baseEmissions, uint256 retentionFactor, uint256 cliffsToApply)
         internal
         pure
         returns (uint256)

@@ -1286,8 +1286,7 @@ contract AtomWalletTest is BaseTest {
         assertEq(atomWallet.owner(), claimant);
 
         bytes32 hash = keccak256("post-claim message");
-        // Raw digest (no prefix) for ERC-1271
-        bytes memory signature = _signAndWrapRaw(claimantPrivateKey, 0, hash);
+        bytes memory signature = _signAndWrapReplaySafe(claimantPrivateKey, 0, hash, atomWallet);
 
         bytes4 result = atomWallet.isValidSignature(hash, signature);
         assertEq(result, bytes4(0x1626ba7e));
@@ -1302,7 +1301,7 @@ contract AtomWalletTest is BaseTest {
         atomWallet.completeClaim(claimant);
 
         bytes32 hash = keccak256("post-claim message");
-        bytes memory signature = _signAndWrapRaw(wrongPrivateKey, 0, hash);
+        bytes memory signature = _signAndWrapReplaySafe(wrongPrivateKey, 0, hash, atomWallet);
 
         bytes4 result = atomWallet.isValidSignature(hash, signature);
         assertEq(result, bytes4(0xffffffff));
@@ -1314,10 +1313,22 @@ contract AtomWalletTest is BaseTest {
 
         AtomWallet testWallet = _createClaimedWallet(claimant);
 
-        bytes memory signature = _signAndWrapRaw(ownerPrivateKey, 0, hash);
+        bytes memory signature = _signAndWrapReplaySafe(ownerPrivateKey, 0, hash, testWallet);
 
         bytes4 result = testWallet.isValidSignature(hash, signature);
         assertEq(result, bytes4(0x1626ba7e));
+    }
+
+    function test_isValidSignature_rejectsCrossWalletReplay() public {
+        uint256 claimantPrivateKey = 0xC1A1;
+        address claimant = vm.addr(claimantPrivateKey);
+        AtomWallet firstWallet = _createClaimedWallet(claimant);
+        AtomWallet secondWallet = _createClaimedWallet(claimant);
+        bytes32 hash = keccak256("wallet-specific authorization");
+        bytes memory signature = _signAndWrapReplaySafe(claimantPrivateKey, 0, hash, firstWallet);
+
+        assertEq(firstWallet.isValidSignature(hash, signature), bytes4(0x1626ba7e));
+        assertEq(secondWallet.isValidSignature(hash, signature), bytes4(0xffffffff));
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -1463,11 +1474,7 @@ contract AtomWalletTest is BaseTest {
     /// @dev Signs a UserOp hash with the EIP-191 prefix applied, then wraps the ECDSA
     ///      signature into the Coinbase SignatureWrapper format expected by
     ///      `_validateSignature` (ownerIndex + raw signature bytes).
-    function _signUserOpCoinbase(
-        uint256 signerPrivateKey,
-        uint256 ownerIndex,
-        bytes32 userOpHash
-    )
+    function _signUserOpCoinbase(uint256 signerPrivateKey, uint256 ownerIndex, bytes32 userOpHash)
         internal
         pure
         returns (bytes memory)
@@ -1478,18 +1485,25 @@ contract AtomWalletTest is BaseTest {
         return abi.encode(ownerIndex, rawSig);
     }
 
-    /// @dev Signs a raw digest (no prefix) and wraps in the Coinbase SignatureWrapper
-    ///      format expected by `isValidSignature` (ERC-1271).
-    function _signAndWrapRaw(
-        uint256 signerPrivateKey,
-        uint256 ownerIndex,
-        bytes32 hash
-    )
+    /// @dev Signs the wallet- and chain-bound replay-safe digest and wraps it in the
+    ///      Coinbase SignatureWrapper format expected by `isValidSignature` (ERC-1271).
+    function _signAndWrapReplaySafe(uint256 signerPrivateKey, uint256 ownerIndex, bytes32 hash, AtomWallet targetWallet)
         internal
-        pure
+        view
         returns (bytes memory)
     {
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, hash);
+        bytes32 domainSeparator = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes("AtomWallet")),
+                keccak256(bytes("1")),
+                block.chainid,
+                address(targetWallet)
+            )
+        );
+        bytes32 messageHash = keccak256(abi.encode(keccak256("CoinbaseSmartWalletMessage(bytes32 hash)"), hash));
+        bytes32 replaySafeHash = keccak256(abi.encodePacked("\x19\x01", domainSeparator, messageHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, replaySafeHash);
         bytes memory rawSig = abi.encodePacked(r, s, v);
         return abi.encode(ownerIndex, rawSig);
     }

@@ -165,10 +165,7 @@ contract AtomWarden is IAtomWarden, Initializable, AccessControlUpgradeable, EIP
         uint48 _maxValidUntil,
         uint256 _maxClaimsPerWindow,
         uint256 _claimCapWindow
-    )
-        external
-        initializer
-    {
+    ) external initializer {
         if (_signatureThreshold == 0) {
             revert AtomWarden_InvalidThreshold();
         }
@@ -219,10 +216,7 @@ contract AtomWarden is IAtomWarden, Initializable, AccessControlUpgradeable, EIP
         uint48 _maxValidUntil,
         uint256 _maxClaimsPerWindow,
         uint256 _claimCapWindow
-    )
-        external
-        reinitializer(2)
-    {
+    ) external reinitializer(2) {
         address admin = IMultiVaultCore(multiVault).getGeneralConfig().admin;
         if (msg.sender != admin) {
             revert AtomWarden_UnauthorizedReinitializer();
@@ -284,10 +278,7 @@ contract AtomWarden is IAtomWarden, Initializable, AccessControlUpgradeable, EIP
      *      provides O(1) deduplication and a canonical bundle layout. Off-chain producers
      *      MUST sort signers by recovered address (not by key index) before concatenating.
      */
-    function claimWithAuthorization(
-        ClaimAuthorization calldata authorization,
-        bytes calldata signature
-    )
+    function claimWithAuthorization(ClaimAuthorization calldata authorization, bytes calldata signature)
         external
         whenNotPaused
     {
@@ -375,10 +366,7 @@ contract AtomWarden is IAtomWarden, Initializable, AccessControlUpgradeable, EIP
     /// @inheritdoc IAtomWarden
     /// @dev Reverts atomically if any individual grant fails. Operators should filter out
     ///      already-claimed wallets off-chain before submitting a batch.
-    function batchGrantAtomWalletOwnership(
-        bytes32[] calldata atomIds,
-        address[] calldata newOwners
-    )
+    function batchGrantAtomWalletOwnership(bytes32[] calldata atomIds, address[] calldata newOwners)
         external
         onlyRole(OPERATOR_ROLE)
     {
@@ -581,10 +569,7 @@ contract AtomWarden is IAtomWarden, Initializable, AccessControlUpgradeable, EIP
      *      `AtomWarden_NonCanonicalSignerOrder` if any recovered address is not strictly
      *      greater than the previous one.
      */
-    function _verifyQuorum(
-        ClaimAuthorization calldata authorization,
-        bytes calldata signature
-    )
+    function _verifyQuorum(ClaimAuthorization calldata authorization, bytes calldata signature)
         internal
         view
         returns (address firstSigner, uint16 verified)

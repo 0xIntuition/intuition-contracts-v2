@@ -104,10 +104,7 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
         WalletConfig memory _walletConfig,
         VaultFees memory _vaultFees,
         BondingCurveConfig memory _bondingCurveConfig
-    )
-        internal
-        onlyInitializing
-    {
+    ) internal onlyInitializing {
         _setGeneralConfig(_generalConfig);
         atomConfig = _atomConfig;
         tripleConfig = _tripleConfig;
@@ -214,11 +211,7 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
     }
 
     /// @inheritdoc IMultiVaultCore
-    function calculateTripleId(
-        bytes32 subjectId,
-        bytes32 predicateId,
-        bytes32 objectId
-    )
+    function calculateTripleId(bytes32 subjectId, bytes32 predicateId, bytes32 objectId)
         external
         pure
         returns (bytes32)
@@ -227,11 +220,7 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
     }
 
     /// @inheritdoc IMultiVaultCore
-    function calculateCounterTripleId(
-        bytes32 subjectId,
-        bytes32 predicateId,
-        bytes32 objectId
-    )
+    function calculateCounterTripleId(bytes32 subjectId, bytes32 predicateId, bytes32 objectId)
         external
         pure
         returns (bytes32)
@@ -287,11 +276,7 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
     /// @param predicateId The atom id of the predicate
     /// @param objectId The atom id of the object
     /// @return id The calculated triple id
-    function _calculateTripleId(
-        bytes32 subjectId,
-        bytes32 predicateId,
-        bytes32 objectId
-    )
+    function _calculateTripleId(bytes32 subjectId, bytes32 predicateId, bytes32 objectId)
         internal
         pure
         returns (bytes32)

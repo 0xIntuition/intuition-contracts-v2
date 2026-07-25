@@ -18,10 +18,7 @@ interface IVotingEscrowView {
 
     // Per-user checkpoints
     function user_point_epoch(address addr) external view returns (uint256);
-    function user_point_history(
-        address addr,
-        uint256 idx
-    )
+    function user_point_history(address addr, uint256 idx)
         external
         view
         returns (int128 bias, int128 slope, uint256 ts, uint256 blk);

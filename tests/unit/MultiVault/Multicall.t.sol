@@ -903,11 +903,7 @@ contract MulticallTest is BaseTest {
         );
     }
 
-    function _toBytesArray3(
-        string memory a,
-        string memory b,
-        string memory c
-    )
+    function _toBytesArray3(string memory a, string memory b, string memory c)
         private
         pure
         returns (bytes[] memory arr)

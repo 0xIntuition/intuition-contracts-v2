@@ -63,11 +63,7 @@ contract LinearCurve is BaseCurve {
     }
 
     /// @inheritdoc BaseCurve
-    function previewDeposit(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function previewDeposit(uint256 assets, uint256 totalAssets, uint256 totalShares)
         external
         pure
         override
@@ -80,11 +76,7 @@ contract LinearCurve is BaseCurve {
     }
 
     /// @inheritdoc BaseCurve
-    function previewRedeem(
-        uint256 shares,
-        uint256 totalShares,
-        uint256 totalAssets
-    )
+    function previewRedeem(uint256 shares, uint256 totalShares, uint256 totalAssets)
         external
         pure
         override
@@ -96,11 +88,7 @@ contract LinearCurve is BaseCurve {
     }
 
     /// @inheritdoc BaseCurve
-    function previewMint(
-        uint256 shares,
-        uint256 totalShares,
-        uint256 totalAssets
-    )
+    function previewMint(uint256 shares, uint256 totalShares, uint256 totalAssets)
         external
         pure
         override
@@ -113,11 +101,7 @@ contract LinearCurve is BaseCurve {
     }
 
     /// @inheritdoc BaseCurve
-    function previewWithdraw(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function previewWithdraw(uint256 assets, uint256 totalAssets, uint256 totalShares)
         external
         pure
         override
@@ -129,11 +113,7 @@ contract LinearCurve is BaseCurve {
     }
 
     /// @inheritdoc BaseCurve
-    function convertToShares(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function convertToShares(uint256 assets, uint256 totalAssets, uint256 totalShares)
         external
         pure
         override
@@ -146,11 +126,7 @@ contract LinearCurve is BaseCurve {
     }
 
     /// @inheritdoc BaseCurve
-    function convertToAssets(
-        uint256 shares,
-        uint256 totalShares,
-        uint256 totalAssets
-    )
+    function convertToAssets(uint256 shares, uint256 totalShares, uint256 totalAssets)
         external
         pure
         override
@@ -177,11 +153,7 @@ contract LinearCurve is BaseCurve {
     /* =================================================== */
 
     /// @dev Internal function to convert assets to shares without checks
-    function _convertToShares(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function _convertToShares(uint256 assets, uint256 totalAssets, uint256 totalShares)
         internal
         pure
         returns (uint256 shares)
@@ -191,11 +163,7 @@ contract LinearCurve is BaseCurve {
     }
 
     /// @dev Internal function to convert shares to assets without checks
-    function _convertToAssets(
-        uint256 shares,
-        uint256 totalShares,
-        uint256 totalAssets
-    )
+    function _convertToAssets(uint256 shares, uint256 totalShares, uint256 totalAssets)
         internal
         pure
         returns (uint256 assets)

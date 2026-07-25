@@ -8,6 +8,7 @@ import { ISatelliteEmissionsController } from "src/interfaces/ISatelliteEmission
 import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
 import { MetaERC20Dispatcher } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
 import { MetaERC20DispatchInit, FinalityState } from "src/interfaces/IMetaLayer.sol";
+import { ICoreEmissionsController } from "src/interfaces/ICoreEmissionsController.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 /// @dev forge test --match-path 'tests/unit/SatelliteEmissionsController/AccessControl.t.sol'
@@ -56,6 +57,18 @@ contract AccessControlTest is TrustBondingBase {
         );
 
         satelliteEmissionsController.initialize(users.admin, address(0), metaERC20DispatchInit, coreEmissionsInit);
+    }
+
+    function test_initialize_revertsWhenEmissionsLengthIsZero() external {
+        SatelliteEmissionsController satelliteEmissionsController = _deploySatelliteEmissionsController();
+        coreEmissionsInit.emissionsLength = 0;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(ICoreEmissionsController.CoreEmissionsController_InvalidEmissionsLength.selector)
+        );
+        satelliteEmissionsController.initialize(
+            users.admin, baseEmissionsController, metaERC20DispatchInit, coreEmissionsInit
+        );
     }
 
     /*//////////////////////////////////////////////////////////////

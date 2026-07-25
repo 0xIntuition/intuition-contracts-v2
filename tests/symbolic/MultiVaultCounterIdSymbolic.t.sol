@@ -32,11 +32,7 @@ contract MultiVaultCounterIdSymbolic is Test {
     ///         (`COUNTER_SALT‖tripleId`) than the triple id (`TRIPLE_SALT‖s‖p‖o`), so keccak injectivity
     ///         proves inequality soundly. (A free-symbolic `tripleId` would admit a spurious
     ///         `keccak(x) == x` fixed point that is preimage-infeasible in reality.)
-    function check_counterIdNeverCollidesWithTripleId(
-        bytes32 subjectId,
-        bytes32 predicateId,
-        bytes32 objectId
-    )
+    function check_counterIdNeverCollidesWithTripleId(bytes32 subjectId, bytes32 predicateId, bytes32 objectId)
         external
         view
     {
@@ -52,11 +48,7 @@ contract MultiVaultCounterIdSymbolic is Test {
 
     /// @notice The two public derivation paths agree: deriving the counter id from a computed triple id
     ///         equals computing the counter id directly from the same subject/predicate/object.
-    function check_counterDerivationConsistency(
-        bytes32 subjectId,
-        bytes32 predicateId,
-        bytes32 objectId
-    )
+    function check_counterDerivationConsistency(bytes32 subjectId, bytes32 predicateId, bytes32 objectId)
         external
         view
     {

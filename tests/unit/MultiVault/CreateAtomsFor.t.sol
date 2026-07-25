@@ -271,9 +271,7 @@ contract CreateAtomsForTest is BaseTest {
         uint8 rawCount,
         uint96 rawPerAtom,
         bytes32 salt
-    )
-        public
-    {
+    ) public {
         vm.assume(rawCreator != address(0));
         vm.assume(rawCreator != users.bob);
         // Skip any code-bearing address so deposit-to-account semantics stay
@@ -295,9 +293,7 @@ contract CreateAtomsForTest is BaseTest {
         uint256 count,
         uint256 perAtomAssets,
         uint256 total
-    )
-        internal
-    {
+    ) internal {
         uint256 epoch = protocol.multiVault.currentEpoch();
         int256 creatorUtilBefore = protocol.multiVault.getUserUtilizationForEpoch(creator, epoch);
         int256 senderUtilBefore = protocol.multiVault.getUserUtilizationForEpoch(users.bob, epoch);

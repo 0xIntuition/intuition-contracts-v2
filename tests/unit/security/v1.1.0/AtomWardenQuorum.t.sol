@@ -200,11 +200,7 @@ contract AtomWardenQuorumTest is Test {
     }
 
     /// @dev Concatenate two single-signer sigs in strictly-ascending recovered-address order.
-    function _sortedBundle(
-        IAtomWarden.ClaimAuthorization memory auth,
-        uint256 k1,
-        uint256 k2
-    )
+    function _sortedBundle(IAtomWarden.ClaimAuthorization memory auth, uint256 k1, uint256 k2)
         internal
         view
         returns (bytes memory)

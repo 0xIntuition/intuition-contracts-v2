@@ -35,9 +35,7 @@ contract TrustBondingClaimTest is TrustBondingBase {
         uint256 beforeSeed,
         uint256 afterSeed,
         uint256 targetSeed
-    )
-        public
-    {
+    ) public {
         _advanceToEpoch(3);
         uint256 epoch = 2;
 
@@ -82,9 +80,7 @@ contract TrustBondingClaimTest is TrustBondingBase {
         uint256 beforeSeed,
         uint256 afterSeed,
         uint256 targetSeed
-    )
-        public
-    {
+    ) public {
         _advanceToEpoch(3);
         uint256 epoch = 2;
         address user = users.bob;

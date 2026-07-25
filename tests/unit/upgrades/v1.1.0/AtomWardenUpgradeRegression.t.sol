@@ -312,10 +312,7 @@ contract AtomWardenUpgradeRegressionTest is Test {
         atomId = multiVault.createAtoms{ value: atomCost }(data, assets)[0];
     }
 
-    function _signAuthorization(
-        IAtomWarden.ClaimAuthorization memory authorization,
-        uint256 privateKey
-    )
+    function _signAuthorization(IAtomWarden.ClaimAuthorization memory authorization, uint256 privateKey)
         internal
         view
         returns (bytes memory)

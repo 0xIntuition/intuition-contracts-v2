@@ -442,11 +442,7 @@ abstract contract BaseTest is Modifiers, Test {
         return BondingCurveConfig({ registry: address(0), defaultCurveId: 1 });
     }
 
-    function createAtomWithDeposit(
-        bytes memory atomData,
-        uint256 depositAmount,
-        address creator
-    )
+    function createAtomWithDeposit(bytes memory atomData, uint256 depositAmount, address creator)
         internal
         returns (bytes32)
     {
@@ -459,11 +455,7 @@ abstract contract BaseTest is Modifiers, Test {
         return atomIds[0];
     }
 
-    function createSimpleAtom(
-        string memory atomString,
-        uint256 depositAmount,
-        address creator
-    )
+    function createSimpleAtom(string memory atomString, uint256 depositAmount, address creator)
         internal
         returns (bytes32)
     {
@@ -493,11 +485,7 @@ abstract contract BaseTest is Modifiers, Test {
     }
 
     // Helper function to create multiple atoms with uniform costs
-    function createAtomsWithUniformCost(
-        bytes[] memory atomDataArray,
-        uint256 costPerAtom,
-        address creator
-    )
+    function createAtomsWithUniformCost(bytes[] memory atomDataArray, uint256 costPerAtom, address creator)
         internal
         returns (bytes32[] memory)
     {
@@ -519,10 +507,7 @@ abstract contract BaseTest is Modifiers, Test {
         uint256 atomCost,
         uint256 tripleCost,
         address creator
-    )
-        internal
-        returns (bytes32 tripleId, bytes32[] memory atomIds)
-    {
+    ) internal returns (bytes32 tripleId, bytes32[] memory atomIds) {
         resetPrank({ msgSender: creator });
 
         // Create atoms
@@ -557,10 +542,7 @@ abstract contract BaseTest is Modifiers, Test {
         uint256 curveId,
         uint256 amount,
         uint256 minShares
-    )
-        internal
-        returns (uint256 shares)
-    {
+    ) internal returns (uint256 shares) {
         resetPrank({ msgSender: depositor });
         return protocol.multiVault.deposit{ value: amount }(receiver, termId, curveId, minShares);
     }
@@ -573,10 +555,7 @@ abstract contract BaseTest is Modifiers, Test {
         uint256 curveId,
         uint256 shares,
         uint256 minAssets
-    )
-        internal
-        returns (uint256 assets)
-    {
+    ) internal returns (uint256 assets) {
         resetPrank({ msgSender: redeemer });
         return protocol.multiVault.redeem(receiver, termId, curveId, shares, minAssets);
     }
@@ -600,11 +579,7 @@ abstract contract BaseTest is Modifiers, Test {
     }
 
     // Helper function to create multiple atoms and return their IDs
-    function createMultipleAtoms(
-        string[] memory atomStrings,
-        uint256[] memory costs,
-        address creator
-    )
+    function createMultipleAtoms(string[] memory atomStrings, uint256[] memory costs, address creator)
         internal
         returns (bytes32[] memory)
     {
@@ -626,10 +601,7 @@ abstract contract BaseTest is Modifiers, Test {
         uint256[] memory curveIds,
         uint256[] memory amounts,
         uint256[] memory minShares
-    )
-        internal
-        returns (uint256[] memory shares)
-    {
+    ) internal returns (uint256[] memory shares) {
         resetPrank({ msgSender: depositor });
         uint256 totalAmount = calculateTotalCost(amounts);
         return protocol.multiVault.depositBatch{ value: totalAmount }(receiver, termIds, curveIds, amounts, minShares);
@@ -643,10 +615,7 @@ abstract contract BaseTest is Modifiers, Test {
         uint256[] memory curveIds,
         uint256[] memory shares,
         uint256[] memory minAssets
-    )
-        internal
-        returns (uint256[] memory assets)
-    {
+    ) internal returns (uint256[] memory assets) {
         resetPrank({ msgSender: redeemer });
         return protocol.multiVault.redeemBatch(receiver, termIds, curveIds, shares, minAssets);
     }

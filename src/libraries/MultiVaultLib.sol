@@ -162,11 +162,7 @@ library MultiVaultLib {
     /// @dev Mirror of {MultiVault.createAtoms}. {MultiVault}'s external function forwards to this
     ///      one via `DELEGATECALL`; the library handles the full call graph (payment validation,
     ///      per-atom creation loop, fee accumulation, utilization tracking) internally.
-    function createAtoms(
-        bytes[] calldata data,
-        uint256[] calldata assets,
-        uint256 payment
-    )
+    function createAtoms(bytes[] calldata data, uint256[] calldata assets, uint256 payment)
         public
         returns (bytes32[] memory)
     {
@@ -181,10 +177,7 @@ library MultiVaultLib {
         bytes32[] calldata objectIds,
         uint256[] calldata assets,
         uint256 payment
-    )
-        public
-        returns (bytes32[] memory)
-    {
+    ) public returns (bytes32[] memory) {
         uint256 _amount = _validatePayment(assets, payment);
         return _createTriples(msg.sender, subjectIds, predicateIds, objectIds, assets, _amount);
     }
@@ -194,12 +187,7 @@ library MultiVaultLib {
     ///      to `creator` instead of `msg.sender`. Requires `creator` to have
     ///      granted `msg.sender` an approval whose CREATION bit is set, unless
     ///      `creator == msg.sender` (self-creation short-circuit).
-    function createAtomsFor(
-        address creator,
-        bytes[] calldata data,
-        uint256[] calldata assets,
-        uint256 payment
-    )
+    function createAtomsFor(address creator, bytes[] calldata data, uint256[] calldata assets, uint256 payment)
         public
         returns (bytes32[] memory)
     {
@@ -220,10 +208,7 @@ library MultiVaultLib {
         bytes32[] calldata objectIds,
         uint256[] calldata assets,
         uint256 payment
-    )
-        public
-        returns (bytes32[] memory)
-    {
+    ) public returns (bytes32[] memory) {
         if (!_isApprovedToCreate(msg.sender, creator)) {
             revert MultiVault.MultiVault_CreatorNotApproved();
         }
@@ -232,13 +217,7 @@ library MultiVaultLib {
     }
 
     /// @dev Mirror of {MultiVault.deposit}.
-    function deposit(
-        address receiver,
-        bytes32 termId,
-        uint256 curveId,
-        uint256 minShares,
-        uint256 payment
-    )
+    function deposit(address receiver, bytes32 termId, uint256 curveId, uint256 minShares, uint256 payment)
         public
         returns (uint256)
     {
@@ -260,10 +239,7 @@ library MultiVaultLib {
         uint256[] calldata assets,
         uint256[] calldata minShares,
         uint256 payment
-    )
-        public
-        returns (uint256[] memory shares)
-    {
+    ) public returns (uint256[] memory shares) {
         uint256 _assetsSum = _validatePayment(assets, payment);
         uint256 length = termIds.length;
 
@@ -294,13 +270,7 @@ library MultiVaultLib {
     }
 
     /// @dev Mirror of {MultiVault.redeem}.
-    function redeem(
-        address receiver,
-        bytes32 termId,
-        uint256 curveId,
-        uint256 shares,
-        uint256 minAssets
-    )
+    function redeem(address receiver, bytes32 termId, uint256 curveId, uint256 shares, uint256 minAssets)
         public
         returns (uint256)
     {
@@ -322,10 +292,7 @@ library MultiVaultLib {
         uint256[] calldata curveIds,
         uint256[] calldata shares,
         uint256[] calldata minAssets
-    )
-        public
-        returns (uint256[] memory received)
-    {
+    ) public returns (uint256[] memory received) {
         if (termIds.length == 0 || termIds.length > MAX_BATCH_SIZE) {
             revert MultiVault.MultiVault_InvalidArrayLength();
         }
@@ -383,9 +350,7 @@ library MultiVaultLib {
         uint256 totalAssets,
         uint256 totalShares,
         VaultType vaultType
-    )
-        public
-    {
+    ) public {
         _setVaultTotals(termId, curveId, totalAssets, totalShares, vaultType);
     }
 
@@ -400,13 +365,7 @@ library MultiVaultLib {
     }
 
     /// @dev Mirror of {MultiVault._validateRedeem}.
-    function validateRedeem(
-        bytes32 termId,
-        uint256 curveId,
-        address account,
-        uint256 shares,
-        uint256 minAssets
-    )
+    function validateRedeem(bytes32 termId, uint256 curveId, address account, uint256 shares, uint256 minAssets)
         public
         view
     {
@@ -431,10 +390,7 @@ library MultiVaultLib {
        Public so they can be invoked across the DELEGATECALL boundary. */
 
     /// @dev Mirror of {MultiVault._calculateAtomCreate}.
-    function calculateAtomCreate(
-        bytes32 termId,
-        uint256 assets
-    )
+    function calculateAtomCreate(bytes32 termId, uint256 assets)
         public
         view
         returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees)
@@ -443,10 +399,7 @@ library MultiVaultLib {
     }
 
     /// @dev Mirror of {MultiVault._calculateTripleCreate}.
-    function calculateTripleCreate(
-        bytes32 termId,
-        uint256 assets
-    )
+    function calculateTripleCreate(bytes32 termId, uint256 assets)
         public
         view
         returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees)
@@ -455,12 +408,7 @@ library MultiVaultLib {
     }
 
     /// @dev Mirror of {MultiVault._calculateDeposit}.
-    function calculateDeposit(
-        bytes32 termId,
-        uint256 curveId,
-        uint256 assets,
-        bool isAtomVault
-    )
+    function calculateDeposit(bytes32 termId, uint256 curveId, uint256 assets, bool isAtomVault)
         public
         view
         returns (uint256 shares, uint256 assetsAfterMinSharesCost, uint256 assetsAfterFees)
@@ -469,11 +417,7 @@ library MultiVaultLib {
     }
 
     /// @dev Mirror of {MultiVault._calculateRedeem}.
-    function calculateRedeem(
-        bytes32 termId,
-        uint256 curveId,
-        uint256 shares
-    )
+    function calculateRedeem(bytes32 termId, uint256 curveId, uint256 shares)
         public
         view
         returns (uint256 assetsAfterFees, uint256 sharesUsed)
@@ -552,12 +496,7 @@ library MultiVaultLib {
     /*                  ATOM / TRIPLE CREATION             */
     /* =================================================== */
 
-    function _createAtoms(
-        address sender,
-        bytes[] calldata data,
-        uint256[] calldata assets,
-        uint256 payment
-    )
+    function _createAtoms(address sender, bytes[] calldata data, uint256[] calldata assets, uint256 payment)
         private
         returns (bytes32[] memory)
     {
@@ -637,10 +576,7 @@ library MultiVaultLib {
         bytes32[] calldata objectIds,
         uint256[] calldata assets,
         uint256 amount
-    )
-        private
-        returns (bytes32[] memory)
-    {
+    ) private returns (bytes32[] memory) {
         uint256 length = subjectIds.length;
         uint256 minCost = _getTripleCost() * assets.length;
 
@@ -672,13 +608,7 @@ library MultiVaultLib {
         return ids;
     }
 
-    function _createTriple(
-        address sender,
-        bytes32 subjectId,
-        bytes32 predicateId,
-        bytes32 objectId,
-        uint256 assets
-    )
+    function _createTriple(address sender, bytes32 subjectId, bytes32 predicateId, bytes32 objectId, uint256 assets)
         private
         returns (bytes32 tripleId)
     {
@@ -753,10 +683,7 @@ library MultiVaultLib {
         uint256 curveId,
         uint256 assets,
         uint256 minShares
-    )
-        private
-        returns (uint256)
-    {
+    ) private returns (uint256) {
         _validateMinDeposit(assets);
 
         VaultType _vaultType = _getVaultType(termId);
@@ -826,10 +753,7 @@ library MultiVaultLib {
         uint256 curveId,
         uint256 shares,
         uint256 minAssets
-    )
-        private
-        returns (uint256, uint256)
-    {
+    ) private returns (uint256, uint256) {
         VaultType _vaultType = _getVaultType(termId);
 
         _validateRedeem(termId, curveId, receiver, shares, minAssets);
@@ -895,12 +819,7 @@ library MultiVaultLib {
     /*                      CALCULATE                      */
     /* =================================================== */
 
-    function _calculateDeposit(
-        bytes32 termId,
-        uint256 curveId,
-        uint256 assets,
-        bool isAtomVault
-    )
+    function _calculateDeposit(bytes32 termId, uint256 curveId, uint256 assets, bool isAtomVault)
         private
         view
         returns (uint256 shares, uint256 assetsAfterMinSharesCost, uint256 assetsAfterFees)
@@ -912,10 +831,7 @@ library MultiVaultLib {
         }
     }
 
-    function _calculateAtomCreate(
-        bytes32 termId,
-        uint256 assets
-    )
+    function _calculateAtomCreate(bytes32 termId, uint256 assets)
         private
         view
         returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees)
@@ -939,11 +855,7 @@ library MultiVaultLib {
         return (shares, assetsAfterFixedFees, assetsAfterFees);
     }
 
-    function _calculateAtomDeposit(
-        bytes32 termId,
-        uint256 curveId,
-        uint256 assets
-    )
+    function _calculateAtomDeposit(bytes32 termId, uint256 curveId, uint256 assets)
         private
         view
         returns (uint256 shares, uint256 assetsAfterMinSharesCost, uint256 assetsAfterFees)
@@ -990,11 +902,7 @@ library MultiVaultLib {
         return (shares, assetsAfterFixedFees, assetsAfterFees);
     }
 
-    function _calculateTripleDeposit(
-        bytes32 termId,
-        uint256 curveId,
-        uint256 assets
-    )
+    function _calculateTripleDeposit(bytes32 termId, uint256 curveId, uint256 assets)
         private
         view
         returns (uint256 shares, uint256 assetsAfterMinSharesCost, uint256 assetsAfterFees)
@@ -1163,10 +1071,7 @@ library MultiVaultLib {
         uint256 assets,
         uint256 shares,
         VaultType vaultType
-    )
-        private
-        returns (uint256)
-    {
+    ) private returns (uint256) {
         Storage storage s = _s();
         uint256 minShare = s.generalConfig.minShare;
         VaultState storage vaultState = s.vaults[termId][curveId];
@@ -1193,10 +1098,7 @@ library MultiVaultLib {
         uint256 assets,
         uint256 shares,
         VaultType _vaultType
-    )
-        private
-        returns (uint256)
-    {
+    ) private returns (uint256) {
         Storage storage s = _s();
         _setVaultTotals(
             termId,
@@ -1216,10 +1118,7 @@ library MultiVaultLib {
         uint256 assets,
         uint256 shares,
         VaultType vaultType
-    )
-        private
-        returns (uint256)
-    {
+    ) private returns (uint256) {
         VaultState storage vaultState = _s().vaults[termId][curveId];
 
         _setVaultTotals(termId, curveId, vaultState.totalAssets - assets, vaultState.totalShares - shares, vaultType);
@@ -1257,9 +1156,7 @@ library MultiVaultLib {
         uint256 totalAssets,
         uint256 totalShares,
         VaultType vaultType
-    )
-        private
-    {
+    ) private {
         Storage storage s = _s();
         IBondingCurveRegistry registry = IBondingCurveRegistry(s.bondingCurveConfig.registry);
 
@@ -1340,10 +1237,7 @@ library MultiVaultLib {
         uint256 assetsAfterMinSharesCost,
         uint256 assetsAfterFees,
         uint256 minSharesForReceiver
-    )
-        private
-        view
-    {
+    ) private view {
         if (sharesForReceiver == 0) revert MultiVault.MultiVault_DepositOrRedeemZeroShares();
         if (sharesForReceiver < minSharesForReceiver) revert MultiVault.MultiVault_SlippageExceeded();
 
@@ -1366,13 +1260,7 @@ library MultiVaultLib {
         }
     }
 
-    function _validateRedeem(
-        bytes32 termId,
-        uint256 curveId,
-        address account,
-        uint256 shares,
-        uint256 minAssets
-    )
+    function _validateRedeem(bytes32 termId, uint256 curveId, address account, uint256 shares, uint256 minAssets)
         private
         view
     {
@@ -1532,11 +1420,7 @@ library MultiVaultLib {
         return keccak256(abi.encodePacked(ATOM_SALT, keccak256(data)));
     }
 
-    function _calculateTripleId(
-        bytes32 subjectId,
-        bytes32 predicateId,
-        bytes32 objectId
-    )
+    function _calculateTripleId(bytes32 subjectId, bytes32 predicateId, bytes32 objectId)
         private
         pure
         returns (bytes32)

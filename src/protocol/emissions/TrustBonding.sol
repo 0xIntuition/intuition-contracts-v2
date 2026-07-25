@@ -125,10 +125,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         address _satelliteEmissionsController,
         uint256 _systemUtilizationLowerBound,
         uint256 _personalUtilizationLowerBound
-    )
-        external
-        initializer
-    {
+    ) external initializer {
         if (_owner == address(0)) {
             revert TrustBonding_ZeroAddress();
         }
@@ -692,11 +689,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
      * @param lowerBound The lower bound for the utilization ratio
      * @return The normalized utilization ratio for the given parameters
      */
-    function _getNormalizedUtilizationRatio(
-        uint256 delta,
-        uint256 target,
-        uint256 lowerBound
-    )
+    function _getNormalizedUtilizationRatio(uint256 delta, uint256 target, uint256 lowerBound)
         internal
         pure
         returns (uint256)

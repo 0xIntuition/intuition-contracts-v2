@@ -476,10 +476,7 @@ interface IFeeProxy {
     ///         accrued fees.
     /// @return affiliate The newly registered affiliate address
     ///         (`msg.sender`).
-    function registerAffiliate(
-        FeeConfig calldata fees,
-        address feeRecipient
-    )
+    function registerAffiliate(FeeConfig calldata fees, address feeRecipient)
         external
         payable
         returns (address affiliate);
@@ -596,10 +593,7 @@ interface IFeeProxy {
         uint256 grossAssets,
         uint256 minShares,
         FeeGuard calldata feeGuard
-    )
-        external
-        payable
-        returns (uint256 shares);
+    ) external payable returns (uint256 shares);
 
     /// @notice Mediates a multi-vault deposit batch through `affiliate`.
     ///         Behaves like {depositVia} applied across `termIds`, with
@@ -630,10 +624,7 @@ interface IFeeProxy {
         uint256[] calldata assets,
         uint256[] calldata minShares,
         FeeGuard calldata feeGuard
-    )
-        external
-        payable
-        returns (uint256[] memory shares);
+    ) external payable returns (uint256[] memory shares);
 
     /// @notice Mediates atom creation through `affiliate`. Deducts the
     ///         per-affiliate creation fee, forwards the remaining assets
@@ -652,10 +643,7 @@ interface IFeeProxy {
         bytes[] calldata atomDatas,
         uint256[] calldata assets,
         FeeGuard calldata feeGuard
-    )
-        external
-        payable
-        returns (bytes32[] memory termIds);
+    ) external payable returns (bytes32[] memory termIds);
 
     /// @notice Mediates triple creation through `affiliate`. Deducts the
     ///         per-affiliate creation fee, forwards the remaining assets
@@ -679,10 +667,7 @@ interface IFeeProxy {
         bytes32[] calldata objectIds,
         uint256[] calldata assets,
         FeeGuard calldata feeGuard
-    )
-        external
-        payable
-        returns (bytes32[] memory termIds);
+    ) external payable returns (bytes32[] memory termIds);
 
     /// @notice Withdraws the caller's full pending refund balance from the
     ///         pull-fallback ledger to `msg.sender`.
@@ -765,10 +750,7 @@ interface IFeeProxy {
     /// @param  grossAssets The pre-fee gross asset amount.
     /// @return fee The total affiliate fee that would be deducted.
     /// @return forwarded The amount that would be forwarded to MultiVault.
-    function previewDepositFee(
-        address affiliate,
-        uint256 grossAssets
-    )
+    function previewDepositFee(address affiliate, uint256 grossAssets)
         external
         view
         returns (uint256 fee, uint256 forwarded);
@@ -779,10 +761,7 @@ interface IFeeProxy {
     /// @param  grossAssets The pre-fee gross asset amount.
     /// @return fee The total affiliate fee that would be deducted.
     /// @return forwarded The amount that would be forwarded to MultiVault.
-    function previewCreationFee(
-        address affiliate,
-        uint256 grossAssets
-    )
+    function previewCreationFee(address affiliate, uint256 grossAssets)
         external
         view
         returns (uint256 fee, uint256 forwarded);

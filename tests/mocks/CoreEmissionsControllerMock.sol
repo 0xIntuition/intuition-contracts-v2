@@ -33,9 +33,7 @@ contract CoreEmissionsControllerMock is CoreEmissionsController {
         uint256 emissionsPerEpoch,
         uint256 emissionsReductionCliff,
         uint256 emissionsReductionBasisPoints
-    )
-        external
-    {
+    ) external {
         __CoreEmissionsController_init(
             startTimestamp, emissionsLength, emissionsPerEpoch, emissionsReductionCliff, emissionsReductionBasisPoints
         );
@@ -53,11 +51,7 @@ contract CoreEmissionsControllerMock is CoreEmissionsController {
         return _emissionsAtEpoch(epochNumber);
     }
 
-    function applyCliffReductions(
-        uint256 baseEmissions,
-        uint256 retentionFactor,
-        uint256 cliffsToApply
-    )
+    function applyCliffReductions(uint256 baseEmissions, uint256 retentionFactor, uint256 cliffsToApply)
         external
         pure
         returns (uint256)
@@ -119,9 +113,7 @@ contract CoreEmissionsControllerMock is CoreEmissionsController {
         uint256 emissionsPerEpoch,
         uint256 emissionsReductionCliff,
         uint256 emissionsReductionBasisPoints
-    )
-        external
-    {
+    ) external {
         __CoreEmissionsController_init({
             startTimestamp: DEFAULT_START_TIMESTAMP,
             emissionsLength: emissionsLength,

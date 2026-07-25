@@ -48,9 +48,7 @@ contract MetaERC20Dispatcher {
         uint32 recipientDomain,
         uint256 gasCost,
         FinalityState finalityState
-    )
-        internal
-    {
+    ) internal {
         // Initialize MetaERC20Dispatcher
         _setMetaERC20SpokeOrHub(metaERC20SpokeOrHub);
         _setRecipientDomain(recipientDomain);
@@ -121,9 +119,7 @@ contract MetaERC20Dispatcher {
         uint256 _amount,
         uint256 _gasLimit,
         FinalityState _finality
-    )
-        internal
-    {
+    ) internal {
         IMetaERC20HubOrSpoke(_hubOrSpoke).transferRemote{ value: _gasLimit }(
             _domain, _recipient, _amount, GAS_CONSTANT, _finality
         );
@@ -144,9 +140,7 @@ contract MetaERC20Dispatcher {
         uint256 _amount,
         uint256 _gasLimit,
         FinalityState _finality
-    )
-        internal
-    {
+    ) internal {
         // When bridging using a native token the `value` must include the `_gasLimit` and `amount` before being
         // sent to the MetaERC20HubOrSpoke smart contract. Only the amount is burned and the `gasLimit` is used to pay
         // for the

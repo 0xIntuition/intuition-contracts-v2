@@ -370,11 +370,7 @@ contract FeeProxyMultiVaultTest is FeeProxyBaseTest {
         assertEq(userStats.totalForwardedAssets, 0, "affiliate user forwarded unchanged");
     }
 
-    function _allocate(
-        uint256[] memory assets,
-        uint256 totalForwarded,
-        uint256 totalGross
-    )
+    function _allocate(uint256[] memory assets, uint256 totalForwarded, uint256 totalGross)
         internal
         pure
         returns (uint256[] memory forwardedAssets)

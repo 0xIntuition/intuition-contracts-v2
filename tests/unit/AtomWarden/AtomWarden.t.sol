@@ -63,13 +63,7 @@ contract MockMultiVault {
         return atomCreatedAt[atomId];
     }
 
-    function setAtom(
-        bytes32 atomId,
-        bytes memory data,
-        address wallet,
-        address creator,
-        uint48 createdTimestamp
-    )
+    function setAtom(bytes32 atomId, bytes memory data, address wallet, address creator, uint48 createdTimestamp)
         external
     {
         isAtom[atomId] = true;
@@ -1237,10 +1231,7 @@ contract AtomWardenTest is Test {
         assertTrue(MockAtomWallet(multiVault.atomWallets(atomId)).isClaimed());
     }
 
-    function testFuzz_claimWithAuthorization_permutationEqualsCanonicalOrReverts(
-        uint256 keySeed,
-        uint256 permSeed
-    )
+    function testFuzz_claimWithAuthorization_permutationEqualsCanonicalOrReverts(uint256 keySeed, uint256 permSeed)
         external
     {
         // For any random permutation of N signers concatenated into the bundle,
@@ -1898,13 +1889,7 @@ contract AtomWardenTest is Test {
         return _setAtom(atomData, account, claimed, address(0), 0);
     }
 
-    function _setAtom(
-        string memory data,
-        address walletOwner,
-        bool claimed,
-        address atomCreator,
-        uint48 createdAt
-    )
+    function _setAtom(string memory data, address walletOwner, bool claimed, address atomCreator, uint48 createdAt)
         internal
         returns (bytes32 atomId)
     {
@@ -1917,10 +1902,7 @@ contract AtomWardenTest is Test {
         multiVault.setAtom(atomId, bytes(data), address(wallet), atomCreator, createdAt);
     }
 
-    function _signAuthorization(
-        IAtomWarden.ClaimAuthorization memory authorization,
-        uint256 privateKey
-    )
+    function _signAuthorization(IAtomWarden.ClaimAuthorization memory authorization, uint256 privateKey)
         internal
         view
         returns (bytes memory)
@@ -1983,10 +1965,7 @@ contract AtomWardenTest is Test {
         return freshWarden;
     }
 
-    function _defaultAuthorization(
-        bytes32 atomId,
-        uint256 nonce
-    )
+    function _defaultAuthorization(bytes32 atomId, uint256 nonce)
         internal
         view
         returns (IAtomWarden.ClaimAuthorization memory)
@@ -2018,10 +1997,7 @@ contract AtomWardenTest is Test {
     /// @dev Sorts the keys by their `vm.addr` ascending and concatenates ECDSA
     ///      signatures over the same EIP-712 digest in that order — the canonical
     ///      Gnosis-Safe-style bundle layout the contract expects.
-    function _buildSortedSignatures(
-        IAtomWarden.ClaimAuthorization memory authorization,
-        uint256[] memory keys
-    )
+    function _buildSortedSignatures(IAtomWarden.ClaimAuthorization memory authorization, uint256[] memory keys)
         internal
         view
         returns (bytes memory bundle)
@@ -2031,10 +2007,7 @@ contract AtomWardenTest is Test {
 
     /// @dev Sorts ascending and then reverses, so the resulting order is strictly
     ///      DESCENDING by recovered address — the canonical "violates ordering" case.
-    function _buildReversedSignatures(
-        IAtomWarden.ClaimAuthorization memory authorization,
-        uint256[] memory keys
-    )
+    function _buildReversedSignatures(IAtomWarden.ClaimAuthorization memory authorization, uint256[] memory keys)
         internal
         view
         returns (bytes memory bundle)
@@ -2048,10 +2021,7 @@ contract AtomWardenTest is Test {
         bundle = _signInOrder(authorization, reversed);
     }
 
-    function _signInOrder(
-        IAtomWarden.ClaimAuthorization memory authorization,
-        uint256[] memory keys
-    )
+    function _signInOrder(IAtomWarden.ClaimAuthorization memory authorization, uint256[] memory keys)
         internal
         view
         returns (bytes memory bundle)

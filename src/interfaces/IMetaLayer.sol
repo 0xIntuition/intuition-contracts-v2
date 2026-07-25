@@ -21,9 +21,7 @@ interface IMetaERC20HubOrSpoke {
         uint256 _amount,
         uint256 _gasLimit,
         FinalityState _finalityState
-    )
-        external
-        payable;
+    ) external payable;
 
     function metalayerRouter() external view returns (address);
 }
