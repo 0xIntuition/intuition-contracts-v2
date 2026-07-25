@@ -106,9 +106,20 @@ contract AtomWalletTakeoverTest is BaseTest {
 
     /// @dev Build a CoinbaseSmartWallet SignatureWrapper for an EOA owner:
     ///      abi.encode(uint256 ownerIndex, bytes signatureData) where signatureData
-    ///      is a 65-byte ECDSA signature over `hash`.
-    function _wrapEoaSig(uint256 ownerIndex, bytes32 hash, uint256 key) internal pure returns (bytes memory) {
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(key, hash);
+    ///      is a 65-byte ECDSA signature over the wallet-bound replay-safe digest.
+    function _wrapEoaSig(uint256 ownerIndex, bytes32 hash, uint256 key) internal view returns (bytes memory) {
+        bytes32 domainSeparator = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes("AtomWallet")),
+                keccak256(bytes("1")),
+                block.chainid,
+                address(wallet)
+            )
+        );
+        bytes32 messageHash = keccak256(abi.encode(keccak256("CoinbaseSmartWalletMessage(bytes32 hash)"), hash));
+        bytes32 replaySafeHash = keccak256(abi.encodePacked("\x19\x01", domainSeparator, messageHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(key, replaySafeHash);
         bytes memory sigData = abi.encodePacked(r, s, v);
         return abi.encode(ownerIndex, sigData);
     }

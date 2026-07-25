@@ -286,18 +286,18 @@ contract AtomWalletAuthEdgesTest is BaseTest {
     /*                       HELPERS                       */
     /* =================================================== */
 
-    /// @dev Inline-encoded SignatureWrapper for an EOA owner: abi.encode(ownerIndex, 65-byte sig).
-    function _wrapEoaSig(uint256 ownerIndex, bytes32 hash, uint256 key) internal pure returns (bytes memory) {
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(key, hash);
+    /// @dev Inline-encoded SignatureWrapper for an EOA owner over the replay-safe digest.
+    function _wrapEoaSig(uint256 ownerIndex, bytes32 hash, uint256 key) internal view returns (bytes memory) {
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(key, _replaySafeHash(hash));
         return abi.encode(ownerIndex, abi.encodePacked(r, s, v));
     }
 
-    /// @dev Builds an inline-encoded wrapper carrying a real WebAuthn assertion over `hash` for the
-    ///      P-256 key `p256Key`, signed so it passes Solady `WebAuthn.verify` (UP flag set, low-s).
+    /// @dev Builds an inline-encoded wrapper carrying a real WebAuthn assertion over the
+    ///      replay-safe digest for the P-256 key `p256Key`, signed so it passes Solady
+    ///      `WebAuthn.verify` (UP flag set, low-s).
     ///      The clientDataJSON prefix is fixed, so `typeIndex == 1` and `challengeIndex == 23`.
-    function _passkeyWrapper(uint256 ownerIndex, bytes32 hash, uint256 p256Key) internal pure returns (bytes memory) {
-        // AtomWallet passes `abi.encode(hash)` (the raw 32-byte digest) as the WebAuthn challenge.
-        string memory b64 = Base64.encode(abi.encode(hash), true, true);
+    function _passkeyWrapper(uint256 ownerIndex, bytes32 hash, uint256 p256Key) internal view returns (bytes memory) {
+        string memory b64 = Base64.encode(abi.encode(_replaySafeHash(hash)), true, true);
         string memory clientDataJSON =
             string.concat('{"type":"webauthn.get","challenge":"', b64, '","origin":"https://intuition.systems"}');
 
@@ -319,6 +319,20 @@ contract AtomWalletAuthEdgesTest is BaseTest {
             s: s
         });
         return abi.encode(ownerIndex, abi.encode(auth));
+    }
+
+    function _replaySafeHash(bytes32 hash) internal view returns (bytes32) {
+        bytes32 domainSeparator = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes("AtomWallet")),
+                keccak256(bytes("1")),
+                block.chainid,
+                address(wallet)
+            )
+        );
+        bytes32 messageHash = keccak256(abi.encode(keccak256("CoinbaseSmartWalletMessage(bytes32 hash)"), hash));
+        return keccak256(abi.encodePacked("\x19\x01", domainSeparator, messageHash));
     }
 
     /// @dev Calls `isValidSignature` via low-level staticcall so a revert (rather than a returned

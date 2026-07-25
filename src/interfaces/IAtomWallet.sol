@@ -21,11 +21,6 @@ interface IAtomWallet {
     function completeClaim(address newOwner) external;
 
     /**
-     * @notice Migrates a claimed pre-v1.1.0 owner into the MultiOwnable registry
-     */
-    function migrateLegacyOwner() external;
-
-    /**
      * @notice Returns the current owner of the AtomWallet
      * @return owner The address of the current owner
      */

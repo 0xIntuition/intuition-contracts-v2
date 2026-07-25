@@ -3,7 +3,6 @@ pragma solidity 0.8.29;
 
 import { BaseAccount } from "@account-abstraction/core/BaseAccount.sol";
 import { PackedUserOperation } from "@account-abstraction/interfaces/PackedUserOperation.sol";
-import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import { IERC1271 } from "@openzeppelin/contracts/interfaces/IERC1271.sol";
 import { IERC165 } from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import { IEntryPoint } from "@account-abstraction/interfaces/IEntryPoint.sol";
@@ -47,7 +46,6 @@ contract AtomWallet is Initializable, BaseAccount, ReentrancyGuardUpgradeable, I
     error AtomWallet_AlreadyClaimed();
     error AtomWallet_OwnerCannotBeRemoved();
     error AtomWallet_RenounceDisabled();
-    error AtomWallet_NoLegacyOwnerToMigrate();
 
     /* =================================================== */
     /*                       EVENTS                        */
@@ -60,10 +58,6 @@ contract AtomWallet is Initializable, BaseAccount, ReentrancyGuardUpgradeable, I
     ///         contract dropped `OwnableUpgradeable`; indexers tracking the canonical
     ///         primary owner key off this event.
     event PrimaryOwnerTransferred(address indexed previousClaimant, address indexed newClaimant);
-
-    /// @notice Emitted when a claimed pre-v1.1.0 wallet's Ownable owner is migrated into
-    ///         the MultiOwnable registry.
-    event LegacyOwnerMigrated(address indexed legacyOwner);
 
     /* =================================================== */
     /*                     CONSTANTS                       */
@@ -78,14 +72,6 @@ contract AtomWallet is Initializable, BaseAccount, ReentrancyGuardUpgradeable, I
     /// @dev EIP-712 domain fields used to bind ERC-1271 authorizations to this wallet and chain.
     string private constant ERC1271_DOMAIN_NAME = "AtomWallet";
     string private constant ERC1271_DOMAIN_VERSION = "1";
-
-    /**
-     * @dev ERC-7201 storage slot used by OwnableUpgradeable in the pre-v1.1.0 implementation.
-     *      Claimed wallets upgraded through the shared beacon retain their owner here until
-     *      the first post-upgrade owner action migrates it into MultiOwnable.
-     */
-    bytes32 private constant LEGACY_OWNABLE_STORAGE_LOCATION =
-        0x9016d09d72d40fdae2fd8ceac6b6234c7706214fd39c1cd1e609a0528c199300;
 
     /* =================================================== */
     /*                  STATE VARIABLES                    */
@@ -125,7 +111,6 @@ contract AtomWallet is Initializable, BaseAccount, ReentrancyGuardUpgradeable, I
     ///         this path. Reuses `AtomWallet_OnlyOwnerOrEntryPoint` for ABI stability.
     modifier onlyMultiOwnableOwnerOrEntryPoint() {
         _checkMultiOwnableOwnerOrEntryPoint();
-        _migrateLegacyOwnerIfNeeded();
         _;
     }
 
@@ -142,7 +127,6 @@ contract AtomWallet is Initializable, BaseAccount, ReentrancyGuardUpgradeable, I
     ///         registry. Reuses `AtomWallet_OnlyOwner` for ABI stability.
     modifier onlyMultiOwnableOwnerOrSelf() {
         _checkMultiOwnableOwnerOrSelf();
-        _migrateLegacyOwnerIfNeeded();
         _;
     }
 
@@ -291,19 +275,6 @@ contract AtomWallet is Initializable, BaseAccount, ReentrancyGuardUpgradeable, I
     }
 
     /**
-     * @notice Migrates a claimed pre-v1.1.0 Ownable owner into the MultiOwnable registry.
-     * @dev The migration also happens automatically on the first authorized owner action.
-     *      Only the owner retained in the legacy Ownable storage slot may call this function.
-     */
-    function migrateLegacyOwner() external {
-        address legacyOwner = _legacyOwnerPendingMigration();
-        if (legacyOwner == address(0) || msg.sender != legacyOwner) {
-            revert AtomWallet_NoLegacyOwnerToMigrate();
-        }
-        _migrateLegacyOwner(legacyOwner);
-    }
-
-    /**
      * @notice Completes a Warden-driven claim in a single step
      * @param newOwner the new owner of the wallet
      */
@@ -398,13 +369,7 @@ contract AtomWallet is Initializable, BaseAccount, ReentrancyGuardUpgradeable, I
      * @return the primary owner of the wallet
      */
     function owner() public view returns (address) {
-        if (!isClaimed) {
-            return multiVault.getAtomWarden();
-        }
-        if (_claimant != address(0)) {
-            return _claimant;
-        }
-        return _legacyOwnableOwner();
+        return isClaimed ? _claimant : multiVault.getAtomWarden();
     }
 
     /* =================================================== */
@@ -486,7 +451,7 @@ contract AtomWallet is Initializable, BaseAccount, ReentrancyGuardUpgradeable, I
     function _checkMultiOwnableOwnerOrEntryPoint() internal view {
         if (
             msg.sender != address(entryPoint()) && msg.sender != address(this)
-                && !CoinbaseSmartWalletLib.isOwnerAddress(msg.sender) && msg.sender != _legacyOwnerPendingMigration()
+                && !CoinbaseSmartWalletLib.isOwnerAddress(msg.sender)
         ) {
             revert AtomWallet_OnlyOwnerOrEntryPoint();
         }
@@ -499,10 +464,7 @@ contract AtomWallet is Initializable, BaseAccount, ReentrancyGuardUpgradeable, I
     }
 
     function _checkMultiOwnableOwnerOrSelf() internal view {
-        if (
-            msg.sender != address(this) && !CoinbaseSmartWalletLib.isOwnerAddress(msg.sender)
-                && msg.sender != _legacyOwnerPendingMigration()
-        ) {
+        if (msg.sender != address(this) && !CoinbaseSmartWalletLib.isOwnerAddress(msg.sender)) {
             revert AtomWallet_OnlyOwner();
         }
     }
@@ -526,96 +488,9 @@ contract AtomWallet is Initializable, BaseAccount, ReentrancyGuardUpgradeable, I
         override
         returns (uint256 validationData)
     {
-        address legacyOwner = _legacyOwnerPendingMigration();
-        if (legacyOwner != address(0)) {
-            (uint48 validUntil, uint48 validAfter, bytes memory signature, bool isMalformedSignature) =
-                _extractLegacySignature(userOp.signature);
-            if (isMalformedSignature) {
-                return _packValidationData(true, 0, 0);
-            }
-
-            bytes32 legacySignedHash = userOpHash;
-            if (userOp.signature.length == 77) {
-                legacySignedHash = keccak256(abi.encodePacked(userOpHash, validUntil, validAfter));
-            }
-            bytes32 legacyHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", legacySignedHash));
-            (address recovered, ECDSA.RecoverError recoverError,) = ECDSA.tryRecover(legacyHash, signature);
-            bool isValidLegacySignature = recoverError == ECDSA.RecoverError.NoError && recovered == legacyOwner;
-            return _packValidationData(!isValidLegacySignature, validUntil, validAfter);
-        }
-
         bytes32 signedHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", userOpHash));
         bool isValid = CoinbaseSmartWalletLib.isValidSignature(signedHash, userOp.signature);
         return _packValidationData(!isValid, 0, 0);
-    }
-
-    /**
-     * @dev Returns the claimed pre-v1.1.0 owner while migration is pending.
-     */
-    function _legacyOwnerPendingMigration() internal view returns (address) {
-        if (!isClaimed || _claimant != address(0)) {
-            return address(0);
-        }
-        return _legacyOwnableOwner();
-    }
-
-    /**
-     * @dev Seeds the MultiOwnable registry from the pre-v1.1.0 Ownable storage slot.
-     */
-    function _migrateLegacyOwnerIfNeeded() internal {
-        address legacyOwner = _legacyOwnerPendingMigration();
-        if (legacyOwner != address(0)) {
-            _migrateLegacyOwner(legacyOwner);
-        }
-    }
-
-    function _migrateLegacyOwner(address legacyOwner) private {
-        _claimant = legacyOwner;
-        if (!CoinbaseSmartWalletLib.isOwnerAddress(legacyOwner)) {
-            CoinbaseSmartWalletLib.addOwnerAddress(legacyOwner);
-        }
-        emit LegacyOwnerMigrated(legacyOwner);
-    }
-
-    /**
-     * @dev Reads the OwnableUpgradeable owner retained by pre-v1.1.0 BeaconProxy wallets.
-     */
-    function _legacyOwnableOwner() private view returns (address legacyOwner) {
-        bytes32 storageLocation = LEGACY_OWNABLE_STORAGE_LOCATION;
-        assembly {
-            legacyOwner := sload(storageLocation)
-        }
-    }
-
-    /**
-     * @dev Parses the 65-byte or 77-byte signature format accepted by the pre-v1.1.0
-     *      AtomWallet implementation.
-     */
-    function _extractLegacySignature(bytes calldata signature)
-        private
-        pure
-        returns (uint48 validUntil, uint48 validAfter, bytes memory rawSignature, bool isMalformedSignature)
-    {
-        uint256 signatureLength = signature.length;
-        if (signatureLength == 65) {
-            return (0, 0, signature, false);
-        }
-        if (signatureLength != 77) {
-            return (0, 0, "", true);
-        }
-
-        uint256 metadataOffset = signatureLength - 12;
-        rawSignature = signature[:metadataOffset];
-
-        bytes memory metadata = signature[metadataOffset:];
-        uint256 word;
-        assembly {
-            word := mload(add(metadata, 32))
-        }
-        uint96 packed = uint96(word >> 160);
-        validUntil = uint48(packed >> 48);
-        validAfter = uint48(packed);
-        return (validUntil, validAfter, rawSignature, false);
     }
 
     /**
