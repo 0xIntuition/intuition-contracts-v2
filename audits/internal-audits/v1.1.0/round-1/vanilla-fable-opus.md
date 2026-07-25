@@ -1,4 +1,12 @@
-# Intuition v1.1.0 Core Upgrade — Internal AI Pseudo-Audit Report
+# Intuition v1.1.0 Core Upgrade — Internal AI Pseudo-Audit — Round 1
+
+## Report 1 of 6 — Vanilla Frontier Reasoner (Opus 4.8 / Fable), no audit skill
+
+> **How this report was produced:** a single frontier reasoning model (vanilla — no external audit skill or checklist),
+> run as seven independent per-cluster reviewers (clusters A, B, D, E, F, G, H) over the whole in-scope set, each
+> re-deriving from the pre-audit handoff brief and the source and scoring against the §5 invariants with PoC-backed
+> refutation attempts. Provenance ID prefix: `CLD-`. This is one of six independent round reports; the consolidated,
+> de-duplicated view is [`MASTER-consolidated-report.md`](MASTER-consolidated-report.md).
 
 **Artifact type:** Internal AI pseudo-audit. This is a **pre-audit artifact — not a formal audit, certification,
 warranty, or guarantee of safety.** It is an internal, multi-reviewer adversarial pass run before the external audit,
@@ -333,7 +341,7 @@ under `tests/unit/security/v1.1.0/`, and the invariant / storage-layout / fork u
 were run locally and removed; the working tree is unmodified by this review. The committed security and storage suites
 are green at the reviewed commit.
 
-**Provenance.** Finding ids carry the round prefix in the companion found → fixed log (`Fable-<cluster>-<n>`); this
+**Provenance.** Finding ids carry the round prefix in the companion found → fixed log (`CLD-<cluster>-<n>`); this
 packaged report renumbers them `INT-<n>` by severity for readability while the log preserves round/model provenance for
 the merge.
 

@@ -28,3 +28,8 @@ broadcast/*/31337/
 .claude/settings.local.json
 CLAUDE.md
 
+# internal audit artifacts
+audits/handoffs/
+audits/templates/
+audits/internal-audits/**/working-logs/
+audits/internal-audits/**/README.md
