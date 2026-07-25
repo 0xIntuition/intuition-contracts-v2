@@ -718,9 +718,10 @@ contract CoreMainnetUpgradeRegressionTest is Test {
         assertEq(atomWallet.owner(), controlledOwner);
         assertTrue(atomWallet.isClaimed());
 
-        // ERC-1271: sign a raw digest and validate with SignatureWrapper format (post-claim).
+        // ERC-1271: sign the wallet-bound replay-safe digest and validate with
+        // SignatureWrapper format (post-claim).
         bytes32 hash = keccak256("erc1271-post-upgrade-test");
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerPrivateKey, hash);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerPrivateKey, _atomWalletReplaySafeHash(atomWalletAddress, hash));
         bytes memory rawSig = abi.encodePacked(r, s, v);
         // Post-claim: wrap in SignatureWrapper (ownerIndex=0, signatureData=rawSig)
         bytes memory signature = abi.encode(uint256(0), rawSig);
@@ -1282,6 +1283,20 @@ contract CoreMainnetUpgradeRegressionTest is Test {
         bytes32 ethSignedMessageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", userOpHash));
         (uint8 signatureV, bytes32 signatureR, bytes32 signatureS) = vm.sign(signerPrivateKey, ethSignedMessageHash);
         return abi.encodePacked(signatureR, signatureS, signatureV);
+    }
+
+    function _atomWalletReplaySafeHash(address atomWalletAddress, bytes32 hash) internal view returns (bytes32) {
+        bytes32 domainSeparator = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes("AtomWallet")),
+                keccak256(bytes("1")),
+                block.chainid,
+                atomWalletAddress
+            )
+        );
+        bytes32 messageHash = keccak256(abi.encode(keccak256("CoinbaseSmartWalletMessage(bytes32 hash)"), hash));
+        return keccak256(abi.encodePacked("\x19\x01", domainSeparator, messageHash));
     }
 
     function _signUserOpHashWithTimeWindow(
