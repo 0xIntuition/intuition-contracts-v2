@@ -90,9 +90,9 @@ library MultiVaultLib {
     /* =================================================== */
 
     /// @dev Struct that mirrors {MultiVault}'s storage layout starting at slot 0. The field order
-    ///      and packing must match `forge inspect MultiVault storage-layout` exactly — verified by
-    ///      the storage-layout diff gate. Field names here are library-local; the SLOT positions
-    ///      are what's load-bearing.
+    ///      and packing must match `forge inspect MultiVault storage-layout` exactly — pinned by the
+    ///      storage-layout regression suite in CI and re-verified on every upgrade. Field names here
+    ///      are library-local; the SLOT positions are what's load-bearing.
     struct Storage {
         // slot 0
         uint256 totalTermsCreated;
