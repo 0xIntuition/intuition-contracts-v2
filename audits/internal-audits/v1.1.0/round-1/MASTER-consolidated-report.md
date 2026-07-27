@@ -38,10 +38,13 @@ reward forfeiture (severity-disputed between rounds).
 flat-price par, storage-layout upgrade-safety, and the `multicallPayable` no-msg.value-replay property were each probed
 with cited refutation attempts across rounds and are recorded as negatives in §6.
 
-**Remediation is in progress on this branch (unverified by this consolidation).** As of the reviewed working tree, there
-are uncommitted changes to `AtomWallet.sol`, `CoreEmissionsController.sol`, and the TrustBonding utilization test suite
-— consistent with fixes for `MA-01` / `MED-01`, `MED-02`, and `MED-03` respectively. This master does **not** verify
-those fixes; every finding below is reported at its as-found status. See §7.
+**Remediation is complete; every finding is dispositioned.** Exactly **one** finding required a code fix — `MED-01`
+(ERC-1271 wallet/chain binding), landed with regression coverage. `MED-02` was added as defense-in-depth for future
+deployments only (live controllers are already initialized to a 14-day epoch). `MA-01` is not applicable against the
+deployed system (on-chain census: one AtomWallet, unclaimed). `MED-03` and the remaining Minor/Informational items are
+by design, acknowledged, or not applicable. `INFO-03` (the dynamic-fee curve surface absent at this commit) is carried
+into **round 2** as scope rather than treated as a defect. Per-finding responses are in the **disposition register** at
+the end of §5; the go/no-go gate in §8 reflects the closed state.
 
 ### Findings by severity (consolidated, de-duplicated)
 
@@ -186,16 +189,25 @@ counts how many of the six independent rounds surfaced it — a proxy for signal
   6** — both skill rounds, independently.
 - **Affected code:** `src/protocol/emissions/TrustBonding.sol` — the system-utilization ratio / carry-forward accounting
   used to throttle per-epoch emissions.
-- **Mechanism:** after a quiescent (no-activity) epoch, the self-healing utilization carry-forward resolves the system
-  utilization ratio to ~100% for the following epoch, so the utilization-based emission throttle — the headline economic
-  mechanism of v1.1.0 TrustBonding — does not damp emissions the way the design intends for the epoch after quiescence.
-- **Impact:** post-quiescence emission over-issuance relative to the intended utilization throttle. Bounded per epoch,
-  but it is a direct distortion of the emissions economics; both skill rounds rated it Medium.
-- **Recommendation:** make the utilization carry symmetric across no-activity gaps so a quiescent epoch does not reset
-  the ratio to its maximum; add invariant coverage that a quiescent epoch cannot raise the next epoch's throttled
-  emissions above the active-state bound.
-- **Regression test:** `tests/unit/security/v1.1.0/MultiAgentRound_SystemUtilizationCarryAsymmetry.t.sol` and
-  `ParallelRound_SystemUtilizationRollover.t.sol` (present as new, uncommitted tests on the working tree).
+- **Mechanism:** `_rollover` carries utilization forward with a **snap-forward** (not walk-fill) strategy: it writes
+  only the current epoch's slot from `lastSystemUtilizationEpoch`, so a fully-quiescent epoch's `totalUtilization` slot
+  stays `0`. `_getSystemUtilizationRatio` reads that slot as its baseline, so the epoch following a quiescent one can
+  compute a delta against `0` and round up to the maximum ratio.
+- **Impact — measured, bounded.** Holding real activity constant and varying only whether the prior epoch was quiescent,
+  the ratio is **100.00% (quiescent baseline) vs 91.66% (carried baseline)**. Worst case is bounded by the configured
+  lower bound → 100% (i.e. ≤ ~2× for a **single** epoch), and hard-capped by `maxEpochEmissions` — no unbounded mint, no
+  solvency impact. Requires **protocol-wide quiescence** (zero create/deposit/redeem for a full epoch), which is not
+  attacker-inducible.
+- **Disposition — by design (closed).** The carry-forward defense (`lastSystemUtilizationEpoch` +
+  `hasRolledOverSystemUtilization`) is **already implemented in this release** and fixes the substantive bug: pre-fix,
+  `_rollover` carried from `currentEpoch - 1`, which is `0` inside a gap, so the carry died across quiescence.
+  `MultiVault.reinitialize` pre-seeds `lastSystemUtilizationEpoch` so the first post-upgrade rollover reads a meaningful
+  slot. Leaving intermediate epochs at zero is the **deliberate, documented** choice — snap-forward was selected over
+  the evaluated-and-rejected walk-back/walk-fill variant — and is asserted as intended behavior in
+  `tests/unit/MultiVault/NoActivityEpochDefense.t.sol`. The earlier "make the carry symmetric" recommendation is
+  therefore superseded: it describes the rejected design.
+- **Regression test:** `tests/unit/MultiVault/NoActivityEpochDefense.t.sol` (multi-epoch quiescence carry-forward,
+  including the intermediate-epoch-zero assertions) and `tests/unit/MultiVault/RolloverSystemUtilization.t.sol`.
 
 ---
 
@@ -248,6 +260,42 @@ separate Minors._
 
 ---
 
+### Disposition register (every finding, with response)
+
+Status vocabulary: **Closed — Fixed** (code change landed + gating test) · **Closed — Acknowledged** (accepted as-is;
+rationale recorded) · **Closed — By design** (behavior is the intended design decision) · **Closed — Not applicable**
+(precondition does not exist in the deployed system) · **Open** (action still required).
+
+| ID          | Status                        | Response / rationale                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ----------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MA-01**   | Closed — Not applicable       | On-chain verification found a single protocol AtomWallet deployment, **unclaimed**, with no Warden-claim or ownership-grant events, so no legacy `Ownable2Step`-claimed wallet exists to brick. Legacy-owner migration logic was deliberately **not** added. Re-verify the census immediately before executing the beacon upgrade.                                                                                                                                                                                          |
+| **MED-01**  | **Closed — Fixed**            | ERC-1271 now validates `replaySafeHash(hash, "AtomWallet", "1")`, binding the digest to the wallet **and** chain id. EOA and P-256/WebAuthn vectors updated; covered by the AtomWallet auth/adversarial suites and the v1.0.2 mainnet upgrade regression.                                                                                                                                                                                                                                                                   |
+| **MED-02**  | **Closed — Fixed** (n/a live) | The shared emissions initializer now rejects `emissionsLength == 0` with an explicit error. Defense-in-depth only: both deployed controllers are already initialized to a 14-day epoch and the value has no setter, so live proxies are unaffected. Do **not** upgrade a live controller solely to acquire this guard.                                                                                                                                                                                                      |
+| **MED-03**  | Closed — By design            | Snap-forward carry-forward is the deliberate, documented design (walk-fill was evaluated and rejected); the substantive carry-loss bug is already fixed in this release and reinitialization pre-seeds the tracking slot. Residual effect measured at 100% vs 91.66%, ≤ ~2× for one epoch, capped by `maxEpochEmissions`, and requires protocol-wide quiescence.                                                                                                                                                            |
+| **MED-04**  | Closed — Acknowledged         | Intended consequence of the pause design: pausing is an emergency lever and a pause spanning an epoch boundary forfeits that epoch's rewards. Accepted as a conservative posture. **Ops runbook note:** prefer short pauses; a >1-epoch pause forfeits that epoch's rewards.                                                                                                                                                                                                                                                |
+| **MIN-01**  | Closed — By design            | Follows from the wallet claim flow — `transferOwnership` intentionally hands the wallet to the claimant as the single owner.                                                                                                                                                                                                                                                                                                                                                                                                |
+| **MIN-02**  | Closed — By design            | `feeDenominator` is a designated governance parameter set through the 4-of-8 Safe + `TimelockController`; validating trusted-governance inputs on-chain is out of the accepted trust model.                                                                                                                                                                                                                                                                                                                                 |
+| **MIN-03**  | Closed — Acknowledged         | The per-window claim cap is an intentionally conservative throttle: over-throttling degrades liveness but never authorizes a claim. Arguably the desired posture for a compromised-signer scenario.                                                                                                                                                                                                                                                                                                                         |
+| **MIN-04**  | Closed — Acknowledged         | Misconfiguring `feeRecipient` to a non-forwarding address is a trusted-admin configuration error, not an attacker path.                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **MIN-05**  | Closed — Not applicable       | Not reachable: `minDeposit` is configured **greater than zero** in MultiVault, so a batch leg cannot round to zero and revert the batch.                                                                                                                                                                                                                                                                                                                                                                                    |
+| **MIN-06**  | Closed — Acknowledged         | `setMaxFixedFee` is timelock-gated governance; an absolute on-chain ceiling is not required under the accepted trust model.                                                                                                                                                                                                                                                                                                                                                                                                 |
+| **MIN-07**  | Closed — Not applicable       | Epoch length is not changeable after initialization, and the current deployment already satisfies `MINTIME ≥ EPOCH_LENGTH`. No on-chain enforcement needed for the deployed configuration.                                                                                                                                                                                                                                                                                                                                  |
+| **MIN-08**  | Closed — By design            | The P-256/WebAuthn path fails **closed** where the RIP-7212 precompile/verifier is unavailable — a capability gate, not a vulnerability.                                                                                                                                                                                                                                                                                                                                                                                    |
+| **MIN-09**  | Closed — Acknowledged         | Accepted risks: `initialize` is executed **atomically** in the deploy scripts (no front-run window); `reinitialize` is access-controlled; `redeem` being pause-gated is the intended risk-management posture.                                                                                                                                                                                                                                                                                                               |
+| **INFO-01** | Closed — Acknowledged         | High-`s` acceptance remains (the underlying signature-checker library documents that it does not enforce non-malleability), but it is **not exploitable here**: ERC-1271 validation is stateless and no nonce or uniqueness store is keyed on signature bytes, so a malleated variant grants nothing the original does not. UserOp replay is prevented by EntryPoint nonces. The `replaySafeHash` fix additionally closed the cross-wallet dimension.                                                                       |
+| **INFO-02** | Closed — By design            | The fixed-window limiter's ≤ `2 × cap` boundary straddle is the documented, intended behavior of a fixed (non-sliding) window.                                                                                                                                                                                                                                                                                                                                                                                              |
+| **INFO-03** | Open — deferred to round 2    | Correct scope observation: the dynamic-fee curve surface is absent at the reviewed commit. It is the subject of the **next round**, not a defect in this one.                                                                                                                                                                                                                                                                                                                                                               |
+| **INFO-04** | **Closed — Fixed** (docs)     | NatSpec reworded to describe the mechanism that actually exists: the layout is pinned by the storage-layout regression suite executed in CI, plus review during development and the upgrade process — not a separate bespoke "diff gate" job.                                                                                                                                                                                                                                                                               |
+| **INFO-05** | Closed — Acknowledged         | Calling `reinitialize` is an explicit step of the upgrade process. **Verified on-chain (chain id `1155`):** the Initializable slot reads `_initialized == 1` on both the MultiVault and TrustBonding proxies, confirming `reinitializer(2)` has not executed — which also validates the §5 storage-reshape assumption. Re-confirm this read immediately before the upgrade.                                                                                                                                                 |
+| **INFO-06** | Closed — By design            | `sweepAccumulatedProtocolFees` is intentionally permissionless: it can only route funds to the configured `protocolMultisig`, so an unprivileged caller gains nothing.                                                                                                                                                                                                                                                                                                                                                      |
+| **INFO-07** | Closed — By design (+ docs)   | `BaseCurve` deliberately declares exactly one state variable, so inheriting curves own every slot from 1 onward and no gap is required. A gap would only ever have helped if reserved **before** deployment: for curves already live behind proxies the layout is frozen, so inserting base state would shift every child's slots regardless — adding base state is therefore not an option for deployed curves, and any such change means a fresh deployment. NatSpec updated to record the deliberate single-slot layout. |
+
+**Summary:** 0 Open on the deployed system. One code fix was strictly required (**MED-01**); **MED-02** was added as
+defense-in-depth for future deployments; **INFO-04 / INFO-07** are documentation corrections; everything else is
+acknowledged, by design, or not applicable. **INFO-03** is carried into round 2 as scope, not as a defect.
+
+---
+
 ## 6. Properties checked (negatives — coverage evidence)
 
 Each invariant was attacked and held; the rounds that confirmed it are noted. Negatives are deliverables — they evidence
@@ -290,31 +338,38 @@ that the surface was probed, not merely declared clean.
 
 _`○_` = frontier rated MED-04 Informational ("by design"); ToB rated it Medium.
 
-**Remediation status (unverified by this consolidation).** The reviewed working tree carries uncommitted changes to
-`src/protocol/wallet/AtomWallet.sol`, `src/interfaces/IAtomWallet.sol`,
-`src/protocol/emissions/CoreEmissionsController.sol`, `src/interfaces/ICoreEmissionsController.sol`, and the AtomWallet
-/ emissions / TrustBonding-utilization test suites, plus new security tests
-`MultiAgentRound_SystemUtilizationCarryAsymmetry.t.sol` and `ParallelRound_SystemUtilizationRollover.t.sol`. This is
-consistent with active remediation of `MA-01`/`MED-01` (AtomWallet), `MED-02` (emissions), and `MED-03` (utilization).
-**None of these fixes is verified here** — each finding above is reported at its as-found status, and the next step (§8)
-is to confirm each fix goes red-when-reverted against its gating test.
+**Remediation status — complete.** `MED-01` landed in `src/protocol/wallet/AtomWallet.sol` /
+`src/interfaces/IAtomWallet.sol` (ERC-1271 now binds the digest to the wallet and chain via `replaySafeHash`), with the
+EOA and P-256/WebAuthn vectors updated across the AtomWallet auth/adversarial suites and the v1.0.2 mainnet upgrade
+regression. `MED-02` landed in `src/protocol/emissions/CoreEmissionsController.sol` /
+`src/interfaces/ICoreEmissionsController.sol` as an initialization-time guard (no effect on live proxies). `MA-01` was
+closed by on-chain census rather than code — legacy-owner migration logic was deliberately **not** added. `MED-03` is
+the pre-existing, deliberate snap-forward design and needed no change. Per-finding responses are in the disposition
+register at the end of §5.
 
 ---
 
 ## 8. Go / no-go gate (what to close before the external audit)
 
-1. **MA-01 (Major)** — land the legacy-owner migration path **or** prove non-reachability via **OQ-E-1** (on-chain
-   census of `Ownable2Step`-claimed, value-holding wallets). Do not ship the beacon upgrade until one of these is true.
-2. **MED-01** — restore the wallet-bound `replaySafeHash` on the ERC-1271 path (and reject high-s, `INFO-01`).
-3. **MED-02** — reject `emissionsLength == 0` in the shared emissions initializer.
-4. **MED-03** — make the utilization carry symmetric; gate with the two new invariant tests.
-5. **MED-04** — ratify the pause-forfeiture as accepted (documented + surfaced), or add a post-pause claim grace window.
-6. Confirm each fix is **mutation-checked** (its gating test goes red when the guard is removed), then move the finding
-   to `Fixed` with the test named — this is the found→fixed log the external auditors receive alongside this report.
+All findings are dispositioned (see the register at the end of §5); **nothing is open against the deployed system.** Two
+operational checks remain, both to be run immediately **before executing the upgrade**:
 
-**Bottom line:** no permissionless Critical/Major theft path was found across six independent rounds; the six core
-invariants held. The gating item is the migration-safety Major (`MA-01`), whose live impact hinges on OQ-E-1, followed
-by four Mediums that are already being addressed on-branch. Resolve §8.1–§8.5 and re-verify before external hand-off.
+1. **MA-01 re-census (pre-upgrade gate).** `MA-01` is closed by an on-chain fact — one AtomWallet, unclaimed — and the
+   legacy-owner migration path was deliberately not built, so that fact is load-bearing rather than backstopped by code.
+   **Re-run the census immediately before the beacon upgrade** and confirm no wallet has been claimed under the legacy
+   `Ownable2Step` model in the interim.
+2. **Reinitializer version check (pre-upgrade gate).** Confirm the Initializable slot still reads `_initialized == 1` on
+   the MultiVault proxy before running `reinitialize(2)` (verified at time of writing on chain id `1155`; see
+   `INFO-05`).
+
+**Carried into round 2 (not a gate for this one):** the dynamic-fee curve surface (`INFO-03`) does not exist at the
+reviewed commit and therefore has **zero audit coverage**. It is the most novel funds-touching surface in the pipeline
+and must be the subject of the next round before it ships publicly.
+
+**Bottom line:** no permissionless Critical/Major theft path was found across six independent rounds, and the six core
+invariants held. Exactly one finding required a code fix (`MED-01`), which landed with regression coverage; one more
+(`MED-02`) was added as forward-looking defense-in-depth. The remaining items are by design, acknowledged, or not
+applicable to the deployed system. The residual risk is operational, not code: run the two pre-upgrade checks above.
 
 ---
 
