@@ -642,6 +642,14 @@ interface IMultiVault {
      *         `createAtomsFor`, `createTriplesFor`, `deposit`, `depositBatch`.
      *         Mixed payable + non-payable atomic batches are not supported when
      *         `msg.value > 0`. Nested multicalls revert.
+     *
+     *         This boundary is intentional: enabling value-bearing batches that
+     *         include non-payable exits (`redeem`, `redeemBatch`, `approve`)
+     *         would require making those exits `payable` with a zero-value guard,
+     *         and even then a batch cannot recycle redeemed proceeds — paid out
+     *         to the receiver — into a later deposit. Such flows belong in a
+     *         smart account that custodies intermediate balances, or in separate
+     *         transactions.
      * @param  data The array of ABI-encoded calls to execute against this contract
      * @param  values The array of per-sub-call value allocations
      * @return results The array of return data from each sub-call
@@ -691,7 +699,8 @@ interface IMultiVault {
     /// @param _timelock The new timelock controller address
     function setTimelock(address _timelock) external;
 
-    /// @notice Reinitializes the contract to bootstrap the timelock address after upgrade
+    /// @notice Reinitializes the contract after upgrade: bootstraps the timelock address and
+    ///         pre-seeds the system-utilization rollover source
     /// @param _timelock The timelock controller address
     function reinitialize(address _timelock) external;
 }

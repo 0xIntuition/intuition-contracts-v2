@@ -528,6 +528,26 @@ contract CoreEmissionsControllerTest is CoreEmissionsControllerBase {
         controller.validateCliff(1000);
     }
 
+    function test_init_RevertsOnZeroEmissionsPerEpoch() public {
+        vm.expectRevert();
+        controller.initCoreEmissionsController(
+            DEFAULT_START_TIMESTAMP, DEFAULT_EPOCH_LENGTH, 0, DEFAULT_REDUCTION_CLIFF, DEFAULT_REDUCTION_BASIS_POINTS
+        );
+    }
+
+    function test_init_RevertsOnStartTimestampBeforeNow() public {
+        vm.warp(DEFAULT_START_TIMESTAMP + 100);
+
+        vm.expectRevert();
+        controller.initCoreEmissionsController(
+            block.timestamp - 1,
+            DEFAULT_EPOCH_LENGTH,
+            DEFAULT_EMISSIONS_PER_EPOCH,
+            DEFAULT_REDUCTION_CLIFF,
+            DEFAULT_REDUCTION_BASIS_POINTS
+        );
+    }
+
     /* =================================================== */
     /*                 EDGE CASE TESTS                    */
     /* =================================================== */

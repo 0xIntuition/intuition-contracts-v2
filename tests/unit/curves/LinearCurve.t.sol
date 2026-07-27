@@ -310,4 +310,31 @@ contract LinearCurveTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_SharesOverflowMax.selector));
         curve.convertToShares(1, max - 1, max);
     }
+
+    /* =================================================== */
+    /*               FEE HOOK SAFE DEFAULTS                */
+    /* =================================================== */
+
+    function test_feeHooks_defaultGettersSignalNoHooks() public view {
+        assertFalse(curve.hasDepositFeeHook(), "no deposit fee hook by default");
+        assertFalse(curve.hasRedeemFeeHook(), "no redeem fee hook by default");
+    }
+
+    function test_feeHooks_quotesRevertByDefault() public {
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_FeeHooksNotSupported.selector));
+        curve.quoteDepositFee(bytes32("term"), 1e18);
+
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_FeeHooksNotSupported.selector));
+        curve.quoteRedeemFee(bytes32("term"), address(this), 1e18);
+    }
+
+    function test_feeHooks_recordsRevertByDefault() public {
+        vm.deal(address(this), 2e18);
+
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_FeeHooksNotSupported.selector));
+        curve.recordDeposit{ value: 1e18 }(bytes32("term"), address(this), 1e18);
+
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_FeeHooksNotSupported.selector));
+        curve.recordRedeem{ value: 1e18 }(bytes32("term"), address(this), 1e18);
+    }
 }

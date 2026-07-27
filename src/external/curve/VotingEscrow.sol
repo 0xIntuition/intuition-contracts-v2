@@ -745,6 +745,14 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         return _supply_at(point, t);
     }
 
+    /// @notice Total voting power at an arbitrary timestamp `t`
+    /// @dev Only defined for `t >= point_history[0].ts`, i.e. at or after this contract was initialized.
+    ///      Querying earlier is out of domain and reverts on arithmetic underflow rather than returning 0;
+    ///      no voting power existed before the contract was live, so such a query has no meaning. This is
+    ///      inherited Curve / Stargate behaviour, kept as-is: the function is `view`, so a revert cannot
+    ///      affect state or block any caller that queries a valid timestamp.
+    /// @param t Timestamp to query, at or after contract initialization
+    /// @return Total voting power at `t`
     function totalSupplyAtT(uint256 t) external view returns (uint256) {
         return _totalSupply(t);
     }

@@ -15,15 +15,17 @@ import { ApprovalTypes } from "src/interfaces/IMultiVault.sol";
 ///              read matches; this triangulates field, slot, and auto-getter.
 ///           2. asserting the upgrade-safety gap immediately after the new field is zero
 ///              across its declared length and just past it (no spill).
-///         Future PRs that append fields should extend this test by writing the new field at
-///         slot 38 and shrinking the asserted-zero range accordingly.
+///         Future PRs that append fields should extend this test by writing the new field at the
+///         next free slot (currently 38) and shrinking the asserted-zero range accordingly.
 contract MultiVaultStorageLayoutTest is BaseTest {
-    /// @dev Slot of the new `lastSystemUtilizationEpoch` field; load-bearing for the gap
-    ///      defense added in this PR. See [`MultiVaultLib.Storage`].
+    /// @dev Slot of the `lastSystemUtilizationEpoch` field; load-bearing for the gap
+    ///      defense. See [`MultiVaultLib.Storage`].
     uint256 internal constant LAST_SYSTEM_UTILIZATION_EPOCH_SLOT = 37;
 
-    /// @dev First slot of the post-`lastSystemUtilizationEpoch` upgrade-safety gap. The
-    ///      gap is `uint256[47]`, occupying slots 38 through 84 inclusive.
+    /// @dev First slot of the post-`lastSystemUtilizationEpoch` upgrade-safety gap. The gap is
+    ///      `uint256[47]`, occupying slots 38 through 84 inclusive. (The dynamic-fee routing pair
+    ///      that briefly occupied slots 38/39 pre-release was removed when the fee hooks were
+    ///      standardized into the curve interface — no MultiVault storage tracks curves anymore.)
     uint256 internal constant GAP_FIRST_SLOT = 38;
     uint256 internal constant GAP_LAST_SLOT = 84;
 
@@ -58,12 +60,15 @@ contract MultiVaultStorageLayoutTest is BaseTest {
         );
     }
 
-    function test_storageLayout_gapShiftedTo47Slots_remainsZero() external {
+    function test_storageLayout_gap47Slots_remainsZero() external {
         // Drive some natural activity so storage is fully exercised (atom creation,
-        // utilization, fees, vault state) — gap slots must stay zero regardless.
+        // utilization, fees, vault state) — gap slots must stay zero regardless. The
+        // dynamic-fee deposit additionally proves fee-hook routing writes NO MultiVault
+        // storage: the hook state lives entirely on the curve.
         vm.warp(block.timestamp + 14 days + 1);
         bytes32 atomId = createSimpleAtom("storage-layout-gap", ATOM_COST[0], users.alice);
         makeDeposit(users.alice, users.alice, atomId, CURVE_ID, 1 ether, 0);
+        makeDeposit(users.alice, users.alice, atomId, DYNAMIC_FEE_CURVE_ID, 1 ether, 0);
 
         for (uint256 slot = GAP_FIRST_SLOT; slot <= GAP_LAST_SLOT; slot++) {
             assertEq(

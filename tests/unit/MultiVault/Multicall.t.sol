@@ -655,9 +655,8 @@ contract MulticallTest is BaseTest {
         // Triples require pre-existing subject/predicate/object atoms — share
         // those across both paths so the differential is only the triple
         // creation itself.
-        bytes32[] memory atomIds = createAtomsWithUniformCost(
-            _toBytesArray3("diff-subj", "diff-pred", "diff-obj"), ATOM_COST[0], users.alice
-        );
+        bytes32[] memory atomIds =
+            createAtomsWithUniformCost(_toBytesArray3("diff-subj", "diff-pred", "diff-obj"), ATOM_COST[0], users.alice);
 
         bytes32[] memory subjectIds = new bytes32[](1);
         bytes32[] memory predicateIds = new bytes32[](1);

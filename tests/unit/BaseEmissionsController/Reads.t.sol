@@ -3,6 +3,7 @@ pragma solidity 0.8.29;
 
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { BaseEmissionsController } from "src/protocol/emissions/BaseEmissionsController.sol";
+import { IBaseEmissionsController } from "src/interfaces/IBaseEmissionsController.sol";
 import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";
 import { MetaERC20DispatchInit, FinalityState } from "src/interfaces/IMetaLayer.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
@@ -353,5 +354,38 @@ contract BaseEmissionsControllerGettersTest is BaseTest {
 
         assertEq(currentEpoch, epochAtTimestamp);
         assertEq(currentEpoch, 3);
+    }
+
+    /* =================================================== */
+    /*         RECEIVE / BALANCE / BURN TESTS             */
+    /* =================================================== */
+
+    function test_receive_and_getBalance_Success() public {
+        assertEq(baseEmissionsController.getBalance(), 0);
+
+        vm.deal(users.alice, 1 ether);
+        resetPrank(users.alice);
+        (bool ok,) = payable(address(baseEmissionsController)).call{ value: 1 ether }("");
+        assertTrue(ok);
+
+        assertEq(baseEmissionsController.getBalance(), 1 ether);
+        assertEq(address(baseEmissionsController).balance, 1 ether);
+    }
+
+    function test_burn_Success() public {
+        deal(address(protocol.trust), address(baseEmissionsController), 100e18);
+
+        resetPrank(users.admin);
+        baseEmissionsController.burn(40e18);
+
+        assertEq(protocol.trust.balanceOf(address(baseEmissionsController)), 60e18);
+    }
+
+    function test_burn_RevertsWhen_AmountExceedsBurnableBalance() public {
+        deal(address(protocol.trust), address(baseEmissionsController), 10e18);
+
+        resetPrank(users.admin);
+        vm.expectRevert(IBaseEmissionsController.BaseEmissionsController_InsufficientBurnableBalance.selector);
+        baseEmissionsController.burn(10e18 + 1);
     }
 }

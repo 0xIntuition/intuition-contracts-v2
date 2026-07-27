@@ -28,6 +28,8 @@ import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.s
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
 import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCurve.sol";
 import { ProgressiveCurve } from "src/protocol/curves/ProgressiveCurve.sol";
+import { DynamicFeeFlatPriceCurve } from "src/protocol/curves/DynamicFeeFlatPriceCurve.sol";
+import { DynamicFeeConfig } from "src/interfaces/IDynamicFeeFlatPriceCurve.sol";
 import { ERC20Mock } from "tests/mocks/ERC20Mock.sol";
 import { Users } from "tests/utils/Types.sol";
 import { Trust } from "src/Trust.sol";
@@ -43,12 +45,17 @@ abstract contract BaseTest is Modifiers, Test {
     LinearCurve internal linearCurve;
     OffsetProgressiveCurve internal offsetProgressiveCurve;
     ProgressiveCurve internal progressiveCurve;
+    DynamicFeeFlatPriceCurve internal dynamicFeeCurve;
     BondingCurveRegistry internal bondingCurveRegistryImpl;
 
     TransparentUpgradeableProxy internal linearCurveProxy;
     TransparentUpgradeableProxy internal offsetProgressiveCurveProxy;
     TransparentUpgradeableProxy internal progressiveCurveProxy;
+    TransparentUpgradeableProxy internal dynamicFeeCurveProxy;
     TransparentUpgradeableProxy internal bondingCurveRegistryProxy;
+
+    /// @dev The dynamic-fee curve registers fourth (Linear=1, Offset=2, Progressive=3).
+    uint256 internal constant DYNAMIC_FEE_CURVE_ID = 4;
 
     uint256 internal BASIS_POINTS_DIVISOR = 10_000;
     uint256 internal ONE_SHARE = 1e18;
@@ -278,14 +285,35 @@ abstract contract BaseTest is Modifiers, Test {
         console2.log("OffsetProgressiveCurve address: ", address(offsetProgressiveCurve));
         console2.log("ProgressiveCurve address: ", address(progressiveCurve));
 
+        // The merged flat-price dynamic-fee curve: one contract serving both the flat 1:1 pricing
+        // surface (inherited from LinearCurve) and the tier/fee schedule + per-vault fee accounting.
+        // Registration below is its only wiring — the MultiVault discovers the fee hooks through the
+        // registry + the standardized IBaseCurve getters. The MultiVault proxy address already
+        // exists here, so the curve can be pointed at it before the MultiVault is initialized.
+        DynamicFeeFlatPriceCurve dynamicFeeCurveImpl = new DynamicFeeFlatPriceCurve();
+        dynamicFeeCurveProxy = new TransparentUpgradeableProxy(
+            address(dynamicFeeCurveImpl),
+            users.admin,
+            abi.encodeWithSelector(
+                DynamicFeeFlatPriceCurve.initialize.selector,
+                "Dynamic Fee Flat Price Curve",
+                users.admin,
+                address(protocol.multiVault),
+                _getDefaultDynamicFeeConfig()
+            )
+        );
+        dynamicFeeCurve = DynamicFeeFlatPriceCurve(address(dynamicFeeCurveProxy));
+
         // Add curves to registry
         resetPrank(users.admin);
         protocol.curveRegistry.addBondingCurve(address(linearCurve));
         protocol.curveRegistry.addBondingCurve(address(offsetProgressiveCurve));
         protocol.curveRegistry.addBondingCurve(address(progressiveCurve));
+        protocol.curveRegistry.addBondingCurve(address(dynamicFeeCurve));
         console2.log("Added LinearCurve to registry with ID: 1");
         console2.log("Added OffsetProgressiveCurve to registry with ID: 2");
         console2.log("Added ProgressiveCurve to registry with ID: 3");
+        console2.log("Added Dynamic Fee Flat Price Curve to registry with ID: 4");
 
         // Label contracts for debugging
         vm.label(address(multiVaultImpl), "MultiVaultImpl");
@@ -371,7 +399,12 @@ abstract contract BaseTest is Modifiers, Test {
                 bondingCurveConfig
             );
 
-        // Bootstrap RBAC: set timelock (reinitialize also grants PAUSER_ROLE to generalConfig.admin)
+        vm.label(address(dynamicFeeCurve), "DynamicFeeFlatPriceCurve");
+
+        // Bootstrap RBAC: set timelock and pre-seed the utilization rollover source (reinitialize
+        // also grants PAUSER_ROLE to generalConfig.admin). The dynamic-fee curve needs no
+        // MultiVault-side wiring: its fee hooks are discovered through the registry + the
+        // standardized IBaseCurve hook getters on every deposit/redeem.
         resetPrank(users.admin);
         protocol.multiVault.reinitialize(users.timelock);
 
@@ -440,6 +473,29 @@ abstract contract BaseTest is Modifiers, Test {
 
     function _getDefaultBondingCurveConfig() internal pure returns (BondingCurveConfig memory) {
         return BondingCurveConfig({ registry: address(0), defaultCurveId: 1 });
+    }
+
+    /// @dev Default dynamic-fee schedule for tests: 5 tiers of width 5 TRUST growing 20% per tier
+    ///      (edges 5, 11, 18, 26, 35 e18 — small enough that ordinary test deposits cross tiers),
+    ///      deposit fee 1% +0.5%/tier capped at 10%, triangular fulcrum distribution
+    ///      (alpha = BPS, sigma = 4e18 — nearest-first window), withdrawal fee
+    ///      2% +0.5%/tier, all routed to the leaver's own tier.
+    function _getDefaultDynamicFeeConfig() internal pure returns (DynamicFeeConfig memory config) {
+        config = DynamicFeeConfig({
+            width0: 5e18,
+            tierCount: 5,
+            growthGBps: 2000,
+            depositBaseBps: 100,
+            depositGrowthBps: 50,
+            depositCapBps: 1000,
+            fulcrumAlpha: 10_000,
+            kernelSpread: 4e18,
+            withdrawalBaseBps: 200,
+            withdrawalGrowthBps: 50,
+            withdrawalCapBps: 1000,
+            withdrawalToRecentShareBps: 0,
+            depositToRecentTierShareBps: 0
+        });
     }
 
     function createAtomWithDeposit(bytes memory atomData, uint256 depositAmount, address creator)

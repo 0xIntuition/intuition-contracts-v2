@@ -7,10 +7,22 @@ import { Test } from "forge-std/src/Test.sol";
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { MultiVaultCore } from "src/protocol/MultiVaultCore.sol";
-import { ApprovalTypes } from "src/interfaces/IMultiVault.sol";
+import { ApprovalTypes, VaultType } from "src/interfaces/IMultiVault.sol";
 
 /// @dev Minimal registry mock so _validateRedeem() can run inside a harness.
 contract BondingCurveRegistryMock {
+    /// @dev The fee-hook resolver probes the registry before the min-share validation runs. Keeping
+    ///      this zero makes the harness curve hookless, matching the original min-share test intent.
+    function curveAddresses(
+        uint256 /*curveId*/
+    )
+        external
+        pure
+        returns (address)
+    {
+        return address(0);
+    }
+
     function previewDeposit(
         uint256 assets,
         uint256,
@@ -62,6 +74,16 @@ contract BondingCurveRegistryMock {
     {
         return type(uint256).max;
     }
+
+    function getCurveMaxShares(
+        uint256 /*curveId*/
+    )
+        external
+        pure
+        returns (uint256)
+    {
+        return type(uint256).max;
+    }
 }
 
 /// @dev Test-only harness exposing internal methods and internal storage.
@@ -73,6 +95,10 @@ contract MultiVaultHarness is MultiVault {
 
     function setTotalSharesForTest(bytes32 termId, uint256 curveId, uint256 totalShares) external {
         _vaults[termId][curveId].totalShares = totalShares;
+    }
+
+    function setTotalAssetsForTest(bytes32 termId, uint256 curveId, uint256 totalAssets) external {
+        _vaults[termId][curveId].totalAssets = totalAssets;
     }
 
     function setMinShareForTest(uint256 minShare) external {
@@ -87,6 +113,33 @@ contract MultiVaultHarness is MultiVault {
         generalConfig.feeDenominator = den;
     }
 
+    function setTrustBondingForTest(address tb) external {
+        generalConfig.trustBonding = tb;
+    }
+
+    function setMinDepositForTest(uint256 minDep) external {
+        generalConfig.minDeposit = minDep;
+    }
+
+    function setGeneralConfigFeeThresholdForTest(uint256 threshold) external {
+        generalConfig.feeThreshold = threshold;
+    }
+
+    // Directly poke triple-state bookkeeping to construct states the normal
+    // create-triple path can never leave the vault in (used to reach the library's
+    // own defense-in-depth guards against exactly that kind of corruption).
+    function setIsTripleForTest(bytes32 termId, bool val) external {
+        _isTriple[termId] = val;
+    }
+
+    function setTripleIdFromCounterIdForTest(bytes32 counterId, bytes32 tripleId) external {
+        _tripleIdFromCounterId[counterId] = tripleId;
+    }
+
+    function setAtomForTest(bytes32 atomId, bytes memory data) external {
+        _atoms[atomId] = data;
+    }
+
     // Expose the internal functions we want to hit
     function burnForTest(address from, bytes32 termId, uint256 curveId, uint256 amount) external returns (uint256) {
         return _burn(from, termId, curveId, amount);
@@ -97,6 +150,67 @@ contract MultiVaultHarness is MultiVault {
         view
     {
         _validateRedeem(termId, curveId, account, shares, minAssets);
+    }
+
+    function setVaultTotalsForTest(
+        bytes32 termId,
+        uint256 curveId,
+        uint256 totalAssets,
+        uint256 totalShares,
+        VaultType vaultType
+    ) external {
+        _setVaultTotals(termId, curveId, totalAssets, totalShares, vaultType);
+    }
+}
+
+/// @dev Registry stand-in with fully controllable bounds/shares, used purely to exercise
+///      `_validateMinShares`'s own defensive guards (zero-shares, max-assets, max-shares) — every
+///      real curve either has practically-unbounded max fields or self-clamps before MultiVault's
+///      guard would ever see a violation.
+contract ControllableRegistryMock {
+    uint256 public fixedShares = 1e18;
+    uint256 public fixedMaxAssets = type(uint256).max;
+    uint256 public fixedMaxShares = type(uint256).max;
+
+    /// @dev Keep this registry hookless so the tests reach `_validateMinShares`'s intended guards.
+    function curveAddresses(uint256) external pure returns (address) {
+        return address(0);
+    }
+
+    function setFixedShares(uint256 s) external {
+        fixedShares = s;
+    }
+
+    function setFixedMaxAssets(uint256 m) external {
+        fixedMaxAssets = m;
+    }
+
+    function setFixedMaxShares(uint256 m) external {
+        fixedMaxShares = m;
+    }
+
+    function previewDeposit(uint256, uint256, uint256, uint256) external view returns (uint256) {
+        return fixedShares;
+    }
+
+    function previewMint(uint256, uint256, uint256, uint256) external pure returns (uint256) {
+        return 0;
+    }
+
+    function previewRedeem(uint256 shares, uint256, uint256, uint256) external pure returns (uint256) {
+        return shares;
+    }
+
+    function currentPrice(uint256, uint256, uint256) external pure returns (uint256) {
+        return 1e18;
+    }
+
+    function getCurveMaxAssets(uint256) external view returns (uint256) {
+        return fixedMaxAssets;
+    }
+
+    function getCurveMaxShares(uint256) external view returns (uint256) {
+        return fixedMaxShares;
     }
 }
 
@@ -137,6 +251,23 @@ contract RedeemTest is BaseTest {
 
         uint256 remainingShares = protocol.multiVault.getShares(users.alice, atomId, CURVE_ID);
         assertEq(remainingShares, 0, "Should have no redeemable shares remaining");
+    }
+
+    function test_redeem_ShiftsUtilizationHistory_whenPriorEpochAlreadyRecorded() public {
+        // Move into epoch 1 before any activity so the user's first utilization epoch is nonzero
+        // (epoch 0 is indistinguishable from "unset" in userEpochHistory).
+        vm.warp(block.timestamp + TRUST_BONDING_EPOCH_LENGTH);
+
+        bytes32 atomId = createSimpleAtom("Utilization shift atom", ATOM_COST[0], users.alice);
+        uint256 shares = makeDeposit(users.alice, users.alice, atomId, CURVE_ID, 10e18, 0);
+
+        // Move into a new epoch so `_removeUtilization`'s history-shift branch (last active epoch
+        // != current epoch AND last active epoch != 0) fires on redeem, instead of the
+        // first-ever-activity branch already covered elsewhere.
+        vm.warp(block.timestamp + TRUST_BONDING_EPOCH_LENGTH);
+
+        uint256 assets = redeemShares(users.alice, users.alice, atomId, CURVE_ID, shares / 2, 0);
+        assertTrue(assets > 0, "Should receive assets after redeeming in a later epoch");
     }
 
     function test_redeem_DifferentReceiver_Success() public {
@@ -516,6 +647,167 @@ contract RedeemTest is BaseTest {
     /*//////////////////////////////////////////////////////////////
         Test unreachable branches in _burn() and _validateRedeem()
     //////////////////////////////////////////////////////////////*/
+
+    function test_burn_RevertsWhen_FromIsZeroAddress() public {
+        MultiVaultHarness h = new MultiVaultHarness();
+
+        vm.expectRevert(MultiVault.MultiVault_BurnFromZeroAddress.selector);
+        h.burnForTest(address(0), keccak256("burn-zero-address-term"), 123, 1);
+    }
+
+    function test_setVaultTotals_RevertsWhen_ExceedsCurveMaxAssets() public {
+        MultiVaultHarness h = new MultiVaultHarness();
+        h.setBondingCurveRegistryForTest(address(protocol.curveRegistry));
+
+        // LinearCurve (id 1) declares MAX_ASSETS = type(uint256).max, so it can never be exceeded;
+        // OffsetProgressiveCurve (id 2) derives a finite overflow-safe bound instead.
+        vm.expectRevert(MultiVault.MultiVault_ActionExceedsMaxAssets.selector);
+        h.setVaultTotalsForTest(
+            keccak256("set-vault-totals-max-assets"), OFFSET_PROGRESSIVE_CURVE_ID, type(uint256).max, 1, VaultType.ATOM
+        );
+    }
+
+    function test_setVaultTotals_RevertsWhen_ExceedsCurveMaxShares() public {
+        MultiVaultHarness h = new MultiVaultHarness();
+        h.setBondingCurveRegistryForTest(address(protocol.curveRegistry));
+
+        vm.expectRevert(MultiVault.MultiVault_ActionExceedsMaxShares.selector);
+        h.setVaultTotalsForTest(
+            keccak256("set-vault-totals-max-shares"), OFFSET_PROGRESSIVE_CURVE_ID, 1, type(uint256).max, VaultType.ATOM
+        );
+    }
+
+    /// @dev `isTriple` and `tripleIdFromCounterId` are always set together by
+    ///      `_initializeTripleState`, so `_hasCounterStake`'s own `!isTriple[tripleId]` guard can
+    ///      never fire through the real triple-creation path. Corrupts the two mappings out of
+    ///      sync directly to exercise the guard.
+    function test_hasCounterStake_RevertsWhen_IsCounterTripleWithoutIsTripleFlag() public {
+        MultiVaultHarness h = new MultiVaultHarness();
+        h.setTrustBondingForTest(address(protocol.trustBonding));
+        h.setBondingCurveRegistryForTest(address(protocol.curveRegistry));
+
+        bytes32 termId = keccak256("counter-without-istriple-flag");
+        bytes32 fakeParent = keccak256("fake-parent-for-hasCounterStake");
+        h.setTripleIdFromCounterIdForTest(termId, fakeParent);
+
+        resetPrank(users.alice);
+        vm.expectRevert(MultiVault.MultiVault_TermNotTriple.selector);
+        h.deposit{ value: 1e17 }(users.alice, termId, CURVE_ID, 0);
+    }
+
+    /// @dev `_isDirectCounterTripleTermInit`'s guard defends against depositing directly into a
+    ///      counter-triple's vault before the positive-triple create path has seeded it — a state
+    ///      the atomic `_createTriple` path never actually leaves behind (it seeds both sides
+    ///      together). Corrupts `isTriple` / `tripleIdFromCounterId` directly to simulate it, on
+    ///      both the execution path (`deposit`, here) and calc/preview path (`previewDeposit`,
+    ///      below) where the guard is mirrored.
+    function test_processDeposit_RevertsWhen_DirectlyInitializingCounterTripleTerm() public {
+        MultiVaultHarness h = new MultiVaultHarness();
+        h.setTrustBondingForTest(address(protocol.trustBonding));
+        h.setBondingCurveRegistryForTest(address(protocol.curveRegistry));
+
+        bytes32 termId = keccak256("direct-counter-init-704");
+        bytes32 fakeParent = keccak256("fake-parent-for-704");
+        h.setIsTripleForTest(termId, true);
+        h.setTripleIdFromCounterIdForTest(termId, fakeParent);
+
+        resetPrank(users.alice);
+        vm.expectRevert(MultiVault.MultiVault_CannotDirectlyInitializeCounterTriple.selector);
+        h.deposit{ value: 1e17 }(users.alice, termId, OFFSET_PROGRESSIVE_CURVE_ID, 0);
+    }
+
+    function test_previewDeposit_RevertsWhen_DirectlyInitializingCounterTripleTerm() public {
+        MultiVaultHarness h = new MultiVaultHarness();
+        h.setBondingCurveRegistryForTest(address(protocol.curveRegistry));
+
+        bytes32 termId = keccak256("direct-counter-init-974");
+        bytes32 fakeParent = keccak256("fake-parent-for-974");
+        h.setIsTripleForTest(termId, true);
+        h.setTripleIdFromCounterIdForTest(termId, fakeParent);
+
+        vm.expectRevert(MultiVault.MultiVault_CannotDirectlyInitializeCounterTriple.selector);
+        h.previewDeposit(termId, OFFSET_PROGRESSIVE_CURVE_ID, 1e17);
+    }
+
+    /// @dev `_getTriple` (the library's own copy, used by the pro-rata fee-distribution path) can
+    ///      only ever revert if `triples[tripleId]` is unset while the term is classified as a
+    ///      non-atom vault — a combination `_createTriple` never produces (it seeds `triples` and
+    ///      `isTriple` together). Simulates that desync directly: `isTriple` set, `triples` left
+    ///      empty, and the vault pre-seeded (nonzero shares) so the deposit reaches the
+    ///      atom-deposit-fraction branch instead of tripping the `_isDirectCounterTripleTermInit`
+    ///      guard first.
+    function test_increaseProRataVaultsAssets_RevertsWhen_TripleAtomIdsUnset() public {
+        MultiVaultHarness h = new MultiVaultHarness();
+        h.setTrustBondingForTest(address(protocol.trustBonding));
+        h.setBondingCurveRegistryForTest(address(protocol.curveRegistry));
+
+        h.setFeeDenominatorForTest(FEE_DENOMINATOR);
+        // A huge threshold keeps the *entry-fee* pro-rata path (which would key off the term's own
+        // default-curve vault, curve id 0 here — never registered) from firing, while the
+        // bytes32(0) vault below is pushed past it so `_shouldChargeAtomDepositFraction` (which
+        // reads `triples[termId]`'s three atom ids, all zero here) still evaluates true.
+        h.setGeneralConfigFeeThresholdForTest(1e30);
+        h.setTotalSharesForTest(bytes32(0), 0, 2e30);
+
+        bytes32 termId = keccak256("pro-rata-unset-atomids-1546");
+        h.setIsTripleForTest(termId, true);
+        h.setTotalSharesForTest(termId, OFFSET_PROGRESSIVE_CURVE_ID, 1e18);
+        h.setTotalAssetsForTest(termId, OFFSET_PROGRESSIVE_CURVE_ID, 1e18);
+
+        resetPrank(users.alice);
+        vm.expectRevert(abi.encodeWithSelector(MultiVaultCore.MultiVaultCore_TripleDoesNotExist.selector, termId));
+        h.deposit{ value: 1e17 }(users.alice, termId, OFFSET_PROGRESSIVE_CURVE_ID, 0);
+    }
+
+    /// @dev `_validateMinShares`'s own zero-shares / max-assets / max-shares guards: every real
+    ///      curve either has a practically-unbounded max (never exceeded) or self-clamps before
+    ///      MultiVault's guard would see a violation, and no real curve rounds a `MIN_DEPOSIT`-sized
+    ///      deposit down to exactly zero shares. A fully-controllable registry stand-in exercises
+    ///      each guard directly, independent of any real curve's math.
+    function _depositAtomWithControllableRegistry(ControllableRegistryMock registry)
+        internal
+        returns (MultiVaultHarness h, bytes32 atomId)
+    {
+        h = new MultiVaultHarness();
+        h.setTrustBondingForTest(address(protocol.trustBonding));
+        h.setBondingCurveRegistryForTest(address(registry));
+        h.setFeeDenominatorForTest(FEE_DENOMINATOR);
+
+        atomId = keccak256("validate-min-shares-atom");
+        h.setAtomForTest(atomId, abi.encodePacked("validate-min-shares-atom-data"));
+    }
+
+    function test_validateMinShares_RevertsWhen_SharesForReceiverIsZero() public {
+        ControllableRegistryMock registry = new ControllableRegistryMock();
+        registry.setFixedShares(0);
+        (MultiVaultHarness h, bytes32 atomId) = _depositAtomWithControllableRegistry(registry);
+
+        resetPrank(users.alice);
+        vm.expectRevert(MultiVault.MultiVault_DepositOrRedeemZeroShares.selector);
+        h.deposit{ value: 1e17 }(users.alice, atomId, 1, 0);
+    }
+
+    function test_validateMinShares_RevertsWhen_ExceedsCurveMaxAssets() public {
+        ControllableRegistryMock registry = new ControllableRegistryMock();
+        registry.setFixedShares(1e18);
+        registry.setFixedMaxAssets(1);
+        (MultiVaultHarness h, bytes32 atomId) = _depositAtomWithControllableRegistry(registry);
+
+        resetPrank(users.alice);
+        vm.expectRevert(MultiVault.MultiVault_ActionExceedsMaxAssets.selector);
+        h.deposit{ value: 1e17 }(users.alice, atomId, 1, 0);
+    }
+
+    function test_validateMinShares_RevertsWhen_ExceedsCurveMaxShares() public {
+        ControllableRegistryMock registry = new ControllableRegistryMock();
+        registry.setFixedShares(1e18);
+        registry.setFixedMaxShares(1);
+        (MultiVaultHarness h, bytes32 atomId) = _depositAtomWithControllableRegistry(registry);
+
+        resetPrank(users.alice);
+        vm.expectRevert(MultiVault.MultiVault_ActionExceedsMaxShares.selector);
+        h.deposit{ value: 1e17 }(users.alice, atomId, 1, 0);
+    }
 
     function test_redeem_InternalBurn_RevertWhen_InsufficientBalance() public {
         MultiVaultHarness h = new MultiVaultHarness();

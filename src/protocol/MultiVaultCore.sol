@@ -310,18 +310,6 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
         return _data;
     }
 
-    /// @dev Internal function to get the underlying atom ids for a given triple id
-    /// @dev If the triple does not exist, this function reverts
-    /// @param tripleId term id of the triple
-    /// @return The underlying atom ids of the triple
-    function _getTriple(bytes32 tripleId) internal view returns (bytes32, bytes32, bytes32) {
-        bytes32[3] memory atomIds = _triples[tripleId];
-        if (atomIds[0] == bytes32(0) && atomIds[1] == bytes32(0) && atomIds[2] == bytes32(0)) {
-            revert MultiVaultCore_TripleDoesNotExist(tripleId);
-        }
-        return (atomIds[0], atomIds[1], atomIds[2]);
-    }
-
     /// @dev Internal function to get the inverse triple id (counter or positive) for a given triple id
     /// @param tripleId The id of the triple or counter triple
     /// @return The inverse triple id

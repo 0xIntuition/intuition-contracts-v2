@@ -11,6 +11,8 @@ import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.so
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 import { MultiVault } from "src/protocol/MultiVault.sol";
+import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
+import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCurve.sol";
 import { GeneralConfig } from "src/interfaces/IMultiVaultCore.sol";
 import { IMultiVault, ApprovalTypes } from "src/interfaces/IMultiVault.sol";
 
@@ -30,6 +32,10 @@ contract MultiVaultUpgradeRegressionTest is Test {
     address internal constant MULTIVAULT_PROXY = 0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e;
     address internal constant UPGRADES_TIMELOCK = 0x321e5d4b20158648dFd1f360A79CAFc97190bAd1;
     address internal constant PROXY_ADMIN = 0x1999faD6477e4fa9aA0FF20DaafC32F7B90005C8;
+    address internal constant LINEAR_CURVE_PROXY = 0xc3eFD5471dc63d74639725f381f9686e3F264366;
+    address internal constant LINEAR_CURVE_PROXY_ADMIN = 0x6365D6eD0caf54d6290D866d56C043d3fCDc3B8c;
+    address internal constant OFFSET_PROGRESSIVE_CURVE_PROXY = 0x23afF95153aa88D28B9B97Ba97629E05D5fD335d;
+    address internal constant OFFSET_PROGRESSIVE_CURVE_PROXY_ADMIN = 0xe58B117aDfB0a141dC1CC22b98297294F6E2c5E7;
     uint256 internal constant INTUITION_FORK_BLOCK = 2_369_449;
     uint256 internal constant OFFSET_PROGRESSIVE_CURVE_ID = 2;
     uint256 internal constant TOTAL_UTILIZATION_SLOT = 30;
@@ -380,11 +386,29 @@ contract MultiVaultUpgradeRegressionTest is Test {
         );
     }
 
+    /// @dev The full Upgrades-Timelock batch, mirroring the live governance sequence: the new
+    ///      MultiVault calls the standardized fee-hook getters on the registry-resolved curve on
+    ///      every deposit/redeem, so every registered curve proxy MUST be upgraded to a recompiled
+    ///      implementation in the same batch — swapping MultiVault alone bricks all deposits with a
+    ///      missing-selector revert. The write-flow tests below (which deposit on curve ids 1 and 2
+    ///      post-upgrade) are the executable proof of that sequencing requirement.
     function _upgradeMultiVault() internal {
         MultiVault newImpl = new MultiVault();
+        LinearCurve newLinearCurveImpl = new LinearCurve();
+        OffsetProgressiveCurve newOffsetProgressiveCurveImpl = new OffsetProgressiveCurve();
 
         vm.startPrank(UPGRADES_TIMELOCK);
         proxyAdmin.upgradeAndCall(ITransparentUpgradeableProxy(payable(MULTIVAULT_PROXY)), address(newImpl), bytes(""));
+        ProxyAdmin(LINEAR_CURVE_PROXY_ADMIN)
+            .upgradeAndCall(
+                ITransparentUpgradeableProxy(payable(LINEAR_CURVE_PROXY)), address(newLinearCurveImpl), bytes("")
+            );
+        ProxyAdmin(OFFSET_PROGRESSIVE_CURVE_PROXY_ADMIN)
+            .upgradeAndCall(
+                ITransparentUpgradeableProxy(payable(OFFSET_PROGRESSIVE_CURVE_PROXY)),
+                address(newOffsetProgressiveCurveImpl),
+                bytes("")
+            );
         vm.stopPrank();
     }
 

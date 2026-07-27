@@ -91,14 +91,33 @@ contract MultiVault is
     mapping(address atomWallet => uint256 accumulatedFees) public accumulatedAtomWalletDepositFees;
 
     /// @notice Mapping of the TRUST token amount utilization for each epoch
-    // Epoch -> TRUST token amount used by all users, defined as the difference between the amount of TRUST
-    // deposited and redeemed by actions of all users
+    /// @dev Epoch -> aggregate TRUST moved through the protocol by all users during that epoch.
+    ///      Credited on deposit with the full amount sent in, and debited on redeem with the asset value that
+    ///      leaves the vault. Those two bases differ by the fees charged on the way in, so aggregate activity
+    ///      that deposits and then fully redeems does NOT net back to its prior value. See
+    ///      `personalUtilization` for the full rationale; the same semantics apply here.
     mapping(uint256 epoch => int256 utilizationAmount) public totalUtilization;
 
     /// @notice Mapping of the TRUST token amount utilization for each user in each epoch
-    // User address -> Epoch -> TRUST token amount used by the user, defined as the difference between the amount of
-    // TRUST
-    // deposited and redeemed by the user
+    /// @dev User -> Epoch -> TRUST moved through the protocol by that user during that epoch.
+    ///      Utilization is credited on deposit with the FULL amount sent in (`msg.value`) and debited on redeem
+    ///      with the asset value that LEAVES the vault for the redeemed shares (`rawAssetsBeforeFees`). Those two
+    ///      bases deliberately differ by the fees charged on the way in, so a deposit followed by a full redeem
+    ///      intentionally does NOT net to zero: it leaves a residue equal to the fees the user paid and the
+    ///      protocol retained.
+    ///
+    ///      This asymmetry is by design. Utilization measures a user's net economic contribution to the protocol
+    ///      during the epoch — capital committed, plus the fees they contributed — and NOT their vault balance.
+    ///      There is deliberately NO invariant that `personalUtilization` equals a user's share value or TVL, and
+    ///      NO invariant that a deposit/redeem round-trip restores it to its prior value. Consumers must not
+    ///      assume either property.
+    ///
+    ///      Utilization is also deliberately NOT time-weighted. It is a running signed counter mutated at the
+    ///      moment of each deposit and redeem; it carries no notion of how long capital stayed in the vault.
+    ///      Capital committed in the final block of an epoch counts exactly the same as identical capital held
+    ///      for the whole epoch. This is intentional — utilization gates reward eligibility on activity, not on
+    ///      duration, because duration is already priced by the bonding lock in `TrustBonding`. Consumers must
+    ///      NOT read this as a time-weighted average balance.
     mapping(address user => mapping(uint256 epoch => int256 utilizationAmount)) public personalUtilization;
 
     /// @notice Mapping of the last 3 active epochs for each user
@@ -537,6 +556,20 @@ contract MultiVault is
     ///         virtualization can run; the selector allowlist rejects such
     ///         compositions cleanly with a custom error.
     ///
+    ///         This boundary is an intentional, evaluated design decision, not an
+    ///         oversight. Admitting non-payable exits (`redeem`, `redeemBatch`,
+    ///         `approve`) into a value-bearing batch would require marking those
+    ///         functions `payable` and gating each with a zero-value assertion
+    ///         keyed on `_effectiveMsgValue()` (never raw `msg.value`, which a
+    ///         `delegatecall` sub-call inherits as the whole batch's `CALLVALUE`).
+    ///         Even then a batch could not recycle capital: redeemed proceeds are
+    ///         paid out to the receiver via `Address.sendValue` rather than
+    ///         retained, so an exit's output can never fund a later deposit leg,
+    ///         in either leg ordering — the sole gain would be atomicity of
+    ///         otherwise-independent legs. Flows that must recycle intermediate
+    ///         proceeds belong in a smart account that custodies balances between
+    ///         calls (see `AtomWallet.executeBatch`), or in separate transactions.
+    ///
     ///         Nested multicalls (`multicall` or `multicallPayable` invoked from
     ///         inside an active multicall) are rejected. The selector allowlist
     ///         catches them in the upfront pre-loop; the `_inMulticall` guard is
@@ -795,6 +828,9 @@ contract MultiVault is
     }
 
     /// @inheritdoc IMultiVault
+    /// @dev Permissionless by design. The recipient is always `generalConfig.protocolMultisig`, which only
+    ///      timelocked governance can change — never the caller and never a parameter. An arbitrary caller
+    ///      can therefore only push already-accrued fees to their intended destination, at their own gas.
     function sweepAccumulatedProtocolFees(uint256 epoch) external {
         uint256 protocolFees = accumulatedProtocolFees[epoch];
         if (protocolFees == 0) return;

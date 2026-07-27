@@ -141,6 +141,45 @@ abstract contract BaseCurve is IBaseCurve, Initializable {
     function currentPrice(uint256 totalShares, uint256 totalAssets) external view virtual returns (uint256 sharePrice);
 
     /* =================================================== */
+    /*                     FEE HOOKS                       */
+    /* =================================================== */
+
+    // Safe defaults: a curve without fee hooks signals `false` on both getters, and its quote /
+    // record surface reverts. The MultiVault gates every quote and record call on the getters, so
+    // for a hookless curve none of the four functions below is ever reached from the vault —
+    // behavior is identical to a curve with no hook surface at all. A hook curve overrides all six.
+
+    /// @inheritdoc IBaseCurve
+    function hasDepositFeeHook() external view virtual returns (bool) {
+        return false;
+    }
+
+    /// @inheritdoc IBaseCurve
+    function hasRedeemFeeHook() external view virtual returns (bool) {
+        return false;
+    }
+
+    /// @inheritdoc IBaseCurve
+    function quoteDepositFee(bytes32, uint256) external view virtual returns (uint256) {
+        revert BaseCurve_FeeHooksNotSupported();
+    }
+
+    /// @inheritdoc IBaseCurve
+    function quoteRedeemFee(bytes32, address, uint256) external view virtual returns (uint256) {
+        revert BaseCurve_FeeHooksNotSupported();
+    }
+
+    /// @inheritdoc IBaseCurve
+    function recordDeposit(bytes32, address, uint256) external payable virtual {
+        revert BaseCurve_FeeHooksNotSupported();
+    }
+
+    /// @inheritdoc IBaseCurve
+    function recordRedeem(bytes32, address, uint256) external payable virtual {
+        revert BaseCurve_FeeHooksNotSupported();
+    }
+
+    /* =================================================== */
     /*                  INTERNAL FUNCTIONS                 */
     /* =================================================== */
 

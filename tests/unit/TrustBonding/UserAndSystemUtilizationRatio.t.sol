@@ -581,6 +581,19 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
         assertEq(checkpoint, int256(555), "Case C: use previousPreviousActiveEpoch's utilization");
     }
 
+    function test_getUserUtilizationInEpoch_returnsThirdHistorySlot() external {
+        _advanceToEpoch(7);
+        _setUserUtilizationForEpoch(users.alice, 4, 444);
+        _setUserUtilizationForEpoch(users.alice, 5, 555);
+        _setUserUtilizationForEpoch(users.alice, 6, 666);
+        _setActiveEpoch(users.alice, 0, 6);
+        _setActiveEpoch(users.alice, 1, 5);
+        _setActiveEpoch(users.alice, 2, 4);
+
+        int256 checkpoint = IMultiVault(address(protocol.multiVault)).getUserUtilizationInEpoch(users.alice, 4);
+        assertEq(checkpoint, int256(444), "lookup at epoch 4 must use the third history slot");
+    }
+
     function test_getUserUtilizationInEpoch_caseD() external {
         _advanceToEpoch(7);
         _setUserUtilizationForEpoch(users.alice, 4, 444);
@@ -643,5 +656,18 @@ contract UserAndSystemUtilizationRatio is TrustBondingBase {
 
         int256 checkpoint = IMultiVault(address(protocol.multiVault)).getUserUtilizationInEpoch(users.alice, 3);
         assertEq(checkpoint, int256(123), "Case A should return util[0] when last == 0 < epoch");
+    }
+
+    // Both hist[0] and hist[1] are still ahead of the target epoch, forcing the third (oldest)
+    // lookback slot to resolve the query — the one branch the cases above never reach.
+    function test_getUserUtilizationInEpoch_thirdSlotResolves_whenFirstTwoAreAheadOfTarget() external {
+        _advanceToEpoch(10);
+        _setUserUtilizationForEpoch(users.alice, 2, 222);
+        _setActiveEpoch(users.alice, 0, 8);
+        _setActiveEpoch(users.alice, 1, 6);
+        _setActiveEpoch(users.alice, 2, 2);
+
+        int256 checkpoint = IMultiVault(address(protocol.multiVault)).getUserUtilizationInEpoch(users.alice, 5);
+        assertEq(checkpoint, int256(222), "hist[0] and hist[1] > target, so hist[2] must resolve the query");
     }
 }

@@ -14,6 +14,10 @@ import { MultiVault } from "src/protocol/MultiVault.sol";
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 import { AtomWarden } from "src/protocol/wallet/AtomWarden.sol";
 import { AtomWallet } from "src/protocol/wallet/AtomWallet.sol";
+import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
+import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCurve.sol";
+import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
+import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 
 /*
@@ -27,10 +31,23 @@ import { IMultiVault } from "src/interfaces/IMultiVault.sol";
   intentionally deferred (tracked in the V2 Contracts Deployments Notion doc).
 
   Contracts covered:
-    - MultiVault   (TransparentUpgradeableProxy) — linked against MultiVaultLib
-    - TrustBonding (TransparentUpgradeableProxy)
-    - AtomWarden   (TransparentUpgradeableProxy)
-    - AtomWallet   (UpgradeableBeacon: AtomWalletBeacon)
+    - MultiVault             (TransparentUpgradeableProxy) — linked against MultiVaultLib
+    - TrustBonding           (TransparentUpgradeableProxy)
+    - AtomWarden             (TransparentUpgradeableProxy)
+    - AtomWallet             (UpgradeableBeacon: AtomWalletBeacon)
+    - LinearCurve            (TransparentUpgradeableProxy) — REQUIRED, see curve note
+    - OffsetProgressiveCurve (TransparentUpgradeableProxy) — REQUIRED, see curve note
+
+  CURVE NOTE (hard sequencing requirement). The upgraded MultiVault calls the
+  standardized fee-hook getters (`hasDepositFeeHook` / `hasRedeemFeeHook`) on the
+  registry-resolved curve on EVERY deposit and redeem. The live curve proxies run
+  implementations that predate those selectors, so if the MultiVault
+  implementation is swapped without also swapping every registered curve proxy
+  to a recompiled implementation, every deposit and redeem on the chain reverts.
+  All curve upgrades therefore ship in the SAME Upgrades-Timelock batch as the
+  MultiVault upgrade, and the fork dry-run asserts the registry holds exactly
+  the two curves this script covers (a later-registered curve would need its own
+  upgrade entry here).
 
   Supported chains: Intuition Mainnet (1155) and Intuition Testnet (13579) — the
   v1.1.0 core upgrade is Intuition-chain-only, so there are no Base components.
@@ -99,7 +116,7 @@ import { IMultiVault } from "src/interfaces/IMultiVault.sol";
   `msg.sender == ProxyAdmin`, which holds neither role and reverts:
     - `MultiVault.reinitialize(address)`           — onlyRole(DEFAULT_ADMIN_ROLE)
     - `AtomWarden.reinitialize(uint256,uint256,uint256,uint48,uint48,uint256,uint256)`
-          — gated to `MultiVault.generalConfig().admin`
+            — gated to `MultiVault.generalConfig().admin`
   So per proxy: (1) Upgrades Timelock -> upgradeAndCall(proxy, impl, "");
   (2) Admin Safe -> <contract>.reinitialize(...). TrustBonding needs no
   reinitializer; AtomWallet is a beacon swap (`upgradeTo`) with no reinitializer.
@@ -147,6 +164,11 @@ contract DeployCoreUpgradeImplementations is Script {
         address atomWardenProxy;
         address atomWardenProxyAdmin;
         address atomWalletBeacon;
+        address bondingCurveRegistryProxy;
+        address linearCurveProxy;
+        address linearCurveProxyAdmin;
+        address offsetProgressiveCurveProxy;
+        address offsetProgressiveCurveProxyAdmin;
         address upgradesTimelock;
         address parametersTimelock;
     }
@@ -175,6 +197,8 @@ contract DeployCoreUpgradeImplementations is Script {
     TrustBonding public trustBondingImplementation;
     AtomWarden public atomWardenImplementation;
     AtomWallet public atomWalletImplementation;
+    LinearCurve public linearCurveImplementation;
+    OffsetProgressiveCurve public offsetProgressiveCurveImplementation;
 
     /* =================================================== */
     /*                    Entry Points                     */
@@ -227,10 +251,12 @@ contract DeployCoreUpgradeImplementations is Script {
 
         console2.log("");
         console2.log("DEPLOYMENT COMPLETE: =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+");
-        console2.log("MultiVault Implementation   :", address(multiVaultImplementation));
-        console2.log("TrustBonding Implementation :", address(trustBondingImplementation));
-        console2.log("AtomWarden Implementation   :", address(atomWardenImplementation));
-        console2.log("AtomWallet Implementation   :", address(atomWalletImplementation));
+        console2.log("MultiVault Implementation             :", address(multiVaultImplementation));
+        console2.log("TrustBonding Implementation           :", address(trustBondingImplementation));
+        console2.log("AtomWarden Implementation             :", address(atomWardenImplementation));
+        console2.log("AtomWallet Implementation             :", address(atomWalletImplementation));
+        console2.log("LinearCurve Implementation            :", address(linearCurveImplementation));
+        console2.log("OffsetProgressiveCurve Implementation :", address(offsetProgressiveCurveImplementation));
         console2.log("");
         console2.log("MultiVaultLib is auto-deployed and linked by Foundry as the first broadcast tx;");
         console2.log("its address is recorded in broadcast/.../run-latest.json and in the --verify output.");
@@ -278,16 +304,43 @@ contract DeployCoreUpgradeImplementations is Script {
         console2.logBytes(abi.encodeCall(UpgradeableBeacon.upgradeTo, (address(atomWalletImplementation))));
 
         console2.log("");
+        console2.log(
+            "[5] LinearCurve upgrade (-> ProxyAdmin %s) [REQUIRED with [1], see curve note]", addr.linearCurveProxyAdmin
+        );
+        console2.logBytes(
+            abi.encodeCall(
+                ProxyAdmin.upgradeAndCall,
+                (ITransparentUpgradeableProxy(addr.linearCurveProxy), address(linearCurveImplementation), "")
+            )
+        );
+
+        console2.log("");
+        console2.log(
+            "[6] OffsetProgressiveCurve upgrade (-> ProxyAdmin %s) [REQUIRED with [1], see curve note]",
+            addr.offsetProgressiveCurveProxyAdmin
+        );
+        console2.logBytes(
+            abi.encodeCall(
+                ProxyAdmin.upgradeAndCall,
+                (
+                    ITransparentUpgradeableProxy(addr.offsetProgressiveCurveProxy),
+                    address(offsetProgressiveCurveImplementation),
+                    ""
+                )
+            )
+        );
+
+        console2.log("");
         console2.log("ADMIN SAFE BATCH (separate txs, caller-gated): =+=+=+=+=+=+=+=+=+=+=+=+");
 
         console2.log("");
         console2.log(
-            "[5] MultiVault.reinitialize(parametersTimelock = %s) -> proxy %s", parametersTimelock, addr.multiVaultProxy
+            "[7] MultiVault.reinitialize(parametersTimelock = %s) -> proxy %s", parametersTimelock, addr.multiVaultProxy
         );
         console2.logBytes(abi.encodeCall(MultiVault.reinitialize, (parametersTimelock)));
 
         console2.log("");
-        console2.log("[6] AtomWarden.reinitialize(...) -> proxy %s", addr.atomWardenProxy);
+        console2.log("[8] AtomWarden.reinitialize(...) -> proxy %s", addr.atomWardenProxy);
         console2.log("    claimWindow=%s minFeeThreshold=%s", reinitClaimWindow, reinitMinFeeThreshold);
         console2.log(
             "    signatureThreshold=%s maxValidAfter=%s maxValidUntil=%s",
@@ -362,6 +415,19 @@ contract DeployCoreUpgradeImplementations is Script {
                 ITransparentUpgradeableProxy(payable(addr.atomWardenProxy)), address(atomWardenImplementation), ""
             );
         UpgradeableBeacon(addr.atomWalletBeacon).upgradeTo(address(atomWalletImplementation));
+        // Curve upgrades MUST land in the same batch as the MultiVault upgrade: the new MultiVault
+        // calls the fee-hook getters on the registry-resolved curve on every deposit/redeem, and the
+        // old curve implementations lack those selectors (see the curve note in the header).
+        ProxyAdmin(addr.linearCurveProxyAdmin)
+            .upgradeAndCall(
+                ITransparentUpgradeableProxy(payable(addr.linearCurveProxy)), address(linearCurveImplementation), ""
+            );
+        ProxyAdmin(addr.offsetProgressiveCurveProxyAdmin)
+            .upgradeAndCall(
+                ITransparentUpgradeableProxy(payable(addr.offsetProgressiveCurveProxy)),
+                address(offsetProgressiveCurveImplementation),
+                ""
+            );
         vm.stopPrank();
 
         // 3. Admin-Safe batch — the two caller-gated reinitializers (separate txs).
@@ -382,6 +448,7 @@ contract DeployCoreUpgradeImplementations is Script {
         _assertUpgradeApplied(multiVault, adminSafe);
         _assertAtomWardenApplied(atomWarden, adminSafe);
         _assertAtomWalletApplied();
+        _assertCurvesApplied();
 
         // 5. Exercise the new MultiVault multicall surface.
         _exerciseMulticall(multiVault);
@@ -457,6 +524,44 @@ contract DeployCoreUpgradeImplementations is Script {
         console2.log("  [ok] AtomWallet beacon implementation updated");
     }
 
+    /// @dev Curve proxies: impl pointers updated, the fee-hook getters resolve (proving the new
+    ///      MultiVault's per-deposit hook probe cannot revert on a missing selector), and the
+    ///      registry holds exactly the curves this script upgrades — a curve registered after this
+    ///      script was written would be missed and would brick its own vaults' deposits.
+    function _assertCurvesApplied() internal view {
+        if (_implementationOf(addr.linearCurveProxy) != address(linearCurveImplementation)) {
+            revert DryRunAssertionFailed("LinearCurve impl pointer");
+        }
+        if (_implementationOf(addr.offsetProgressiveCurveProxy) != address(offsetProgressiveCurveImplementation)) {
+            revert DryRunAssertionFailed("OffsetProgressiveCurve impl pointer");
+        }
+
+        BondingCurveRegistry registry = BondingCurveRegistry(addr.bondingCurveRegistryProxy);
+        if (registry.count() != 2) revert DryRunAssertionFailed("registry.count != covered curves");
+        if (registry.curveAddresses(1) != addr.linearCurveProxy) {
+            revert DryRunAssertionFailed("registry curve id 1 != LinearCurve");
+        }
+        if (registry.curveAddresses(2) != addr.offsetProgressiveCurveProxy) {
+            revert DryRunAssertionFailed("registry curve id 2 != OffsetProgressiveCurve");
+        }
+
+        if (
+            IBaseCurve(addr.linearCurveProxy).hasDepositFeeHook()
+                || IBaseCurve(addr.linearCurveProxy).hasRedeemFeeHook()
+        ) {
+            revert DryRunAssertionFailed("LinearCurve hook getters must be false");
+        }
+        if (
+            IBaseCurve(addr.offsetProgressiveCurveProxy).hasDepositFeeHook()
+                || IBaseCurve(addr.offsetProgressiveCurveProxy).hasRedeemFeeHook()
+        ) {
+            revert DryRunAssertionFailed("OffsetProgressiveCurve hook getters must be false");
+        }
+
+        console2.log("  [ok] LinearCurve + OffsetProgressiveCurve impl pointers updated");
+        console2.log("  [ok] registry covers exactly the upgraded curves; hook getters resolve (false)");
+    }
+
     /// @dev Canonical non-payable multicall: two read sub-calls. Confirms the
     ///      selector resolves and the anti-nesting guard executes cleanly.
     function _exerciseMulticall(MultiVault multiVault) internal {
@@ -519,6 +624,12 @@ contract DeployCoreUpgradeImplementations is Script {
 
         atomWalletImplementation = new AtomWallet();
         console2.log("AtomWallet Implementation deployed:", address(atomWalletImplementation));
+
+        linearCurveImplementation = new LinearCurve();
+        console2.log("LinearCurve Implementation deployed:", address(linearCurveImplementation));
+
+        offsetProgressiveCurveImplementation = new OffsetProgressiveCurve();
+        console2.log("OffsetProgressiveCurve Implementation deployed:", address(offsetProgressiveCurveImplementation));
     }
 
     function _implementationOf(address proxy) internal view returns (address) {
@@ -536,6 +647,11 @@ contract DeployCoreUpgradeImplementations is Script {
                 atomWardenProxy: 0x98C9BCecf318d0D1409Bf81Ea3551b629fAEC165,
                 atomWardenProxyAdmin: 0xf548dbDd7a18Ee9d91106b3b6967770b504aeE2A,
                 atomWalletBeacon: 0xC23cD55CF924b3FE4b97deAA0EAF222a5082A1FF,
+                bondingCurveRegistryProxy: 0xd0E488Fb32130232527eedEB72f8cE2BFC0F9930,
+                linearCurveProxy: 0xc3eFD5471dc63d74639725f381f9686e3F264366,
+                linearCurveProxyAdmin: 0x6365D6eD0caf54d6290D866d56C043d3fCDc3B8c,
+                offsetProgressiveCurveProxy: 0x23afF95153aa88D28B9B97Ba97629E05D5fD335d,
+                offsetProgressiveCurveProxyAdmin: 0xe58B117aDfB0a141dC1CC22b98297294F6E2c5E7,
                 upgradesTimelock: 0x321e5d4b20158648dFd1f360A79CAFc97190bAd1,
                 parametersTimelock: 0x71b0F1ABebC2DaA0b7B5C3f9b72FAa1cd9F35FEA
             });
@@ -551,6 +667,11 @@ contract DeployCoreUpgradeImplementations is Script {
                 atomWardenProxy: 0x1f2622D57D09B5E21738a8e0acE24ed9d4a2E32F,
                 atomWardenProxyAdmin: 0x5FA28AA0E9fc58cEBE3E1Fe4F2264F32111888fb,
                 atomWalletBeacon: 0x8497Eb80fB9742265AeFE711856b2ecACABF1Cb0,
+                bondingCurveRegistryProxy: 0xbFE8068d5C5117c57d37464e33c937bC08317F88,
+                linearCurveProxy: 0x9f272DAEfa66e031081430Ec138FD34190d6f671,
+                linearCurveProxyAdmin: 0x99b42bF374644F82bE85cd5c74D28f8269409f19,
+                offsetProgressiveCurveProxy: 0xd50CB061b1CE0560108fc3D58685d4eDb7594f20,
+                offsetProgressiveCurveProxyAdmin: 0x4EB7e35C74A532E90095c8792268321875E671F9,
                 upgradesTimelock: 0x81c66D5dD09F1dEF8493E5A5B459e2E9028a4430,
                 parametersTimelock: 0xA87E4EEd6C71966E938b45c0e2127344DC597D12
             });

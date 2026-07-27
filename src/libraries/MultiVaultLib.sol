@@ -6,6 +6,7 @@ import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 
 import { IMultiVault, ApprovalTypes, VaultState, VaultType } from "src/interfaces/IMultiVault.sol";
 import { IAtomWalletFactory } from "src/interfaces/IAtomWalletFactory.sol";
+import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
 import { IBondingCurveRegistry } from "src/interfaces/IBondingCurveRegistry.sol";
 import { ITrustBonding } from "src/interfaces/ITrustBonding.sol";
 import {
@@ -125,6 +126,9 @@ library MultiVaultLib {
         // slot 29
         mapping(address => uint256) accumulatedAtomWalletDepositFees;
         // slot 30
+        // Credited on deposit with the full amount sent in, debited on redeem with the asset value leaving the
+        // vault; the bases differ by the entry-side fees, so a round-trip intentionally does not net to zero.
+        // See the `totalUtilization` / `personalUtilization` NatSpec on MultiVault for the full rationale.
         mapping(uint256 => int256) totalUtilization;
         // slot 31
         mapping(address => mapping(uint256 => int256)) personalUtilization;
@@ -153,6 +157,18 @@ library MultiVaultLib {
         assembly {
             s.slot := 0
         }
+    }
+
+    /// @dev The fee-hook decision and quote for one deposit/redeem, resolved EXACTLY ONCE during
+    ///      calculation and carried verbatim to the record phase. This makes netted == forwarded a
+    ///      dataflow guarantee rather than a convention: a curve whose quote or hook getter reads
+    ///      MultiVault state (which mutates between calculation and record) can no longer produce a
+    ///      forwarded value that differs from what was withheld from the user.
+    struct CurveHook {
+        /// @dev The vault's curve iff it advertises the hook for this path; address(0) = no hook.
+        address curve;
+        /// @dev The curve-level fee quoted at calculation time; forwarded verbatim as `msg.value`.
+        uint256 fee;
     }
 
     /* =================================================== */
@@ -407,22 +423,24 @@ library MultiVaultLib {
         return _calculateTripleCreate(termId, assets);
     }
 
-    /// @dev Mirror of {MultiVault._calculateDeposit}.
+    /// @dev Mirror of {MultiVault._calculateDeposit}. The internal calc also resolves the fee-hook
+    ///      carry for the write path; this view mirror drops it.
     function calculateDeposit(bytes32 termId, uint256 curveId, uint256 assets, bool isAtomVault)
         public
         view
         returns (uint256 shares, uint256 assetsAfterMinSharesCost, uint256 assetsAfterFees)
     {
-        return _calculateDeposit(termId, curveId, assets, isAtomVault);
+        (shares, assetsAfterMinSharesCost, assetsAfterFees,) = _calculateDeposit(termId, curveId, assets, isAtomVault);
     }
 
-    /// @dev Mirror of {MultiVault._calculateRedeem}.
+    /// @dev Mirror of {MultiVault._calculateRedeem}. Account-less preview path: passes `address(0)`
+    ///      to the curve's redeem-fee quote. The fee-hook carry is dropped on this view mirror.
     function calculateRedeem(bytes32 termId, uint256 curveId, uint256 shares)
         public
         view
         returns (uint256 assetsAfterFees, uint256 sharesUsed)
     {
-        return _calculateRedeem(termId, curveId, shares);
+        (assetsAfterFees, sharesUsed,) = _calculateRedeem(termId, curveId, shares, address(0));
     }
 
     /// @dev Mirror of {MultiVault._convertToShares}.
@@ -687,8 +705,6 @@ library MultiVaultLib {
         _validateMinDeposit(assets);
 
         VaultType _vaultType = _getVaultType(termId);
-        bool isNew = _isNewVault(termId, curveId);
-        bool isDefault = curveId == _s().bondingCurveConfig.defaultCurveId;
 
         if (_vaultType != VaultType.ATOM) {
             if (_hasCounterStake(termId, curveId, receiver)) revert MultiVault.MultiVault_HasCounterStake();
@@ -697,11 +713,20 @@ library MultiVaultLib {
             }
         }
 
-        if (isNew && isDefault) {
-            revert MultiVault.MultiVault_DefaultCurveMustBeInitializedViaCreatePaths();
+        // Collapsed to a single flag to stay under the 16-slot stack ceiling: after the
+        // default-curve guard fires, the only distinction the rest of the flow needs is
+        // "new non-default vault" (creation-style update) vs everything else.
+        bool isNewNonDefault;
+        {
+            bool isNew = _isNewVault(termId, curveId);
+            bool isDefault = curveId == _s().bondingCurveConfig.defaultCurveId;
+            if (isNew && isDefault) {
+                revert MultiVault.MultiVault_DefaultCurveMustBeInitializedViaCreatePaths();
+            }
+            isNewNonDefault = isNew && !isDefault;
         }
 
-        (uint256 sharesForReceiver, uint256 assetsAfterMinSharesCost, uint256 assetsAfterFees) =
+        (uint256 sharesForReceiver, uint256 assetsAfterMinSharesCost, uint256 assetsAfterFees, CurveHook memory hook) =
             _calculateDeposit(termId, curveId, assets, _vaultType == VaultType.ATOM);
 
         _validateMinShares(
@@ -727,7 +752,7 @@ library MultiVaultLib {
         }
 
         uint256 userBalanceAfter;
-        if (isNew && !isDefault) {
+        if (isNewNonDefault) {
             userBalanceAfter =
                 _updateVaultOnCreation(receiver, termId, curveId, assetsAfterFees, sharesForReceiver, _vaultType);
 
@@ -738,6 +763,12 @@ library MultiVaultLib {
             userBalanceAfter =
                 _updateVaultOnDeposit(receiver, termId, curveId, assetsAfterFees, sharesForReceiver, _vaultType);
         }
+
+        // Curve deposit hook: forward the fee withheld during calculation (carried in `hook`, never
+        // re-quoted) to the vault's curve and book the depositor's position. Runs after every
+        // vault-state write (CEI); registered curves are admin-vetted and cannot re-enter (the
+        // whole path is `nonReentrant`). A no-op for hookless curves.
+        _recordCurveDeposit(termId, receiver, hook, sharesForReceiver);
 
         emit IMultiVault.Deposited(
             sender, receiver, termId, curveId, assets, assetsAfterFees, sharesForReceiver, userBalanceAfter, _vaultType
@@ -760,7 +791,7 @@ library MultiVaultLib {
 
         uint256 rawAssetsBeforeFees = _convertToAssets(termId, curveId, shares);
 
-        (uint256 assetsAfterFees,) = _calculateRedeem(termId, curveId, shares);
+        (uint256 assetsAfterFees,, CurveHook memory hook) = _calculateRedeem(termId, curveId, shares, receiver);
 
         _accumulateVaultProtocolFees(rawAssetsBeforeFees);
 
@@ -770,6 +801,11 @@ library MultiVaultLib {
 
         uint256 userSharesAfter =
             _updateVaultOnRedeem(receiver, termId, curveId, rawAssetsBeforeFees, shares, _vaultType);
+
+        // Curve redeem hook: forward the fee withheld during calculation (carried in `hook`, never
+        // re-quoted) to the vault's curve and book the exit. Runs after the shares are burned and
+        // totals lowered, and before the receiver payout (CEI). A no-op for hookless curves.
+        _recordCurveRedeem(termId, receiver, hook, shares);
 
         Address.sendValue(payable(receiver), assetsAfterFees);
 
@@ -786,6 +822,46 @@ library MultiVaultLib {
         );
 
         return (rawAssetsBeforeFees, assetsAfterFees);
+    }
+
+    /// @dev Resolve `curveId` through the registry and return the curve address iff it exposes the
+    ///      standardized deposit fee hook; address(0) otherwise. The explicit zero-address guard is
+    ///      load-bearing: an unregistered id must fall through so the canonical
+    ///      `BondingCurveRegistry_InvalidCurveId` still surfaces from the pricing call, instead of a
+    ///      bare call-to-codeless-account revert here.
+    function _depositFeeHookCurve(uint256 curveId) private view returns (address) {
+        address curve = IBondingCurveRegistry(_s().bondingCurveConfig.registry).curveAddresses(curveId);
+        if (curve == address(0) || !IBaseCurve(curve).hasDepositFeeHook()) return address(0);
+        return curve;
+    }
+
+    /// @dev Redeem-path mirror of {_depositFeeHookCurve}, gated on {IBaseCurve.hasRedeemFeeHook}.
+    function _redeemFeeHookCurve(uint256 curveId) private view returns (address) {
+        address curve = IBondingCurveRegistry(_s().bondingCurveConfig.registry).curveAddresses(curveId);
+        if (curve == address(0) || !IBaseCurve(curve).hasRedeemFeeHook()) return address(0);
+        return curve;
+    }
+
+    /// @dev Forward the curve-level deposit fee (native) to the vault's curve and book the
+    ///      depositor's position; a no-op for any curve without the deposit hook. Always invoked on
+    ///      a hook curve — even at a zero fee — so the curve's per-user share ledger stays in
+    ///      lockstep with the vault. `hook` carries the decision and quote resolved during
+    ///      {_calculateDeposit}, so the forwarded value equals the withheld fee by dataflow — the
+    ///      hook is never re-resolved or re-quoted after the vault-state writes.
+    function _recordCurveDeposit(bytes32 termId, address receiver, CurveHook memory hook, uint256 sharesForReceiver)
+        private
+    {
+        if (hook.curve == address(0)) return;
+        IBaseCurve(hook.curve).recordDeposit{ value: hook.fee }(termId, receiver, sharesForReceiver);
+    }
+
+    /// @dev Forward the curve-level withdrawal fee (native) to the vault's curve and book the exit;
+    ///      a no-op for any curve without the redeem hook. Always invoked on a hook curve so the
+    ///      curve's per-user share ledger stays in lockstep with the vault. `hook` carries the
+    ///      decision and quote resolved during {_calculateRedeem} — never re-resolved here.
+    function _recordCurveRedeem(bytes32 termId, address receiver, CurveHook memory hook, uint256 shares) private {
+        if (hook.curve == address(0)) return;
+        IBaseCurve(hook.curve).recordRedeem{ value: hook.fee }(termId, receiver, shares);
     }
 
     /* =================================================== */
@@ -822,7 +898,7 @@ library MultiVaultLib {
     function _calculateDeposit(bytes32 termId, uint256 curveId, uint256 assets, bool isAtomVault)
         private
         view
-        returns (uint256 shares, uint256 assetsAfterMinSharesCost, uint256 assetsAfterFees)
+        returns (uint256 shares, uint256 assetsAfterMinSharesCost, uint256 assetsAfterFees, CurveHook memory hook)
     {
         if (isAtomVault) {
             return _calculateAtomDeposit(termId, curveId, assets);
@@ -858,7 +934,7 @@ library MultiVaultLib {
     function _calculateAtomDeposit(bytes32 termId, uint256 curveId, uint256 assets)
         private
         view
-        returns (uint256 shares, uint256 assetsAfterMinSharesCost, uint256 assetsAfterFees)
+        returns (uint256 shares, uint256 assetsAfterMinSharesCost, uint256 assetsAfterFees, CurveHook memory hook)
     {
         assetsAfterMinSharesCost = assets;
 
@@ -875,6 +951,15 @@ library MultiVaultLib {
                 _shouldChargeFees(termId) ? _feeOnRaw(assetsAfterMinSharesCost, _s().vaultFees.entryFee) : 0;
             uint256 atomWalletDepositFee = _feeOnRaw(assetsAfterMinSharesCost, _s().atomConfig.atomWalletDepositFee);
             assetsAfterFees = assetsAfterMinSharesCost - protocolFee - entryFee - atomWalletDepositFee;
+        }
+
+        // Layer the curve's own deposit fee on top of MultiVault's fees (0 for any hookless curve);
+        // it is withheld from the minted net here and the SAME quote is forwarded to the curve in
+        // `_processDeposit` via the carried `hook` — quoted exactly once.
+        hook.curve = _depositFeeHookCurve(curveId);
+        if (hook.curve != address(0)) {
+            hook.fee = IBaseCurve(hook.curve).quoteDepositFee(termId, assetsAfterMinSharesCost);
+            assetsAfterFees -= hook.fee;
         }
 
         shares = _depositShares(termId, curveId, assetsAfterFees);
@@ -905,7 +990,7 @@ library MultiVaultLib {
     function _calculateTripleDeposit(bytes32 termId, uint256 curveId, uint256 assets)
         private
         view
-        returns (uint256 shares, uint256 assetsAfterMinSharesCost, uint256 assetsAfterFees)
+        returns (uint256 shares, uint256 assetsAfterMinSharesCost, uint256 assetsAfterFees, CurveHook memory hook)
     {
         assetsAfterMinSharesCost = assets;
 
@@ -930,6 +1015,15 @@ library MultiVaultLib {
             assetsAfterFees = assetsAfterMinSharesCost - protocolFee - entryFee - atomDepositFraction;
         }
 
+        // Layer the curve's own deposit fee on top of MultiVault's fees (0 for any hookless curve);
+        // it is withheld from the minted net here and the SAME quote is forwarded to the curve in
+        // `_processDeposit` via the carried `hook` — quoted exactly once.
+        hook.curve = _depositFeeHookCurve(curveId);
+        if (hook.curve != address(0)) {
+            hook.fee = IBaseCurve(hook.curve).quoteDepositFee(termId, assetsAfterMinSharesCost);
+            assetsAfterFees -= hook.fee;
+        }
+
         shares = _depositShares(termId, curveId, assetsAfterFees);
     }
 
@@ -950,16 +1044,29 @@ library MultiVaultLib {
         return _convertToShares(termId, curveId, assetsAfterFees);
     }
 
-    function _calculateRedeem(bytes32 termId, uint256 curveId, uint256 shares) private view returns (uint256, uint256) {
+    function _calculateRedeem(bytes32 termId, uint256 curveId, uint256 shares, address account)
+        private
+        view
+        returns (uint256, uint256, CurveHook memory hook)
+    {
         Storage storage s = _s();
         uint256 assets = _convertToAssets(termId, curveId, shares);
 
         uint256 protocolFee = _feeOnRaw(assets, s.vaultFees.protocolFee);
         uint256 exitFee = _shouldChargeExitFees(termId, curveId, shares) ? _feeOnRaw(assets, s.vaultFees.exitFee) : 0;
 
-        uint256 assetsAfterFees = assets - protocolFee - exitFee;
+        // Layer the curve's own withdrawal fee on top of MultiVault's fees (0 for any hookless
+        // curve); the SAME quote is forwarded to the curve in `_processRedeem` via the carried
+        // `hook` — quoted exactly once. The account-less preview path passes `address(0)`; the hook
+        // curve decides its own fallback semantics for it.
+        hook.curve = _redeemFeeHookCurve(curveId);
+        if (hook.curve != address(0)) {
+            hook.fee = IBaseCurve(hook.curve).quoteRedeemFee(termId, account, assets);
+        }
 
-        return (assetsAfterFees, shares);
+        uint256 assetsAfterFees = assets - protocolFee - exitFee - hook.fee;
+
+        return (assetsAfterFees, shares, hook);
     }
 
     /* =================================================== */
@@ -1278,7 +1385,7 @@ library MultiVaultLib {
             revert MultiVault.MultiVault_InsufficientRemainingSharesInVault(remainingShares);
         }
 
-        (uint256 expectedAssets,) = _calculateRedeem(termId, curveId, shares);
+        (uint256 expectedAssets,,) = _calculateRedeem(termId, curveId, shares, account);
 
         if (expectedAssets < minAssets) {
             revert MultiVault.MultiVault_SlippageExceeded();
@@ -1327,6 +1434,10 @@ library MultiVaultLib {
         return IBondingCurveRegistry(_s().bondingCurveConfig.registry).previewMint(minShare, 0, 0, curveId);
     }
 
+    /// @dev Fees from every curve are routed to the default (linear) curve's vault, so the threshold is
+    ///      measured in that vault's `totalShares` rather than in assets. Below it, donating fees into a
+    ///      near-empty share supply would drive its share price to unintended values, so fees are waived
+    ///      until the default vault has enough depth to absorb them. Uncharged dust is the intended cost.
     function _shouldChargeFees(bytes32 termId) private view returns (bool) {
         Storage storage s = _s();
         uint256 defaultCurveId = s.bondingCurveConfig.defaultCurveId;
@@ -1360,6 +1471,9 @@ library MultiVaultLib {
         return _shouldChargeFees(atomIds[0]) && _shouldChargeFees(atomIds[1]) && _shouldChargeFees(atomIds[2]);
     }
 
+    /// @dev Counter-stake is intentionally scoped per curve: it only blocks holding both sides of a triple on
+    ///      the SAME curve. Holding opposing sides on different curves is allowed and is not a bypass — each
+    ///      curve prices its own vault independently, so the two positions carry genuine opposing exposure.
     function _hasCounterStake(bytes32 tripleId, uint256 curveId, address receiver) private view returns (bool) {
         Storage storage s = _s();
         if (!s.isTriple[tripleId]) {

@@ -44,9 +44,8 @@ contract MultiVaultInvariants is BaseTest {
         defaultCurveId = getDefaultCurveId();
         minShare = protocol.multiVault.getGeneralConfig().minShare;
 
-        handler = new MultiVaultInvariantHandler(
-            protocol.multiVault, defaultCurveId, users.alice, users.bob, users.charlie
-        );
+        handler =
+            new MultiVaultInvariantHandler(protocol.multiVault, defaultCurveId, users.alice, users.bob, users.charlie);
 
         targetContract(address(handler));
     }
