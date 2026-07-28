@@ -8,7 +8,7 @@ import { AtomWarden } from "src/protocol/wallet/AtomWarden.sol";
 import { IAtomWarden } from "src/interfaces/IAtomWarden.sol";
 import { MockMultiVault, MockAtomWallet } from "tests/unit/AtomWarden/AtomWarden.t.sol";
 
-/// @title  Track 4 — AtomWarden quorum replay / malleability hunt (ENG-12460)
+/// @title  AtomWarden quorum replay / malleability hunt
 /// @notice Targets the gaps not already nailed by tests/unit/AtomWarden/AtomWarden.t.sol:
 ///         (1) real ECDSA signature malleability via the high-s complement, and
 ///         (2) signer revocation dropping the live set below threshold. Both are

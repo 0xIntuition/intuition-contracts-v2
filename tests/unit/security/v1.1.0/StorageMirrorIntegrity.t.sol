@@ -5,7 +5,7 @@ import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 import { BaseTest } from "tests/BaseTest.t.sol";
 
 /// @title  StorageMirrorIntegrity
-/// @notice Hypothesis 1 (deep pre-audit): MultiVaultLib storage-mirror integrity for the new
+/// @notice MultiVaultLib storage-mirror integrity for the new
 ///         v1.1.0 slots.
 ///
 /// Invariant under test: every slot the delegatecall library (`MultiVaultLib`, executing in

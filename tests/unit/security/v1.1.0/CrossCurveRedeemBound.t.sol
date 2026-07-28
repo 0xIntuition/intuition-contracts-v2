@@ -4,7 +4,7 @@ pragma solidity 0.8.29;
 import { BaseTest } from "tests/BaseTest.t.sol";
 
 /// @title  CrossCurveRedeemBound
-/// @notice Hypothesis 3 (deep pre-audit): redeem-never-exceeds-deposit across curves, pushed past
+/// @notice Redeem-never-exceeds-deposit across curves, pushed past
 ///         the existing round-trip suite (which fuzzes to 1000 ether on a single deposit).
 ///
 /// Invariant under test: for every curve (linear=1, offset-progressive=2, progressive=3), the

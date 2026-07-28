@@ -4,7 +4,7 @@ pragma solidity 0.8.29;
 import { FeeProxyBaseTest, RevertingReceiverMock } from "tests/unit/FeeProxy/FeeProxyBase.t.sol";
 import { IFeeProxy } from "src/interfaces/IFeeProxy.sol";
 
-/// @title  Track 3 — FeeProxy ETH-conservation & refund-ledger drain hunt (ENG-12460)
+/// @title  FeeProxy ETH-conservation & refund-ledger drain hunt
 /// @notice Attempts to make the proxy pay out more than it took in, to over-credit
 ///         the pull-fallback ledger, and to drain one user's pending refund from
 ///         another account. All NEGATIVE results: ETH is conserved end-to-end and

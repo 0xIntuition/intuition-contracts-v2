@@ -4,7 +4,7 @@ pragma solidity 0.8.29;
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { ApprovalTypes } from "src/interfaces/IMultiVault.sol";
 
-/// @title  Track 2 — deposit↔redeem value extraction hunt (ENG-12460)
+/// @title  Deposit↔redeem value extraction hunt
 /// @notice Attempts to pull more assets out than were put in (rounding asymmetry,
 ///         first-depositor inflation, pro-rata asset injection) and confirms the
 ///         ghost-shares-to-BURN seeding blocks the classic inflation grief.

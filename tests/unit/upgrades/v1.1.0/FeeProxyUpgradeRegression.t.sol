@@ -9,7 +9,7 @@ import { FeeProxyBaseTest } from "tests/unit/FeeProxy/FeeProxyBase.t.sol";
 ///         state variable so the live layout stays stable. Any future
 ///         storage change that shifts these slots must update this anchor in
 ///         the same PR.
-/// @dev    Part of the v1.1.0 pre-audit upgrade-regression set under
+/// @dev    Part of the v1.1.0 upgrade-regression set under
 ///         `tests/unit/upgrades/v1.1.0/` (mirrors the v1.0.2 grouping of
 ///         `CoreMainnetUpgradeRegression`).
 /// @custom:upgrade v1.1.0

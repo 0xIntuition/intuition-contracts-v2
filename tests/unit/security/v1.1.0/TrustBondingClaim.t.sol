@@ -3,7 +3,7 @@ pragma solidity 0.8.29;
 
 import { TrustBondingBase } from "tests/unit/TrustBonding/TrustBondingBase.t.sol";
 
-/// @title  Track 6 — TrustBonding reward / utilization-carry hunt (ENG-12460)
+/// @title  TrustBonding reward / utilization-carry hunt
 /// @notice Pins the utilization-ratio normalization against the suspected
 ///         zero-target division (a cleared false-positive) and proves the ratio is
 ///         always bounded and never reverts for any permissionless utilization

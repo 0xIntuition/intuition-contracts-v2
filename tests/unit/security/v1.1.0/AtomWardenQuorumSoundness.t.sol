@@ -9,7 +9,7 @@ import { IAtomWarden } from "src/interfaces/IAtomWarden.sol";
 import { MockMultiVault, MockAtomWallet } from "tests/unit/AtomWarden/AtomWarden.t.sol";
 
 /// @title  AtomWardenQuorumSoundness
-/// @notice Hypothesis 4 (deep pre-audit): AtomWarden quorum soundness, pushing past the existing
+/// @notice AtomWarden quorum soundness, pushing past the existing
 ///         high-s / stale-nonce / revoke-below-threshold suite.
 ///
 /// Invariant under test: a successful `claimWithAuthorization` requires at least `signatureThreshold`

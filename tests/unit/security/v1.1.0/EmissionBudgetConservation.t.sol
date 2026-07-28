@@ -6,7 +6,7 @@ import { ICoreEmissionsController } from "src/interfaces/ICoreEmissionsControlle
 import { TrustBondingBase } from "tests/unit/TrustBonding/TrustBondingBase.t.sol";
 
 /// @title  EmissionBudgetConservation
-/// @notice Hypothesis 6 (deep pre-audit): emission-budget conservation.
+/// @notice Emission-budget conservation.
 ///
 /// Invariant under test: across all users and epochs, the sum of claimed rewards for any epoch is
 /// bounded by that epoch's emissions budget, the budget is bounded by the controller's maximum

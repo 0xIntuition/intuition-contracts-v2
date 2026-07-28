@@ -4,7 +4,7 @@ pragma solidity 0.8.29;
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { AtomWallet } from "src/protocol/wallet/AtomWallet.sol";
 
-/// @title  Track 5 — AtomWallet takeover / permanent-DoS hunt (ENG-12460)
+/// @title  AtomWallet takeover / permanent-DoS hunt
 /// @notice Attempts a permissionless takeover of an AtomWallet: passing signature
 ///         validation without being an owner (pre-claim, when the MultiOwnable
 ///         registry is empty), seeding an owner without the warden, and adding /

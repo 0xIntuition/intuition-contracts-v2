@@ -8,7 +8,7 @@ import { Base64 } from "solady/utils/Base64.sol";
 import { P256 } from "solady/utils/P256.sol";
 
 /// @title  AtomWalletAuthEdges
-/// @notice Hypothesis 5 (deep pre-audit): AtomWallet ERC-4337 / P-256 auth and claim-transition
+/// @notice AtomWallet ERC-4337 / P-256 auth and claim-transition
 ///         edges, including the **regression suite for F-002**.
 ///
 /// F-002 (FIXED): `CoinbaseSmartWalletLib.isValidSignature` previously decoded the inline-encoded

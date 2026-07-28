@@ -23,7 +23,7 @@ import { IAtomWarden } from "src/interfaces/IAtomWarden.sol";
 ///         so the AtomWarden surface (storage, role-hooks, signed claims) can be exercised
 ///         independently of the broader core unison upgrade.
 /// @dev    Uses the same intuition-mainnet fork pin as the core regression so post-upgrade
-///         calldata semantics line up. Part of the v1.1.0 pre-audit upgrade-regression set
+///         calldata semantics line up. Part of the v1.1.0 upgrade-regression set
 ///         under `tests/unit/upgrades/v1.1.0/` (mirrors the v1.0.2 grouping of
 ///         `CoreMainnetUpgradeRegression`).
 /// @custom:upgrade v1.1.0
