@@ -51,7 +51,9 @@ struct DynamicFeeConfig {
     uint256 withdrawalCapBps;
     /// @dev Fraction (bps, 0..BPS) of each withdrawal fee routed to the prior tiers via the same
     ///      triangular fulcrum kernel (the "frontier" slice); the remainder goes to the leaver's OWN
-    ///      tier (the diamond-hands reward). 0 = pure diamond-hands.
+    ///      tier, split across whoever else occupies it at that moment. 0 (the shipped default)
+    ///      routes the ENTIRE withdrawal fee to the exiting tier's other occupants. Entitlement
+    ///      carries no dwell requirement — see the `recordRedeem` notes on the implementation.
     uint256 withdrawalToRecentShareBps;
     /// @dev Fraction (bps, 0..BPS) of each DEPOSIT fee paid as a single lump to the nearest OCCUPIED
     ///      prior tier — the "recent-tier" spike that rewards the immediately preceding cohort on top of

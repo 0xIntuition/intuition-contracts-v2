@@ -64,6 +64,15 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Mapping of epochs to the total claimed rewards for that epoch among all users
+    /// @dev Also serves as the target the NEXT epoch's system utilization ratio is measured against —
+    ///      deliberately the rewards actually CLAIMED for the prior epoch, not those earned or eligible.
+    ///      Claiming is optional; declining to claim leaves this counter lower and can only shift the following
+    ///      ratio within its hard `[systemUtilizationLowerBound, BASIS_POINTS_DIVISOR]` bounds. Emissions are
+    ///      minted on a fixed, pre-scheduled per-epoch schedule: the utilization ratios only split that fixed
+    ///      budget between released and reclaimed amounts. They never change the amount minted and never touch
+    ///      principal, and the unclaimed remainder is a residual the protocol reclaims — not an allocation owed
+    ///      to any user. A higher ratio therefore redistributes a bounded, already-fixed pot; it cannot mint
+    ///      new tokens or extract another party's funds.
     mapping(uint256 epoch => uint256 totalClaimedRewards) public totalClaimedRewardsForEpoch;
 
     /// @notice Mapping of users to their respective claimed rewards for a specific epoch

@@ -147,9 +147,17 @@ interface IBaseCurve {
 
     /// @notice Record a deposit on the curve's own ledger and receive the quoted deposit fee as
     ///         `msg.value`. Called by the MultiVault after all of its vault-state writes, and only
-    ///         on curves whose {hasDepositFeeHook} is true — but on those curves it is ALWAYS
-    ///         called, even when the quoted fee is zero, so the curve ledger stays in lockstep
-    ///         with vault shares.
+    ///         on curves whose {hasDepositFeeHook} is true — on those curves it is called on every
+    ///         deposit path, even when the quoted fee is zero, so the curve ledger stays in
+    ///         lockstep with vault shares.
+    /// @dev    IMPORTANT — the term CREATION paths are the one exception. `createAtoms`,
+    ///         `createAtomsFor`, `createTriples` and `createTriplesFor` mint the creator's shares on
+    ///         `bondingCurveConfig.defaultCurveId` WITHOUT resolving or dispatching this hook, so a
+    ///         hook-bearing curve would receive no ledger entry for a created position and the
+    ///         holder's first redemption would underflow inside the curve with no recovery path.
+    ///         A hook-bearing curve therefore MUST NOT be set as `defaultCurveId`. The deployed
+    ///         configuration keeps `defaultCurveId == 1` (`LinearCurve`, hookless, 1:1); hook curves
+    ///         are reachable only through `deposit` / `redeem` on an explicit non-default `curveId`.
     /// @param termId The term (atom or triple) deposited into
     /// @param account The account the shares were minted to
     /// @param shares The number of shares minted to `account`

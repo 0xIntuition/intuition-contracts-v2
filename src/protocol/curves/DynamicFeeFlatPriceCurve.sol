@@ -53,9 +53,21 @@ import {
  *           lump to the nearest occupied prior tier BEFORE the fulcrum spread (0 by default = pure
  *           fulcrum), letting the immediately preceding cohort earn a configurable premium.
  *         - Withdrawal fee `min(cap, base + exitTier*growth)` (or the tier's manual override) goes to
- *           the residual holders of the exiting tier (diamond-hands), with a configurable
+ *           the residual holders of the exiting tier, with a configurable
  *           `withdrawalToRecentShareBps` slice routed to the prior tiers via the same fulcrum kernel;
- *           the exiter is excluded.
+ *           the exiter is excluded from the fee they themselves pay.
+ *
+ *           NOTE on what "residual holder" does and does not mean. Entitlement is established at
+ *           `recordDeposit` time against the tier's then-current accumulator; there is deliberately
+ *           NO dwell requirement, NO time-weighting and NO minimum holding period — this is an
+ *           activity-driven redistribution, not a yield-accrual product, and earning from a later
+ *           depositor or a later exiter is the intended mechanic (asserted by
+ *           `test_frontRun_sandwichEarningsBoundedByVictimFee`). A position opened one transaction
+ *           before an exit is therefore as entitled as one held for a year, and because the credit
+ *           divides across the recipient tier's stake, a small position that is the tier's only
+ *           other occupant receives the whole slice. Conservation still binds: no party can ever
+ *           earn more than the fees actually collected. Read "residual holder" as "whoever is in the
+ *           tier when the fee lands", not as a commitment or loyalty reward.
  *
  *         The spec's O(cohort) push-credit is replaced by an O(1) MasterChef-style accumulator:
  *         `accFeePerShare[termId][tier]` tracks fee-per-unit-stake; a holder's pending is
@@ -253,10 +265,17 @@ contract DynamicFeeFlatPriceCurve is
     /// @notice Set a sparse manual fee override for a single tier (replaces the formula for that tier).
     /// @dev    Overriding one tier does not touch any other tier. The stored rates fully replace the
     ///         formulaic `min(cap, base + tier*growth)` but must stay within the schedule's declared
-    ///         per-tier caps (`depositCapBps` / `withdrawalCapBps`): the override retunes a tier's rate
-    ///         inside the same envelope the formula respects, it does not bypass the cap. Bounding the
-    ///         withdrawal rate matters — a BPS-level withdrawal fee consumes the entire redeem and
-    ///         underflows `assets - fees` in MultiVault, bricking redeems for that tier until retuned.
+    ///         per-tier caps (`depositCapBps` / `withdrawalCapBps`) AT THE TIME THE OVERRIDE IS SET.
+    ///         Note the override is read back UNCLAMPED: it is not re-validated if a cap is later
+    ///         LOWERED, so a cap reduction does not retroactively tighten a tier that already carries
+    ///         an override. Clear the override explicitly when tightening a cap.
+    ///         Bounding the withdrawal rate matters, and the damaging failure mode is NOT a revert:
+    ///         at exactly `BPS` the redeem underflows `assets - fees` in MultiVault and reverts, but
+    ///         at any rate strictly INSIDE the cap that still exceeds the payout, the redemption
+    ///         SUCCEEDS and pays the redeemer ZERO while burning their shares — MultiVault enforces
+    ///         no floor on the payout and `previewRedeem` reports the same zero without erroring.
+    ///         Keep `withdrawalCapBps` at a value that cannot consume a redemption (the shipped
+    ///         schedule uses 1000 bps = 10%).
     ///         An explicit 0-bps rate remains expressible (via `isSet == true`). Only tiers within the
     ///         live `tierCount` may be overridden.
     /// @param tier The tier index to override (`< config.tierCount`)
