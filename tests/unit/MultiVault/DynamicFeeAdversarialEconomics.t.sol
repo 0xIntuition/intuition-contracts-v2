@@ -8,7 +8,7 @@ import { DynamicFeeConfig } from "src/interfaces/IDynamicFeeFlatPriceCurve.sol";
 /// @title  DynamicFeeAdversarialEconomicsTest
 /// @notice Adversarial economic tests for the flat-price / dynamic-fee curve, driven end-to-end through
 ///         MultiVault (curve id 4). These actively try to break the economics: Sybil / wallet-splitting,
-///         front-running the recent-N earning window, fee-helper solvency (never pays out more than it
+///         front-running the nearest-N earning window, fee-helper solvency (never pays out more than it
 ///         collected), wash / round-trip must be net-negative, principal always returns at par, and live
 ///         fee-change abuse (governance bounds, no re-pricing of already-accrued balances). Every modeled
 ///         attack must revert or stay within documented bounds.

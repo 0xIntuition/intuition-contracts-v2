@@ -12,9 +12,10 @@ import { DynamicFeeFlatPriceCurve } from "src/protocol/curves/DynamicFeeFlatPric
 ///         extra term. The split views exist so a consumer can compose correctly:
 ///         `bankedEarnings` once, `pendingFor` per term, or `claimableAcross` for the total.
 ///
-///         `claimableAcross` claims to equal what `claim` would pay, so it enforces strictly
-///         ascending term ids: a repeated term would be counted once per occurrence here while
-///         `claim` settles it only once, silently breaking that equality.
+///         `claimableAcross` claims to equal what `claim` would pay, so it rejects repeated term ids:
+///         a repeat would be counted once per occurrence here while `claim` settles it only once,
+///         silently breaking that equality. Order is irrelevant — the ids may be supplied in any
+///         sequence.
 contract CurveClaimViewsTest is BaseTest {
     uint256 internal constant DYN = DYNAMIC_FEE_CURVE_ID;
 
@@ -118,6 +119,38 @@ contract CurveClaimViewsTest is BaseTest {
             dynamicFeeCurve.claimableAcross(users.bob, ascending),
             "the total must not depend on the order the terms are supplied in"
         );
+    }
+
+    /// @dev A repeat that is NOT adjacent in the supplied order must still be caught. This is what
+    ///      makes the sort load-bearing: with the sort removed, a two-element duplicate is still
+    ///      trivially adjacent and would be caught by luck, but `[A, B, A]` would slip through.
+    function test_claimableAcross_revertsOnNonAdjacentDuplicate() external {
+        (bytes32 first, bytes32 second) = _twoTermsWithBankedEarnings();
+
+        bytes32[] memory terms = new bytes32[](3);
+        terms[0] = first;
+        terms[1] = second;
+        terms[2] = first;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(DynamicFeeFlatPriceCurve.DynamicFeeFlatPriceCurve_DuplicateTermIds.selector)
+        );
+        dynamicFeeCurve.claimableAcross(users.bob, terms);
+    }
+
+    /// @dev An empty set is rejected as a deliberate API choice, not because the value would be
+    ///      meaningless: `claim([])` is itself valid and withdraws any banked balance, so the
+    ///      consistent answer for an empty set would be exactly `bankedEarnings`. The rejection exists
+    ///      to surface caller error — an empty array reaching this function almost always means the
+    ///      caller assembled the wrong set — and `bankedEarnings` already exposes that number
+    ///      directly, so nothing is unreachable.
+    function test_claimableAcross_revertsOnEmptyTermIds() external {
+        _twoTermsWithBankedEarnings();
+
+        bytes32[] memory terms = new bytes32[](0);
+
+        vm.expectRevert(abi.encodeWithSelector(DynamicFeeFlatPriceCurve.DynamicFeeFlatPriceCurve_EmptyTermIds.selector));
+        dynamicFeeCurve.claimableAcross(users.bob, terms);
     }
 
     /// @dev `pendingFor` is term-scoped and excludes the banked balance; `bankedEarnings` is

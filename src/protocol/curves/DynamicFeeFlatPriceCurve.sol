@@ -5,6 +5,7 @@ import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
+import { LibSort } from "solady/utils/LibSort.sol";
 
 import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
@@ -93,6 +94,7 @@ contract DynamicFeeFlatPriceCurve is
     IDynamicFeeFlatPriceCurve
 {
     using FixedPointMathLib for uint256;
+    using LibSort for uint256[];
 
     /* =================================================== */
     /*                       CONSTANTS                     */
@@ -262,6 +264,7 @@ contract DynamicFeeFlatPriceCurve is
     error DynamicFeeFlatPriceCurve_TierCountCannotShrink();
     error DynamicFeeFlatPriceCurve_InvalidTierOverride();
     error DynamicFeeFlatPriceCurve_DuplicateTermIds();
+    error DynamicFeeFlatPriceCurve_EmptyTermIds();
     error DynamicFeeFlatPriceCurve_InvalidMinEligibleTierStake();
 
     /* =================================================== */
@@ -645,29 +648,47 @@ contract DynamicFeeFlatPriceCurve is
     }
 
     /// @notice Total withdrawable across the supplied terms — the figure {claim} would pay.
-    /// @dev    `termIds` must be UNIQUE; order is irrelevant. This is enforced rather than merely
-    ///         documented, because a repeated term would have its pending counted once per occurrence
-    ///         here while {claim} settles it only once — silently breaking the equality with the
-    ///         payout that this function exists to provide. Reverts with
-    ///         {DynamicFeeFlatPriceCurve_DuplicateTermIds} otherwise.
+    /// @dev    Input is validated first, then the total is accumulated. `termIds` must be non-empty and
+    ///         free of repeats; order is irrelevant. Uniqueness is ENFORCED rather than documented,
+    ///         because a repeated term would have its pending counted once per occurrence here while
+    ///         {claim} settles it once — silently breaking the equality with the payout that this
+    ///         function exists to provide.
+    /// @dev    Uniqueness is proved in EXPECTED `O(n log n)`: a scratch copy is sorted so that any
+    ///         repeat becomes adjacent, then one linear scan settles it. The bound is expected rather
+    ///         than worst case — the underlying sort is quicksort-based and retains a theoretical
+    ///         quadratic worst case — but that still beats the unconditional pairwise comparison the
+    ///         same check would otherwise need. Sorting here rather than demanding a pre-sorted array
+    ///         keeps the burden off every integrator. A storage or transient-storage set would be
+    ///         cheaper still but is unavailable: both are state writes, which `view` forbids.
     /// @param  account The account to read
-    /// @param  termIds The terms to include, in any order, without repeats
+    /// @param  termIds The terms to include, non-empty, in any order, without repeats
     /// @return amount  The total claimable amount, equal to what {claim} would pay for these terms
     function claimableAcross(address account, bytes32[] calldata termIds) external view returns (uint256 amount) {
-        amount = earned[account];
         uint256 length = termIds.length;
+        if (length == 0) revert DynamicFeeFlatPriceCurve_EmptyTermIds();
+
+        // Pass 1 — validate. Sorting a scratch copy makes any repeat adjacent, so a single linear scan
+        // proves uniqueness without comparing every pair.
+        uint256[] memory sorted = new uint256[](length);
         for (uint256 i = 0; i < length;) {
-            // Reject a repeated term rather than requiring the caller to pre-sort. The quadratic scan
-            // is deliberate: this is a `view`, so an off-chain caller pays nothing for it, and any
-            // ordering requirement would be an ergonomic tax that buys no safety the check below does
-            // not already provide.
-            for (uint256 j = 0; j < i;) {
-                if (termIds[j] == termIds[i]) revert DynamicFeeFlatPriceCurve_DuplicateTermIds();
-                unchecked {
-                    ++j;
-                }
+            sorted[i] = uint256(termIds[i]);
+            unchecked {
+                ++i;
             }
-            amount += _pendingFor(account, termIds[i]);
+        }
+        sorted.sort();
+        for (uint256 i = 1; i < length;) {
+            if (sorted[i] == sorted[i - 1]) revert DynamicFeeFlatPriceCurve_DuplicateTermIds();
+            unchecked {
+                ++i;
+            }
+        }
+
+        // Pass 2 — accumulate. A sum is order-independent, so the sorted copy is read directly. The
+        // banked balance is account-wide and is added exactly once.
+        amount = earned[account];
+        for (uint256 i = 0; i < length;) {
+            amount += _pendingFor(account, bytes32(sorted[i]));
             unchecked {
                 ++i;
             }

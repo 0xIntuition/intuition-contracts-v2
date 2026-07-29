@@ -354,7 +354,7 @@ contract CurveMinEligibleTierStakeTest is Test {
     ///      tier through its own downward scan — a separate gate from the fulcrum spread. Without the
     ///      floor there, a dust tier excluded from the spread would still absorb the entire lump. The
     ///      spike is dormant at the shipped `depositToPriorTierBps == 0`, so this configures it on.
-    function test_dustTier_doesNotAbsorbTheDepositRecentTierSpike() external {
+    function test_dustTier_doesNotAbsorbTheDepositPriorTierSpike() external {
         DynamicFeeConfig memory config = _defaultConfig();
         config.depositToPriorTierBps = uint256(BPS); // route the whole fee as the spike lump
         DynamicFeeFlatPriceCurve c = _deploy(config);

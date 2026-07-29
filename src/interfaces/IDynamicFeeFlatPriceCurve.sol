@@ -141,9 +141,9 @@ interface IDynamicFeeFlatPriceCurve {
     function bankedEarnings(address account) external view returns (uint256 amount);
 
     /// @notice Total withdrawable across the supplied terms — the figure `claim` would pay.
-    /// @dev `termIds` must be unique; order is irrelevant. Reverts on a repeat.
+    /// @dev `termIds` must be non-empty and unique; order is irrelevant. Reverts on an empty array or a repeat.
     /// @param account The account to read
-    /// @param termIds The terms to include, in any order, without repeats
+    /// @param termIds The terms to include, non-empty, in any order, without repeats
     /// @return amount The total claimable amount
     function claimableAcross(address account, bytes32[] calldata termIds) external view returns (uint256 amount);
 
