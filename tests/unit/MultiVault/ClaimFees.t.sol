@@ -2,6 +2,7 @@
 pragma solidity 0.8.29;
 
 import { console2 } from "forge-std/src/console2.sol";
+import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
@@ -34,6 +35,7 @@ contract ProtocolFeeSweepReentrantReceiver {
     uint256 public epoch;
     uint256 public receiveCount;
     bool public armed;
+    bytes4 public lastRevertSelector;
 
     constructor(IMultiVault _mv) {
         mv = _mv;
@@ -47,7 +49,18 @@ contract ProtocolFeeSweepReentrantReceiver {
     receive() external payable {
         ++receiveCount;
         if (!armed || receiveCount != 1) return;
-        mv.sweepAccumulatedProtocolFees(epoch);
+        try mv.sweepAccumulatedProtocolFees(epoch) { }
+        catch (bytes memory reason) {
+            lastRevertSelector = _selector(reason);
+        }
+    }
+
+    function _selector(bytes memory reason) private pure returns (bytes4 selector) {
+        if (reason.length >= 4) {
+            assembly {
+                selector := mload(add(reason, 0x20))
+            }
+        }
     }
 }
 
@@ -204,6 +217,11 @@ contract ClaimTest is BaseTest, ClaimEvents {
         assertEq(protocol.multiVault.accumulatedProtocolFees(epoch), 0, "fees must remain zero after reentry");
         assertEq(address(malicious).balance, accrued, "malicious receiver must only receive one sweep");
         assertEq(malicious.receiveCount(), 1, "reentrant sweep must not perform a second transfer");
+        assertEq(
+            malicious.lastRevertSelector(),
+            ReentrancyGuardUpgradeable.ReentrancyGuardReentrantCall.selector,
+            "nonReentrant guard must reject the callback"
+        );
     }
 
     /*//////////////////////////////////////////////////////////////////////////

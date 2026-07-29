@@ -118,7 +118,13 @@ library CoinbaseSmartWalletLib {
         }
         if (dataLen > signature.length) return false;
         uint256 paddedDataLen = (dataLen + 31) & ~uint256(31);
-        if (signature.length < 96 + paddedDataLen) return false;
+        // EXACT length, not a minimum. `abi.decode` ignores trailing bytes, so accepting a longer
+        // buffer would admit arbitrarily many distinct byte strings that all validate for the same
+        // digest and owner. Not a concern here (validation is stateless and nothing in the protocol
+        // is keyed on signature bytes), but non-unique encodings are a trap for any consumer that
+        // dedups or caches on the signature, so the wrapper is pinned to its canonical encoding.
+        // Every in-repo producer emits exactly `abi.encode(ownerIndex, signatureData)`.
+        if (signature.length != 96 + paddedDataLen) return false;
 
         // Now safe to decode. Decode as the inline (uint256, bytes) tuple that every producer in
         // this codebase emits via `abi.encode(ownerIndex, signatureData)`. Decoding as the

@@ -8,13 +8,13 @@ import { MultiVaultInvariantHandler } from "tests/invariant/handlers/MultiVaultI
 /// @title  MultiVaultInvariants
 /// @author 0xIntuition
 /// @notice Stateful invariant campaign for the v1.1.0 MultiVault. Drives random create / deposit /
-///         redeem / multicall / multicallPayable sequences (atoms, triples, counter-triples) through
+///         redeem / zero-value / value-bearing multicall sequences (atoms, triples, counter-triples) through
 ///         {MultiVaultInvariantHandler} against the full proxy + linked-library deployment from
 ///         {BaseTest}, and asserts the protocol-level safety properties the on-behalf-of, multicall,
 ///         and counter-stake changes must preserve:
 ///
 ///         - native-value conservation: with no fee sweeps, `MultiVault.balance` always equals
-///           `valueIn - valueOut`, so a multicallPayable sub-call can never duplicate, borrow, or leak
+///           `valueIn - valueOut`, so a multicall sub-call can never duplicate, borrow, or leak
 ///           `msg.value` (the headline multicall accounting property);
 ///         - ghost (min) shares minted to `BURN_ADDRESS` are never burned below `minShare`;
 ///         - the closed set of share holders (actors + `BURN_ADDRESS`) can never collectively exceed a
@@ -51,7 +51,7 @@ contract MultiVaultInvariants is BaseTest {
     }
 
     /// @notice With no fee sweeps during the campaign, MultiVault's native balance must equal exactly
-    ///         the value moved in minus the value redeemed out. Any multicallPayable value duplication,
+    ///         the value moved in minus the value redeemed out. Any multicall value duplication,
     ///         borrowing across sub-calls, or leak would break this identity.
     /// forge-config: default.invariant.runs = 32
     /// forge-config: default.invariant.depth = 50

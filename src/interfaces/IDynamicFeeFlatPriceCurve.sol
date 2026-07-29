@@ -11,6 +11,10 @@ pragma solidity 0.8.29;
 ///         curve storage slot. That is safe for a FRESH deploy (a new curve id) — which is how this
 ///         curve ships — but a live-proxy upgrade that grows this struct would orphan the accounting and
 ///         must reserve or migrate slots.
+///         Read that as a deadline, not just a warning: every field this struct will ever hold must be
+///         added BEFORE the first deploy, because pre-deploy is the only moment the layout is free to
+///         change. `minEligibleTierStake` was added under exactly that rule. Anything added after the
+///         curve is live must go in its own slot after `protocolAccrued` instead.
 struct DynamicFeeConfig {
     /// @dev Asset width (TRUST wei) of tier 0; later tiers widen geometrically by `growthGBps`.
     uint256 width0;
@@ -34,7 +38,7 @@ struct DynamicFeeConfig {
     ///      prior tiers by a triangular weight kernel that peaks at a fulcrum a fraction of the way
     ///      down the ladder: `dStar = (1 - fulcrumAlpha/BPS) * span` (distance from the source, where
     ///      `span` is the number of prior tiers). `fulcrumAlpha = BPS` peaks on the NEAREST tier
-    ///      (recent-first — the legacy nearest-N window); `0` peaks on the FARTHEST (earliest holders);
+    ///      (nearest-first — the legacy nearest-N window); `0` peaks on the FARTHEST (earliest holders);
     ///      intermediate values place the most-earning band mid-ladder, and because the peak is a
     ///      fraction of `span` it slides UP the ladder as the vault grows.
     uint256 fulcrumAlpha;
@@ -54,17 +58,39 @@ struct DynamicFeeConfig {
     ///      tier, split across whoever else occupies it at that moment. 0 (the shipped default)
     ///      routes the ENTIRE withdrawal fee to the exiting tier's other occupants. Entitlement
     ///      carries no dwell requirement — see the `recordRedeem` notes on the implementation.
-    uint256 withdrawalToRecentShareBps;
+    ///
+    ///      NAMING NOTE (covers this field and `depositToPriorTierBps`): the two knobs name OPPOSITE
+    ///      sides of their respective splits. That asymmetry is deliberate, not an oversight. Each is
+    ///      named for the allocation you opt INTO, so `0` means "default behaviour only" on both legs,
+    ///      and a larger value always means "more of the thing the name points at". The defaults differ
+    ///      because the primary lever differs per leg: the fulcrum spread is the deposit default,
+    ///      while the exiting tier is the withdrawal default. Naming both after the same side would
+    ///      have forced one of them to default to `BPS` rather than `0`, which is the more error-prone
+    ///      arrangement for a value that is set by hand.
+    uint256 withdrawalToFulcrumTiersBps;
     /// @dev Fraction (bps, 0..BPS) of each DEPOSIT fee paid as a single lump to the nearest OCCUPIED
-    ///      prior tier — the "recent-tier" spike that rewards the immediately preceding cohort on top of
-    ///      the sliding-fulcrum spread (the deposit mirror of `withdrawalToRecentShareBps`, inverted:
-    ///      here the share is the single-tier lump and the remainder is the fulcrum spread). The
-    ///      remaining `BPS - depositToRecentTierShareBps` is distributed across the prior tiers by the
-    ///      triangular fulcrum kernel exactly as before. The nearest occupied prior tier is searched
-    ///      downward from the source tier (depositor's own stake excluded); if no prior tier holds stake
-    ///      the spike folds back into the fulcrum pool, and ultimately the protocol bucket, so nothing is
-    ///      forfeited. 0 = pure fulcrum — the deposit-side default, leaving distribution unchanged.
-    uint256 depositToRecentTierShareBps;
+    ///      prior tier — the "prior-tier" spike that rewards the immediately preceding cohort on top of
+    ///      the sliding-fulcrum spread. Like `withdrawalToFulcrumTiersBps` it names the opt-in side of
+    ///      its split, which on this leg is the single-tier lump rather than the fulcrum spread — see
+    ///      the naming note on that field. The remaining `BPS - depositToPriorTierBps` is distributed
+    ///      across the prior tiers by the triangular fulcrum kernel exactly as before. The nearest
+    ///      occupied prior tier is searched downward from the source tier (depositor's own stake
+    ///      excluded); if no prior tier holds stake the spike folds back into the fulcrum pool, and
+    ///      ultimately the protocol bucket, so nothing is forfeited. 0 = pure fulcrum — the deposit-side
+    ///      default, leaving distribution unchanged.
+    uint256 depositToPriorTierBps;
+    /// @dev Minimum stake a tier must hold to receive redistributed fees. `0` (the shipped default)
+    ///      disables the filter entirely and reproduces the plain "holds any stake at all" test, so the
+    ///      mechanism is inert until governance turns it on. Bounded above by
+    ///      {DynamicFeeFlatPriceCurve.MAX_MIN_ELIGIBLE_TIER_STAKE}.
+    ///      DENOMINATED IN SHARES, matching `tierStake` — not in the asset units the width fields use.
+    ///      Shares and assets coincide here only because this curve holds price at exactly 1:1.
+    ///      Judged on the EXCLUSION-ADJUSTED stake: the payer's own position is removed before the test,
+    ///      so the quantity that must clear the floor is the stake that will actually receive the fee.
+    ///      Read live at distribution time — no snapshot, no migration on change. See the field's notes
+    ///      on the implementation for where an excluded tier's share goes, which differs between the
+    ///      deposit and redeem paths.
+    uint256 minEligibleTierStake;
 }
 
 /// @notice A sparse, owner-set manual fee rate for a single tier. Consulted before the formulaic
@@ -101,4 +127,36 @@ interface IDynamicFeeFlatPriceCurve {
 
     /// @notice View the caller-claimable amount for a user in a vault (booked + unsettled pending).
     function claimable(address account, bytes32 termId) external view returns (uint256 amount);
+
+    /// @notice Unsettled pending earnings for ONE term only. Additive across terms.
+    /// @param account The account to read
+    /// @param termId The term (atom or triple) to read
+    /// @return amount The term-scoped pending amount, excluding any banked balance
+    function pendingFor(address account, bytes32 termId) external view returns (uint256 amount);
+
+    /// @notice Banked, term-independent earnings already settled to the account's balance.
+    /// @dev Add this ONCE across any set of terms — it is not per-term.
+    /// @param account The account to read
+    /// @return amount The banked balance
+    function bankedEarnings(address account) external view returns (uint256 amount);
+
+    /// @notice Total withdrawable across the supplied terms — the figure `claim` would pay.
+    /// @dev `termIds` must be unique; order is irrelevant. Reverts on a repeat.
+    /// @param account The account to read
+    /// @param termIds The terms to include, in any order, without repeats
+    /// @return amount The total claimable amount
+    function claimableAcross(address account, bytes32[] calldata termIds) external view returns (uint256 amount);
+
+    /// @notice Account-aware redeem preview, net of THIS CURVE's withdrawal fee only.
+    /// @dev Not an execution-net payout — MultiVault's protocol and exit fees are not modelled here.
+    ///      See the implementation NatSpec for the composition rule. Never use as `minAssets`.
+    /// @param termId The term being redeemed from
+    /// @param account The redeeming account
+    /// @param shares The share amount to preview
+    /// @return assetsAfterCurveFee Gross assets less this curve's withdrawal fee for `account`
+    /// @return fee The curve withdrawal fee `account` would pay
+    function previewRedeemFor(bytes32 termId, address account, uint256 shares)
+        external
+        view
+        returns (uint256 assetsAfterCurveFee, uint256 fee);
 }

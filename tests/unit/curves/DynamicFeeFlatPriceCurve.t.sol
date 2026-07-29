@@ -73,8 +73,9 @@ contract DynamicFeeFlatPriceCurveTest is Test {
             withdrawalBaseBps: 200,
             withdrawalGrowthBps: 50,
             withdrawalCapBps: 1000,
-            withdrawalToRecentShareBps: 0,
-            depositToRecentTierShareBps: 0
+            withdrawalToFulcrumTiersBps: 0,
+            depositToPriorTierBps: 0,
+            minEligibleTierStake: 0
         });
     }
 
@@ -443,18 +444,18 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         return _distributeFromTierFourWithSpike(alpha, sigma, 0, pool);
     }
 
-    /// @dev As {_distributeFromTierFour}, but routes a `recentShareBps` slice of the released fee as a
-    ///      lump to the nearest occupied prior tier (the deposit "recent-tier" spike) before spreading
-    ///      the remainder by the fulcrum. `recentShareBps = 0` is the pure-fulcrum path the base helper
+    /// @dev As {_distributeFromTierFour}, but routes a `shareBps` slice of the released fee as a
+    ///      lump to the nearest occupied prior tier (the deposit "prior-tier" spike) before spreading
+    ///      the remainder by the fulcrum. `shareBps = 0` is the pure-fulcrum path the base helper
     ///      uses.
-    function _distributeFromTierFourWithSpike(uint256 alpha, uint256 sigma, uint256 recentShareBps, uint256 pool)
+    function _distributeFromTierFourWithSpike(uint256 alpha, uint256 sigma, uint256 shareBps, uint256 pool)
         internal
         returns (uint256 tier0, uint256 tier1, uint256 tier2, uint256 tier3)
     {
         DynamicFeeConfig memory config = _defaultConfig();
         config.fulcrumAlpha = alpha;
         config.kernelSpread = sigma;
-        config.depositToRecentTierShareBps = recentShareBps;
+        config.depositToPriorTierBps = shareBps;
         DynamicFeeFlatPriceCurve c = _deploy(config);
         address dave = makeAddr("dave");
         address eve = makeAddr("eve");
@@ -567,12 +568,12 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     /*             DEPOSIT RECENT-TIER SPIKE             */
     /* =================================================== */
 
-    /// @dev A `depositToRecentTierShareBps` slice is paid as a lump to the nearest occupied prior tier
+    /// @dev A `depositToPriorTierBps` slice is paid as a lump to the nearest occupied prior tier
     ///      (here dave at d = 1) ON TOP OF that tier's fulcrum share, so the nearest tier earns
     ///      disproportionately while the rest of the ladder still receives the fulcrum spread. With a
     ///      50% spike over an 8e18 pool: dave earns 4e18 (spike) + 2e18 (fulcrum) = 6e18, carol
     ///      1.333e18, bob 0.667e18, alice 0.
-    function test_depositRecentTierShare_spikesNearestPriorTier() external {
+    function test_depositToPriorTier_spikesNearestPriorTier() external {
         (uint256 t0, uint256 t1, uint256 t2, uint256 t3) = _distributeFromTierFourWithSpike(BPS, 4e18, 5000, 8e18);
         assertApproxEqAbs(t3, 6e18, 1e6, "nearest tier earns the spike lump plus its fulcrum share");
         assertApproxEqAbs(t2, 1.333e18, 1e15, "d=2 earns its fulcrum share of the remainder");
@@ -583,7 +584,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
 
     /// @dev A full (100%) spike sends the whole fee to the single nearest occupied prior tier; the
     ///      fulcrum slice is empty, so no other tier earns and nothing leaks to the protocol.
-    function test_depositRecentTierShare_fullShareAllToNearest() external {
+    function test_depositToPriorTier_fullShareAllToNearest() external {
         (uint256 t0, uint256 t1, uint256 t2, uint256 t3) = _distributeFromTierFourWithSpike(BPS, 4e18, BPS, 8e18);
         assertApproxEqAbs(t3, 8e18, 1e6, "the nearest occupied prior tier takes the whole fee");
         assertEq(t2, 0, "no fulcrum spread when the spike is 100%");
@@ -593,7 +594,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
 
     /// @dev Zero share is the default and reduces to a pure fulcrum distribution — byte-for-byte the
     ///      pre-split behavior (compare {test_fulcrum_alphaOne_nearestFirstWindow}).
-    function test_depositRecentTierShare_zeroReproducesPureFulcrum() external {
+    function test_depositToPriorTier_zeroReproducesPureFulcrum() external {
         (uint256 t0, uint256 t1, uint256 t2, uint256 t3) = _distributeFromTierFourWithSpike(BPS, 4e18, 0, 6e18);
         assertApproxEqAbs(t3, 3e18, 1e4, "d=1 earns 50% (pure fulcrum)");
         assertApproxEqAbs(t2, 2e18, 1e4, "d=2 earns 33.3% (pure fulcrum)");
@@ -604,11 +605,11 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     /// @dev The spike targets the nearest OCCUPIED prior tier and excludes the depositor's own stake:
     ///      when dave (tier 3) tops up from tier 4, his own tier is skipped and the 100% spike lands on
     ///      the next occupied prior tier (carol, tier 2). dave earns nothing from his own fee.
-    function test_depositRecentTierShare_excludesDepositorTierAndSkipsToNextOccupied() external {
+    function test_depositToPriorTier_excludesDepositorTierAndSkipsToNextOccupied() external {
         DynamicFeeConfig memory config = _defaultConfig();
         config.fulcrumAlpha = BPS;
         config.kernelSpread = 4e18;
-        config.depositToRecentTierShareBps = BPS; // 100% spike -> unambiguous routing target
+        config.depositToPriorTierBps = BPS; // 100% spike -> unambiguous routing target
         DynamicFeeFlatPriceCurve c = _deploy(config);
         address dave = makeAddr("dave-skip");
 
@@ -632,9 +633,9 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     /// @dev When there is no prior tier to receive it (a first-tier deposit), the spike slice folds back
     ///      into the fulcrum pool and, with no prior tier there either, routes to the protocol bucket —
     ///      never forfeited.
-    function test_depositRecentTierShare_noPriorTierRoutesToProtocol() external {
+    function test_depositToPriorTier_noPriorTierRoutesToProtocol() external {
         DynamicFeeConfig memory config = _defaultConfig();
-        config.depositToRecentTierShareBps = 5000;
+        config.depositToPriorTierBps = 5000;
         DynamicFeeFlatPriceCurve c = _deploy(config);
 
         c.recordDeposit{ value: 1e18 }(T1, alice, 10e18); // first depositor: vault at tier 0, no prior tier
@@ -647,9 +648,9 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     ///      pre-deposit bucket, the exclusion empties it in BOTH routing helpers — the spike finds no
     ///      recipient and folds into the fulcrum, which also finds no eligible tier — so the whole fee
     ///      folds to `protocolAccrued` and the payer earns nothing from their own fee.
-    function test_depositRecentTierShare_onlyPriorTierIsDepositorsOwn_foldsToProtocol() external {
+    function test_depositToPriorTier_onlyPriorTierIsDepositorsOwn_foldsToProtocol() external {
         DynamicFeeConfig memory config = _defaultConfig();
-        config.depositToRecentTierShareBps = 5000; // spike enabled
+        config.depositToPriorTierBps = 5000; // spike enabled
         DynamicFeeFlatPriceCurve c = _deploy(config);
 
         // alice is the sole holder, bucketed at tier 0; this first deposit lifts the vault to tier 1.
@@ -667,22 +668,19 @@ contract DynamicFeeFlatPriceCurveTest is Test {
 
     /// @dev Conservation with the spike enabled: the curve custodies the whole fee, and claimable +
     ///      protocol never exceeds the pool (shortfall is bounded accumulator dust), for any
-    ///      alpha / sigma / recent-share / pool.
-    function testFuzz_depositRecentTierShare_conservation(
-        uint256 alpha,
-        uint256 sigma,
-        uint256 recentShareBps,
-        uint256 pool
-    ) external {
+    ///      alpha / sigma / prior-tier share / pool.
+    function testFuzz_depositToPriorTier_conservation(uint256 alpha, uint256 sigma, uint256 shareBps, uint256 pool)
+        external
+    {
         alpha = bound(alpha, 0, BPS);
         sigma = bound(sigma, 1, 64e18);
-        recentShareBps = bound(recentShareBps, 0, BPS);
+        shareBps = bound(shareBps, 0, BPS);
         pool = bound(pool, 1, 1_000_000e18);
 
         DynamicFeeConfig memory config = _defaultConfig();
         config.fulcrumAlpha = alpha;
         config.kernelSpread = sigma;
-        config.depositToRecentTierShareBps = recentShareBps;
+        config.depositToPriorTierBps = shareBps;
         DynamicFeeFlatPriceCurve c = _deploy(config);
         address dave = makeAddr("dave-spike-fuzz");
         address eve = makeAddr("eve-spike-fuzz");
@@ -722,9 +720,9 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     }
 
     function test_recordRedeem_frontierPolicyRoutesToPriorTiers() external {
-        // Reconfigure to 100% frontier routing (withdrawalToRecentShareBps = BPS).
+        // Reconfigure to 100% frontier routing (withdrawalToFulcrumTiersBps = BPS).
         DynamicFeeConfig memory config = _defaultConfig();
-        config.withdrawalToRecentShareBps = BPS;
+        config.withdrawalToFulcrumTiersBps = BPS;
         dynamicFeeCurve = _deploy(config);
 
         // alice at tier 0, bob at tier 1.
@@ -1213,14 +1211,14 @@ contract DynamicFeeFlatPriceCurveTest is Test {
 
     function test_setConfig_revertsOnWithdrawalShareAboveBps() external {
         DynamicFeeConfig memory config = _defaultConfig();
-        config.withdrawalToRecentShareBps = BPS + 1;
+        config.withdrawalToFulcrumTiersBps = BPS + 1;
         vm.expectRevert(DynamicFeeFlatPriceCurve.DynamicFeeFlatPriceCurve_InvalidConfig.selector);
         dynamicFeeCurve.setConfig(config);
     }
 
-    function test_setConfig_revertsOnDepositToRecentTierShareAboveBps() external {
+    function test_setConfig_revertsOnDepositToPriorTierAboveBps() external {
         DynamicFeeConfig memory config = _defaultConfig();
-        config.depositToRecentTierShareBps = BPS + 1;
+        config.depositToPriorTierBps = BPS + 1;
         vm.expectRevert(DynamicFeeFlatPriceCurve.DynamicFeeFlatPriceCurve_InvalidConfig.selector);
         dynamicFeeCurve.setConfig(config);
     }

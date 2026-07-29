@@ -5,17 +5,16 @@ import { BaseTest } from "tests/BaseTest.t.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 
-/// @title  `multicallPayable` value-accounting hunt
+/// @title  Track 1 — `multicall` value-accounting hunt (ENG-12460)
 /// @notice Adversarial PoCs that *attempt* to credit more ETH across a batch than
-///         `msg.value` covers, and to smuggle non-allowlisted / nested calls into
-///         the value-multicall. Every test here is a NEGATIVE result: the attack
-///         is defended and the test asserts the guard fires + state is conserved.
+///         `msg.value` covers, and to smuggle nested calls or value into guarded
+///         zero-value legs. The tests assert the guard fires or state is conserved.
 ///
 ///         Complements the equivalence/value-borrow coverage already in
-///         tests/unit/MultiVault/MulticallPayableAdversarial.t.sol; this file adds
+///         tests/unit/MultiVault/MulticallAdversarial.t.sol; this file adds
 ///         the nesting-rejection, ETH-out-leg rejection, double-credit, and
 ///         end-to-end native-value-conservation angles.
-contract MulticallPayableValueTest is BaseTest {
+contract MulticallValueTest is BaseTest {
     uint256 internal CURVE_ID;
 
     function setUp() public override {
@@ -46,16 +45,15 @@ contract MulticallPayableValueTest is BaseTest {
 
         resetPrank(users.alice);
         vm.expectRevert(MultiVault.MultiVault_MulticallValueMismatch.selector);
-        protocol.multiVault.multicallPayable{ value: outer }(data, values);
+        protocol.multiVault.multicall{ value: outer }(data, values);
 
         assertEq(protocol.multiVault.getShares(users.alice, atomA, CURVE_ID), sharesABefore, "atom A untouched");
         assertEq(protocol.multiVault.getShares(users.alice, atomB, CURVE_ID), sharesBBefore, "atom B untouched");
     }
 
-    /// @dev H2: a leg whose calldata re-enters `multicallPayable`. The upfront
-    ///      selector allowlist rejects it before any execution begins, so the
-    ///      `_inMulticall` reentrancy window never opens for a nested value-batch.
-    function test_nestedMulticallPayableLeg_reverts() public {
+    /// @dev H2: a leg whose calldata re-enters `multicall`. The transient guard
+    ///      rejects the nested value-bearing batch during sub-call execution.
+    function test_nestedMulticallLeg_reverts() public {
         bytes32 atomA = createSimpleAtom("t1-nest-A", ATOM_COST[0], users.alice);
 
         bytes[] memory inner = new bytes[](1);
@@ -64,28 +62,41 @@ contract MulticallPayableValueTest is BaseTest {
         innerValues[0] = 1 ether;
 
         bytes[] memory data = new bytes[](1);
-        data[0] = abi.encodeCall(IMultiVault.multicallPayable, (inner, innerValues));
+        data[0] = abi.encodeCall(IMultiVault.multicall, (inner, innerValues));
         uint256[] memory values = new uint256[](1);
         values[0] = 1 ether;
 
         resetPrank(users.alice);
-        vm.expectRevert(MultiVault.MultiVault_PayableMulticallSelectorNotAllowed.selector);
-        protocol.multiVault.multicallPayable{ value: 1 ether }(data, values);
+        vm.expectRevert(MultiVault.MultiVault_NestedMulticall.selector);
+        protocol.multiVault.multicall{ value: 1 ether }(data, values);
     }
 
-    /// @dev H3: `redeem` (an ETH-OUT path) cannot be smuggled into the value-batch.
-    ///      The allowlist only admits create/deposit selectors, so there is no
-    ///      attacker-controlled external transfer inside the `_inMulticall` window
-    ///      to re-enter from. The 4-byte selector is enough to trip the guard.
-    function test_redeemLegInValueBatch_reverts() public {
-        bytes[] memory data = new bytes[](1);
-        data[0] = abi.encodeWithSelector(IMultiVault.redeem.selector);
-        uint256[] memory values = new uint256[](1);
-        values[0] = 0;
+    /// @dev H3: a zero-valued redeem leg can safely share a value-bearing batch
+    ///      with a deposit. The exit cannot observe or consume the deposit leg's
+    ///      allocation, and its proceeds are paid directly to the receiver.
+    function test_redeemLegInValueBatch_succeedsWithZeroAllocation() public {
+        bytes32 atomId = createSimpleAtom("t1-mixed-redeem", ATOM_COST[0] + 4 ether, users.alice);
+        uint256 sharesBefore = protocol.multiVault.getShares(users.alice, atomId, CURVE_ID);
+        uint256 sharesToRedeem = sharesBefore / 4;
+        uint256 depositValue = 2 ether;
 
+        bytes[] memory data = new bytes[](2);
+        data[0] = abi.encodeCall(IMultiVault.deposit, (users.alice, atomId, CURVE_ID, 0));
+        data[1] = abi.encodeCall(IMultiVault.redeem, (users.alice, atomId, CURVE_ID, sharesToRedeem, 0));
+        uint256[] memory values = new uint256[](2);
+        values[0] = depositValue;
+
+        uint256 balanceBefore = address(protocol.multiVault).balance;
         resetPrank(users.alice);
-        vm.expectRevert(MultiVault.MultiVault_PayableMulticallSelectorNotAllowed.selector);
-        protocol.multiVault.multicallPayable{ value: 0 }(data, values);
+        bytes[] memory results = protocol.multiVault.multicall{ value: depositValue }(data, values);
+
+        uint256 redeemedAssets = abi.decode(results[1], (uint256));
+        assertGt(redeemedAssets, 0, "redeem leg returns assets");
+        assertEq(
+            address(protocol.multiVault).balance,
+            balanceBefore + depositValue - redeemedAssets,
+            "mixed batch conserves native value"
+        );
     }
 
     /// @dev Invariant: a mixed legal batch increases the vault's native balance by
@@ -114,7 +125,7 @@ contract MulticallPayableValueTest is BaseTest {
         uint256 balanceBefore = address(protocol.multiVault).balance;
 
         resetPrank(users.alice);
-        protocol.multiVault.multicallPayable{ value: outer }(data, values);
+        protocol.multiVault.multicall{ value: outer }(data, values);
 
         assertEq(
             address(protocol.multiVault).balance - balanceBefore,
@@ -131,6 +142,6 @@ contract MulticallPayableValueTest is BaseTest {
 
         resetPrank(users.alice);
         vm.expectRevert(MultiVault.MultiVault_ArraysNotSameLength.selector);
-        protocol.multiVault.multicallPayable{ value: 0 }(data, values);
+        protocol.multiVault.multicall{ value: 0 }(data, values);
     }
 }

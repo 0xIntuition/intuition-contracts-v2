@@ -5,7 +5,7 @@ import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { BaseTest } from "tests/BaseTest.t.sol";
 
-/// @notice Catches a multi-subcall multicallPayable that reverts on a LATER subcall (after earlier
+/// @notice Catches a multi-subcall multicall that reverts on a LATER subcall (after earlier
 ///         subcalls have already set `_virtualMsgValue`), then performs a direct deposit in the same
 ///         transaction. Used to prove transient value state does not leak across the caught revert.
 contract MultiSubcallCatcher {
@@ -19,7 +19,7 @@ contract MultiSubcallCatcher {
         curveId = curveId_;
     }
 
-    /// @dev `multicallPayable` with values [good, 0]: subcall 0 deposits `firstValue` (succeeds, sets
+    /// @dev `multicall` with values [good, 0]: subcall 0 deposits `firstValue` (succeeds, sets
     ///      `_virtualMsgValue = firstValue`), subcall 1 deposits 0 (reverts below-minimum). The whole
     ///      call reverts and the forwarded value returns here. Then a direct deposit of `directValue`
     ///      must be credited its own value — not the stale `firstValue` and not 0.
@@ -36,8 +36,8 @@ contract MultiSubcallCatcher {
         values[1] = 0;
 
         (bool ok, bytes memory reason) =
-            address(multiVault).call{ value: firstValue }(abi.encodeCall(IMultiVault.multicallPayable, (data, values)));
-        require(!ok, "multicallPayable should revert on the zero-value subcall");
+            address(multiVault).call{ value: firstValue }(abi.encodeCall(IMultiVault.multicall, (data, values)));
+        require(!ok, "multicall should revert on the zero-value subcall");
         lastFailureSelector = _selector(reason);
 
         directShares = multiVault.deposit{ value: directValue }(address(this), atomId, curveId, 0);
@@ -52,19 +52,19 @@ contract MultiSubcallCatcher {
     }
 }
 
-/// @title  MulticallPayableValueAccounting
-/// @notice Transient value accounting in multicallPayable, pushed
+/// @title  MulticallValueAccounting
+/// @notice Hypothesis 2 (deep pre-audit): transient value accounting in multicall, pushed
 ///         past the existing single-subcall caught-revert test to a MULTI-subcall sequence where a
 ///         later subcall reverts after earlier subcalls have already written `_virtualMsgValue`.
 ///
 /// Invariant under test: `_inMulticall` / `_virtualMsgValue` are scoped to the multicall frame, so a
 /// caught revert (which rolls back the frame's transient writes under EIP-1153) must leave a later
 /// same-tx direct call seeing its own `msg.value`, never a stale virtual value; and a successful
-/// multicallPayable credits each subcall exactly its allocated value.
+/// multicall credits each subcall exactly its allocated value.
 ///
 /// Verdict: DEFENDED. EIP-1153 frame-revert semantics clear the transient writes; the direct deposit
 /// after the caught revert is credited exactly its own value.
-contract MulticallPayableValueAccountingTest is BaseTest {
+contract MulticallValueAccountingTest is BaseTest {
     uint256 internal curveId;
 
     function setUp() public override {
@@ -72,7 +72,7 @@ contract MulticallPayableValueAccountingTest is BaseTest {
         curveId = getDefaultCurveId();
     }
 
-    /// @dev After a multi-subcall multicallPayable reverts on its second (zero-value) subcall, the
+    /// @dev After a multi-subcall multicall reverts on its second (zero-value) subcall, the
     ///      catcher's direct deposit is credited exactly its own value — proven by matching the
     ///      shares a clean depositor gets for the same value on an identical fresh atom.
     function test_multiSubcallCaughtRevert_doesNotLeakVirtualValue() external {
@@ -99,7 +99,7 @@ contract MulticallPayableValueAccountingTest is BaseTest {
         assertEq(directShares, controlShares, "direct deposit credited its own value (2 ether), no transient leak");
     }
 
-    /// @dev A fully-successful two-subcall multicallPayable credits each subcall exactly its
+    /// @dev A fully-successful two-subcall multicall credits each subcall exactly its
     ///      allocated value: total native spent == msg.value, and the two resulting positions match
     ///      independent single deposits of the same values.
     function test_multiSubcallSuccess_creditsEachSubcallItsAllocatedValue() external {
@@ -121,7 +121,7 @@ contract MulticallPayableValueAccountingTest is BaseTest {
         uint256 balBefore = users.bob.balance;
 
         resetPrank(users.bob);
-        protocol.multiVault.multicallPayable{ value: valueA + valueB }(data, values);
+        protocol.multiVault.multicall{ value: valueA + valueB }(data, values);
 
         assertEq(balBefore - users.bob.balance, valueA + valueB, "exactly msg.value spent across subcalls");
 

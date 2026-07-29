@@ -119,6 +119,18 @@ contract AtomWalletFactory is IAtomWalletFactory, Initializable {
     /**
      * @notice Returns the AtomWallet address for the given atom data
      * @dev The create2 salt is based off of the vault ID
+     * @dev ADDRESS STABILITY — the salt is the atom id alone, but the derived address also depends on
+     *      the initcode hash, which embeds THREE values read from `MultiVaultCore.walletConfig()` and
+     *      this factory: `entryPoint`, `multiVault`, and `atomWalletBeacon` (see `_getDeploymentData`).
+     *      The operationally important distinction:
+     *        - Upgrading the beacon's IMPLEMENTATION is safe. The beacon ADDRESS is unchanged, so every
+     *          wallet address is unchanged. This is the normal upgrade path.
+     *        - Rotating `entryPoint`, or repointing `walletConfig` at a DIFFERENT beacon contract,
+     *          re-derives every not-yet-deployed wallet address. Already-deployed wallets keep their
+     *          addresses and keep working, but counterfactual addresses the protocol and its
+     *          integrators have advertised — and, in the atom-wallet fee model, already routed value to
+     *          — would no longer be the addresses this factory deploys.
+     *      The EntryPoint is not intended to be rotated.
      * @param atomId id of the atom associated to the atom wallet
      * @return atomWallet the address of the atom wallet
      */

@@ -149,7 +149,7 @@ export const MultiVaultAbi = [
       }
     ],
     "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "payable"
   },
   {
     "type": "function",
@@ -1725,25 +1725,6 @@ export const MultiVaultAbi = [
         "name": "data",
         "type": "bytes[]",
         "internalType": "bytes[]"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "results",
-        "type": "bytes[]",
-        "internalType": "bytes[]"
-      }
-    ],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "multicallPayable",
-    "inputs": [
-      {
-        "name": "data",
-        "type": "bytes[]",
-        "internalType": "bytes[]"
       },
       {
         "name": "values",
@@ -1996,7 +1977,7 @@ export const MultiVaultAbi = [
         "internalType": "uint256"
       }
     ],
-    "stateMutability": "nonpayable"
+    "stateMutability": "payable"
   },
   {
     "type": "function",
@@ -2035,7 +2016,7 @@ export const MultiVaultAbi = [
         "internalType": "uint256[]"
       }
     ],
-    "stateMutability": "nonpayable"
+    "stateMutability": "payable"
   },
   {
     "type": "function",
@@ -3520,7 +3501,7 @@ export const MultiVaultAbi = [
   },
   {
     "type": "error",
-    "name": "MultiVault_PayableMulticallSelectorNotAllowed",
+    "name": "MultiVault_RedeemYieldsNoAssets",
     "inputs": []
   },
   {
@@ -3579,6 +3560,11 @@ export const MultiVaultAbi = [
         "internalType": "bytes32"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "MultiVault_UnexpectedValue",
+    "inputs": []
   },
   {
     "type": "error",

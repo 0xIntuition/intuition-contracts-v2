@@ -16,7 +16,7 @@ import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 /// @dev    The handler tracks every native-value movement into and out of {MultiVault} in
 ///         `ghost_valueIn` / `ghost_valueOut`, updated ONLY on a successful (non-reverting) action.
 ///         Because nothing in the campaign sweeps accrued fees, `MultiVault.balance` must always equal
-///         `ghost_valueIn - ghost_valueOut`; the multicall / multicallPayable drivers below are the
+///         `ghost_valueIn - ghost_valueOut`; the multicall drivers below are the
 ///         primary stress on that identity. Reverts from bounded-but-invalid inputs are swallowed so
 ///         the campaign keeps exploring. Test-only; never deployed on-chain.
 contract MultiVaultInvariantHandler is Test {
@@ -47,7 +47,7 @@ contract MultiVaultInvariantHandler is Test {
     uint256 public ghost_triplesCreated;
     uint256 public ghost_deposits;
     uint256 public ghost_redeems;
-    uint256 public ghost_multicallPayableBatches;
+    uint256 public ghost_valueBearingMulticallBatches;
     uint256 public ghost_multicallRedeemBatches;
     uint256 internal dataNonce;
 
@@ -159,13 +159,13 @@ contract MultiVaultInvariantHandler is Test {
         } catch { }
     }
 
-    /* ============ MULTICALL / MULTICALLPAYABLE ACTIONS ============ */
+    /* ==================== MULTICALL ACTIONS ==================== */
 
-    /// @notice Drive `multicallPayable` with two deposit sub-calls whose per-sub-call `values` sum to
+    /// @notice Drive `multicall` with two deposit sub-calls whose per-sub-call `values` sum to
     ///         `msg.value`. This is the primary stress on the per-sub-call value allocation
     ///         (`_virtualMsgValue` / `_effectiveMsgValue`): if a sub-call ever duplicated or borrowed
     ///         value, the native-value-conservation invariant would break.
-    function multicallPayableDeposits(
+    function multicallDeposits(
         uint256 actorSeed,
         uint256 termSeedA,
         uint256 termSeedB,
@@ -192,18 +192,16 @@ contract MultiVaultInvariantHandler is Test {
 
         vm.deal(actor, total);
         vm.prank(actor);
-        try MULTI_VAULT.multicallPayable{ value: total }(data, values) {
+        try MULTI_VAULT.multicall{ value: total }(data, values) {
             ghost_valueIn += total;
-            ghost_multicallPayableBatches++;
+            ghost_valueBearingMulticallBatches++;
         } catch { }
     }
 
-    /// @notice Drive `multicallPayable` batching a fresh `createAtoms` with a `deposit` into an existing
+    /// @notice Drive `multicall` batching a fresh `createAtoms` with a `deposit` into an existing
     ///         vault, each allocated its own slice of `msg.value`. Mixes a create and a deposit in one
     ///         payable batch — the multi-selector value-accounting path.
-    function multicallPayableCreateAndDeposit(uint256 actorSeed, uint256 termSeed, uint256 assetSeed, bool useTriple)
-        public
-    {
+    function multicallCreateAndDeposit(uint256 actorSeed, uint256 termSeed, uint256 assetSeed, bool useTriple) public {
         bytes32 termId = _pickTerm(termSeed, useTriple);
         if (termId == bytes32(0)) return;
 
@@ -226,11 +224,11 @@ contract MultiVaultInvariantHandler is Test {
 
         vm.deal(actor, total);
         vm.prank(actor);
-        try MULTI_VAULT.multicallPayable{ value: total }(data, values) returns (bytes[] memory results) {
+        try MULTI_VAULT.multicall{ value: total }(data, values) returns (bytes[] memory results) {
             bytes32[] memory createdIds = abi.decode(results[0], (bytes32[]));
             _register(atomTerms, createdIds[0]);
             ghost_valueIn += total;
-            ghost_multicallPayableBatches++;
+            ghost_valueBearingMulticallBatches++;
         } catch { }
     }
 
@@ -252,7 +250,7 @@ contract MultiVaultInvariantHandler is Test {
         data[1] = abi.encodeCall(IMultiVault.redeem, (actor, termB, DEFAULT_CURVE_ID, bound(shareSeed, 1, balanceB), 0));
 
         vm.prank(actor);
-        try MULTI_VAULT.multicall(data) returns (bytes[] memory results) {
+        try MULTI_VAULT.multicall(data, new uint256[](data.length)) returns (bytes[] memory results) {
             ghost_valueOut += abi.decode(results[0], (uint256));
             ghost_valueOut += abi.decode(results[1], (uint256));
             ghost_multicallRedeemBatches++;

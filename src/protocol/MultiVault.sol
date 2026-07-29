@@ -3,7 +3,6 @@ pragma solidity 0.8.29;
 
 import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { MulticallUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/MulticallUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
@@ -46,8 +45,7 @@ contract MultiVault is
     MultiVaultCore,
     AccessControlUpgradeable,
     ReentrancyGuardUpgradeable,
-    PausableUpgradeable,
-    MulticallUpgradeable
+    PausableUpgradeable
 {
     using FixedPointMathLib for uint256;
 
@@ -151,14 +149,14 @@ contract MultiVault is
     /*                  TRANSIENT STATE                    */
     /* =================================================== */
 
-    /// @dev Set to true while a multicall (canonical or payable) is active.
+    /// @dev Set to true while a multicall is active.
     ///      Lives in transient storage (EIP-1153) so it is reset between
     ///      transactions and does not consume persistent storage slots.
     ///      EIP-1153 requires a Cancun+ chain; the Intuition deployment target
     ///      supports transient storage.
     bool private transient _inMulticall;
 
-    /// @dev Per-sub-call value allocated by `multicallPayable`. Read by
+    /// @dev Per-sub-call value allocated by `multicall`. Read by
     ///      `_effectiveMsgValue()` so payable entry points see their share
     ///      of the outer transaction's `msg.value` instead of the full
     ///      `CALLVALUE` propagated by `delegatecall`.
@@ -177,6 +175,10 @@ contract MultiVault is
     error MultiVault_AtomDataTooLong();
 
     error MultiVault_BurnFromZeroAddress();
+
+    /// @notice Thrown when a redemption's total fees would consume the entire payout, leaving the
+    ///         redeemer with zero assets for burned shares.
+    error MultiVault_RedeemYieldsNoAssets();
 
     error MultiVault_BurnInsufficientBalance();
 
@@ -238,7 +240,7 @@ contract MultiVault is
 
     error MultiVault_NestedMulticall();
 
-    error MultiVault_PayableMulticallSelectorNotAllowed();
+    error MultiVault_UnexpectedValue();
 
     /* =================================================== */
     /*                      MODIFIERS                      */
@@ -246,7 +248,15 @@ contract MultiVault is
 
     /// @notice Restricts function access to the timelock controller
     modifier onlyTimelock() {
-        if (msg.sender != timelock) revert MultiVault_OnlyTimelock();
+        _checkTimelock();
+        _;
+    }
+
+    /// @dev Rejects value attributed to entry points that do not consume it.
+    ///      Inside a multicall this checks the leg's virtual allocation; on a
+    ///      direct call it checks the physical `msg.value`.
+    modifier requiresZeroValue() {
+        _checkZeroValue();
         _;
     }
 
@@ -281,7 +291,6 @@ contract MultiVault is
         __AccessControl_init();
         __ReentrancyGuard_init();
         __Pausable_init();
-        __Multicall_init();
         __MultiVaultCore_init(
             _generalConfig, _atomConfig, _tripleConfig, _walletConfig, _vaultFees, _bondingCurveConfig
         );
@@ -292,11 +301,6 @@ contract MultiVault is
     ///         system-utilization rollover source slot to the current epoch.
     /// @param _timelock The timelock controller address
     function reinitialize(address _timelock) external onlyRole(DEFAULT_ADMIN_ROLE) reinitializer(2) {
-        // Chain the empty OZ MulticallUpgradeable initializer here for the
-        // upgrade path. `initialize()` already calls it on fresh deployments;
-        // wiring it on this reinitializer keeps both paths symmetric and
-        // future-proofs against a later OZ version populating the body.
-        __Multicall_init();
         _setTimelock(_timelock);
         _grantRole(PAUSER_ROLE, generalConfig.admin);
         // Pre-seed the system-utilization rollover source so the first post-upgrade
@@ -470,7 +474,7 @@ contract MultiVault is
     /* =================================================== */
 
     /// @inheritdoc IMultiVault
-    function approve(address sender, ApprovalTypes approvalType) external {
+    function approve(address sender, ApprovalTypes approvalType) external payable requiresZeroValue nonReentrant {
         address receiver = msg.sender;
 
         if (receiver == sender) {
@@ -490,101 +494,36 @@ contract MultiVault is
     /*                     Multicall                       */
     /* =================================================== */
 
-    /// @notice Execute a batch of non-payable calls on this contract atomically.
-    ///         Sub-calls are dispatched via `delegatecall` to `address(this)`,
-    ///         so each sub-call sees the original `msg.sender` and the surrounding
-    ///         storage / account context.
-    /// @dev    Overrides `MulticallUpgradeable.multicall` to participate in the
-    ///         shared `_inMulticall` guard. Sub-calls observe `_virtualMsgValue = 0`,
-    ///         which causes any payable entry point composed inside this multicall
-    ///         to revert through its existing payment validation.
+    /// @notice Execute calls on this contract atomically with explicit per-call
+    ///         value allocation.
+    /// @dev    The sum of `values` must equal `msg.value`. Each sub-call is
+    ///         dispatched through `delegatecall` so it preserves the original
+    ///         `msg.sender`, storage context, and modifier checks. Payable write
+    ///         paths consume only their virtual allocation through
+    ///         `_effectiveMsgValue`; `redeem`, `redeemBatch`, and `approve`
+    ///         require an allocation of zero.
     ///
-    ///         ERC-2771 context-suffix forwarding (the OZ default behavior) is
-    ///         deliberately omitted. `MultiVault` is not ERC-2771-aware today; if
-    ///         that changes, this override must reintroduce the suffix logic.
+    ///         A zero-value batch can call the full entry-point surface. In a
+    ///         value-bearing batch, Solidity's dispatcher still rejects other
+    ///         non-payable functions, including view functions, because every
+    ///         delegatecall observes the outer call's physical `CALLVALUE`.
     ///
-    ///         Each sub-call's modifiers (`nonReentrant`, `whenNotPaused`, role
-    ///         checks) re-evaluate independently. The first sub-call revert
-    ///         bubbles raw revert data unchanged.
-    /// @param  data The array of ABI-encoded calls to execute against this contract
-    /// @return results The array of return data from each sub-call
-    function multicall(bytes[] calldata data)
-        external
-        override(IMultiVault, MulticallUpgradeable)
-        returns (bytes[] memory results)
-    {
-        if (_inMulticall) revert MultiVault_NestedMulticall();
-        _inMulticall = true;
-        _virtualMsgValue = 0;
-
-        uint256 length = data.length;
-        results = new bytes[](length);
-        for (uint256 i = 0; i < length;) {
-            (bool ok, bytes memory ret) = address(this).delegatecall(data[i]);
-            if (!ok) {
-                assembly {
-                    revert(add(ret, 0x20), mload(ret))
-                }
-            }
-            results[i] = ret;
-            unchecked {
-                ++i;
-            }
-        }
-
-        _inMulticall = false;
-    }
-
-    /// @notice Execute a batch of payable calls on this contract atomically with
-    ///         per-sub-call value accounting. The caller passes a `values` array
-    ///         specifying how much of `msg.value` is allocated to each sub-call;
-    ///         this contract enforces `sum(values) == msg.value` and exposes the
-    ///         per-sub-call allocation through `_effectiveMsgValue()` so payable
-    ///         write-path forwards pass their allocated share to {MultiVaultLib}
-    ///         instead of the full propagated `CALLVALUE`.
-    /// @dev    Selector allowlist limits sub-calls to the six payable entry
-    ///         points that have been migrated to read `_effectiveMsgValue()`:
-    ///         `createAtoms`, `createTriples`, `createAtomsFor`,
-    ///         `createTriplesFor`, `deposit`, `depositBatch`. Adding a future
-    ///         payable function to `MultiVault` requires a corresponding
-    ///         allowlist update — that is the intended forcing function for
-    ///         value-accounting safety.
+    ///         SECURITY INVARIANT: every payable external entry point added in
+    ///         a future upgrade, other than this dispatcher, must be
+    ///         `nonReentrant` and must either consume only
+    ///         `_effectiveMsgValue()` or enforce `requiresZeroValue`. Any
+    ///         multicall-compatible path that yields external control must also
+    ///         be `nonReentrant`. Reading raw `msg.value`, ignoring an allocated
+    ///         value, or yielding control without the guard is unsafe while the
+    ///         transient multicall context is active.
     ///
-    ///         Mixed payable + non-payable atomic batches are not supported when
-    ///         `msg.value > 0`. Solidity's auto-generated dispatcher rejects a
-    ///         delegatecall to any non-payable function before value
-    ///         virtualization can run; the selector allowlist rejects such
-    ///         compositions cleanly with a custom error.
-    ///
-    ///         This boundary is an intentional, evaluated design decision, not an
-    ///         oversight. Admitting non-payable exits (`redeem`, `redeemBatch`,
-    ///         `approve`) into a value-bearing batch would require marking those
-    ///         functions `payable` and gating each with a zero-value assertion
-    ///         keyed on `_effectiveMsgValue()` (never raw `msg.value`, which a
-    ///         `delegatecall` sub-call inherits as the whole batch's `CALLVALUE`).
-    ///         Even then a batch could not recycle capital: redeemed proceeds are
-    ///         paid out to the receiver via `Address.sendValue` rather than
-    ///         retained, so an exit's output can never fund a later deposit leg,
-    ///         in either leg ordering — the sole gain would be atomicity of
-    ///         otherwise-independent legs. Flows that must recycle intermediate
-    ///         proceeds belong in a smart account that custodies balances between
-    ///         calls (see `AtomWallet.executeBatch`), or in separate transactions.
-    ///
-    ///         Nested multicalls (`multicall` or `multicallPayable` invoked from
-    ///         inside an active multicall) are rejected. The selector allowlist
-    ///         catches them in the upfront pre-loop; the `_inMulticall` guard is
-    ///         a second line of defense exercised by canonical-multicall nesting
-    ///         and by the test harness.
-    ///
-    ///         Sub-calls are dispatched via `delegatecall` to `address(this)`,
-    ///         preserving `msg.sender` and re-evaluating each sub-call's
-    ///         modifiers independently. The first sub-call revert bubbles raw
-    ///         revert data unchanged.
+    ///         Nested multicalls are rejected by `_inMulticall`. The first
+    ///         sub-call revert bubbles raw revert data unchanged.
     /// @param  data The array of ABI-encoded calls to execute against this contract
     /// @param  values The array of per-sub-call value allocations; must satisfy
     ///         `sum(values) == msg.value`
     /// @return results The array of return data from each sub-call
-    function multicallPayable(bytes[] calldata data, uint256[] calldata values)
+    function multicall(bytes[] calldata data, uint256[] calldata values)
         external
         payable
         returns (bytes[] memory results)
@@ -595,15 +534,6 @@ contract MultiVault is
         uint256 length = data.length;
         uint256 total;
         for (uint256 i = 0; i < length;) {
-            if (data[i].length < 4) revert MultiVault_PayableMulticallSelectorNotAllowed();
-            bytes4 selector = bytes4(data[i][:4]);
-            if (
-                selector != IMultiVault.createAtoms.selector && selector != IMultiVault.createTriples.selector
-                    && selector != IMultiVault.createAtomsFor.selector
-                    && selector != IMultiVault.createTriplesFor.selector && selector != IMultiVault.deposit.selector
-                    && selector != IMultiVault.depositBatch.selector
-            ) revert MultiVault_PayableMulticallSelectorNotAllowed();
-
             total += values[i];
             unchecked {
                 ++i;
@@ -633,11 +563,16 @@ contract MultiVault is
     }
 
     /// @dev Returns the effective `msg.value` for the currently executing
-    ///      payable entry point. Inside `multicallPayable`, this is the
+    ///      payable entry point. Inside `multicall`, this is the
     ///      per-sub-call allocation set in `_virtualMsgValue`; outside any
     ///      multicall, it is the raw `msg.value` of the direct call.
     function _effectiveMsgValue() internal view returns (uint256) {
         return _inMulticall ? _virtualMsgValue : msg.value;
+    }
+
+    /// @dev Shared implementation for the `requiresZeroValue` entry-point guard.
+    function _checkZeroValue() internal view {
+        if (_effectiveMsgValue() != 0) revert MultiVault_UnexpectedValue();
     }
 
     /* =================================================== */
@@ -719,6 +654,8 @@ contract MultiVault is
     /// @inheritdoc IMultiVault
     function redeem(address receiver, bytes32 termId, uint256 curveId, uint256 shares, uint256 minAssets)
         external
+        payable
+        requiresZeroValue
         whenNotPaused
         nonReentrant
         returns (uint256)
@@ -733,7 +670,7 @@ contract MultiVault is
         uint256[] calldata curveIds,
         uint256[] calldata shares,
         uint256[] calldata minAssets
-    ) external whenNotPaused nonReentrant returns (uint256[] memory) {
+    ) external payable requiresZeroValue whenNotPaused nonReentrant returns (uint256[] memory) {
         return MultiVaultLib.redeemBatch(receiver, termIds, curveIds, shares, minAssets);
     }
 
@@ -831,7 +768,7 @@ contract MultiVault is
     /// @dev Permissionless by design. The recipient is always `generalConfig.protocolMultisig`, which only
     ///      timelocked governance can change — never the caller and never a parameter. An arbitrary caller
     ///      can therefore only push already-accrued fees to their intended destination, at their own gas.
-    function sweepAccumulatedProtocolFees(uint256 epoch) external {
+    function sweepAccumulatedProtocolFees(uint256 epoch) external nonReentrant {
         uint256 protocolFees = accumulatedProtocolFees[epoch];
         if (protocolFees == 0) return;
 
@@ -928,6 +865,11 @@ contract MultiVault is
     ///      `MultiVaultUtilizationHarness.removeUtilizationForTest` resolves through inheritance.
     function _removeUtilization(address user, int256 amountToRemove) internal {
         MultiVaultLib.removeUtilization(user, amountToRemove);
+    }
+
+    /// @dev Shared implementation for the `onlyTimelock` entry-point guard.
+    function _checkTimelock() internal view {
+        if (msg.sender != timelock) revert MultiVault_OnlyTimelock();
     }
 
     /// @dev Internal function to set and validate the timelock address. Tiny body, kept inline

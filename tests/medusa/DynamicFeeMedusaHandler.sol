@@ -41,8 +41,9 @@ contract DynamicFeeMedusaHandler is Test {
             withdrawalBaseBps: 200,
             withdrawalGrowthBps: 50,
             withdrawalCapBps: 1000,
-            withdrawalToRecentShareBps: 0,
-            depositToRecentTierShareBps: 0
+            withdrawalToFulcrumTiersBps: 0,
+            depositToPriorTierBps: 0,
+            minEligibleTierStake: 0
         });
 
         DynamicFeeFlatPriceCurve impl = new DynamicFeeFlatPriceCurve();
@@ -90,12 +91,12 @@ contract DynamicFeeMedusaHandler is Test {
         } catch { }
     }
 
-    /// @notice Let the campaign explore the deposit recent-tier spike across its full range so the
+    /// @notice Let the campaign explore the deposit prior-tier spike across its full range so the
     ///         stateful net exercises the lump-to-nearest-occupied-prior-tier path, not just the
     ///         pure-fulcrum default. Owner-only setter; the handler is the curve owner.
-    function setRecentTierShare(uint256 shareBps) public {
+    function setPriorTierShare(uint256 shareBps) public {
         DynamicFeeConfig memory config = curve.getConfig();
-        config.depositToRecentTierShareBps = _bound(shareBps, 0, 10_000);
+        config.depositToPriorTierBps = _bound(shareBps, 0, 10_000);
         curve.setConfig(config);
     }
 

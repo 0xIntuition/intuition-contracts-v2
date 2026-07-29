@@ -442,6 +442,22 @@ interface IMultiVault {
 
     /// @notice Simulates a redemption of shares from a vault
     /// @dev Returns the net assets the user would receive after fees and the shares to be burned
+    /// @dev ACCOUNT-AGNOSTIC. This signature carries no account, so a curve fee hook is quoted with
+    ///      `address(0)` and any curve pricing its fee off per-holder state falls back to a
+    ///      vault-level default. On the dynamic-fee curve a holder's rate keys on their recorded tier
+    ///      while the fallback uses the vault's current tier, so this figure can differ from execution
+    ///      in EITHER direction. Do NOT derive a redemption `minAssets` from it on a hook-bearing
+    ///      curve — over-statement makes the slippage guard reject the redemption. Use the curve's own
+    ///      account-aware view for the holder's true curve fee. Note that view is net of the CURVE's
+    ///      fee only and is NOT a drop-in replacement for this figure: to derive a holder-accurate
+    ///      net, take the value returned here, add back the account-less curve fee it was computed
+    ///      with (`quoteRedeemFee(termId, address(0), grossAssets)`), then subtract the account's own
+    ///      curve fee. On hookless curves (including the default curve) this caveat does not apply.
+    /// @dev CAN REVERT. If the accumulated fees would consume the entire redemption, this reverts with
+    ///      `MultiVault_RedeemYieldsNoAssets` rather than returning zero — the same floor the write
+    ///      path enforces, surfaced here so a preview cannot report a payout the execution will not
+    ///      make. In practice this affects only dust redemptions. Callers previewing a SET of
+    ///      positions should tolerate a revert on any single one rather than assuming a total.
     /// @param termId The ID of the term (atom or triple)
     /// @param curveId The ID of the bonding curve
     /// @param shares The amount of shares the user would redeem
@@ -475,11 +491,13 @@ interface IMultiVault {
     /* =================================================== */
 
     /// @notice Sets the approval type for a sender to act on behalf of the receiver
+    /// @dev Declared payable only so it can share a value-bearing multicall with
+    ///      payable legs. Its direct or virtual value allocation must be zero.
     /// @param sender The address to grant or revoke approval for
     /// @param approvalType The type of approval to grant. Encoded as the
     ///        bit-flag union of DEPOSIT (0b001), REDEMPTION (0b010), and
     ///        CREATION (0b100). See {ApprovalTypes} for the full enumeration.
-    function approve(address sender, ApprovalTypes approvalType) external;
+    function approve(address sender, ApprovalTypes approvalType) external payable;
 
     /**
      * @notice Creates multiple atom vaults with initial deposits
@@ -588,6 +606,8 @@ interface IMultiVault {
 
     /**
      * @notice Redeems shares from a vault and returns assets to the receiver
+     * @dev Declared payable only so it can share a value-bearing multicall with
+     *      payable legs. Its direct or virtual value allocation must be zero.
      * @param receiver Address to receive the redeemed assets
      * @param termId ID of the term (atom or triple) to redeem from
      * @param curveId Bonding curve ID to use for the redemption
@@ -597,10 +617,13 @@ interface IMultiVault {
      */
     function redeem(address receiver, bytes32 termId, uint256 curveId, uint256 shares, uint256 minAssets)
         external
+        payable
         returns (uint256);
 
     /**
      * @notice Redeems shares from multiple vaults in a single transaction
+     * @dev Declared payable only so it can share a value-bearing multicall with
+     *      payable legs. Its direct or virtual value allocation must be zero.
      * @param receiver Address to receive the redeemed assets
      * @param termIds Array of term IDs to redeem from
      * @param curveIds Array of bonding curve IDs to use for each redemption
@@ -614,47 +637,22 @@ interface IMultiVault {
         uint256[] calldata curveIds,
         uint256[] calldata shares,
         uint256[] calldata minAssets
-    ) external returns (uint256[] memory);
+    ) external payable returns (uint256[] memory);
 
     /**
-     * @notice Executes a batch of non-payable calls on this contract atomically.
-     *         Sub-calls are dispatched via `delegatecall` to `address(this)`,
-     *         preserving `msg.sender` and re-evaluating each sub-call's modifiers
-     *         (`nonReentrant`, `whenNotPaused`, role checks) independently.
-     * @dev    The implementation is non-payable; any payable sub-call composed
-     *         here observes a zero virtual `msg.value` and reverts through its
-     *         own payment validation. Use `multicallPayable` to compose payable
-     *         entry points with explicit per-sub-call value accounting. Nested
-     *         multicalls revert.
-     * @param  data The array of ABI-encoded calls to execute against this contract
-     * @return results The array of return data from each sub-call
-     */
-    function multicall(bytes[] calldata data) external returns (bytes[] memory results);
-
-    /**
-     * @notice Executes a batch of payable calls on this contract atomically with
-     *         explicit per-sub-call value accounting. The caller supplies a
-     *         `values` array specifying how much of `msg.value` is allocated to
-     *         each sub-call; the implementation enforces
-     *         `sum(values) == msg.value`.
-     * @dev    Sub-calls are limited to the six payable entry points that read
-     *         the per-sub-call allocation: `createAtoms`, `createTriples`,
-     *         `createAtomsFor`, `createTriplesFor`, `deposit`, `depositBatch`.
-     *         Mixed payable + non-payable atomic batches are not supported when
-     *         `msg.value > 0`. Nested multicalls revert.
-     *
-     *         This boundary is intentional: enabling value-bearing batches that
-     *         include non-payable exits (`redeem`, `redeemBatch`, `approve`)
-     *         would require making those exits `payable` with a zero-value guard,
-     *         and even then a batch cannot recycle redeemed proceeds — paid out
-     *         to the receiver — into a later deposit. Such flows belong in a
-     *         smart account that custodies intermediate balances, or in separate
-     *         transactions.
+     * @notice Executes calls on this contract atomically with explicit per-call
+     *         value allocation. The sum of `values` must equal `msg.value`.
+     * @dev    Sub-calls preserve the original `msg.sender` and re-evaluate their
+     *         modifiers. A zero-value batch can call the full entry-point surface.
+     *         In a value-bearing batch, non-payable functions other than the
+     *         guarded `redeem`, `redeemBatch`, and `approve` entry points remain
+     *         subject to Solidity's non-payable dispatcher check. Nested
+     *         multicalls revert, and the first sub-call revert bubbles unchanged.
      * @param  data The array of ABI-encoded calls to execute against this contract
      * @param  values The array of per-sub-call value allocations
      * @return results The array of return data from each sub-call
      */
-    function multicallPayable(bytes[] calldata data, uint256[] calldata values)
+    function multicall(bytes[] calldata data, uint256[] calldata values)
         external
         payable
         returns (bytes[] memory results);

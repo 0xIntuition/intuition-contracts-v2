@@ -493,8 +493,9 @@ abstract contract BaseTest is Modifiers, Test {
             withdrawalBaseBps: 200,
             withdrawalGrowthBps: 50,
             withdrawalCapBps: 1000,
-            withdrawalToRecentShareBps: 0,
-            depositToRecentTierShareBps: 0
+            withdrawalToFulcrumTiersBps: 0,
+            depositToPriorTierBps: 0,
+            minEligibleTierStake: 0
         });
     }
 

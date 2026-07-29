@@ -23,7 +23,7 @@ import { IMultiVault, ApprovalTypes } from "src/interfaces/IMultiVault.sol";
 ///         attribution, on-behalf-of `createAtomsFor` / `createTriplesFor`, canonical and payable
 ///         multicall value accounting, MultiVaultLib-extraction legacy write-flow parity, and the
 ///         system-utilization rollover replay / self-heal guard (#623, carry source at slot 37).
-/// @dev    Forks Intuition Mainnet. Part of the v1.1.0 upgrade-regression set, grouped under
+/// @dev    Forks Intuition Mainnet. Part of the v1.1.0 pre-audit upgrade-regression set, grouped under
 ///         `tests/unit/upgrades/v1.1.0/` (mirroring the v1.0.2 grouping of `CoreMainnetUpgradeRegression`).
 /// @custom:upgrade v1.1.0
 contract MultiVaultUpgradeRegressionTest is Test {
@@ -526,7 +526,7 @@ contract MultiVaultUpgradeRegressionTest is Test {
         data[1] = abi.encodeCall(IMultiVault.redeem, (user, atomTwo, defaultCurveId, redeemTwoShares, 0));
 
         vm.prank(user);
-        bytes[] memory results = multiVault.multicall(data);
+        bytes[] memory results = multiVault.multicall(data, new uint256[](data.length));
 
         assertEq(abi.decode(results[0], (uint256)), expectedAssetsOne, "first multicall redeem assets mismatch");
         assertEq(abi.decode(results[1], (uint256)), expectedAssetsTwo, "second multicall redeem assets mismatch");
@@ -569,11 +569,11 @@ contract MultiVaultUpgradeRegressionTest is Test {
         values[2] = atomCost;
 
         vm.prank(operator);
-        multiVault.multicallPayable{ value: atomCost + depositAmount + atomCost }(data, values);
+        multiVault.multicall{ value: atomCost + depositAmount + atomCost }(data, values);
 
-        assertTrue(multiVault.isTermCreated(atomId), "multicallPayable must create first atom");
-        assertTrue(multiVault.isTermCreated(creatorAtomId), "multicallPayable must create creator atom");
-        assertGt(multiVault.getShares(operator, atomId, defaultCurveId), 0, "multicallPayable deposit must mint shares");
+        assertTrue(multiVault.isTermCreated(atomId), "multicall must create first atom");
+        assertTrue(multiVault.isTermCreated(creatorAtomId), "multicall must create creator atom");
+        assertGt(multiVault.getShares(operator, atomId, defaultCurveId), 0, "multicall deposit must mint shares");
         assertEq(multiVault.getAtomCreator(atomId), operator, "direct create sub-call must record operator");
         assertEq(multiVault.getAtomCreator(creatorAtomId), creator, "createAtomsFor sub-call must record creator");
         assertEq(

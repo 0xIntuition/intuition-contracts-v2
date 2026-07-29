@@ -452,7 +452,7 @@ contract DeployCoreUpgradeImplementations is Script {
 
         // 5. Exercise the new MultiVault multicall surface.
         _exerciseMulticall(multiVault);
-        _exerciseMulticallPayable(multiVault);
+        _exerciseValueBearingMulticall(multiVault);
 
         console2.log("");
         console2.log("FORK DRY-RUN PASSED: all assertions + multicall exercises succeeded.");
@@ -568,14 +568,14 @@ contract DeployCoreUpgradeImplementations is Script {
         bytes[] memory calls = new bytes[](2);
         calls[0] = abi.encodeWithSignature("currentEpoch()");
         calls[1] = abi.encodeWithSignature("getAtomCost()");
-        multiVault.multicall(calls);
-        console2.log("  [ok] multicall(bytes[]) resolved");
+        multiVault.multicall(calls, new uint256[](calls.length));
+        console2.log("  [ok] zero-value multicall resolved");
     }
 
-    /// @dev Flagship multicallPayable: createAtoms + deposit into the same atom
+    /// @dev Flagship value-bearing multicall: createAtoms + deposit into the same atom
     ///      in one tx. The atom id is predicted via the pure `calculateAtomId`,
     ///      so the deposit sub-call can target it.
-    function _exerciseMulticallPayable(MultiVault multiVault) internal {
+    function _exerciseValueBearingMulticall(MultiVault multiVault) internal {
         bytes memory atomData = bytes("v1.1.0-dryrun-flagship-atom");
         bytes32 atomId = multiVault.calculateAtomId(atomData);
         uint256 defaultCurveId = multiVault.getBondingCurveConfig().defaultCurveId;
@@ -600,12 +600,12 @@ contract DeployCoreUpgradeImplementations is Script {
         values[1] = minDeposit;
 
         vm.prank(depositor);
-        multiVault.multicallPayable{ value: atomCost + minDeposit }(calls, values);
+        multiVault.multicall{ value: atomCost + minDeposit }(calls, values);
 
         if (multiVault.getAtomCreator(atomId) != depositor) {
-            revert DryRunAssertionFailed("multicallPayable atom creator");
+            revert DryRunAssertionFailed("multicall atom creator");
         }
-        console2.log("  [ok] multicallPayable(createAtoms + deposit) resolved");
+        console2.log("  [ok] multicall(createAtoms + deposit) resolved");
     }
 
     /* =================================================== */

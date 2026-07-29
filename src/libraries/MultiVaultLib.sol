@@ -38,7 +38,7 @@ import { MultiVaultCore } from "src/protocol/MultiVaultCore.sol";
  *         `DELEGATECALL`, `address(this)`, `msg.sender`, `msg.value`, and storage all reflect the
  *         {MultiVault} call context — the library is logic-only and operates on {MultiVault}'s
  *         storage in place. Payable entrypoints receive an explicit `payment` argument from
- *         {MultiVault} so direct calls use raw `msg.value` and `multicallPayable` sub-calls use
+ *         {MultiVault} so direct calls use raw `msg.value` and `multicall` sub-calls use
  *         their allocated virtual value without teaching this library about multicall state.
  *
  *         Conventions (load-bearing):
@@ -1064,7 +1064,18 @@ library MultiVaultLib {
             hook.fee = IBaseCurve(hook.curve).quoteRedeemFee(termId, account, assets);
         }
 
-        uint256 assetsAfterFees = assets - protocolFee - exitFee - hook.fee;
+        // Defense in depth: reject a redemption that would return nothing, independently of the
+        // caller-supplied `minAssets`. Without this, a curve fee rate that consumes the whole
+        // redemption burns the redeemer's shares for a zero payout WITHOUT reverting, and the
+        // account-less preview reports the same zero, so a front end deriving `minAssets` from it
+        // derives no protection either. The curve's own immutable cap ceilings are the primary
+        // guard; this floor holds regardless of which curve is attached.
+        uint256 totalFees = protocolFee + exitFee + hook.fee;
+        if (totalFees >= assets) {
+            revert MultiVault.MultiVault_RedeemYieldsNoAssets();
+        }
+
+        uint256 assetsAfterFees = assets - totalFees;
 
         return (assetsAfterFees, shares, hook);
     }

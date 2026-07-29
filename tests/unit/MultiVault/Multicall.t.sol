@@ -27,7 +27,7 @@ contract MulticallReentrantReceiver {
     receive() external payable {
         if (!armed) return;
         bytes[] memory inner = new bytes[](0);
-        mv.multicall(inner);
+        mv.multicall(inner, new uint256[](0));
     }
 }
 
@@ -72,15 +72,29 @@ contract MulticallTest is BaseTest {
     /*                Canonical multicall (overridden)              */
     /* ============================================================ */
 
-    function test_multicall_revertsOn_NonZeroMsgValue() public {
+    function test_multicall_emptyBatchWithValue_revertsOn_ValueMismatch() public {
         bytes[] memory data = new bytes[](0);
+        uint256[] memory values = new uint256[](0);
 
         resetPrank(users.alice);
-        (bool ok, bytes memory ret) =
-            address(protocol.multiVault).call{ value: 1 wei }(abi.encodeCall(IMultiVault.multicall, (data)));
-        assertFalse(ok, "non-payable multicall must reject msg.value");
-        // Solidity dispatcher revert is empty for non-payable check
-        assertEq(ret.length, 0, "expected empty revert from non-payable dispatcher");
+        vm.expectRevert(MultiVault.MultiVault_MulticallValueMismatch.selector);
+        protocol.multiVault.multicall{ value: 1 wei }(data, values);
+    }
+
+    function test_multicall_legacySelectorsAreUnavailable() public {
+        bytes[] memory data = new bytes[](0);
+        uint256[] memory values = new uint256[](0);
+
+        resetPrank(users.alice);
+        (bool oldMulticallOk, bytes memory oldMulticallRet) =
+            address(protocol.multiVault).call(abi.encodeWithSelector(bytes4(keccak256("multicall(bytes[])")), data));
+        assertFalse(oldMulticallOk, "legacy multicall selector must be removed");
+        assertEq(oldMulticallRet.length, 0, "legacy multicall dispatcher revert");
+
+        (bool payableMulticallOk, bytes memory payableMulticallRet) = address(protocol.multiVault)
+            .call(abi.encodeWithSelector(bytes4(keccak256("multicallPayable(bytes[],uint256[])")), data, values));
+        assertFalse(payableMulticallOk, "multicallPayable selector must be removed");
+        assertEq(payableMulticallRet.length, 0, "multicallPayable dispatcher revert");
     }
 
     function test_multicall_redeemTwoVaults_succeeds() public {
@@ -103,7 +117,7 @@ contract MulticallTest is BaseTest {
 
         uint256 balBefore = users.alice.balance;
         resetPrank(users.alice);
-        bytes[] memory results = protocol.multiVault.multicall(data);
+        bytes[] memory results = protocol.multiVault.multicall(data, new uint256[](data.length));
         uint256 balAfter = users.alice.balance;
 
         assertEq(results.length, 2);
@@ -124,7 +138,7 @@ contract MulticallTest is BaseTest {
 
         resetPrank(users.alice);
         vm.expectRevert(MultiVault.MultiVault_InsufficientSharesInVault.selector);
-        protocol.multiVault.multicall(data);
+        protocol.multiVault.multicall(data, new uint256[](data.length));
     }
 
     function test_multicall_reEvaluates_whenNotPaused() public {
@@ -141,7 +155,7 @@ contract MulticallTest is BaseTest {
         resetPrank(users.alice);
         // OZ Pausable v5 reverts with EnforcedPause()
         vm.expectRevert(bytes4(keccak256("EnforcedPause()")));
-        protocol.multiVault.multicall(data);
+        protocol.multiVault.multicall(data, new uint256[](data.length));
     }
 
     function test_multicall_reEvaluates_roleCheck() public {
@@ -156,7 +170,7 @@ contract MulticallTest is BaseTest {
                 IAccessControl.AccessControlUnauthorizedAccount.selector, users.alice, protocol.multiVault.PAUSER_ROLE()
             )
         );
-        protocol.multiVault.multicall(data);
+        protocol.multiVault.multicall(data, new uint256[](data.length));
     }
 
     function test_multicall_payableSubcall_revertsViaValueCheck() public {
@@ -173,39 +187,39 @@ contract MulticallTest is BaseTest {
 
         resetPrank(users.alice);
         vm.expectRevert(MultiVault.MultiVault_InsufficientBalance.selector);
-        protocol.multiVault.multicall(data);
+        protocol.multiVault.multicall(data, new uint256[](data.length));
     }
 
     function test_multicall_nestedCanonical_revertsWith_NestedMulticall() public {
         bytes[] memory inner = new bytes[](0);
+        uint256[] memory innerValues = new uint256[](0);
         bytes[] memory outer = new bytes[](1);
-        outer[0] = abi.encodeCall(IMultiVault.multicall, (inner));
+        outer[0] = abi.encodeCall(IMultiVault.multicall, (inner, innerValues));
 
         resetPrank(users.alice);
         vm.expectRevert(MultiVault.MultiVault_NestedMulticall.selector);
-        protocol.multiVault.multicall(outer);
+        protocol.multiVault.multicall(outer, new uint256[](outer.length));
     }
 
     function test_multicall_nestedPayable_revertsWith_NestedMulticall() public {
-        // outer canonical multicall (msg.value=0); inner multicallPayable also
-        // gets msg.value=0 propagated via delegatecall — payable dispatcher
-        // accepts; our shared guard rejects.
         bytes[] memory innerData = new bytes[](0);
         uint256[] memory innerValues = new uint256[](0);
 
         bytes[] memory outer = new bytes[](1);
-        outer[0] = abi.encodeCall(IMultiVault.multicallPayable, (innerData, innerValues));
+        outer[0] = abi.encodeCall(IMultiVault.multicall, (innerData, innerValues));
+        uint256[] memory outerValues = new uint256[](1);
+        outerValues[0] = 1 wei;
 
         resetPrank(users.alice);
         vm.expectRevert(MultiVault.MultiVault_NestedMulticall.selector);
-        protocol.multiVault.multicall(outer);
+        protocol.multiVault.multicall{ value: 1 wei }(outer, outerValues);
     }
 
     /* ============================================================ */
-    /*                       multicallPayable                       */
+    /*                    Value-bearing multicall                  */
     /* ============================================================ */
 
-    function test_multicallPayable_atomCreate_then_deposit_inOneTx() public {
+    function test_multicall_atomCreate_then_deposit_inOneTx() public {
         // Compose: createAtoms([X bytes], [V_create]) + deposit(alice, atomId, curve, 0)
         // with values = [V_create, V_deposit] and msg.value = V_create + V_deposit.
         bytes memory atomBytes = abi.encodePacked("payable-multicall-atom");
@@ -228,7 +242,7 @@ contract MulticallTest is BaseTest {
         values[1] = vDeposit;
 
         resetPrank(users.alice);
-        bytes[] memory results = protocol.multiVault.multicallPayable{ value: vCreate + vDeposit }(data, values);
+        bytes[] memory results = protocol.multiVault.multicall{ value: vCreate + vDeposit }(data, values);
 
         assertEq(results.length, 2);
         assertTrue(protocol.multiVault.isTermCreated(expectedAtomId), "atom should be created");
@@ -239,10 +253,8 @@ contract MulticallTest is BaseTest {
     }
 
     /// @notice The v1.1.0 fix that unlocks first-deposit on a counter-triple's non-default-curve
-    ///         vault must also work when invoked through the canonical {multicallPayable} entry
-    ///         point — the selector allowlist already includes `deposit`, and the symmetric
-    ///         bootstrap path inside `_processDeposit` is reached identically.
-    function test_multicallPayable_DepositCounterTripleNonDefault_Succeeds() public {
+    ///         vault must also work when invoked through the value-bearing {multicall} entry point.
+    function test_multicall_DepositCounterTripleNonDefault_Succeeds() public {
         (bytes32 tripleId,) =
             createTripleWithAtoms("mc-ctr-s", "mc-ctr-p", "mc-ctr-o", ATOM_COST[0], TRIPLE_COST[0], users.alice);
         bytes32 counterId = protocol.multiVault.getCounterIdFromTripleId(tripleId);
@@ -258,7 +270,7 @@ contract MulticallTest is BaseTest {
 
         vm.deal(users.bob, vDeposit);
         resetPrank(users.bob);
-        bytes[] memory results = protocol.multiVault.multicallPayable{ value: vDeposit }(data, values);
+        bytes[] memory results = protocol.multiVault.multicall{ value: vDeposit }(data, values);
         assertEq(results.length, 1, "one sub-call expected");
 
         uint256 bobShares = protocol.multiVault.getShares(users.bob, counterId, nonDefaultCurve);
@@ -273,7 +285,7 @@ contract MulticallTest is BaseTest {
         );
     }
 
-    function test_multicallPayable_batchDeposits_acrossMultipleAtoms() public {
+    function test_multicall_batchDeposits_acrossMultipleAtoms() public {
         bytes32 atomA = createSimpleAtom("payable-batch-A", ATOM_COST[0], users.alice);
         bytes32 atomB = createSimpleAtom("payable-batch-B", ATOM_COST[0], users.alice);
 
@@ -292,7 +304,7 @@ contract MulticallTest is BaseTest {
         uint256 sharesBBefore = protocol.multiVault.getShares(users.alice, atomB, CURVE_ID);
 
         resetPrank(users.alice);
-        protocol.multiVault.multicallPayable{ value: va + vb }(data, values);
+        protocol.multiVault.multicall{ value: va + vb }(data, values);
 
         uint256 sharesAAfter = protocol.multiVault.getShares(users.alice, atomA, CURVE_ID);
         uint256 sharesBAfter = protocol.multiVault.getShares(users.alice, atomB, CURVE_ID);
@@ -300,16 +312,16 @@ contract MulticallTest is BaseTest {
         assertGt(sharesBAfter, sharesBBefore, "vault B shares should increase");
     }
 
-    function test_multicallPayable_emptyData_isNoop() public {
+    function test_multicall_emptyData_isNoop() public {
         bytes[] memory data = new bytes[](0);
         uint256[] memory values = new uint256[](0);
 
         resetPrank(users.alice);
-        bytes[] memory results = protocol.multiVault.multicallPayable{ value: 0 }(data, values);
+        bytes[] memory results = protocol.multiVault.multicall{ value: 0 }(data, values);
         assertEq(results.length, 0);
     }
 
-    function test_multicallPayable_revertsOn_ValueMismatch() public {
+    function test_multicall_revertsOn_ValueMismatch() public {
         bytes32 atomId = createSimpleAtom("vmismatch", ATOM_COST[0], users.alice);
 
         bytes[] memory data = new bytes[](1);
@@ -320,10 +332,10 @@ contract MulticallTest is BaseTest {
         resetPrank(users.alice);
         // sum(values) = 1, msg.value = 2 -> revert
         vm.expectRevert(MultiVault.MultiVault_MulticallValueMismatch.selector);
-        protocol.multiVault.multicallPayable{ value: 2 ether }(data, values);
+        protocol.multiVault.multicall{ value: 2 ether }(data, values);
     }
 
-    function test_multicallPayable_revertsOn_LengthMismatch() public {
+    function test_multicall_revertsOn_LengthMismatch() public {
         bytes[] memory data = new bytes[](2);
         data[0] = abi.encodeCall(IMultiVault.deposit, (users.alice, bytes32(0), CURVE_ID, 0));
         data[1] = abi.encodeCall(IMultiVault.deposit, (users.alice, bytes32(0), CURVE_ID, 0));
@@ -332,62 +344,63 @@ contract MulticallTest is BaseTest {
 
         resetPrank(users.alice);
         vm.expectRevert(MultiVault.MultiVault_ArraysNotSameLength.selector);
-        protocol.multiVault.multicallPayable{ value: 1 ether }(data, values);
+        protocol.multiVault.multicall{ value: 1 ether }(data, values);
     }
 
-    function test_multicallPayable_revertsOn_DisallowedSelector_redeem() public {
+    function test_multicall_redeemWithValueAllocation_revertsOn_UnexpectedValue() public {
         bytes[] memory data = new bytes[](1);
         data[0] = abi.encodeCall(IMultiVault.redeem, (users.alice, bytes32(0), CURVE_ID, 1, 0));
         uint256[] memory values = new uint256[](1);
-        values[0] = 0;
+        values[0] = 1 wei;
 
         resetPrank(users.alice);
-        vm.expectRevert(MultiVault.MultiVault_PayableMulticallSelectorNotAllowed.selector);
-        protocol.multiVault.multicallPayable{ value: 0 }(data, values);
+        vm.expectRevert(MultiVault.MultiVault_UnexpectedValue.selector);
+        protocol.multiVault.multicall{ value: 1 wei }(data, values);
     }
 
-    function test_multicallPayable_revertsOn_ShortCalldata() public {
+    function test_multicall_revertsOn_ShortCalldata() public {
         bytes[] memory data = new bytes[](1);
         data[0] = hex"112233"; // 3 bytes < 4
         uint256[] memory values = new uint256[](1);
         values[0] = 0;
 
         resetPrank(users.alice);
-        vm.expectRevert(MultiVault.MultiVault_PayableMulticallSelectorNotAllowed.selector);
-        protocol.multiVault.multicallPayable{ value: 0 }(data, values);
+        (bool ok, bytes memory ret) =
+            address(protocol.multiVault).call(abi.encodeCall(IMultiVault.multicall, (data, values)));
+        assertFalse(ok, "short calldata sub-call must revert");
+        assertEq(ret.length, 0, "raw dispatcher revert must bubble unchanged");
     }
 
-    function test_multicallPayable_innerMulticallPayable_rejected_byAllowlist() public {
-        // Outer multicallPayable -> inner multicallPayable. The selector
-        // allowlist runs in the upfront pre-loop; multicallPayable.selector is
-        // not allowed, so we get the allowlist error, not NestedMulticall.
+    function test_multicall_innerMulticall_revertsWith_NestedMulticall() public {
         bytes[] memory innerData = new bytes[](0);
         uint256[] memory innerValues = new uint256[](0);
 
         bytes[] memory outerData = new bytes[](1);
-        outerData[0] = abi.encodeCall(IMultiVault.multicallPayable, (innerData, innerValues));
+        outerData[0] = abi.encodeCall(IMultiVault.multicall, (innerData, innerValues));
         uint256[] memory outerValues = new uint256[](1);
         outerValues[0] = 0;
 
         resetPrank(users.alice);
-        vm.expectRevert(MultiVault.MultiVault_PayableMulticallSelectorNotAllowed.selector);
-        protocol.multiVault.multicallPayable{ value: 0 }(outerData, outerValues);
+        vm.expectRevert(MultiVault.MultiVault_NestedMulticall.selector);
+        protocol.multiVault.multicall(outerData, outerValues);
     }
 
-    function test_multicallPayable_innerCanonicalMulticall_rejected_byAllowlist() public {
-        bytes[] memory innerData = new bytes[](0);
-
-        bytes[] memory outerData = new bytes[](1);
-        outerData[0] = abi.encodeCall(IMultiVault.multicall, (innerData));
-        uint256[] memory outerValues = new uint256[](1);
-        outerValues[0] = 0;
+    function test_multicall_valueBearingViewSubcall_revertsAtDispatcher() public {
+        bytes32 atomId = createSimpleAtom("value-bearing-view", ATOM_COST[0], users.alice);
+        bytes[] memory data = new bytes[](2);
+        data[0] = abi.encodeCall(IMultiVault.currentEpoch, ());
+        data[1] = abi.encodeCall(IMultiVault.deposit, (users.alice, atomId, CURVE_ID, 0));
+        uint256[] memory values = new uint256[](2);
+        values[1] = 1 ether;
 
         resetPrank(users.alice);
-        vm.expectRevert(MultiVault.MultiVault_PayableMulticallSelectorNotAllowed.selector);
-        protocol.multiVault.multicallPayable{ value: 0 }(outerData, outerValues);
+        (bool ok, bytes memory ret) =
+            address(protocol.multiVault).call{ value: 1 ether }(abi.encodeCall(IMultiVault.multicall, (data, values)));
+        assertFalse(ok, "non-payable view must reject physical batch value");
+        assertEq(ret.length, 0, "expected empty dispatcher revert");
     }
 
-    function test_multicallPayable_msgSender_preservation() public {
+    function test_multicall_msgSender_preservation() public {
         // createAtoms records `atomCreators[atomId] = msg.sender`. If the
         // delegatecall didn't preserve msg.sender, the creator would be
         // address(this) (the test contract), not alice.
@@ -405,12 +418,12 @@ contract MulticallTest is BaseTest {
         values[0] = ATOM_COST[0];
 
         resetPrank(users.alice);
-        protocol.multiVault.multicallPayable{ value: ATOM_COST[0] }(data, values);
+        protocol.multiVault.multicall{ value: ATOM_COST[0] }(data, values);
 
         assertEq(protocol.multiVault.getAtomCreator(expectedAtomId), users.alice, "msg.sender must propagate as alice");
     }
 
-    function test_multicallPayable_revertBubbling() public {
+    function test_multicall_revertBubbling() public {
         // First sub-call succeeds (createAtoms); second sub-call deposits to a
         // non-existent termId and should revert with the original custom
         // error, bubbled from the sub-call.
@@ -437,10 +450,10 @@ contract MulticallTest is BaseTest {
         vm.expectRevert(
             abi.encodeWithSelector(MultiVaultCore.MultiVaultCore_TermDoesNotExist.selector, nonexistentTerm)
         );
-        protocol.multiVault.multicallPayable{ value: ATOM_COST[0] + 1 ether }(data, values);
+        protocol.multiVault.multicall{ value: ATOM_COST[0] + 1 ether }(data, values);
     }
 
-    function test_multicallPayable_directCallFallback_reads_msgValue() public {
+    function test_multicall_directCallFallback_reads_msgValue() public {
         // Sanity check: outside multicall, _effectiveMsgValue() must equal
         // msg.value (i.e., direct calls are unchanged). createAtoms with
         // matching value succeeds without going through multicall.
@@ -544,14 +557,14 @@ contract MulticallTest is BaseTest {
         // inner cause: `MultiVault_NestedMulticall`. The shared transient
         // guard catches the receive-hook reentry.
         vm.expectRevert(MultiVault.MultiVault_NestedMulticall.selector);
-        protocol.multiVault.multicall(data);
+        protocol.multiVault.multicall(data, new uint256[](data.length));
     }
 
     /* ============================================================ */
     /*                              Fuzz                            */
     /* ============================================================ */
 
-    function testFuzz_multicallPayable_mismatchAlwaysReverts(uint256 v0, uint256 v1, uint256 outerValue) public {
+    function testFuzz_multicall_mismatchAlwaysReverts(uint256 v0, uint256 v1, uint256 outerValue) public {
         // Constrain the fuzz so we explicitly want a mismatch and avoid
         // overflow on sum.
         v0 = bound(v0, 0, type(uint128).max);
@@ -559,10 +572,8 @@ contract MulticallTest is BaseTest {
         outerValue = bound(outerValue, 0, type(uint128).max);
         vm.assume(outerValue != v0 + v1);
 
-        // Use deposit calldata as a stand-in (any allowlisted selector works
-        // because we revert before delegatecall on the sum check). This
-        // guarantees the allowlist passes and the only failure mode is the
-        // value-conservation check.
+        // Use valid deposit calldata because the mismatch is checked before
+        // execution; the only failure mode is the value-conservation check.
         bytes[] memory data = new bytes[](2);
         data[0] = abi.encodeCall(IMultiVault.deposit, (users.alice, bytes32(0), CURVE_ID, 0));
         data[1] = abi.encodeCall(IMultiVault.deposit, (users.alice, bytes32(0), CURVE_ID, 0));
@@ -573,16 +584,16 @@ contract MulticallTest is BaseTest {
         vm.deal(users.alice, outerValue);
         resetPrank(users.alice);
         vm.expectRevert(MultiVault.MultiVault_MulticallValueMismatch.selector);
-        protocol.multiVault.multicallPayable{ value: outerValue }(data, values);
+        protocol.multiVault.multicall{ value: outerValue }(data, values);
     }
 
     /* ============================================================ */
-    /*       Direct-call vs multicallPayable differential equiv     */
+    /*           Direct-call vs multicall differential equiv       */
     /* ============================================================ */
 
     /// @dev Snapshot of every observable on-chain state that the four payable
     ///      entry points touch. Compared after a direct call vs the same call
-    ///      routed through `multicallPayable` to prove bit-identical effects.
+    ///      routed through `multicall` to prove bit-identical effects.
     struct StateProbe {
         uint256 totalTermsCreated;
         uint256 currentEpochProtocolFees;
@@ -619,7 +630,7 @@ contract MulticallTest is BaseTest {
         assertEq(direct.atomCreator, viaMulticall.atomCreator, "atom creator diverged");
     }
 
-    function test_diff_createAtoms_directVsMulticallPayable() public {
+    function test_diff_createAtoms_directVsMulticall() public {
         bytes memory atomBytes = abi.encodePacked("diff-createAtoms-payload");
         bytes32 expectedAtomId = calculateAtomId(atomBytes);
 
@@ -636,7 +647,7 @@ contract MulticallTest is BaseTest {
         protocol.multiVault.createAtoms{ value: totalValue }(atomDataArr, createAssets);
         StateProbe memory direct = _probe(expectedAtomId, users.alice);
 
-        // Path B: same call routed through multicallPayable
+        // Path B: same call routed through multicall
         require(vm.revertToState(snap), "revertToState failed");
 
         bytes[] memory data = new bytes[](1);
@@ -645,13 +656,13 @@ contract MulticallTest is BaseTest {
         values[0] = totalValue;
 
         resetPrank(users.alice);
-        protocol.multiVault.multicallPayable{ value: totalValue }(data, values);
+        protocol.multiVault.multicall{ value: totalValue }(data, values);
         StateProbe memory viaMulticall = _probe(expectedAtomId, users.alice);
 
         _assertProbesEqual(direct, viaMulticall);
     }
 
-    function test_diff_createTriples_directVsMulticallPayable() public {
+    function test_diff_createTriples_directVsMulticall() public {
         // Triples require pre-existing subject/predicate/object atoms — share
         // those across both paths so the differential is only the triple
         // creation itself.
@@ -681,7 +692,7 @@ contract MulticallTest is BaseTest {
         bytes32 tripleId = tripleIds[0];
         StateProbe memory direct = _probe(tripleId, users.alice);
 
-        // Path B: same call via multicallPayable
+        // Path B: same call via multicall
         require(vm.revertToState(snap), "revertToState failed");
 
         bytes[] memory data = new bytes[](1);
@@ -690,13 +701,13 @@ contract MulticallTest is BaseTest {
         values[0] = totalValue;
 
         resetPrank(users.alice);
-        protocol.multiVault.multicallPayable{ value: totalValue }(data, values);
+        protocol.multiVault.multicall{ value: totalValue }(data, values);
         StateProbe memory viaMulticall = _probe(tripleId, users.alice);
 
         _assertProbesEqual(direct, viaMulticall);
     }
 
-    function test_diff_deposit_directVsMulticallPayable() public {
+    function test_diff_deposit_directVsMulticall() public {
         bytes32 atomId = createSimpleAtom("diff-deposit-vault", ATOM_COST[0], users.alice);
 
         uint256 depositAmount = 4 ether;
@@ -708,7 +719,7 @@ contract MulticallTest is BaseTest {
         protocol.multiVault.deposit{ value: depositAmount }(users.alice, atomId, CURVE_ID, 0);
         StateProbe memory direct = _probe(atomId, users.alice);
 
-        // Path B: same call via multicallPayable
+        // Path B: same call via multicall
         require(vm.revertToState(snap), "revertToState failed");
 
         bytes[] memory data = new bytes[](1);
@@ -717,13 +728,13 @@ contract MulticallTest is BaseTest {
         values[0] = depositAmount;
 
         resetPrank(users.alice);
-        protocol.multiVault.multicallPayable{ value: depositAmount }(data, values);
+        protocol.multiVault.multicall{ value: depositAmount }(data, values);
         StateProbe memory viaMulticall = _probe(atomId, users.alice);
 
         _assertProbesEqual(direct, viaMulticall);
     }
 
-    function test_diff_depositBatch_directVsMulticallPayable() public {
+    function test_diff_depositBatch_directVsMulticall() public {
         // Two vaults; depositBatch into both. Probe the first; spot-check the
         // second's shares directly so divergence in either is caught.
         bytes32 atomA = createSimpleAtom("diff-depositBatch-A", ATOM_COST[0], users.alice);
@@ -752,7 +763,7 @@ contract MulticallTest is BaseTest {
         StateProbe memory directA = _probe(atomA, users.alice);
         uint256 sharesBDirect = protocol.multiVault.getShares(users.alice, atomB, CURVE_ID);
 
-        // Path B: same call via multicallPayable
+        // Path B: same call via multicall
         require(vm.revertToState(snap), "revertToState failed");
 
         bytes[] memory data = new bytes[](1);
@@ -761,7 +772,7 @@ contract MulticallTest is BaseTest {
         values[0] = totalValue;
 
         resetPrank(users.alice);
-        protocol.multiVault.multicallPayable{ value: totalValue }(data, values);
+        protocol.multiVault.multicall{ value: totalValue }(data, values);
         StateProbe memory viaMulticallA = _probe(atomA, users.alice);
         uint256 sharesBViaMulticall = protocol.multiVault.getShares(users.alice, atomB, CURVE_ID);
 
@@ -769,11 +780,10 @@ contract MulticallTest is BaseTest {
         assertEq(sharesBDirect, sharesBViaMulticall, "vault B shares diverged across paths");
     }
 
-    function test_diff_createAtomsFor_directVsMulticallPayable() public {
+    function test_diff_createAtomsFor_directVsMulticall() public {
         // createAtomsFor with creator == msg.sender must match createAtomsFor
-        // routed through multicallPayable bit-for-bit, exercising both the
-        // selector allowlist and the per-sub-call value accounting for the
-        // new entry point.
+        // routed through multicall bit-for-bit, exercising per-sub-call value
+        // accounting for the new entry point.
         bytes memory atomBytes = abi.encodePacked("diff-createAtomsFor-payload");
         bytes32 expectedAtomId = calculateAtomId(atomBytes);
 
@@ -790,7 +800,7 @@ contract MulticallTest is BaseTest {
         protocol.multiVault.createAtomsFor{ value: totalValue }(users.alice, atomDataArr, createAssets);
         StateProbe memory direct = _probe(expectedAtomId, users.alice);
 
-        // Path B: same call routed through multicallPayable.
+        // Path B: same call routed through multicall.
         require(vm.revertToState(snap), "revertToState failed");
 
         bytes[] memory data = new bytes[](1);
@@ -799,13 +809,13 @@ contract MulticallTest is BaseTest {
         values[0] = totalValue;
 
         resetPrank(users.alice);
-        protocol.multiVault.multicallPayable{ value: totalValue }(data, values);
+        protocol.multiVault.multicall{ value: totalValue }(data, values);
         StateProbe memory viaMulticall = _probe(expectedAtomId, users.alice);
 
         _assertProbesEqual(direct, viaMulticall);
     }
 
-    function test_diff_createTriplesFor_directVsMulticallPayable() public {
+    function test_diff_createTriplesFor_directVsMulticall() public {
         // Pre-create the subject/predicate/object atoms once; both paths
         // share them so the differential is only the triple creation.
         bytes32[] memory atomIds = createAtomsWithUniformCost(
@@ -833,7 +843,7 @@ contract MulticallTest is BaseTest {
         bytes32 tripleId = tripleIds[0];
         StateProbe memory direct = _probe(tripleId, users.alice);
 
-        // Path B: same call via multicallPayable.
+        // Path B: same call via multicall.
         require(vm.revertToState(snap), "revertToState failed");
 
         bytes[] memory data = new bytes[](1);
@@ -844,17 +854,16 @@ contract MulticallTest is BaseTest {
         values[0] = totalValue;
 
         resetPrank(users.alice);
-        protocol.multiVault.multicallPayable{ value: totalValue }(data, values);
+        protocol.multiVault.multicall{ value: totalValue }(data, values);
         StateProbe memory viaMulticall = _probe(tripleId, users.alice);
 
         _assertProbesEqual(direct, viaMulticall);
     }
 
-    function test_multicallPayable_allowsCreateAtomsForSelector() public {
-        // Smoke test on the allowlist branch: a single createAtomsFor sub-call
-        // must clear the selector check and execute end-to-end.
+    function test_multicall_allowsCreateAtomsForSelector() public {
+        // Smoke test for a single createAtomsFor sub-call.
         bytes[] memory atomDataArr = new bytes[](1);
-        atomDataArr[0] = abi.encodePacked("multicallPayable-allow-cAFor");
+        atomDataArr[0] = abi.encodePacked("multicall-allow-cAFor");
         uint256[] memory createAssets = new uint256[](1);
         createAssets[0] = ATOM_COST[0];
 
@@ -864,14 +873,14 @@ contract MulticallTest is BaseTest {
         values[0] = createAssets[0];
 
         resetPrank(users.alice);
-        protocol.multiVault.multicallPayable{ value: createAssets[0] }(data, values);
+        protocol.multiVault.multicall{ value: createAssets[0] }(data, values);
 
         bytes32 atomId = calculateAtomId(atomDataArr[0]);
-        assertTrue(protocol.multiVault.isTermCreated(atomId), "atom must exist after multicallPayable createAtomsFor");
+        assertTrue(protocol.multiVault.isTermCreated(atomId), "atom must exist after multicall createAtomsFor");
         assertEq(protocol.multiVault.getAtomCreator(atomId), users.alice, "creator must be alice");
     }
 
-    function test_multicallPayable_allowsCreateTriplesForSelector() public {
+    function test_multicall_allowsCreateTriplesForSelector() public {
         bytes32[] memory atomIds = createAtomsWithUniformCost(
             _toBytesArray3("mcp-cTFor-S", "mcp-cTFor-P", "mcp-cTFor-O"), ATOM_COST[0], users.alice
         );
@@ -894,12 +903,10 @@ contract MulticallTest is BaseTest {
         values[0] = tripleAssets[0];
 
         resetPrank(users.alice);
-        protocol.multiVault.multicallPayable{ value: tripleAssets[0] }(data, values);
+        protocol.multiVault.multicall{ value: tripleAssets[0] }(data, values);
 
         bytes32 tripleId = protocol.multiVault.calculateTripleId(atomIds[0], atomIds[1], atomIds[2]);
-        assertTrue(
-            protocol.multiVault.isTermCreated(tripleId), "triple must exist after multicallPayable createTriplesFor"
-        );
+        assertTrue(protocol.multiVault.isTermCreated(tripleId), "triple must exist after multicall createTriplesFor");
     }
 
     function _toBytesArray3(string memory a, string memory b, string memory c)

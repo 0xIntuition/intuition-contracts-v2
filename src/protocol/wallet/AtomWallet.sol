@@ -2,6 +2,7 @@
 pragma solidity 0.8.29;
 
 import { BaseAccount } from "@account-abstraction/core/BaseAccount.sol";
+import { Exec } from "@account-abstraction/utils/Exec.sol";
 import { PackedUserOperation } from "@account-abstraction/interfaces/PackedUserOperation.sol";
 import { IERC1271 } from "@openzeppelin/contracts/interfaces/IERC1271.sol";
 import { IERC165 } from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
@@ -186,6 +187,65 @@ contract AtomWallet is Initializable, BaseAccount, ReentrancyGuardUpgradeable, I
         nonReentrant
     {
         _call(dest, value, data);
+    }
+
+    /**
+     * @dev Widens the base account's execution gate from "EntryPoint only" to this protocol's
+     *      authorization model: the EntryPoint, the wallet itself, or any MultiOwnable owner.
+     *
+     *      This is the hook `BaseAccount` exposes for exactly this purpose, so authorization for the
+     *      inherited `executeBatch(Call[])` lives here rather than being restated at the call site.
+     *      Without it that selector is live and gated by `_requireFromEntryPoint()` alone — a
+     *      different owner notion from the one every other surface on this wallet uses.
+     *
+     *      `execute` and `executeBatch(address[],uint256[],bytes[])` do not depend on this hook; both
+     *      carry the equivalent modifier directly.
+     */
+    function _requireForExecute() internal view virtual override {
+        _checkMultiOwnableOwnerOrEntryPoint();
+    }
+
+    /**
+     * @notice Execute a sequence (batch) of transactions (called by the EntryPoint, any
+     *         MultiOwnable address owner, or the wallet itself)
+     * @dev    WHY THIS OVERRIDE EXISTS, given `_requireForExecute` above already fixes authorization:
+     *         solely to attach `nonReentrant`. A `view` hook cannot hold a reentrancy guard, and
+     *         Solidity does not permit `super.executeBatch(...)` because the base declares it
+     *         `external` — an external function cannot be invoked internally. Restating the body is
+     *         therefore the only way to add the guard.
+     *
+     *         The body below is `BaseAccount.executeBatch` copied verbatim — same `Exec` helpers, same
+     *         loop, same branches. That is deliberate: `Exec.call` performs a raw call that does NOT
+     *         copy return data into memory, whereas Solidity's `target.call{value:}(data)` always
+     *         does. Rewriting the loop with a plain `.call` would make every SUCCESSFUL leg copy the
+     *         callee's return data, so a target returning a large payload inflates memory-expansion
+     *         gas for the whole batch — a return-bomb griefing surface upstream deliberately avoids.
+     *
+     *         Failure semantics, also upstream's: EVERY failed call reverts. `callsLength == 1` does
+     *         not decide WHETHER to revert, only HOW to encode it. With one call the failing index is
+     *         necessarily 0 and carries no information, so the target's raw revert data is bubbled
+     *         unchanged and the caller decodes it against the target's own ABI exactly as if they had
+     *         called `execute`. With more than one call the index is the only way to identify the
+     *         failing leg, so the revert is wrapped as `ExecuteError(index, returnData)`.
+     *
+     *         Keep this body in sync with `BaseAccount` on every account-abstraction upgrade.
+     * @param  calls the calls to execute, in order
+     */
+    function executeBatch(Call[] calldata calls) external override nonReentrant {
+        _requireForExecute();
+
+        uint256 callsLength = calls.length;
+        for (uint256 i = 0; i < callsLength; i++) {
+            Call calldata call = calls[i];
+            bool ok = Exec.call(call.target, call.value, call.data, gasleft());
+            if (!ok) {
+                if (callsLength == 1) {
+                    Exec.revertWithReturnData();
+                } else {
+                    revert ExecuteError(i, Exec.getReturnData(0));
+                }
+            }
+        }
     }
 
     /**

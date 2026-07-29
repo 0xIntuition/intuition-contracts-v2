@@ -45,6 +45,14 @@ contract DeployDynamicFeeFlatPriceCurve is SetupScript {
 
     address public UPGRADES_TIMELOCK_CONTROLLER;
 
+    /// @dev Owner of the deployed curve — holds `setConfig`, `setTierFeeOverride`,
+    ///      `clearTierFeeOverride`, `sweepProtocol` and `renounceOwnership`. On governed networks this
+    ///      MUST be the parameters `TimelockController`, so every fee action goes through the same
+    ///      4-of-8 Safe + timelock path as the equivalent `MultiVault` setters. The curve is `Ownable`
+    ///      with no role system, so setting the owner to the timelock is the whole gating mechanism —
+    ///      no separate `onlyTimelock` modifier is required or wanted.
+    address public PARAMETERS_TIMELOCK_CONTROLLER;
+
     /// @dev Must be globally unique in the registry; distinct from the default "Linear Curve".
     string internal constant CURVE_NAME = "Dynamic Fee Flat Price Curve";
 
@@ -53,10 +61,13 @@ contract DeployDynamicFeeFlatPriceCurve is SetupScript {
 
         if (block.chainid == NETWORK_ANVIL) {
             UPGRADES_TIMELOCK_CONTROLLER = msg.sender;
+            PARAMETERS_TIMELOCK_CONTROLLER = msg.sender;
         } else if (block.chainid == NETWORK_INTUITION_SEPOLIA) {
-            UPGRADES_TIMELOCK_CONTROLLER = msg.sender;
+            UPGRADES_TIMELOCK_CONTROLLER = 0x81c66D5dD09F1dEF8493E5A5B459e2E9028a4430;
+            PARAMETERS_TIMELOCK_CONTROLLER = 0xA87E4EEd6C71966E938b45c0e2127344DC597D12;
         } else if (block.chainid == NETWORK_INTUITION) {
             UPGRADES_TIMELOCK_CONTROLLER = 0x321e5d4b20158648dFd1f360A79CAFc97190bAd1;
+            PARAMETERS_TIMELOCK_CONTROLLER = 0x71b0F1ABebC2DaA0b7B5C3f9b72FAa1cd9F35FEA;
         } else {
             revert("Unsupported chain for DeployDynamicFeeFlatPriceCurve script");
         }
@@ -77,7 +88,7 @@ contract DeployDynamicFeeFlatPriceCurve is SetupScript {
             abi.encodeWithSelector(
                 DynamicFeeFlatPriceCurve.initialize.selector,
                 CURVE_NAME,
-                msg.sender, // owner for the PoC; migrate to the parameters timelock / admin Safe in prod
+                PARAMETERS_TIMELOCK_CONTROLLER, // governed networks: the parameters timelock, never the deploying key
                 multiVaultAddr,
                 _defaultConfig()
             )
@@ -118,6 +129,11 @@ contract DeployDynamicFeeFlatPriceCurve is SetupScript {
     ///      pending the economic modeling and are owner-tunable post-deploy via `setConfig`; only the
     ///      13-tier count and the schedule shape are locked. Note `growthGBps` is a COMPOUNDING rate —
     ///      the same numeric value stretches the ladder far more than a linear ramp would.
+    ///      `minEligibleTierStake` — the floor a tier must hold to receive redistributed fees — ships at
+    ///      0, i.e. DISABLED, reproducing the plain occupancy behaviour, so the mechanism changes nothing
+    ///      until governance turns it on. Raising it is a `setConfig` action by the parameters timelock
+    ///      like any other parameter, bounded by the curve's immutable `MAX_MIN_ELIGIBLE_TIER_STAKE`, and
+    ///      it emits `MinEligibleTierStakeUpdated` with the before/after values so a raise is monitorable.
     function _defaultConfig() internal pure returns (DynamicFeeConfig memory config) {
         config = DynamicFeeConfig({
             width0: 5000e18,
@@ -131,8 +147,9 @@ contract DeployDynamicFeeFlatPriceCurve is SetupScript {
             withdrawalBaseBps: 200,
             withdrawalGrowthBps: 50,
             withdrawalCapBps: 1000,
-            withdrawalToRecentShareBps: 0,
-            depositToRecentTierShareBps: 0
+            withdrawalToFulcrumTiersBps: 0,
+            depositToPriorTierBps: 0,
+            minEligibleTierStake: 0
         });
     }
 }

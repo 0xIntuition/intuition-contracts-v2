@@ -72,6 +72,17 @@ contract AtomWarden is IAtomWarden, Initializable, AccessControlUpgradeable, EIP
     ///         `_grantRole` / `_revokeRole` overrides below. Used to bound
     ///         `setSignatureThreshold` so a misconfigured threshold cannot brick claims.
     /// @dev Appended after `signatureThreshold` for storage-layout compatibility with v2.
+    /// @dev This is a ROLE-GRANT TALLY, not a census of usable signing keys, and it fails closed in
+    ///      both directions. Both effects are liveness-only — neither can authorize a claim that the
+    ///      quorum would otherwise reject — but both are worth knowing operationally:
+    ///        - INFLATION: granting `SIGNER_ROLE` to `address(0)` succeeds and increments this count,
+    ///          permitting a `signatureThreshold` the quorum can never satisfy. The phantom entry can
+    ///          never sign, because signature recovery never returns the zero address and the
+    ///          strictly-ascending rule seeds at it. Never grant the role to the zero address.
+    ///        - DEFLATION: any single signer may `renounceRole` unilaterally. If the count reaches
+    ///          zero the quorum fails closed AND the admin cannot repair it by lowering the threshold,
+    ///          because `setSignatureThreshold` requires `newThreshold <= signerCount` and every value
+    ///          then reverts. Recovery requires a `grantRole` FIRST, then the threshold change.
     uint256 public signerCount;
 
     /// @notice Maximum allowed `validAfter - block.timestamp` on a `ClaimAuthorization`,

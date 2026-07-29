@@ -12,6 +12,11 @@ import { MultiVault } from "src/protocol/MultiVault.sol";
  *         sending the correct amount of the underlying asset (TRUST tokens) to the
  *         MultiVault contract to back the shares. This contract will ultimately be
  *         upgraded to the standard MultiVault contract.
+ * @dev    HISTORICAL ARTIFACT — NO LONGER APPLICABLE. This contract served a
+ *         single, one-time migration that has already been performed. It is not
+ *         deployed and is retained for historical reference only. It is outside
+ *         the protocol's active security surface, and the invariants documented
+ *         on {MultiVault} are not extended to anything declared here.
  */
 contract MultiVaultMigrationMode is MultiVault {
     /*//////////////////////////////////////////////////////////////
