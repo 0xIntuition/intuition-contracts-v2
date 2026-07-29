@@ -106,6 +106,50 @@ contract DepositTest is BaseTest {
         protocol.multiVault.deposit{ value: depositAmount }(users.alice, atomId, CURVE_ID, unreasonableMinShares);
     }
 
+    function test_deposit_RevertWhen_CurveRoundsToZeroShares() public {
+        bytes32 atomId = createSimpleAtom("Zero shares atom", ATOM_COST[0], users.alice);
+        (address registry,) = protocol.multiVault.bondingCurveConfig();
+        vm.mockCall(registry, abi.encodeWithSelector(IBondingCurveRegistry.previewDeposit.selector), abi.encode(0));
+
+        resetPrank(users.alice);
+        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_DepositOrRedeemZeroShares.selector));
+        protocol.multiVault.deposit{ value: 1 ether }(users.alice, atomId, CURVE_ID, 0);
+        vm.clearMockedCalls();
+    }
+
+    function test_deposit_RevertWhen_ProjectedAssetsExceedCurveMaximum() public {
+        bytes32 atomId = createSimpleAtom("Max assets atom", ATOM_COST[0], users.alice);
+        (address registry,) = protocol.multiVault.bondingCurveConfig();
+        vm.mockCall(
+            registry, abi.encodeWithSelector(IBondingCurveRegistry.previewDeposit.selector), abi.encode(1 ether)
+        );
+        vm.mockCall(registry, abi.encodeWithSelector(IBondingCurveRegistry.getCurveMaxAssets.selector), abi.encode(0));
+
+        resetPrank(users.alice);
+        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_ActionExceedsMaxAssets.selector));
+        protocol.multiVault.deposit{ value: 1 ether }(users.alice, atomId, CURVE_ID, 0);
+        vm.clearMockedCalls();
+    }
+
+    function test_deposit_RevertWhen_ProjectedSharesExceedCurveMaximum() public {
+        bytes32 atomId = createSimpleAtom("Max shares atom", ATOM_COST[0], users.alice);
+        (address registry,) = protocol.multiVault.bondingCurveConfig();
+        vm.mockCall(
+            registry, abi.encodeWithSelector(IBondingCurveRegistry.previewDeposit.selector), abi.encode(1 ether)
+        );
+        vm.mockCall(
+            registry,
+            abi.encodeWithSelector(IBondingCurveRegistry.getCurveMaxAssets.selector),
+            abi.encode(type(uint256).max)
+        );
+        vm.mockCall(registry, abi.encodeWithSelector(IBondingCurveRegistry.getCurveMaxShares.selector), abi.encode(0));
+
+        resetPrank(users.alice);
+        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_ActionExceedsMaxShares.selector));
+        protocol.multiVault.deposit{ value: 1 ether }(users.alice, atomId, CURVE_ID, 0);
+        vm.clearMockedCalls();
+    }
+
     /*//////////////////////////////////////////////////////////////
         TRIPLE: counter-triple deposit on non-default curve (symmetric)
     //////////////////////////////////////////////////////////////*/

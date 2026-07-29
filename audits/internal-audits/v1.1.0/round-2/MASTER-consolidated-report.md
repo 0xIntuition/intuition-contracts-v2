@@ -1184,6 +1184,17 @@ register row above.
 - **Test coverage only:** withdrawal-side redistribution bounds; ERC-1271 negative regressions; raw-slot configuration
   layout anchors; and the removal of internal provenance markers from tracked test titles.
 
+**Naming note — identifiers are recorded as they existed at the reviewed commit.** Several curve identifiers were
+renamed after this round for clarity: `withdrawalToRecentShareBps` → `withdrawalToFulcrumTiersBps`,
+`depositToRecentTierShareBps` → `depositToPriorTierBps`, `_payRecentTiers` → `_payFulcrumTiers`, and the surrounding
+"recent-tier" / "recent-N" prose to "prior-tier" / "nearest-N". Those renames are **deliberately not back-propagated
+into this report**. An audit artifact records what was reviewed, at the commit it was reviewed against; rewriting
+identifiers after the fact would make the findings cite code that did not exist when they were written, and would break
+the correspondence between this report and the per-round reports behind it. Readers mapping a finding onto current
+source should apply the rename table above. The same applies to `multicallPayable` per the note below. Any
+repository-wide check for retired identifiers should therefore **exclude `audits/`**; `src/`, `script/`, `tests/` and
+`docs/` carry the current names.
+
 **Scope note — the payable-multicall surface was consolidated after this round.** Separate in-flight work merged
 `multicallPayable` into the single `multicall(bytes[],uint256[])` entry point, which remains `payable`. The §4.6
 invariant and its §6 negative therefore still hold and were not weakened: the batched value-accounting property was

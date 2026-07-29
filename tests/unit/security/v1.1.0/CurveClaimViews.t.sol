@@ -138,19 +138,23 @@ contract CurveClaimViewsTest is BaseTest {
         dynamicFeeCurve.claimableAcross(users.bob, terms);
     }
 
-    /// @dev An empty set is rejected as a deliberate API choice, not because the value would be
-    ///      meaningless: `claim([])` is itself valid and withdraws any banked balance, so the
-    ///      consistent answer for an empty set would be exactly `bankedEarnings`. The rejection exists
-    ///      to surface caller error — an empty array reaching this function almost always means the
-    ///      caller assembled the wrong set — and `bankedEarnings` already exposes that number
-    ///      directly, so nothing is unreachable.
-    function test_claimableAcross_revertsOnEmptyTermIds() external {
+    /// @dev An empty set is valid and returns the banked balance. `claim([])` pays exactly that, so the
+    ///      documented equality with the payout holds for zero terms as well — asserted here against
+    ///      the executed claim rather than against the view alone.
+    function test_claimableAcross_emptySetEqualsBankedEarningsAndPayout() external {
         _twoTermsWithBankedEarnings();
 
-        bytes32[] memory terms = new bytes32[](0);
+        bytes32[] memory none = new bytes32[](0);
+        uint256 banked = dynamicFeeCurve.bankedEarnings(users.bob);
+        assertGt(banked, 0, "fixture must produce a non-zero banked balance");
 
-        vm.expectRevert(abi.encodeWithSelector(DynamicFeeFlatPriceCurve.DynamicFeeFlatPriceCurve_EmptyTermIds.selector));
-        dynamicFeeCurve.claimableAcross(users.bob, terms);
+        assertEq(dynamicFeeCurve.claimableAcross(users.bob, none), banked, "empty set must return the banked balance");
+
+        vm.startPrank(users.bob);
+        uint256 paid = dynamicFeeCurve.claim(none);
+        vm.stopPrank();
+
+        assertEq(paid, banked, "claim([]) must pay exactly the banked balance the view reported");
     }
 
     /// @dev `pendingFor` is term-scoped and excludes the banked balance; `bankedEarnings` is

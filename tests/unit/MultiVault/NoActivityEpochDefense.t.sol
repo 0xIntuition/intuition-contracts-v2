@@ -94,4 +94,57 @@ contract NoActivityEpochDefenseTest is BaseTest {
         );
         assertEq(protocol.multiVault.lastSystemUtilizationEpoch(), epochL);
     }
+
+    function test_scenario_MultiEpochQuiescenceThenPartialRedeem() external {
+        vm.warp(block.timestamp + TRUST_BONDING_EPOCH_LENGTH + 1);
+
+        bytes32 atomId = createSimpleAtom("gap-defense-redeem", ATOM_COST[0], users.alice);
+        uint256 shares = makeDeposit(users.alice, users.alice, atomId, CURVE_ID, 4 ether, 0);
+
+        uint256 epochN = protocol.multiVault.currentEpoch();
+        int256 totalAtN = protocol.multiVault.totalUtilization(epochN);
+        int256 personalAtN = protocol.multiVault.personalUtilization(users.alice, epochN);
+        assertGt(totalAtN, int256(0), "epoch N must have system utilization");
+        assertGt(personalAtN, int256(0), "epoch N must have personal utilization");
+
+        vm.warp(block.timestamp + 5 * TRUST_BONDING_EPOCH_LENGTH + 1);
+        uint256 epochM = protocol.multiVault.currentEpoch();
+        assertGt(epochM - epochN, 1, "gap must span multiple epochs");
+
+        uint256 sharesToRedeem = shares / 2;
+        uint256 rawAssets = convertToAssets(sharesToRedeem, atomId, CURVE_ID);
+        redeemShares(users.alice, users.alice, atomId, CURVE_ID, sharesToRedeem, 0);
+
+        assertEq(
+            protocol.multiVault.totalUtilization(epochM),
+            totalAtN - int256(rawAssets),
+            "system utilization must carry before subtraction"
+        );
+        assertEq(
+            protocol.multiVault.personalUtilization(users.alice, epochM),
+            personalAtN - int256(rawAssets),
+            "personal utilization must carry before subtraction"
+        );
+        assertEq(protocol.multiVault.userEpochHistory(users.alice, 0), epochM, "current epoch must lead history");
+        assertEq(protocol.multiVault.userEpochHistory(users.alice, 1), epochN, "prior active epoch must shift");
+        assertEq(protocol.multiVault.userEpochHistory(users.alice, 2), 0, "oldest history slot remains empty");
+        assertEq(protocol.multiVault.lastSystemUtilizationEpoch(), epochM, "system epoch must advance");
+        assertTrue(protocol.multiVault.hasRolledOverSystemUtilization(epochM), "epoch M must be rolled over");
+
+        for (uint256 epoch = epochN + 1; epoch < epochM; epoch++) {
+            assertEq(protocol.multiVault.totalUtilization(epoch), int256(0), "intermediate utilization stays empty");
+            assertFalse(
+                protocol.multiVault.hasRolledOverSystemUtilization(epoch), "intermediate rollover flag stays false"
+            );
+        }
+
+        vm.warp(block.timestamp + TRUST_BONDING_EPOCH_LENGTH + 1);
+        uint256 inactiveEpoch = protocol.multiVault.currentEpoch();
+        assertEq(inactiveEpoch, epochM + 1, "must advance one inactive epoch");
+        assertEq(
+            protocol.trustBonding.getSystemUtilizationRatio(inactiveEpoch),
+            protocol.trustBonding.systemUtilizationLowerBound(),
+            "an inactive epoch must use the system utilization floor"
+        );
+    }
 }

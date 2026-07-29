@@ -264,7 +264,6 @@ contract DynamicFeeFlatPriceCurve is
     error DynamicFeeFlatPriceCurve_TierCountCannotShrink();
     error DynamicFeeFlatPriceCurve_InvalidTierOverride();
     error DynamicFeeFlatPriceCurve_DuplicateTermIds();
-    error DynamicFeeFlatPriceCurve_EmptyTermIds();
     error DynamicFeeFlatPriceCurve_InvalidMinEligibleTierStake();
 
     /* =================================================== */
@@ -648,11 +647,15 @@ contract DynamicFeeFlatPriceCurve is
     }
 
     /// @notice Total withdrawable across the supplied terms — the figure {claim} would pay.
-    /// @dev    Input is validated first, then the total is accumulated. `termIds` must be non-empty and
-    ///         free of repeats; order is irrelevant. Uniqueness is ENFORCED rather than documented,
-    ///         because a repeated term would have its pending counted once per occurrence here while
-    ///         {claim} settles it once — silently breaking the equality with the payout that this
-    ///         function exists to provide.
+    /// @dev    Input is validated first, then the total is accumulated. `termIds` must be free of
+    ///         repeats; order is irrelevant. Uniqueness is ENFORCED rather than documented, because a
+    ///         repeated term would have its pending counted once per occurrence here while {claim}
+    ///         settles it once — silently breaking the equality with the payout that this function
+    ///         exists to provide.
+    /// @dev    An EMPTY set is valid and returns {bankedEarnings}. That is not a special case: {claim}
+    ///         accepts an empty array too and pays out any banked balance, so `earned` genuinely is
+    ///         what {claim} would pay for zero terms. Rejecting it would break the very equality this
+    ///         function documents, for no benefit.
     /// @dev    Uniqueness is proved in EXPECTED `O(n log n)`: a scratch copy is sorted so that any
     ///         repeat becomes adjacent, then one linear scan settles it. The bound is expected rather
     ///         than worst case — the underlying sort is quicksort-based and retains a theoretical
@@ -661,11 +664,10 @@ contract DynamicFeeFlatPriceCurve is
     ///         keeps the burden off every integrator. A storage or transient-storage set would be
     ///         cheaper still but is unavailable: both are state writes, which `view` forbids.
     /// @param  account The account to read
-    /// @param  termIds The terms to include, non-empty, in any order, without repeats
+    /// @param  termIds The terms to include, in any order, without repeats; may be empty
     /// @return amount  The total claimable amount, equal to what {claim} would pay for these terms
     function claimableAcross(address account, bytes32[] calldata termIds) external view returns (uint256 amount) {
         uint256 length = termIds.length;
-        if (length == 0) revert DynamicFeeFlatPriceCurve_EmptyTermIds();
 
         // Pass 1 — validate. Sorting a scratch copy makes any repeat adjacent, so a single linear scan
         // proves uniqueness without comparing every pair.
