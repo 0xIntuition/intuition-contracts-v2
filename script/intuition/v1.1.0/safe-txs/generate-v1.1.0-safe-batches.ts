@@ -57,8 +57,7 @@
     `upgradeAndCall`. Embedded reinit calldata executes via delegatecall with
     `msg.sender == ProxyAdmin`, which holds neither role, and reverts.
 
-  USAGE (from the contracts package root — `contracts/core` in the monorepo, the
-  repository root in the public mirror):
+  USAGE (from the repository root):
 
     bun script/intuition/v1.1.0/safe-txs/generate-v1.1.0-safe-batches.ts
 
@@ -77,7 +76,7 @@ import { ethers } from "ethers";
 /* ===================================================================== */
 
 /*
-  Filled in after running, from the contracts package root:
+  Filled in after running, from the repository root:
 
     forge script script/intuition/v1.1.0/DeployCoreUpgradeImplementations.s.sol:DeployCoreUpgradeImplementations \
       --optimizer-runs 10000 --rpc-url intuition --broadcast --slow --verify \

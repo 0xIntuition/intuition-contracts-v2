@@ -1,62 +1,56 @@
 # v1.1.0 core upgrade — execution order
 
-**Chain:** Intuition Mainnet (1155). This release is Intuition-chain-only; there is no Base
-component.
+**Chain:** Intuition Mainnet (1155). This release is Intuition-chain-only; there is no Base component.
 
 **Signing Safe:** `0xbeA18ab4c83a12be25f8AA8A10D8747A07Cdc6eb` — Gnosis Safe v1.3.0, 4-of-8.
 
-This is the canonical order. Every dependency below is an on-chain constraint, not a
-preference — executing out of order either reverts or breaks the chain. Read the whole
-document before signing anything.
+This is the canonical order. Every dependency below is an on-chain constraint, not a preference — executing out of order
+either reverts or breaks the chain. Read the whole document before signing anything.
 
 ---
 
 ## 0. What you are about to do, in one paragraph
 
-Six live implementations are swapped in a single atomic timelock operation, and then two
-reinitializers and a small number of role grants are executed directly by the Admin Safe.
-The upgrade touches contracts holding user funds. The single most important property is
-that **all six upgrades move together**: the new MultiVault probes fee-hook getters on every
-registered curve on every deposit and redeem, and the live curve implementations predate
-those selectors. A MultiVault swapped without its curves makes **every deposit and redeem on
-the chain revert**.
+Six live implementations are swapped in a single atomic timelock operation, and then two reinitializers and a small
+number of role grants are executed directly by the Admin Safe. The upgrade touches contracts holding user funds. The
+single most important property is that **all six upgrades move together**: the new MultiVault probes fee-hook getters on
+every registered curve on every deposit and redeem, and the live curve implementations predate those selectors. A
+MultiVault swapped without its curves makes **every deposit and redeem on the chain revert**.
 
 ## 1. One Safe, two instruments — read this before looking for a second Safe
 
-The upgrades go through the Upgrades TimelockController; the reinitializers and role grants
-are sent directly. That is a separation of **roles**, not of **addresses**. On this chain
-`0xbeA18ab4c83a12be25f8AA8A10D8747A07Cdc6eb` holds all of them:
+The upgrades go through the Upgrades TimelockController; the reinitializers and role grants are sent directly. That is a
+separation of **roles**, not of **addresses**. On this chain `0xbeA18ab4c83a12be25f8AA8A10D8747A07Cdc6eb` holds all of
+them:
 
-| Role | On |
-| --- | --- |
-| `PROPOSER_ROLE`, `EXECUTOR_ROLE`, `CANCELLER_ROLE` | Upgrades Timelock `0x321e5d4b20158648dFd1f360A79CAFc97190bAd1` |
-| `DEFAULT_ADMIN_ROLE` | MultiVault `0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e` and AtomWarden `0x98C9BCecf318d0D1409Bf81Ea3551b629fAEC165` |
-| `owner()` | BondingCurveRegistry `0xd0E488Fb32130232527eedEB72f8cE2BFC0F9930` |
+| Role                                               | On                                                                                                                  |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `PROPOSER_ROLE`, `EXECUTOR_ROLE`, `CANCELLER_ROLE` | Upgrades Timelock `0x321e5d4b20158648dFd1f360A79CAFc97190bAd1`                                                      |
+| `DEFAULT_ADMIN_ROLE`                               | MultiVault `0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e` and AtomWarden `0x98C9BCecf318d0D1409Bf81Ea3551b629fAEC165` |
+| `owner()`                                          | BondingCurveRegistry `0xd0E488Fb32130232527eedEB72f8cE2BFC0F9930`                                                   |
 
-There is no second Safe. Every batch in this folder is imported into and signed by that one
-Safe.
+There is no second Safe. Every batch in this folder is imported into and signed by that one Safe.
 
 ## 1a. Two contracts in this release are NOT upgrades
 
-`FeeProxy` and `DynamicFeeFlatPriceCurve` both ship with v1.1.0, and neither has an existing
-proxy behind it. They are fresh deployments, so nothing about them belongs in the timelock
-operation — their absence from the upgrade batch is correct, not an omission.
+`FeeProxy` and `DynamicFeeFlatPriceCurve` both ship with v1.1.0, and neither has an existing proxy behind it. They are
+fresh deployments, so nothing about them belongs in the timelock operation — their absence from the upgrade batch is
+correct, not an omission.
 
-| Contract | How it ships | Safe transactions |
-| --- | --- | --- |
-| `FeeProxy` | `forge` broadcast of `script/intuition/FeeProxyDeploy.s.sol` | **None.** Its admin, treasury, MultiVault target and proxy admin are all set by the atomic `initialize`, and no core contract holds a reference to it. |
-| `DynamicFeeFlatPriceCurve` | `forge` broadcast of `script/intuition/DeployDynamicFeeFlatPriceCurve.s.sol` | **One** — step 08 below, `BondingCurveRegistry.addBondingCurve`. |
+| Contract                   | How it ships                                                                 | Safe transactions                                                                                                                                      |
+| -------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `FeeProxy`                 | `forge` broadcast of `script/intuition/FeeProxyDeploy.s.sol`                 | **None.** Its admin, treasury, MultiVault target and proxy admin are all set by the atomic `initialize`, and no core contract holds a reference to it. |
+| `DynamicFeeFlatPriceCurve` | `forge` broadcast of `script/intuition/DeployDynamicFeeFlatPriceCurve.s.sol` | **One** — step 08 below, `BondingCurveRegistry.addBondingCurve`.                                                                                       |
 
-Both are independent of the upgrade's timing: they can be deployed before or after it. Record
-each in the deployed-contracts table in the contracts package `README.md` once its address exists —
-there is a "Pending v1.1.0 additions" section there listing exactly this.
+Both are independent of the upgrade's timing: they can be deployed before or after it. Record each in the
+deployed-contracts table in `README.md` once its address exists — there is a "Pending v1.1.0 additions" section there
+listing exactly this.
 
 ## 2. Why the reinitializers are separate transactions
 
-They cannot be embedded in `upgradeAndCall`. A proxy executes embedded initialization
-calldata via `delegatecall` with `msg.sender == ProxyAdmin`, and the ProxyAdmin holds neither
-`DEFAULT_ADMIN_ROLE` nor the AtomWarden admin identity — so it reverts. Per proxy the
-sequence is therefore: timelock → `upgradeAndCall(proxy, impl, "")` with **empty** calldata,
+They cannot be embedded in `upgradeAndCall`. A proxy executes embedded initialization calldata via `delegatecall` with
+`msg.sender == ProxyAdmin`, and the ProxyAdmin holds neither `DEFAULT_ADMIN_ROLE` nor the AtomWarden admin identity — so
+it reverts. Per proxy the sequence is therefore: timelock → `upgradeAndCall(proxy, impl, "")` with **empty** calldata,
 then Admin Safe → `reinitialize(...)` as its own transaction.
 
 ## 3. Pre-flight — run these before importing anything
@@ -94,33 +88,31 @@ cast call $REGISTRY 'curveAddresses(uint256)(address)' 2 -r $RPC  # expect 0x23a
 
 Also confirm, off-chain:
 
-- The six implementation addresses in the batches match the addresses the deploy script
-  printed, and each is verified on the explorer.
-- The MultiVault implementation is verified **together with its `MultiVaultLib` library**. It
-  is linked, and Foundry auto-deploys the library as the first broadcast transaction; its
-  address is in `broadcast/DeployCoreUpgradeImplementations.s.sol/1155/run-latest.json`. A
-  linked contract verified without its library is only half verified — `--verify` does not
-  necessarily handle this for you.
+- The six implementation addresses in the batches match the addresses the deploy script printed, and each is verified on
+  the explorer.
+- The MultiVault implementation is verified **together with its `MultiVaultLib` library**. It is linked, and Foundry
+  auto-deploys the library as the first broadcast transaction; its address is in
+  `broadcast/DeployCoreUpgradeImplementations.s.sol/1155/run-latest.json`. A linked contract verified without its
+  library is only half verified — `--verify` does not necessarily handle this for you.
 - `forge test --match-contract SafeBatchCalldataParity` passes against the committed batches.
 
 ---
 
 ## 4. The order
 
-| Step | File | Signer acts as | Gate |
-| --- | --- | --- | --- |
-| 01 | `01-…-upgrades-timelock-schedule.json` | Timelock proposer | none — execute now |
-| 02 | `02-…-upgrades-timelock-execute.json` | Timelock executor | step 01 + 7 days |
-| 03 | `03-…-multivault-reinitialize.json` | MultiVault admin | step 02 verified |
-| 04 | `04-…-atomwarden-reinitialize.json` | AtomWarden admin | step 02 verified |
-| 05 | `05-…-atomwarden-grant-signer-role.json` | AtomWarden admin | step 04 |
-| 06 | `06-…-atomwarden-set-signature-threshold.json` | AtomWarden admin | **step 05 confirmed** |
-| 07 | `07-…-multivault-grant-pauser-role.json` | MultiVault admin | step 03 |
-| 08 | `08-…-register-dynamic-fee-curve.json` | Registry owner | upgrade confirmed healthy |
+| Step | File                                           | Signer acts as    | Gate                      |
+| ---- | ---------------------------------------------- | ----------------- | ------------------------- |
+| 01   | `01-…-upgrades-timelock-schedule.json`         | Timelock proposer | none — execute now        |
+| 02   | `02-…-upgrades-timelock-execute.json`          | Timelock executor | step 01 + 7 days          |
+| 03   | `03-…-multivault-reinitialize.json`            | MultiVault admin  | step 02 verified          |
+| 04   | `04-…-atomwarden-reinitialize.json`            | AtomWarden admin  | step 02 verified          |
+| 05   | `05-…-atomwarden-grant-signer-role.json`       | AtomWarden admin  | step 04                   |
+| 06   | `06-…-atomwarden-set-signature-threshold.json` | AtomWarden admin  | **step 05 confirmed**     |
+| 07   | `07-…-multivault-grant-pauser-role.json`       | MultiVault admin  | step 03                   |
+| 08   | `08-…-register-dynamic-fee-curve.json`         | Registry owner    | upgrade confirmed healthy |
 
-Steps 05–08 are emitted only when their constants are filled in. If a file is missing, the
-generator printed a `WARNING` explaining what was skipped and what stays broken — go read it
-rather than assuming the step is unnecessary.
+Steps 05–08 are emitted only when their constants are filled in. If a file is missing, the generator printed a `WARNING`
+explaining what was skipped and what stays broken — go read it rather than assuming the step is unnecessary.
 
 ---
 
@@ -128,25 +120,23 @@ rather than assuming the step is unnecessary.
 
 Import and execute `01-…-upgrades-timelock-schedule.json`.
 
-This one transaction calls `scheduleBatch` with all six upgrades. It is `scheduleBatch`
-rather than six separate `schedule` calls on purpose: six singular timelock operations could
-each be executed alone, and executing the MultiVault upgrade without the curve upgrades is
-exactly the failure this release must not permit. `executeBatch` succeeds or reverts as a
-unit.
+This one transaction calls `scheduleBatch` with all six upgrades. It is `scheduleBatch` rather than six separate
+`schedule` calls on purpose: six singular timelock operations could each be executed alone, and executing the MultiVault
+upgrade without the curve upgrades is exactly the failure this release must not permit. `executeBatch` succeeds or
+reverts as a unit.
 
 **Scheduling changes nothing.** It only starts the clock. Nothing is upgraded until step 02.
 
 Before signing, decode the transaction in the Safe UI and check:
 
 - `targets` has **six** entries, in the order listed in the batch description.
-- Entries 5 and 6 are the LinearCurve and OffsetProgressiveCurve ProxyAdmins. **If either
-  curve is missing, do not sign.** That is the chain-breaking mistake.
-- Every `payloads` entry ends in a run of zero bytes representing empty `bytes` — no
-  reinitializer calldata is embedded.
+- Entries 5 and 6 are the LinearCurve and OffsetProgressiveCurve ProxyAdmins. **If either curve is missing, do not
+  sign.** That is the chain-breaking mistake.
+- Every `payloads` entry ends in a run of zero bytes representing empty `bytes` — no reinitializer calldata is embedded.
 - `predecessor` is zero and `delay` is `604800`.
 
-After execution, record the operation id (printed by the generator and quoted in the batch
-description) and confirm the timelock accepted it:
+After execution, record the operation id (printed by the generator and quoted in the batch description) and confirm the
+timelock accepted it:
 
 ```bash
 cast call $TIMELOCK 'isOperation(bytes32)(bool)' <OPERATION_ID> -r $RPC          # true
@@ -157,9 +147,9 @@ cast call $TIMELOCK 'getTimestamp(bytes32)(uint256)' <OPERATION_ID> -r $RPC     
 
 `604800` seconds. During the wait, nothing has changed on-chain.
 
-If something is discovered in this window, the same Safe holds `CANCELLER_ROLE` and can abort
-cleanly — nothing was ever applied. Send a Safe transaction to the Upgrades Timelock calling
-`cancel(bytes32)` with the operation id. Build the calldata with:
+If something is discovered in this window, the same Safe holds `CANCELLER_ROLE` and can abort cleanly — nothing was ever
+applied. Send a Safe transaction to the Upgrades Timelock calling `cancel(bytes32)` with the operation id. Build the
+calldata with:
 
 ```bash
 cast calldata 'cancel(bytes32)' <OPERATION_ID>
@@ -175,9 +165,9 @@ Confirm afterwards that `isOperation(<OPERATION_ID>)` returns false.
 cast call $TIMELOCK 'isOperationReady(bytes32)(bool)' <OPERATION_ID> -r $RPC     # must be true
 ```
 
-`isOperationReady` returns false until the delay has fully elapsed. The batch reuses the
-step-01 arguments byte for byte — the timelock recomputes the operation id from them, so any
-divergence reverts rather than executing something unintended.
+`isOperationReady` returns false until the delay has fully elapsed. The batch reuses the step-01 arguments byte for byte
+— the timelock recomputes the operation id from them, so any divergence reverts rather than executing something
+unintended.
 
 **Immediately after execution, before doing anything else, verify the chain still works:**
 
@@ -202,14 +192,13 @@ cast call 0x23afF95153aa88D28B9B97Ba97629E05D5fD335d 'hasDepositFeeHook()(bool)'
 cast call 0x23afF95153aa88D28B9B97Ba97629E05D5fD335d 'hasRedeemFeeHook()(bool)' -r $RPC
 ```
 
-Then perform a **real small deposit and redeem on both curve ids**. The view calls above
-confirm the selectors exist; only an actual deposit confirms the whole path. Do this before
-proceeding to step 03.
+Then perform a **real small deposit and redeem on both curve ids**. The view calls above confirm the selectors exist;
+only an actual deposit confirms the whole path. Do this before proceeding to step 03.
 
 ### Step 03 — `MultiVault.reinitialize`
 
-Bootstraps `MultiVault.timelock` to the Parameters TimelockController
-`0x71b0F1ABebC2DaA0b7B5C3f9b72FAa1cd9F35FEA` and grants `PAUSER_ROLE` to the admin.
+Bootstraps `MultiVault.timelock` to the Parameters TimelockController `0x71b0F1ABebC2DaA0b7B5C3f9b72FAa1cd9F35FEA` and
+grants `PAUSER_ROLE` to the admin.
 
 Required — the upgrade is not complete without it. Verify afterwards:
 
@@ -221,10 +210,9 @@ cast call $MULTIVAULT 'hasRole(bytes32,address)(bool)' \
 
 ### Step 04 — `AtomWarden.reinitialize`
 
-Seeds the claim parameters. Note the per-window claim cap ships **armed** at 100 claims per
-1-day window; the deploy script's default of `0` would disable it, and launching a new safety
-control switched off is not the intent. The admin can retune it later through the regular
-setter, without an upgrade.
+Seeds the claim parameters. Note the per-window claim cap ships **armed** at 100 claims per 1-day window; the deploy
+script's default of `0` would disable it, and launching a new safety control switched off is not the intent. The admin
+can retune it later through the regular setter, without an upgrade.
 
 Required. Verify afterwards:
 
@@ -236,18 +224,15 @@ cast call $WARDEN 'claimCapWindow()(uint256)' -r $RPC         # 86400
 cast call $WARDEN 'signerCount()(uint256)' -r $RPC            # 0 — expected, see step 05
 ```
 
-> **`signerCount` is 0 here and that is intentional.** Signed claims revert until step 05.
-> The upgrade is technically applied but **not operationally finished**. Do not declare the
-> rollout complete at this point.
+> **`signerCount` is 0 here and that is intentional.** Signed claims revert until step 05. The upgrade is technically
+> applied but **not operationally finished**. Do not declare the rollout complete at this point.
 
 ### Step 05 — grant `SIGNER_ROLE`
 
-Grants `SIGNER_ROLE` to each backend signer key. This is the step that makes
-`claimWithAuthorization` work again; skipping it leaves wallet claims broken behind an
-otherwise-successful upgrade.
+Grants `SIGNER_ROLE` to each backend signer key. This is the step that makes `claimWithAuthorization` work again;
+skipping it leaves wallet claims broken behind an otherwise-successful upgrade.
 
-This is the one batch that contains more than one transaction, because they are the same call
-repeated per address.
+This is the one batch that contains more than one transaction, because they are the same call repeated per address.
 
 ```bash
 cast call $WARDEN 'signerCount()(uint256)' -r $RPC   # must now equal the number of signers granted
@@ -255,10 +240,9 @@ cast call $WARDEN 'signerCount()(uint256)' -r $RPC   # must now equal the number
 
 ### Step 06 — `setSignatureThreshold`
 
-**Do not execute until step 05 has executed and `signerCount` has been confirmed.**
-`setSignatureThreshold` reverts when `newThreshold > signerCount`. The 05→06 order is
-enforced by the contract, not by convention — running them the other way round wastes a Safe
-execution on a guaranteed revert.
+**Do not execute until step 05 has executed and `signerCount` has been confirmed.** `setSignatureThreshold` reverts when
+`newThreshold > signerCount`. The 05→06 order is enforced by the contract, not by convention — running them the other
+way round wastes a Safe execution on a guaranteed revert.
 
 ```bash
 cast call $WARDEN 'signerCount()(uint256)' -r $RPC        # must be >= the new threshold
@@ -268,16 +252,16 @@ cast call $WARDEN 'signatureThreshold()(uint256)' -r $RPC # the new threshold
 
 ### Step 07 — grant `PAUSER_ROLE` to the pauser Safe
 
-Additive and non-urgent: step 03 already granted `PAUSER_ROLE` to the admin, so the protocol
-is pausable without this. It exists because the admin is a 4-of-8 Safe, which is a slow
-instrument for the one action whose entire value is being fast.
+Additive and non-urgent: step 03 already granted `PAUSER_ROLE` to the admin, so the protocol is pausable without this.
+It exists because the admin is a 4-of-8 Safe, which is a slow instrument for the one action whose entire value is being
+fast.
 
 ### Step 08 — register the DynamicFeeFlatPriceCurve
 
-**Only after the upgrade is confirmed live and healthy.** This is deliberately not bundled
-with the reinitializers: the upgrade batch carries a hard atomicity requirement and stays
-exactly as large as that requires, and registering a curve into a registry that the upgraded
-MultiVault has not yet been confirmed to read correctly inverts the verification order.
+**Only after the upgrade is confirmed live and healthy.** This is deliberately not bundled with the reinitializers: the
+upgrade batch carries a hard atomicity requirement and stays exactly as large as that requires, and registering a curve
+into a registry that the upgraded MultiVault has not yet been confirmed to read correctly inverts the verification
+order.
 
 **Registration is irreversible.** Curve ids are append-only. Before signing, verify:
 
@@ -292,8 +276,7 @@ cast call $CURVE 'multiVault()(address)' -r $RPC     # must equal $MULTIVAULT
 cast call $CURVE 'owner()(address)' -r $RPC          # must be the intended governance address
 ```
 
-And (c) fork-simulate this transaction followed by a deposit on the new curve id, and confirm
-the deposit succeeds.
+And (c) fork-simulate this transaction followed by a deposit on the new curve id, and confirm the deposit succeeds.
 
 After registration:
 
@@ -304,29 +287,27 @@ cast call $REGISTRY 'curveIds(address)(uint256)' $CURVE -r $RPC   # the assigned
 
 ### After step 08 — update the coverage guard
 
-Registration takes `registry.count()` to 3, so the deliberate exact-count assertion in
-`_assertCurvesApplied` (in `script/intuition/v1.1.0/DeployCoreUpgradeImplementations.s.sol`)
-**will start failing**. That is the intended signal, not a defect — but it must be resolved
-properly, because the assertion only pins ids 1 and 2 today, so bumping the count alone would
-silently widen the guard to accept an unchecked third curve.
+Registration takes `registry.count()` to 3, so the deliberate exact-count assertion in `_assertCurvesApplied` (in
+`script/intuition/v1.1.0/DeployCoreUpgradeImplementations.s.sol`) **will start failing**. That is the intended signal,
+not a defect — but it must be resolved properly, because the assertion only pins ids 1 and 2 today, so bumping the count
+alone would silently widen the guard to accept an unchecked third curve.
 
 Make all three changes together:
 
 1. Increment `COVERED_CURVE_COUNT` to `3`.
 2. Add an explicit id/address pin for the new curve, matching the existing ones:
-   `registry.curveAddresses(<new id>) != <new curve proxy>` reverts. Use the id actually
-   assigned by `registry.curveIds(<curve>)` — do not assume it is 3.
-3. Add a fee-hook getter assertion for it, alongside the two existing curves, confirming
-   `hasDepositFeeHook()` / `hasRedeemFeeHook()` resolve rather than revert.
+   `registry.curveAddresses(<new id>) != <new curve proxy>` reverts. Use the id actually assigned by
+   `registry.curveIds(<curve>)` — do not assume it is 3.
+3. Add a fee-hook getter assertion for it, alongside the two existing curves, confirming `hasDepositFeeHook()` /
+   `hasRedeemFeeHook()` resolve rather than revert.
 
-Point 3 matters even though the curve was deployed on v1.1.0 code: the assertion's purpose is
-to prove the MultiVault's per-deposit hook probe cannot revert on a missing selector, and that
-should be established for every registered curve rather than assumed from its provenance.
+Point 3 matters even though the curve was deployed on v1.1.0 code: the assertion's purpose is to prove the MultiVault's
+per-deposit hook probe cannot revert on a missing selector, and that should be established for every registered curve
+rather than assumed from its provenance.
 
-If the guard ever needs to cover several curves, replace the exact count and the per-id pins
-with a loop over `1..count()` checking each address against an explicit covered set — but keep
-it strict either way. Never relax it to a lower bound to make a failure go away; a failure here
-means a live curve would be bricked by the next upgrade.
+If the guard ever needs to cover several curves, replace the exact count and the per-id pins with a loop over
+`1..count()` checking each address against an explicit covered set — but keep it strict either way. Never relax it to a
+lower bound to make a failure go away; a failure here means a live curve would be bricked by the next upgrade.
 
 ---
 
@@ -335,18 +316,18 @@ means a live curve would be bricked by the next upgrade.
 There is no rollback for an executed upgrade. The realistic responses are:
 
 - **Before step 02:** cancel the timelock operation. Nothing was applied.
-- **After step 02:** pause via `PAUSER_ROLE`, then schedule a new timelock operation pointing
-  the proxies back at the previous implementations. That is another 7-day wait, which is why
-  the fork rehearsal and the post-step-02 deposit/redeem check are not optional.
+- **After step 02:** pause via `PAUSER_ROLE`, then schedule a new timelock operation pointing the proxies back at the
+  previous implementations. That is another 7-day wait, which is why the fork rehearsal and the post-step-02
+  deposit/redeem check are not optional.
 
 ## 6. Regenerating these files
 
 ```bash
-# from the contracts package root (`contracts/core` in the monorepo; the repository root in the public mirror)
+# from the repository root
 bun script/intuition/v1.1.0/safe-txs/generate-v1.1.0-safe-batches.ts
 ```
 
-The generator is offline and deterministic: same inputs produce byte-identical files, so a
-clean `git diff` after regenerating is the proof that nothing drifted. It refuses to emit
-while any implementation address is still a placeholder. Change a parameter by editing the
-constant at the top of the generator and regenerating — the diff is the review.
+The generator is offline and deterministic: same inputs produce byte-identical files, so a clean `git diff` after
+regenerating is the proof that nothing drifted. It refuses to emit while any implementation address is still a
+placeholder. Change a parameter by editing the constant at the top of the generator and regenerating — the diff is the
+review.

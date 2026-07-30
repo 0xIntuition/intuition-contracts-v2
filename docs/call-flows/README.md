@@ -22,7 +22,7 @@ reproducible from a single command and diffs as text, so drift shows up in revie
 
 ## Regenerating
 
-Run from the contracts package root (`contracts/core` in the monorepo; the repository root in the public mirror):
+Run from the repository root:
 
 ```bash
 bun run viz:call-flows
