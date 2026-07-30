@@ -1482,10 +1482,20 @@ addresses resolved from deploy manifests by name; issues described by mechanism.
 
 ### Publishing note
 
-These reports name the model / skill / vendor for the team's own tracking. **If any of this is shared outside the team,
-neutralize model / vendor / person names to method descriptors** (e.g. "parallel specialist-lens round" rather than a
-tool author's name) and keep only the id-prefix provenance. This master is written to travel — professional prose,
-id-prefix provenance, disclaimer — and is the file intended for external auditors if the team elects to share one.
+These reports name the model, skill and vendor behind each round, and that is **deliberate in the published set**. The
+names are the evidence for the claim the round rests on: "six independent reviewers" is only meaningful if a reader can
+see they were genuinely different tools and model families rather than one reviewer run six times. The report filenames
+carry the same information and are the primary index into this folder, so stripping the names would remove the
+traceability without removing the signal.
+
+The process documents behind these rounds are published alongside them at [`../../instructions/`](../../instructions/),
+so the method — round composition minimums, the independence rule, de-duplication by content, the severity policy, the
+honesty rules and the disposition-register convention — can be checked rather than taken on trust. Paths into the team's
+private working area are removed from that published copy; nothing else is altered.
+
+What is **not** published, and stays internal: the per-round handoffs, the master brief, the raw working logs, and any
+skill-native artifacts. Those contain unfiltered intermediate findings and working paths that would mislead rather than
+inform a reader of the final reports.
 
 ### Disclaimer
 
