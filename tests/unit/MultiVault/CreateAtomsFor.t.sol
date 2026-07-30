@@ -64,6 +64,8 @@ contract CreateAtomsForTest is BaseTest {
 
     function test_createAtomsFor_multipleAtoms_Success() public {
         setupApproval(users.alice, users.bob, ApprovalTypes.CREATION);
+        vm.warp(block.timestamp + 1 days);
+        uint48 expectedTimestamp = uint48(block.timestamp);
 
         bytes[] memory data = new bytes[](3);
         data[0] = "createFor-multi-1";
@@ -84,6 +86,9 @@ contract CreateAtomsForTest is BaseTest {
         for (uint256 i = 0; i < 3; i++) {
             assertTrue(protocol.multiVault.isTermCreated(ids[i]), "each atom must exist");
             assertEq(protocol.multiVault.getAtomCreator(ids[i]), users.alice, "each atom must credit alice");
+            assertEq(
+                protocol.multiVault.getAtomCreatedAt(ids[i]), expectedTimestamp, "each atom must record creation time"
+            );
         }
     }
 
@@ -149,11 +154,15 @@ contract CreateAtomsForTest is BaseTest {
         assertEq(aliceAfter - aliceBefore, int256(payment), "alice's utilization delta must equal payment");
     }
 
-    function test_createAtomsFor_recordsCreator() public {
+    function test_createAtomsFor_recordsCreatorAndCreatedAt() public {
         setupApproval(users.alice, users.bob, ApprovalTypes.CREATION);
+        vm.warp(block.timestamp + 1 days);
+        uint48 expectedTimestamp = uint48(block.timestamp);
         bytes32 atomId = _createOneFor(users.alice, users.bob, "creator-attribution");
 
         assertEq(protocol.multiVault.getAtomCreator(atomId), users.alice, "atomCreators must point to creator");
+        assertNotEq(protocol.multiVault.getAtomCreator(atomId), users.bob, "sender must not receive attribution");
+        assertEq(protocol.multiVault.getAtomCreatedAt(atomId), expectedTimestamp, "creation time must be exact");
     }
 
     function test_createAtomsFor_emitsAtomCreatedWithCreator() public {

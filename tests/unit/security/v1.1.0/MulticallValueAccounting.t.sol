@@ -53,7 +53,7 @@ contract MultiSubcallCatcher {
 }
 
 /// @title  MulticallValueAccounting
-/// @notice Hypothesis 2 (deep pre-audit): transient value accounting in multicall, pushed
+/// @notice Transient value accounting in multicall, pushed
 ///         past the existing single-subcall caught-revert test to a MULTI-subcall sequence where a
 ///         later subcall reverts after earlier subcalls have already written `_virtualMsgValue`.
 ///

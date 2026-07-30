@@ -9,7 +9,7 @@ import { MultiVaultMigrationMode } from "src/protocol/MultiVaultMigrationMode.so
 import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
 import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCurve.sol";
-import { BondingCurveConfig } from "src/interfaces/IMultiVaultCore.sol";
+import { BondingCurveConfig, GeneralConfig } from "src/interfaces/IMultiVaultCore.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
@@ -151,9 +151,11 @@ contract MultiVaultMigrationModeTest is BaseTest {
         walletConfig.atomWalletBeacon = address(atomWalletBeacon);
 
         // Initialize the migration mode contract
+        GeneralConfig memory generalConfig = _getDefaultGeneralConfig();
+        generalConfig.trustBonding = address(protocol.trustBonding);
         vm.prank(users.admin);
         multiVaultMigrationMode.initialize(
-            _getDefaultGeneralConfig(),
+            generalConfig,
             _getDefaultAtomConfig(),
             _getDefaultTripleConfig(),
             walletConfig,
@@ -203,6 +205,20 @@ contract MultiVaultMigrationModeTest is BaseTest {
         multiVaultMigrationMode.batchSetAtomData(creators, atomDataArray);
 
         return atomIds;
+    }
+
+    function _stageMigratedTriple() internal returns (bytes32 counterTripleId) {
+        address[] memory creators = new address[](1);
+        bytes32[3][] memory tripleAtomIds = new bytes32[3][](1);
+        creators[0] = users.alice;
+        tripleAtomIds[0] = [keccak256("subject"), keccak256("predicate"), keccak256("object")];
+
+        bytes32 tripleId =
+            multiVaultMigrationMode.calculateTripleId(tripleAtomIds[0][0], tripleAtomIds[0][1], tripleAtomIds[0][2]);
+        vm.prank(users.admin);
+        multiVaultMigrationMode.batchSetTripleData(creators, tripleAtomIds);
+
+        return multiVaultMigrationMode.getCounterIdFromTripleId(tripleId);
     }
 
     /* =================================================== */
@@ -364,6 +380,30 @@ contract MultiVaultMigrationModeTest is BaseTest {
         vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_ArraysNotSameLength.selector));
         vm.prank(users.admin);
         multiVaultMigrationMode.batchSetVaultTotals(termIds, 1, vaultTotals);
+    }
+
+    function test_batchSetVaultTotals_revertsWhenAssetsExceedCurveMaximum() external {
+        bytes32[] memory atomIds = _createTestAtoms();
+        bytes32[] memory termIds = new bytes32[](1);
+        termIds[0] = atomIds[0];
+        MultiVaultMigrationMode.VaultTotals[] memory vaultTotals = new MultiVaultMigrationMode.VaultTotals[](1);
+        vaultTotals[0] = MultiVaultMigrationMode.VaultTotals(testBondingCurveRegistry.getCurveMaxAssets(2) + 1, 1);
+
+        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_ActionExceedsMaxAssets.selector));
+        vm.prank(users.admin);
+        multiVaultMigrationMode.batchSetVaultTotals(termIds, 2, vaultTotals);
+    }
+
+    function test_batchSetVaultTotals_revertsWhenSharesExceedCurveMaximum() external {
+        bytes32[] memory atomIds = _createTestAtoms();
+        bytes32[] memory termIds = new bytes32[](1);
+        termIds[0] = atomIds[0];
+        MultiVaultMigrationMode.VaultTotals[] memory vaultTotals = new MultiVaultMigrationMode.VaultTotals[](1);
+        vaultTotals[0] = MultiVaultMigrationMode.VaultTotals(1, testBondingCurveRegistry.getCurveMaxShares(2) + 1);
+
+        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_ActionExceedsMaxShares.selector));
+        vm.prank(users.admin);
+        multiVaultMigrationMode.batchSetVaultTotals(termIds, 2, vaultTotals);
     }
 
     function testFuzz_batchSetVaultTotals(
@@ -821,6 +861,22 @@ contract MultiVaultMigrationModeTest is BaseTest {
         bytes32 counterTripleId = multiVaultMigrationMode.getCounterIdFromTripleId(tripleId);
         assertTrue(multiVaultMigrationMode.isTriple(counterTripleId));
         assertEq(multiVaultMigrationMode.getTripleIdFromCounterId(counterTripleId), tripleId);
+    }
+
+    function test_previewDeposit_revertsForPartiallyMigratedCounterTriple() external {
+        bytes32 counterTripleId = _stageMigratedTriple();
+
+        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_CannotDirectlyInitializeCounterTriple.selector));
+        multiVaultMigrationMode.previewDeposit(counterTripleId, 1, 1 ether);
+    }
+
+    function test_deposit_revertsForPartiallyMigratedCounterTriple() external {
+        bytes32 counterTripleId = _stageMigratedTriple();
+        vm.deal(users.alice, 1 ether);
+
+        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_CannotDirectlyInitializeCounterTriple.selector));
+        vm.prank(users.alice);
+        multiVaultMigrationMode.deposit{ value: 1 ether }(users.alice, counterTripleId, 1, 0);
     }
 
     function test_batchSetTripleData_revertsOnArraysNotSameLength() external {

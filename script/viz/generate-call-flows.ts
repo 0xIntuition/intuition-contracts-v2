@@ -164,6 +164,27 @@ const ENTRY_POINTS: EntryPoint[] = [
 			'Books the exit and distributes the forwarded fee to the exiting tier, then the prior tiers.',
 	},
 	{
+		slug: 'curve-preview-redeem-for',
+		contract: 'DynamicFeeFlatPriceCurve',
+		fn: 'previewRedeemFor',
+		title: 'DynamicFeeFlatPriceCurve.previewRedeemFor',
+		blurb:
+			'The account-aware redeem quote. Prices the withdrawal fee at the HOLDER\'s recorded tier, ' +
+			'unlike `MultiVault.previewRedeem`, which is account-agnostic and falls back to the vault\'s ' +
+			'current tier. Read-only, and net of this curve\'s fee only — MultiVault\'s own protocol and ' +
+			'exit fees are not modelled here.',
+	},
+	{
+		slug: 'curve-claimable-across',
+		contract: 'DynamicFeeFlatPriceCurve',
+		fn: 'claimableAcross',
+		title: 'DynamicFeeFlatPriceCurve.claimableAcross',
+		blurb:
+			'Total withdrawable across a set of terms — the figure `claim` would pay. Validates the ' +
+			'input (sort-and-scan for repeats) before accumulating, so the documented equality with ' +
+			'the payout cannot be broken by a duplicate term.',
+	},
+	{
 		slug: 'curve-claim',
 		contract: 'DynamicFeeFlatPriceCurve',
 		fn: 'claim',

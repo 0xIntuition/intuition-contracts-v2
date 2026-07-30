@@ -35,6 +35,9 @@ contract AtomWardenUpgradeRegressionTest is Test {
     bytes32 internal constant CLAIM_AUTHORIZATION_TYPEHASH = keccak256(
         "ClaimAuthorization(address claimant,bytes32 atomId,uint8 claimType,uint256 nonce,uint48 validAfter,uint48 validUntil)"
     );
+    bytes32 internal constant ERC1271_MESSAGE_TYPEHASH = keccak256("CoinbaseSmartWalletMessage(bytes32 hash)");
+    bytes4 internal constant ERC1271_MAGIC_VALUE = 0x1626ba7e;
+    bytes4 internal constant ERC1271_INVALID_SIGNATURE = 0xffffffff;
 
     address internal constant UPGRADES_TIMELOCK = 0x321e5d4b20158648dFd1f360A79CAFc97190bAd1;
     address internal constant ADMIN_SAFE = 0xbeA18ab4c83a12be25f8AA8A10D8747A07Cdc6eb;
@@ -260,6 +263,41 @@ contract AtomWardenUpgradeRegressionTest is Test {
         assertEq(deployed2, postComputed2, "post-upgrade deployment address must match prediction");
     }
 
+    function test_upgrade_atomWalletERC1271BindsWalletAndChain() external {
+        address creator = makeAddr("erc1271-upgrade-creator");
+        bytes32 atomId1 = _createAtom(creator, "erc1271-upgrade-atom-1");
+        bytes32 atomId2 = _createAtom(creator, "erc1271-upgrade-atom-2");
+
+        AtomWallet wallet1 = AtomWallet(payable(atomWalletFactory.deployAtomWallet(atomId1)));
+        AtomWallet wallet2 = AtomWallet(payable(atomWalletFactory.deployAtomWallet(atomId2)));
+
+        _upgradeAtomWardenAndReinitialize();
+
+        uint256 ownerPrivateKey = 0xE1C1271;
+        address controlledOwner = vm.addr(ownerPrivateKey);
+        vm.startPrank(ADMIN_SAFE);
+        atomWarden.grantAtomWalletOwnership(atomId1, controlledOwner);
+        atomWarden.grantAtomWalletOwnership(atomId2, controlledOwner);
+        vm.stopPrank();
+
+        bytes32 hash = keccak256("erc1271-v1.1.0-upgrade-regression");
+        bytes memory signature = _signAtomWalletHash(ownerPrivateKey, address(wallet1), hash);
+
+        assertEq(wallet1.isValidSignature(hash, signature), ERC1271_MAGIC_VALUE, "target wallet must accept signature");
+        assertEq(
+            wallet2.isValidSignature(hash, signature),
+            ERC1271_INVALID_SIGNATURE,
+            "sibling wallet must reject replayed signature"
+        );
+
+        vm.chainId(block.chainid + 1);
+        assertEq(
+            wallet1.isValidSignature(hash, signature),
+            ERC1271_INVALID_SIGNATURE,
+            "target wallet must reject cross-chain replay"
+        );
+    }
+
     /*//////////////////////////////////////////////////////////////
                                  HELPERS
     //////////////////////////////////////////////////////////////*/
@@ -340,5 +378,21 @@ contract AtomWardenUpgradeRegressionTest is Test {
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
         return abi.encodePacked(r, s, v);
+    }
+
+    function _signAtomWalletHash(uint256 privateKey, address wallet, bytes32 hash)
+        internal
+        view
+        returns (bytes memory)
+    {
+        bytes32 domainSeparator = keccak256(
+            abi.encode(
+                EIP712_DOMAIN_TYPEHASH, keccak256(bytes("AtomWallet")), keccak256(bytes("1")), block.chainid, wallet
+            )
+        );
+        bytes32 messageHash = keccak256(abi.encode(ERC1271_MESSAGE_TYPEHASH, hash));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, messageHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
+        return abi.encode(uint256(0), abi.encodePacked(r, s, v));
     }
 }

@@ -23,7 +23,7 @@ import { IMultiVault, ApprovalTypes } from "src/interfaces/IMultiVault.sol";
 ///         attribution, on-behalf-of `createAtomsFor` / `createTriplesFor`, canonical and payable
 ///         multicall value accounting, MultiVaultLib-extraction legacy write-flow parity, and the
 ///         system-utilization rollover replay / self-heal guard (#623, carry source at slot 37).
-/// @dev    Forks Intuition Mainnet. Part of the v1.1.0 pre-audit upgrade-regression set, grouped under
+/// @dev    Forks Intuition Mainnet. Part of the v1.1.0 upgrade-regression set, grouped under
 ///         `tests/unit/upgrades/v1.1.0/` (mirroring the v1.0.2 grouping of `CoreMainnetUpgradeRegression`).
 /// @custom:upgrade v1.1.0
 contract MultiVaultUpgradeRegressionTest is Test {

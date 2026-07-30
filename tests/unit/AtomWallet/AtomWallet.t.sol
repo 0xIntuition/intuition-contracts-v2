@@ -1331,6 +1331,18 @@ contract AtomWalletTest is BaseTest {
         assertEq(secondWallet.isValidSignature(hash, signature), bytes4(0xffffffff));
     }
 
+    function test_isValidSignature_rejectsCrossChainReplay() public {
+        uint256 claimantPrivateKey = 0xC1A1;
+        address claimant = vm.addr(claimantPrivateKey);
+        AtomWallet testWallet = _createClaimedWallet(claimant);
+        bytes32 hash = keccak256("chain-specific authorization");
+        bytes memory signature = _signAndWrapReplaySafe(claimantPrivateKey, 0, hash, testWallet);
+
+        assertEq(testWallet.isValidSignature(hash, signature), bytes4(0x1626ba7e));
+        vm.chainId(block.chainid + 1);
+        assertEq(testWallet.isValidSignature(hash, signature), bytes4(0xffffffff));
+    }
+
     /*//////////////////////////////////////////////////////////////
                         TOKEN RECEIVER TESTS
     //////////////////////////////////////////////////////////////*/

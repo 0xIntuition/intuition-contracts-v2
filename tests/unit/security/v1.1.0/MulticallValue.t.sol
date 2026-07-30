@@ -5,7 +5,7 @@ import { BaseTest } from "tests/BaseTest.t.sol";
 import { IMultiVault } from "src/interfaces/IMultiVault.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 
-/// @title  Track 1 — `multicall` value-accounting hunt (ENG-12460)
+/// @title  `multicall` value-accounting hunt
 /// @notice Adversarial PoCs that *attempt* to credit more ETH across a batch than
 ///         `msg.value` covers, and to smuggle nested calls or value into guarded
 ///         zero-value legs. The tests assert the guard fires or state is conserved.

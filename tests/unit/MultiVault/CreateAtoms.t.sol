@@ -165,10 +165,12 @@ contract CreateAtomsTest is BaseTest {
         assertEq(protocol.multiVault.getAtomCreator(atomId), users.alice, "Creator should be recorded");
     }
 
-    function test_createAtoms_recordsCreatedAt() public {
+    function test_createAtoms_recordsCreatorAndCreatedAt() public {
+        vm.warp(block.timestamp + 1 days);
         uint48 expectedTimestamp = uint48(block.timestamp);
         bytes32 atomId = createSimpleAtom("Created-at attribution test", ATOM_COST[0], users.alice);
 
+        assertEq(protocol.multiVault.getAtomCreator(atomId), users.alice, "Creator should be recorded");
         assertEq(protocol.multiVault.getAtomCreatedAt(atomId), expectedTimestamp, "Creation time should be recorded");
     }
 
