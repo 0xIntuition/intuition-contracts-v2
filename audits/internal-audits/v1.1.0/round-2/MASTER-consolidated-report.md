@@ -157,10 +157,11 @@ results carry:
 2. One report did not complete the 30-file delta cluster hunk-by-hunk (`FeeProxy`, `TrustBonding`, `MultiVaultCore`,
    `AtomWarden` and the interface deltas were not read as a diff), and recorded two hypotheses as reasoned-but-unproven
    rather than as passes.
-3. **No static-analysis pass contributed to this round.** Slither could not run on the review host (the compile driver
-   forces an artifact download the sandbox blocks with HTTP 403, even when a local `solc` binary is supplied). One
-   report's Medusa campaign did not reach property execution. Findings come from source reading, hand-derived
-   arithmetic, and executed Foundry probes.
+3. **No static-analysis pass contributed to the six reports.** Slither did not run on the review hosts (the compile
+   driver forces an artifact download the sandbox blocks with HTTP 403, even when a local `solc` binary is supplied),
+   and one report's Medusa campaign did not reach property execution. Every finding below therefore rests on source
+   reading, hand-derived arithmetic, and executed Foundry probes. Both tools have since been made to run against the
+   reviewed scope; **§6a** records their standing results.
 
 ---
 
@@ -1263,6 +1264,27 @@ Three coverage results in this round were established by **mutation**, which mak
 | ERC-1271 digest binding (round-1 `MED-01`)                  | _Permissive_ — accept envelope **or** bare digest     | **122 pre-existing wallet tests still pass** | `MIN-03` |
 | Storage layout, intra-struct field order                    | `minDeposit` ↔ `minShare` swapped in `GeneralConfig` | **All 11 layout tests still pass**           | `MIN-04` |
 
+### 6a. Static and dynamic analysis
+
+Slither and Medusa run against the reviewed scope. **Neither contributed to any finding above** — every finding was
+established before either tool was available (§2).
+
+**Slither** — 102 contracts, 100 detectors, **283 results**: 12 High, 35 Medium, 94 Low, 139 Informational, 3
+Optimization. All 8 High-impact/High-confidence results are `uninitialized-state` on **mappings**
+(`MultiVault.totalUtilization`, `MultiVaultCore._triples`, and six siblings); mappings take no initializer in Solidity,
+so the detector does not apply. Three results fall inside the round-2 scope, all `uninitialized-local` on
+`DynamicFeeFlatPriceCurve` — `undistributed` (a zero-start accumulator) and `bestTier` / `bestStake` (a max-search whose
+zero default is the sentinel `_awardNearestOrProtocol` then gates on explicitly, `bestStake > 0`). **The Low and
+Informational results are not triaged.**
+
+**Medusa** — the `DynamicFeeFlatPriceCurve` campaign executes to its 100,000-call limit: **20 of 20 tests pass, 0
+failures**, including `property_valueConserved` and `property_solvent`, over 117,395 calls and 1,130 branches.
+
+**The Medusa properties are not yet shown to bind.** A mutation injecting a one-wei-per-credit inflation on the fee path
+did **not** turn the campaign red: `property_solvent` compares a balance against obligations, and a leak that small sits
+below the detection threshold at this run length and fee bound. The campaign is a working harness; its passing result is
+not evidence of property strength.
+
 ---
 
 ## 7. Cross-round agreement matrix, severity disagreements, and remediation status
@@ -1397,11 +1419,10 @@ address and must be treated as a migration, not a parameter change (`MED-08`). N
 address, and recovering a fully-renounced signer set requires `grantRole` before the threshold can be lowered
 (`MIN-08`).
 
-**Not blocking, but state it explicitly to the external auditors.** No static-analysis pass contributed to this round
-(Slither could not run; the Medusa campaign did not reach property execution), one report's C1 verdict is explicitly
-provisional with no checklist walk or mutation-checks, one report's `MultiVaultLib` review was static-analysis only, and
-one report did not complete the 30-file delta hunk-by-hunk. The clean results on those specific surfaces carry
-correspondingly less weight.
+**Not blocking, but it bounds the coverage claim.** No static-analysis pass contributed to the six reports — Slither and
+Medusa were only made to run after the round closed (§6a). One report's C1 verdict is provisional, with no checklist
+walk or mutation-checks; one report's `MultiVaultLib` review was static-analysis only; and one report did not complete
+the 30-file delta hunk-by-hunk. The clean results on those specific surfaces carry correspondingly less weight.
 
 **What this round establishes positively.** The accumulator's arithmetic, value conservation, the payable-multicall
 value machinery, the byte-exact storage mirror, flat-price par, and the reentrancy surface around the new hooks were

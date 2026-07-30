@@ -4,11 +4,11 @@ pragma solidity 0.8.29;
 import { console, Vm } from "forge-std/src/Test.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 import { TrustBondingBase } from "tests/unit/TrustBonding/TrustBondingBase.t.sol";
+import { ICoreEmissionsController } from "src/interfaces/ICoreEmissionsController.sol";
 import { ISatelliteEmissionsController } from "src/interfaces/ISatelliteEmissionsController.sol";
 import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
 import { MetaERC20Dispatcher } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
 import { MetaERC20DispatchInit, FinalityState } from "src/interfaces/IMetaLayer.sol";
-import { ICoreEmissionsController } from "src/interfaces/ICoreEmissionsController.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 /// @dev forge test --match-path 'tests/unit/SatelliteEmissionsController/AccessControl.t.sol'
