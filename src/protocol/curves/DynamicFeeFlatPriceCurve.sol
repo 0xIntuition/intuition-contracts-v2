@@ -31,7 +31,7 @@ import {
  *         Pricing (`previewDeposit`/`previewRedeem`/`currentPrice`/...) comes entirely from {LinearCurve};
  *         nothing about the 1:1-at-par math changes.
  *
- * @dev    Economics port of `lab/curve-playground/src/model/flatFeeModel3.ts` (the executable spec):
+ * @dev    The economics, stated in full here rather than by reference to anything outside this repo:
  *         - Tiers are bands of cumulative net vault assets. The cumulative upper edge of tier `k` is
  *           the geometric series `edge(k) = width0 * ((1+g)^(k+1) - 1) / g` with `g = growthGBps / BPS`,
  *           and a tier's width is exactly the span between edges, `width(k) = edge(k) - edge(k-1)`.
@@ -53,6 +53,27 @@ import {
  *           nearest-first window. A `depositToPriorTierBps` slice can additionally be paid as a
  *           lump to the nearest occupied prior tier BEFORE the fulcrum spread (0 by default = pure
  *           fulcrum), letting the immediately preceding cohort earn a configurable premium.
+ *
+ *           THE EARNING WINDOW, and why it is stated rather than left to be derived. Because `dStar`
+ *           is a FRACTION of the span, which prior tiers earn depends on where the vault currently
+ *           sits, not on the recipient tier alone. Substituting `d = tier - j` and
+ *           `dStar = (1 - alpha) * tier` into the weight, prior tier `j` earns a non-zero share iff
+ *
+ *               |alpha * tier - j| < sigma        (`tier` = the SOURCE tier, i.e. the vault's tier)
+ *
+ *           For a non-zero `alpha` that is a bounded band of source tiers,
+ *           `(j - sigma)/alpha < tier < (j + sigma)/alpha`, about `2*sigma/alpha` tiers wide. A cohort
+ *           therefore drops out of the spread once the vault climbs past the upper end of its band,
+ *           and it participates again if the vault falls back inside — the condition is evaluated
+ *           afresh on every fee, so nothing about it is permanent or one-way. Nothing already accrued
+ *           is affected either: `accFeePerShare` is monotonic and is never decremented, so leaving the
+ *           window stops NEW credit and touches nothing earned before. At `alpha = 0` the condition
+ *           collapses to `j < sigma`: the earliest `sigma` tiers earn from every source tier and no
+ *           window ever closes.
+ *           Two examples. At `alpha = 1, sigma = 4` and a vault in tier 6, `|6 - j| < 4` admits tiers
+ *           3..5 — the legacy nearest-first window, in the documented 50 / 33.3 / 16.7 split. At
+ *           `alpha = 0.6, sigma = 3` and the same vault, `|3.6 - j| < 3` admits tiers 1..5 and tier 0
+ *           receives nothing, because `|3.6 - 0|` exceeds sigma.
  *         - Withdrawal fee `min(cap, base + exitTier*growth)` (or the tier's manual override) goes to
  *           the residual holders of the exiting tier, with a configurable
  *           `withdrawalToFulcrumTiersBps` slice routed to the prior tiers via the same fulcrum kernel;
@@ -62,8 +83,8 @@ import {
  *           `recordDeposit` time against the tier's then-current accumulator; there is deliberately
  *           NO dwell requirement, NO time-weighting and NO minimum holding period — this is an
  *           activity-driven redistribution, not a yield-accrual product, and earning from a later
- *           depositor or a later exiter is the intended mechanic (asserted by
- *           `test_frontRun_sandwichEarningsBoundedByVictimFee`). A position opened one transaction
+ *           depositor or a later exiter is the intended mechanic — bounded, in that a sandwich around
+ *           a deposit can never extract more than the victim's own fee. A position opened one transaction
  *           before an exit is therefore as entitled as one held for a year, and because the credit
  *           divides across the recipient tier's stake, a small position that is the tier's only
  *           other occupant receives the whole slice. Conservation still binds: no party can ever
@@ -334,9 +355,8 @@ contract DynamicFeeFlatPriceCurve is
     ///           bucket index).
     /// @dev    RETUNE SEMANTICS, with live positions. A retune re-prices the ladder going FORWARD and
     ///         is never applied retroactively: earnings already accrued under the old schedule are
-    ///         preserved exactly, which is the guarantee that matters and is asserted by
-    ///         `test_liveFeeChange_doesNotRepriceAccruedBalances`. A rate moving from, say, 10% to 12%
-    ///         applies only to subsequent activity.
+    ///         preserved exactly, which is the guarantee that matters. A rate moving from, say, 10% to
+    ///         12% applies only to subsequent activity.
     ///         The consequence to understand is that positions are NOT migrated. The accumulators are
     ///         index-keyed (`accFeePerShare[termId][tier]`), and changing `width0`, `growthGBps` or
     ///         `tierCount` changes what each index MEANS without moving any holder between indices. A
@@ -1017,9 +1037,14 @@ contract DynamicFeeFlatPriceCurve is
     }
 
     /// @dev Degenerate branch of {_payFulcrumTiers}: award the whole `pool` to the ELIGIBLE tier nearest
-    ///      the fulcrum (nearest-first tie-break via strict `<`, matching the playground spec), reusing
-    ///      the `stakes` computed in pass 1. Falls through to the protocol bucket only when no prior
-    ///      tier qualifies.
+    ///      the fulcrum, reusing the `stakes` computed in pass 1. Falls through to the protocol bucket
+    ///      only when no prior tier qualifies.
+    ///      TIE-BREAK, stated precisely because two tiers can be exactly equidistant from the fulcrum
+    ///      whenever `dStar` lands on a half-integer (e.g. `span = 3, alpha = 0.5` puts it at 1.5, so
+    ///      `d = 1` and `d = 2` are both 0.5 away). The scan runs `d = 1..span` — nearest prior tier
+    ///      first — and keeps the incumbent on equality via strict `<`, so a tie resolves to the tier
+    ///      NEAREST the source. That is the intended rule on both legs: whichever eligible cohort is
+    ///      closest wins, regardless of the direction the scan approached from.
     ///      The two `> 0` tests below are sentinels, not occupancy tests: {_weighPriorTiers} zeroes the
     ///      entry of any tier that fails {_isEligibleStake}, so a non-zero entry here is eligible by
     ///      construction. That invariant is the whole reason this function needs no floor logic of its

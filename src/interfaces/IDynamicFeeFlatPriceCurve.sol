@@ -2,10 +2,11 @@
 pragma solidity 0.8.29;
 
 /// @notice Tunable configuration for the {DynamicFeeFlatPriceCurve}. All fee rates are expressed in
-///         basis points (bps) over {DynamicFeeFlatPriceCurve.BPS}. The tier schedule and split are the
-///         fixed-point port of the `flatFeeModel3.ts` playground spec; the exact production numbers
-///         are still being finalized by the ongoing mechanics-lock and modeling work, so every field
-///         is tunable.
+///         basis points (bps) over {DynamicFeeFlatPriceCurve.BPS}. The tier schedule and split are a
+///         fixed-point formulation of the stepwise fee economy; the exact production numbers are still
+///         being finalized by the ongoing mechanics-lock and modeling work, so every field is tunable.
+///         The mechanism itself is specified in full on {DynamicFeeFlatPriceCurve}, including the
+///         earning-window condition that determines which prior tiers a given fee reaches.
 /// @dev    Storage note: {DynamicFeeFlatPriceCurve} stores this struct inline (`config`) BEFORE its
 ///         fee-accounting mappings, so appending a field grows the struct and shifts every subsequent
 ///         curve storage slot. That is safe for a FRESH deploy (a new curve id) — which is how this

@@ -8,10 +8,11 @@ import { DynamicFeeFlatPriceCurve } from "src/protocol/curves/DynamicFeeFlatPric
 import { DynamicFeeConfig } from "src/interfaces/IDynamicFeeFlatPriceCurve.sol";
 
 /// @title  DynamicFeeThirteenTierExampleTest
-/// @notice The 13-tier default schedule as an EXECUTABLE worked example — the reference config for
-///         demos, modeling hand-off, and audit scoping. Everything here is deliberately written to be
-///         read: literal tier edges, the full fee table, one manual override, and a narrated
-///         deposit -> earn -> claim walkthrough with exact numbers.
+/// @notice The 13-tier default schedule as an EXECUTABLE worked example, for demos and modeling
+///         hand-off. Everything here is deliberately written to be read: literal tier edges, the
+///         full fee table, one manual override, and a narrated deposit -> earn -> claim walkthrough
+///         with exact numbers. The mechanism itself is specified on {DynamicFeeFlatPriceCurve};
+///         these numbers are one illustrative schedule, not a normative reference.
 ///
 /// @dev    Shape: 13 tiers, geometric width growth (`growthG = 0.5`, i.e. each band is 1.5x the one
 ///         below it), tiers 0-5 deliberately small (they cover the first ~20.8k TRUST of a ~257k
@@ -205,10 +206,12 @@ contract DynamicFeeThirteenTierExampleTest is Test {
     ///             edge).
     ///          3. bob then deposits 900 TRUST from tier 1. It stays inside tier 1 (1,500 + 900 <
     ///             2,500), so the piecewise walk charges one band at tier 1's 1.5% = 13.5 TRUST.
-    ///          4. That fee is distributed by the triangular fulcrum kernel over the occupied prior tiers.
-    ///             Only tier 0 exists below tier 1, so alice's tier takes the nearest 50% slice
-    ///             (6.75 TRUST) and the two absent tiers' slices (4.05 + 2.7) fall to the protocol.
-    ///          5. alice pulls her 6.75 TRUST. Nothing is lost: the contract's balance is exactly
+    ///          4. That fee is distributed by the triangular fulcrum kernel over the occupied prior
+    ///             tiers. The weights are normalized over the tiers that actually HOLD STAKE, not
+    ///             over the whole window, so an absent tier's share is absorbed by the tiers that
+    ///             qualified rather than leaking. Tier 0 (alice) is the only prior tier below tier 1,
+    ///             so it takes the entire 13.5 TRUST and nothing reaches the protocol.
+    ///          5. alice pulls her 13.5 TRUST. Nothing is lost: the contract's balance is exactly
     ///             what was claimed plus what the protocol accrued.
     function test_thirteenTierWalkthrough_depositEarnClaim() external {
         // 1. alice enters an empty vault at tier 0 and pays no fee.
