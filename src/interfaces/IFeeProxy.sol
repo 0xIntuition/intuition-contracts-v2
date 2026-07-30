@@ -142,14 +142,14 @@ struct AffiliateUserStats {
 ///         {MultiVault} on the deposit and creation paths, applies a
 ///         per-affiliate fee, forwards the remaining value to MultiVault,
 ///         and refunds any excess `msg.value` with a pull-fallback ledger.
-/// @dev    Redemptions are not proxied: per decision 3 in ENG-11832, users
-///         redeem directly against {MultiVault} regardless of affiliate
-///         state. A paused affiliate blocks new deposits and creations
+/// @dev    Redemptions are deliberately not proxied: users redeem directly
+///         against {MultiVault} regardless of affiliate state, so no
+///         affiliate can sit between a holder and their exit. A paused affiliate blocks new deposits and creations
 ///         through this proxy only; it does not affect a user's ability to
 ///         redeem.
 ///
 ///         Creation paths route through {MultiVault.createAtomsFor} and
-///         {MultiVault.createTriplesFor} (shipped in ENG-11858) using the
+///         {MultiVault.createTriplesFor} using the
 ///         {ApprovalTypes.CREATION} bit, so the credited atom/triple
 ///         creator is the end user (`msg.sender` of the proxy call), not
 ///         the proxy itself.

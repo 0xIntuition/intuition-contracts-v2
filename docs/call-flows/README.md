@@ -69,9 +69,9 @@ By construction, so the output stays readable and reproducible:
 
 Worth stating explicitly, because these are exactly the places an auditor should not trust a call graph:
 
-- **Dynamic dispatch.** `multicall` / `multicallPayable` dispatch by `delegatecall` to `address(this)` with calldata
-  chosen at runtime, so they appear with **no outgoing edges**.
-  [`multivault-value-paths.md` §4](./multivault-value-paths.md) covers that path by hand.
+- **Dynamic dispatch.** `multicall` dispatches by `delegatecall` to `address(this)` with calldata chosen at runtime, so
+  they appear with **no outgoing edges**. [`multivault-value-paths.md` §4](./multivault-value-paths.md) covers that path
+  by hand.
 - **Interface-typed calls resolve to the interface, not the implementation.** A call to the fee hook shows up as
   `MultiVaultLib → IBaseCurve.recordDeposit`, not as `→ DynamicFeeFlatPriceCurve.recordDeposit`, because the concrete
   curve is resolved from the registry at runtime. [`dynamic-fee-curve.md` §3](./dynamic-fee-curve.md) shows the real

@@ -9,8 +9,8 @@ Three things make these paths harder to follow than a single-contract vault:
    `DELEGATECALL`. There is still only **one storage context**.
 2. **The flow leaves the contract mid-write.** The vault resolves the term's curve from the registry and calls
    standardized hooks on it. The interesting ordering is across that boundary.
-3. **The entry point may be a batch.** `multicall` / `multicallPayable` re-enter the same contract, so a "single"
-   deposit may be one leg of several.
+3. **The entry point may be a batch.** `multicall` re-enters the same contract, so a "single" deposit may be one leg of
+   several.
 
 ---
 
@@ -184,13 +184,13 @@ vault's current tier — see [`dynamic-fee-curve.md`](./dynamic-fee-curve.md)).
 
 ## 4. Batching
 
-Both batch entry points dispatch sub-calls with `delegatecall` to `address(this)`, so a sub-call re-enters this same
+The batch entry point dispatches sub-calls with `delegatecall` to `address(this)`, so a sub-call re-enters this same
 contract through its normal external ABI, keeps the original `msg.sender`, and re-evaluates its own modifiers.
 
 ```mermaid
 flowchart TB
   caller(["EOA / smart account"])
-  mcp["multicallPayable(data[], values[])"]
+  mcp["multicall(data[], values[])"]
   guard{"pre-loop checks"}
   disp["delegatecall(address(this), data[i])<br/>with _virtualMsgValue = values[i]"]
   dep["deposit / depositBatch / createAtoms /<br/>createTriples / createAtomsFor / createTriplesFor"]
@@ -219,9 +219,9 @@ Points a reviewer should confirm:
   supported; the only thing a batch buys is atomicity of otherwise-independent legs.
 - **The first sub-call revert bubbles raw revert data unchanged.**
 
-> The generated page [`generated/multivault-multicall-payable.md`](./generated/multivault-multicall-payable.md) shows
-> this entry point with **no outgoing edges**. That is not a bug in the diagram — the dispatch target is computed at
-> runtime from calldata, so no static call-graph tool can see through it. This diagram is the substitute.
+> The generated page [`generated/multivault-multicall.md`](./generated/multivault-multicall.md) shows this entry point
+> with **no outgoing edges**. That is not a bug in the diagram — the dispatch target is computed at runtime from
+> calldata, so no static call-graph tool can see through it. This diagram is the substitute.
 
 ---
 
