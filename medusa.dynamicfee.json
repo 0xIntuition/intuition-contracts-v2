@@ -8,7 +8,7 @@
 		"callSequenceLength": 30,
 		"pruneFrequency": 5,
 		"corpusDirectory": "private/medusa-corpus/dynamic-fee",
-		"coverageEnabled": false,
+		"coverageEnabled": true,
 		"coverageFormats": ["html", "lcov"],
 		"coverageExclusions": [],
 		"revertReporterEnabled": false,
@@ -75,7 +75,7 @@
 			"target": ".",
 			"solcVersion": "",
 			"exportDirectory": "",
-			"args": []
+			"args": ["--compile-force-framework", "foundry", "--foundry-compile-all"]
 		}
 	},
 	"slither": {

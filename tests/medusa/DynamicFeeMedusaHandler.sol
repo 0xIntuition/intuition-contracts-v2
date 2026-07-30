@@ -28,7 +28,10 @@ contract DynamicFeeMedusaHandler is Test {
     /// @dev Total native value paid back out of the curve to claimers.
     uint256 public ghost_valueOut;
 
-    constructor() {
+    /// @dev `payable` is load-bearing: Medusa funds the harness by attaching value to the deployment
+    ///      transaction, and a non-payable constructor rejects that transfer before any code runs —
+    ///      which surfaces only as a bare "execution reverted" with no revert data.
+    constructor() payable {
         DynamicFeeConfig memory config = DynamicFeeConfig({
             width0: 10e18,
             tierCount: 5,
@@ -55,8 +58,12 @@ contract DynamicFeeMedusaHandler is Test {
             )
         );
         curve = DynamicFeeFlatPriceCurve(address(proxy));
-        vm.deal(address(this), 1_000_000 ether); // fees are forwarded from this handler's balance
     }
+
+    /// @dev The fuzzer funds this handler at deployment (Medusa via the constructor's `value`, Echidna
+    ///      via `balanceContract`), so no cheat-code top-up is needed — and a construction-time
+    ///      cheat call is exactly what prevented this harness from deploying under Medusa.
+    receive() external payable { }
 
     /* ============ FUZZED ACTIONS ============ */
 

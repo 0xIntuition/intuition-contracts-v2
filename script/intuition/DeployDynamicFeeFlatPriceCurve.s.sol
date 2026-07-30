@@ -15,9 +15,12 @@ Deploys the flat-price / dynamic-fee curve:
      surface (inherited from LinearCurve) and the tier schedule + fee accounting that custodies the
      fees. Registered under a fresh curveId.
   2. The single wiring transaction (registry.addBondingCurve) that must be executed by the registry
-     owner — done inline on anvil, printed as calldata for the governed testnet/mainnet Safe
-     elsewhere. No MultiVault-side wiring exists: the MultiVault discovers the curve's fee hooks
-     through the standardized `IBaseCurve` hook getters on every deposit/redeem.
+     owner — done inline on anvil, printed as calldata elsewhere. Who that owner is differs by
+     network and is worth checking rather than assuming: on MAINNET the registry is timelock-owned,
+     so the calldata goes through the governed path; on INTUITION SEPOLIA it is a plain EOA, so
+     registration there is one ordinary transaction and involves no timelock or Safe at all. No
+     MultiVault-side wiring exists: the MultiVault discovers the curve's fee hooks through the
+     standardized `IBaseCurve` hook getters on every deposit/redeem.
 
 WARNING: the curve's `_multiVault` initializer argument MUST be the production MultiVault proxy.
 The curve's record hooks are `onlyMultiVault`, so a miswired curve makes every deposit/redeem on
@@ -102,10 +105,12 @@ contract DeployDynamicFeeFlatPriceCurve is SetupScript {
             "Predicted curveId (registry.count() + 1 at deploy time):", BondingCurveRegistry(registry).count() + 1
         );
 
-        // 2. Register it. On anvil the broadcaster owns the registry, so do it inline; on governed
-        //    networks emit the calldata for the registry owner Safe to execute. Registration is the
-        //    ONLY wiring step: once registered, the MultiVault detects the curve's fee hooks through
-        //    `hasDepositFeeHook()` / `hasRedeemFeeHook()` on the curve itself.
+        // 2. Register it. On anvil the broadcaster owns the registry, so do it inline; elsewhere emit
+        //    the calldata for whoever owns the registry on that network to execute — a timelock on
+        //    mainnet, but a plain EOA on Intuition Sepolia, where this is a single ordinary
+        //    transaction rather than a governance action. Registration is the ONLY wiring step: once
+        //    registered, the MultiVault detects the curve's fee hooks through `hasDepositFeeHook()` /
+        //    `hasRedeemFeeHook()` on the curve itself.
         if (block.chainid == NETWORK_ANVIL) {
             BondingCurveRegistry(registry).addBondingCurve(address(dynamicFeeCurveProxy));
             console2.log("Registered inline (anvil).");
