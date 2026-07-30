@@ -130,9 +130,10 @@ contract DeployDynamicFeeFlatPriceCurve is SetupScript {
     ///      The terminal tier 12 begins at the tier-11 edge, ~197,903 TRUST, and absorbs everything
     ///      above it unbounded; tier 12's own closed-form edge (~242,483 TRUST) is inert (never a
     ///      boundary, since `tierOf` caps at the terminal tier).
-    ///      PLACEHOLDER: the final production numbers (tier widths/edges, per-tier fees, fulcrum alpha/sigma) are
-    ///      pending the economic modeling and are owner-tunable post-deploy via `setConfig`; only the
-    ///      13-tier count and the schedule shape are locked. Note `growthGBps` is a COMPOUNDING rate —
+    ///      These are the values the curve DEPLOYS with, not fixed constants: tier widths/edges, per-tier
+    ///      fees, and the fulcrum alpha/sigma are all retunable post-deploy via `setConfig`, so treat any
+    ///      number below as the starting schedule rather than a permanent one. The 13-tier count and the
+    ///      schedule shape are what stay put. Note `growthGBps` is a COMPOUNDING rate —
     ///      the same numeric value stretches the ladder far more than a linear ramp would.
     ///      `minEligibleTierStake` — the floor a tier must hold to receive redistributed fees — ships at
     ///      0, i.e. DISABLED, reproducing the plain occupancy behaviour, so the mechanism changes nothing

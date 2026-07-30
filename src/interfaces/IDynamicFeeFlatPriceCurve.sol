@@ -3,8 +3,10 @@ pragma solidity 0.8.29;
 
 /// @notice Tunable configuration for the {DynamicFeeFlatPriceCurve}. All fee rates are expressed in
 ///         basis points (bps) over {DynamicFeeFlatPriceCurve.BPS}. The tier schedule and split are a
-///         fixed-point formulation of the stepwise fee economy; the exact production numbers are still
-///         being finalized by the ongoing mechanics-lock and modeling work, so every field is tunable.
+///         fixed-point formulation of the stepwise fee economy: every field is a policy parameter the
+///         owner can retune, validated on write against the immutable ceilings declared on the curve,
+///         so the schedule follows the economics over the protocol's life without a code change. Read
+///         the deployed values as policy rather than as constants to build assumptions on.
 ///         The mechanism itself is specified in full on {DynamicFeeFlatPriceCurve}, including the
 ///         earning-window condition that determines which prior tiers a given fee reaches.
 /// @dev    Storage note: {DynamicFeeFlatPriceCurve} stores this struct inline (`config`) BEFORE its
