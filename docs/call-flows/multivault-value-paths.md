@@ -193,13 +193,13 @@ flowchart TB
   mcp["multicall(data[], values[])"]
   guard{"pre-loop checks"}
   disp["delegatecall(address(this), data[i])<br/>with _virtualMsgValue = values[i]"]
-  dep["deposit / depositBatch / createAtoms /<br/>createTriples / createAtomsFor / createTriplesFor"]
+  dep["any external function on this contract<br/>(dispatch target comes from calldata)"]
   eff["_effectiveMsgValue()<br/>= _virtualMsgValue while batching"]
   lib["MultiVaultLib._processDeposit"]
 
   caller -- "msg.value = Σ values" --> mcp
   mcp --> guard
-  guard -- "selector allowlist · sum(values) == msg.value ·<br/>arrays same length · not nested" --> disp
+  guard -- "not nested · arrays same length ·<br/>sum(values) == msg.value" --> disp
   disp --> dep
   dep --> eff
   eff --> lib
@@ -207,17 +207,26 @@ flowchart TB
 
 Points a reviewer should confirm:
 
-- **Value accounting.** A `delegatecall` sub-call inherits the _whole_ batch's `CALLVALUE` as `msg.value`. Payable entry
-  points must therefore read `_effectiveMsgValue()`, never raw `msg.value`. The selector allowlist is what keeps that
-  invariant enforceable: only the six entry points migrated to `_effectiveMsgValue()` may appear in a payable batch, so
-  adding a new payable function forces an allowlist decision.
-- **`multicall` (non-payable) sets `_virtualMsgValue = 0`**, so any payable entry point composed inside it fails its own
-  payment validation rather than spending value it was not allocated.
-- **Nesting is rejected** twice over: by the selector allowlist in the pre-loop and by the `_inMulticall` guard.
+- **Value accounting.** A `delegatecall` sub-call inherits the _whole_ batch's physical `CALLVALUE` as `msg.value`, so
+  raw `msg.value` is meaningless inside a batch. Every payable entry point must therefore read `_effectiveMsgValue()`,
+  which returns `_virtualMsgValue` while `_inMulticall` is set and `msg.value` otherwise. The dispatcher enforces
+  `sum(values) == msg.value` before the loop, and assigns `_virtualMsgValue = values[i]` per leg, so the legs partition
+  the batch's value exactly once and no wei can be spent twice.
+- **There is no selector allowlist.** The dispatcher `delegatecall`s whatever calldata it is handed, so **any** external
+  function on this contract is reachable inside a batch — including non-payable and `view` functions, each of which
+  still observes the outer call's physical `CALLVALUE`. What protects the non-payable ones is the `requiresZeroValue`
+  modifier, which asserts `_effectiveMsgValue() == 0` and so rejects a leg that was allocated value it must not spend.
+- **The security invariant is a rule about future entry points, not a runtime check.** Every payable external entry
+  point added later — other than the dispatcher itself — must be `nonReentrant` and must either consume only
+  `_effectiveMsgValue()` or carry `requiresZeroValue`. Any multicall-reachable path that yields external control must
+  also be `nonReentrant`. Reading raw `msg.value`, ignoring an allocated value, or yielding control without the guard is
+  unsafe while the transient multicall context is live. Nothing in the dispatcher can enforce that for a function that
+  does not yet exist, which is why it is stated as an invariant on the contract and must be checked in review.
+- **Nesting is rejected** by the `_inMulticall` transient flag, checked as the dispatcher's first statement.
 - **No capital recycling.** Redeem proceeds are sent to the receiver with `Address.sendValue` rather than retained, so
-  an exit leg can never fund a later deposit leg. Mixed payable + non-payable batches are rejected rather than
-  supported; the only thing a batch buys is atomicity of otherwise-independent legs.
-- **The first sub-call revert bubbles raw revert data unchanged.**
+  an exit leg can never fund a later deposit leg. A batch buys atomicity of otherwise-independent legs and nothing more.
+- **The first sub-call revert bubbles raw revert data unchanged**, so a failing leg surfaces its own error rather than a
+  wrapper.
 
 > The generated page [`generated/multivault-multicall.md`](./generated/multivault-multicall.md) shows this entry point
 > with **no outgoing edges**. That is not a bug in the diagram — the dispatch target is computed at runtime from
@@ -240,4 +249,4 @@ Points a reviewer should confirm:
 
 See [`README.md`](./README.md). The generated call graphs are produced by `bun run viz:call-flows` from the repository
 root; this page is maintained by hand and should be re-read whenever `_processDeposit`, `_processRedeem`, the hook
-interface, or the multicall allowlist changes.
+interface, or the multicall dispatcher changes.
