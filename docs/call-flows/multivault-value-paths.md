@@ -212,10 +212,15 @@ Points a reviewer should confirm:
   which returns `_virtualMsgValue` while `_inMulticall` is set and `msg.value` otherwise. The dispatcher enforces
   `sum(values) == msg.value` before the loop, and assigns `_virtualMsgValue = values[i]` per leg, so the legs partition
   the batch's value exactly once and no wei can be spent twice.
-- **There is no selector allowlist.** The dispatcher `delegatecall`s whatever calldata it is handed, so **any** external
-  function on this contract is reachable inside a batch — including non-payable and `view` functions, each of which
-  still observes the outer call's physical `CALLVALUE`. What protects the non-payable ones is the `requiresZeroValue`
-  modifier, which asserts `_effectiveMsgValue() == 0` and so rejects a leg that was allocated value it must not spend.
+- **There is no selector allowlist.** The dispatcher `delegatecall`s whatever calldata it is handed, so a **zero-value**
+  batch can reach the full external surface. In a **value-bearing** batch, genuinely non-payable and `view` functions
+  are rejected by Solidity's own dispatcher, because each `delegatecall` observes the outer physical `CALLVALUE` and a
+  non-payable function reverts on any non-zero `callvalue()` before a single modifier runs. Reachability is therefore
+  narrowed by the language, not by a list this contract maintains.
+- **`requiresZeroValue` covers the case Solidity cannot.** A function declared `payable` bypasses that `callvalue()`
+  check, so a payable entry point that must nonetheless receive nothing has to assert it explicitly. That is what
+  `redeem`, `redeemBatch` and `approve` do: each is `payable` — so it survives a value-bearing batch — and each carries
+  `requiresZeroValue`, which asserts `_effectiveMsgValue() == 0` and rejects a leg allocated value it must not spend.
 - **The security invariant is a rule about future entry points, not a runtime check.** Every payable external entry
   point added later — other than the dispatcher itself — must be `nonReentrant` and must either consume only
   `_effectiveMsgValue()` or carry `requiresZeroValue`. Any multicall-reachable path that yields external control must
