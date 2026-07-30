@@ -4,8 +4,7 @@
 
 Single-term redeem. Vault state is lowered, the curve records the exit, and only then is the payout sent.
 
-Reached functions: 32. Solid arrows are calls inside one contract; dashed arrows leave it (either a `delegatecall` into
-the linked library, which still executes in the caller's storage context, or a genuine external call).
+Reached functions: 32. Solid arrows are calls inside one contract; dashed arrows leave it (either a `delegatecall` into the linked library, which still executes in the caller's storage context, or a genuine external call).
 
 ## Graph
 

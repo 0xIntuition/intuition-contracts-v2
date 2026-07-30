@@ -4,8 +4,7 @@
 
 Batched redeem; each leg runs the same `_processRedeem` body as the single-term path.
 
-Reached functions: 32. Solid arrows are calls inside one contract; dashed arrows leave it (either a `delegatecall` into
-the linked library, which still executes in the caller's storage context, or a genuine external call).
+Reached functions: 32. Solid arrows are calls inside one contract; dashed arrows leave it (either a `delegatecall` into the linked library, which still executes in the caller's storage context, or a genuine external call).
 
 ## Graph
 

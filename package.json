@@ -96,6 +96,7 @@
     "release:alpha": "npm publish --tag alpha",
     "fmt": "forge fmt",
     "fmt:check": "forge fmt --check",
+    "viz:call-flows": "bun script/viz/generate-call-flows.ts",
     "lint": "bun run lint:sol && bun run prettier:check",
     "lint:sol": "forge fmt --check && bun solhint \"{script,src,tests}/**/*.sol\"",
     "prettier:check": "prettier --check \"**/*.{json,md,yml}\"",

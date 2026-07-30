@@ -4,8 +4,7 @@
 
 The piecewise deposit-fee walk across tier bands (view; called during deposit calculation).
 
-Reached functions: 5. Solid arrows are calls inside one contract; dashed arrows leave it (either a `delegatecall` into
-the linked library, which still executes in the caller's storage context, or a genuine external call).
+Reached functions: 5. Solid arrows are calls inside one contract; dashed arrows leave it (either a `delegatecall` into the linked library, which still executes in the caller's storage context, or a genuine external call).
 
 ## Graph
 

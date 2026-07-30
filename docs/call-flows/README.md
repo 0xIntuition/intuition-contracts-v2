@@ -22,13 +22,15 @@ reproducible from a single command and diffs as text, so drift shows up in revie
 
 ## Regenerating
 
+Run from the contracts package root (`contracts/core` in the monorepo; the repository root in the public mirror):
+
 ```bash
-cd contracts/core
 bun run viz:call-flows
 ```
 
-Output lands in `contracts/core/docs/call-flows/generated/` and is committed. The command is idempotent: re-running it
-on unchanged sources produces no diff.
+Output lands in `docs/call-flows/generated/` and is committed. The command is idempotent: re-running it on unchanged
+sources produces no diff, which doubles as the freshness check — if `git status` is dirty after running it, the
+committed diagrams no longer match the source and must be re-committed.
 
 ### Requirements
 

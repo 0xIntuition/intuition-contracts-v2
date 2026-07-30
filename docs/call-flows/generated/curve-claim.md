@@ -4,8 +4,7 @@
 
 The pull side: a holder settles pending fee earnings and withdraws them as native TRUST.
 
-Reached functions: 2. Solid arrows are calls inside one contract; dashed arrows leave it (either a `delegatecall` into
-the linked library, which still executes in the caller's storage context, or a genuine external call).
+Reached functions: 2. Solid arrows are calls inside one contract; dashed arrows leave it (either a `delegatecall` into the linked library, which still executes in the caller's storage context, or a genuine external call).
 
 ## Graph
 

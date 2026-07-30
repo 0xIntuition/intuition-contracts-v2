@@ -2,11 +2,9 @@
 
 # MultiVault.multicall
 
-Batching entry point. Sub-calls re-enter this same contract by `delegatecall` to `address(this)`, so they are dispatched
-through the normal external ABI.
+Batching entry point. Sub-calls re-enter this same contract by `delegatecall` to `address(this)`, so they are dispatched through the normal external ABI.
 
-Reached functions: 1. Solid arrows are calls inside one contract; dashed arrows leave it (either a `delegatecall` into
-the linked library, which still executes in the caller's storage context, or a genuine external call).
+Reached functions: 1. Solid arrows are calls inside one contract; dashed arrows leave it (either a `delegatecall` into the linked library, which still executes in the caller's storage context, or a genuine external call).
 
 ## Graph
 

@@ -2,11 +2,9 @@
 
 # MultiVault.deposit
 
-Single-term deposit. Crosses into MultiVaultLib by `delegatecall`, then out to the registry-resolved curve for the fee
-quote and the record hook.
+Single-term deposit. Crosses into MultiVaultLib by `delegatecall`, then out to the registry-resolved curve for the fee quote and the record hook.
 
-Reached functions: 52. Solid arrows are calls inside one contract; dashed arrows leave it (either a `delegatecall` into
-the linked library, which still executes in the caller's storage context, or a genuine external call).
+Reached functions: 52. Solid arrows are calls inside one contract; dashed arrows leave it (either a `delegatecall` into the linked library, which still executes in the caller's storage context, or a genuine external call).
 
 ## Graph
 

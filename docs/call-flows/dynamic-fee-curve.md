@@ -174,7 +174,7 @@ applies exactly where it was set (`test_quoteDepositFee_piecewiseConsultsOverrid
 > **Reproduce a piecewise walk yourself** with a total that a committed test asserts directly:
 >
 > ```bash
-> cd contracts/core
+> # from the contracts package root (`contracts/core` in the monorepo; the repository root in the public mirror)
 > forge test --match-test test_quoteDepositFee_piecewiseAcrossTraversedTiers -vv
 > ```
 >

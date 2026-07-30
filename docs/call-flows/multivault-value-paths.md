@@ -238,6 +238,6 @@ Points a reviewer should confirm:
 
 ## 6. Regenerating
 
-See [`README.md`](./README.md). The generated call graphs are produced by `bun run viz:call-flows` from
-`contracts/core`; this page is maintained by hand and should be re-read whenever `_processDeposit`, `_processRedeem`,
-the hook interface, or the multicall allowlist changes.
+See [`README.md`](./README.md). The generated call graphs are produced by `bun run viz:call-flows` from the contracts
+package root; this page is maintained by hand and should be re-read whenever `_processDeposit`, `_processRedeem`, the
+hook interface, or the multicall allowlist changes.

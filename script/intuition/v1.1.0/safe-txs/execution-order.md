@@ -48,7 +48,7 @@ operation — their absence from the upgrade batch is correct, not an omission.
 | `DynamicFeeFlatPriceCurve` | `forge` broadcast of `script/intuition/DeployDynamicFeeFlatPriceCurve.s.sol` | **One** — step 08 below, `BondingCurveRegistry.addBondingCurve`. |
 
 Both are independent of the upgrade's timing: they can be deployed before or after it. Record
-each in the deployed-contracts table in `contracts/core/README.md` once its address exists —
+each in the deployed-contracts table in the contracts package `README.md` once its address exists —
 there is a "Pending v1.1.0 additions" section there listing exactly this.
 
 ## 2. Why the reinitializers are separate transactions
@@ -342,7 +342,7 @@ There is no rollback for an executed upgrade. The realistic responses are:
 ## 6. Regenerating these files
 
 ```bash
-# from contracts/core
+# from the contracts package root (`contracts/core` in the monorepo; the repository root in the public mirror)
 bun script/intuition/v1.1.0/safe-txs/generate-v1.1.0-safe-batches.ts
 ```
 

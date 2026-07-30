@@ -2,8 +2,7 @@
 
 # Contract-level call graph
 
-One node per first-party contract, one edge per cross-contract call. Vendored dependencies, tests, deploy scripts,
-`src/legacy` and `src/external` are excluded.
+One node per first-party contract, one edge per cross-contract call. Vendored dependencies, tests, deploy scripts, `src/legacy` and `src/external` are excluded.
 
 ```mermaid
 flowchart LR
@@ -59,6 +58,4 @@ flowchart LR
   TrustBonding --> ISatelliteEmissionsController
 ```
 
-Contracts with no first-party cross-contract calls: `BaseCurve`, `BaseEmissionsController`, `CoreEmissionsController`,
-`DynamicFeeFlatPriceCurve`, `IAtomWarden`, `IBaseEmissionsController`, `IDynamicFeeFlatPriceCurve`, `IFeeProxy`,
-`IGraduatableCurve`, `LinearCurve`, `MultiVaultCore`, `MultiVaultMigrationMode`.
+Contracts with no first-party cross-contract calls: `BaseCurve`, `BaseEmissionsController`, `CoreEmissionsController`, `DynamicFeeFlatPriceCurve`, `IAtomWarden`, `IBaseEmissionsController`, `IDynamicFeeFlatPriceCurve`, `IFeeProxy`, `LinearCurve`, `MultiVaultCore`, `MultiVaultMigrationMode`.
