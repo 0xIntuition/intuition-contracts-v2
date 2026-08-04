@@ -227,7 +227,7 @@ contract MultiVaultInvariantHandler is Test {
         } catch { }
     }
 
-    /// @notice Drive `multicall` batching a fresh `createAtoms` with a `deposit` into an existing
+    /// @notice Drive `multicall` batching a fresh URI-aware atom creation with a deposit into an existing
     ///         vault, each allocated its own slice of `msg.value`. Mixes a create and a deposit in one
     ///         payable batch — the multi-selector value-accounting path.
     function multicallCreateAndDeposit(uint256 actorSeed, uint256 termSeed, uint256 assetSeed, bool useTriple) public {
