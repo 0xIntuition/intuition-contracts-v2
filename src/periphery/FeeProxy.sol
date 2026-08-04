@@ -25,6 +25,7 @@ import {
  *         creation paths. Applies per-affiliate fee math, forwards the net
  *         assets to MultiVault, credits the end user as the on-chain creator
  *         on creation flows (via {MultiVault.createAtomsFor} /
+ *         {MultiVault.createAtomsWithUris} /
  *         {MultiVault.createTriplesFor}), and refunds excess `msg.value` with
  *         a push-then-pull-fallback flow that is safe for smart-contract
  *         wallets.
@@ -338,6 +339,33 @@ contract FeeProxy is
 
         termIds = IMultiVault(multiVault).createAtomsFor{ value: flow.totalForwarded }(
             msg.sender, atomDatas, flow.forwardedAssets
+        );
+
+        _recordAffiliateStats(affiliate, msg.sender, flow.totalGross, flow.fee, flow.totalForwarded, true);
+        _refundExcess(msg.sender, msg.value - flow.totalGross);
+
+        emit CreatedAtomsVia(msg.sender, affiliate, flow.totalGross, flow.fee, flow.totalForwarded, atomDatas.length);
+    }
+
+    /// @inheritdoc IFeeProxy
+    function createAtomsWithUrisVia(
+        address affiliate,
+        bytes[] calldata atomDatas,
+        uint256[] calldata assets,
+        bytes[][] calldata uris,
+        FeeGuard calldata feeGuard
+    ) external payable whenNotPaused nonReentrant returns (bytes32[] memory termIds) {
+        if (atomDatas.length == 0 || atomDatas.length != assets.length || atomDatas.length != uris.length) {
+            revert FeeProxy_LengthMismatch();
+        }
+        _assertCreatorApproved();
+
+        RoutingFlow memory flow = _setupRoutingFlow(affiliate, assets, feeGuard, true);
+
+        _payAffiliate(flow.feeRecipient, affiliate, msg.sender, flow.fee);
+
+        termIds = IMultiVault(multiVault).createAtomsWithUris{ value: flow.totalForwarded }(
+            msg.sender, atomDatas, flow.forwardedAssets, uris
         );
 
         _recordAffiliateStats(affiliate, msg.sender, flow.totalGross, flow.fee, flow.totalForwarded, true);

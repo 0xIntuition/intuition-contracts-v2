@@ -9,8 +9,10 @@ import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.s
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import {
+    IMultiVaultCore,
     GeneralConfig,
     AtomConfig,
+    AtomUriConfig,
     TripleConfig,
     WalletConfig,
     VaultFees,
@@ -197,6 +199,46 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
         resetPrank({ msgSender: users.charlie });
         _expectOnlyTimelock();
         protocol.multiVault.setAtomConfig(ac);
+    }
+
+    /*////////////////////////////////////////////////////////////////////
+                             setAtomUriConfig
+    ////////////////////////////////////////////////////////////////////*/
+
+    function testGetAtomUriConfig_ReturnsDefaultsBeforeExplicitConfiguration() public view {
+        (uint32 maxUriCount, uint32 maxUriLength) = protocol.multiVault.getAtomUriConfig();
+        assertEq(maxUriCount, 5);
+        assertEq(maxUriLength, 700);
+    }
+
+    function testSetAtomUriConfig_OnlyTimelock_UpdatesFields() public {
+        AtomUriConfig memory config = AtomUriConfig({ maxUriCount: 3, maxUriLength: 512 });
+
+        vm.expectEmit(false, false, false, true, address(protocol.multiVault));
+        emit IMultiVaultCore.AtomUriConfigUpdated(config.maxUriCount, config.maxUriLength);
+
+        resetPrank({ msgSender: users.timelock });
+        protocol.multiVault.setAtomUriConfig(config.maxUriCount, config.maxUriLength);
+
+        (uint32 maxUriCount, uint32 maxUriLength) = protocol.multiVault.getAtomUriConfig();
+        assertEq(maxUriCount, config.maxUriCount);
+        assertEq(maxUriLength, config.maxUriLength);
+    }
+
+    function testSetAtomUriConfig_RevertWhen_NotTimelock() public {
+        resetPrank({ msgSender: users.alice });
+        _expectOnlyTimelock();
+        protocol.multiVault.setAtomUriConfig(3, 512);
+    }
+
+    function testSetAtomUriConfig_RevertWhen_AnyLimitIsZero() public {
+        resetPrank({ msgSender: users.timelock });
+
+        vm.expectRevert(MultiVault.MultiVault_InvalidAtomUriConfig.selector);
+        protocol.multiVault.setAtomUriConfig(0, 512);
+
+        vm.expectRevert(MultiVault.MultiVault_InvalidAtomUriConfig.selector);
+        protocol.multiVault.setAtomUriConfig(3, 0);
     }
 
     /*////////////////////////////////////////////////////////////////////

@@ -32,6 +32,14 @@ struct AtomConfig {
     uint256 atomWalletDepositFee;
 }
 
+/// @notice Atom URI context configuration struct
+struct AtomUriConfig {
+    /// @dev Maximum number of context URIs that may be registered for one atom
+    uint32 maxUriCount;
+    /// @dev Maximum byte length of each context URI
+    uint32 maxUriLength;
+}
+
 /// @notice Triple configuration struct
 struct TripleConfig {
     /// @dev The fee paid to the protocol when depositing vault shares for triple vault creation
@@ -109,6 +117,13 @@ interface IMultiVaultCore {
      * @param atomWalletDepositFee The new atom wallet deposit fee
      */
     event AtomConfigUpdated(uint256 atomCreationProtocolFee, uint256 atomWalletDepositFee);
+
+    /**
+     * @notice Emitted when the atom URI context configuration is updated
+     * @param maxUriCount The maximum number of context URIs allowed per atom
+     * @param maxUriLength The maximum byte length allowed for each context URI
+     */
+    event AtomUriConfigUpdated(uint32 maxUriCount, uint32 maxUriLength);
 
     /**
      * @notice Emitted when the triple configuration is updated
@@ -223,6 +238,12 @@ interface IMultiVaultCore {
      * @return AtomConfig struct containing atom creation fees and wallet deposit fee settings
      */
     function getAtomConfig() external view returns (AtomConfig memory);
+
+    /**
+     * @notice Returns the effective atom URI context limits
+     * @dev Uninitialized upgrade storage resolves to the protocol defaults.
+     */
+    function getAtomUriConfig() external view returns (uint32 maxUriCount, uint32 maxUriLength);
 
     /// @notice Returns the static costs required to create an atom
     /// @return atomCost The static costs of creating an atom

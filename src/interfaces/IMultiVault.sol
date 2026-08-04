@@ -223,6 +223,13 @@ interface IMultiVault {
     /// @param atomWallet The address of the atom wallet associated with the atom vault
     event AtomCreated(address indexed creator, bytes32 indexed termId, bytes atomData, address atomWallet);
 
+    /// @notice Emitted when optional context pointers are registered alongside a newly created atom
+    /// @dev URI bytes are opaque, are not stored, and do not affect the atom's `termId`.
+    /// @param termId The ID of the atom the context describes
+    /// @param registrant The address that supplied the context
+    /// @param uris Context pointers registered for the atom
+    event AtomContextRegistered(bytes32 indexed termId, address indexed registrant, bytes[] uris);
+
     /// @notice Emitted when a triple vault is created
     ///
     /// @param creator The address of the creator
@@ -511,6 +518,24 @@ interface IMultiVault {
         returns (bytes32[] memory);
 
     /**
+     * @notice Creates multiple atom vaults for an approved creator with optional creation-time context pointers
+     * @dev Uses the same CREATION approval rules as {createAtomsFor}; callers creating for themselves require no
+     *      approval. The outer arrays must have equal length. Non-empty `uris[i]` is emitted in
+     *      {AtomContextRegistered} for `atomDatas[i]`, but is excluded from atom ID calculation and storage.
+     * @param creator The address recorded as atom creator and context registrant
+     * @param atomDatas Array of atom data for each atom to be created
+     * @param assets Array of asset amounts to deposit into each atom vault
+     * @param uris Array of URI lists to emit alongside each created atom
+     * @return Array of atom IDs (termIds) for the created atoms
+     */
+    function createAtomsWithUris(
+        address creator,
+        bytes[] calldata atomDatas,
+        uint256[] calldata assets,
+        bytes[][] calldata uris
+    ) external payable returns (bytes32[] memory);
+
+    /**
      * @notice Creates multiple triple vaults with initial deposits
      * @param subjectIds Array of atom IDs to use as subjects
      * @param predicateIds Array of atom IDs to use as predicates
@@ -680,6 +705,9 @@ interface IMultiVault {
 
     /// @notice Sets the atom configuration parameters
     function setAtomConfig(AtomConfig memory _atomConfig) external;
+
+    /// @notice Sets the maximum URI count per atom and maximum byte length per URI
+    function setAtomUriConfig(uint32 maxUriCount, uint32 maxUriLength) external;
 
     /// @notice Sets the triple configuration parameters
     function setTripleConfig(TripleConfig memory _tripleConfig) external;

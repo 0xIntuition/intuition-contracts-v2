@@ -13,6 +13,7 @@ import {
     IMultiVaultCore,
     GeneralConfig,
     AtomConfig,
+    AtomUriConfig,
     TripleConfig,
     WalletConfig,
     VaultFees,
@@ -65,6 +66,9 @@ contract MultiVault is
 
     /// @notice Role identifier for addresses that can pause the contract
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+
+    uint32 private constant DEFAULT_ATOM_URI_COUNT = 5;
+    uint32 private constant DEFAULT_ATOM_URI_LENGTH = 700;
 
     /* =================================================== */
     /*                  INTERNAL STATE                     */
@@ -142,8 +146,13 @@ contract MultiVault is
     ///         post-upgrade rollover reads a meaningful source.
     uint256 public lastSystemUtilizationEpoch;
 
+    /// @dev Atom URI limits added in the first reserved storage slot. Zero values
+    ///      resolve to protocol defaults so upgraded proxies are safe before the
+    ///      timelock writes an explicit configuration.
+    AtomUriConfig private _atomUriConfig;
+
     /// @dev Storage gap for future upgrade safety
-    uint256[47] private __gap;
+    uint256[46] private __gap;
 
     /* =================================================== */
     /*                  TRANSIENT STATE                    */
@@ -173,6 +182,10 @@ contract MultiVault is
     error MultiVault_AtomDoesNotExist(bytes32 atomId);
 
     error MultiVault_AtomDataTooLong();
+
+    error MultiVault_AtomUriCountExceeded();
+
+    error MultiVault_AtomUriLengthExceeded();
 
     error MultiVault_BurnFromZeroAddress();
 
@@ -231,6 +244,8 @@ contract MultiVault is
     error MultiVault_EpochNotTracked();
 
     error MultiVault_InvalidEpoch();
+
+    error MultiVault_InvalidAtomUriConfig();
 
     error MultiVault_OnlyTimelock();
 
@@ -315,6 +330,13 @@ contract MultiVault is
     /// @inheritdoc IMultiVault
     function isTermCreated(bytes32 id) external view returns (bool) {
         return MultiVaultLib.isTermCreated(id);
+    }
+
+    /// @inheritdoc IMultiVaultCore
+    function getAtomUriConfig() external view returns (uint32 maxUriCount, uint32 maxUriLength) {
+        AtomUriConfig memory config = _atomUriConfig;
+        maxUriCount = config.maxUriCount == 0 ? DEFAULT_ATOM_URI_COUNT : config.maxUriCount;
+        maxUriLength = config.maxUriLength == 0 ? DEFAULT_ATOM_URI_LENGTH : config.maxUriLength;
     }
 
     /// @inheritdoc IMultiVault
@@ -596,6 +618,16 @@ contract MultiVault is
     }
 
     /// @inheritdoc IMultiVault
+    function createAtomsWithUris(
+        address creator,
+        bytes[] calldata data,
+        uint256[] calldata assets,
+        bytes[][] calldata uris
+    ) external payable whenNotPaused nonReentrant returns (bytes32[] memory) {
+        return MultiVaultLib.createAtomsWithUris(creator, data, assets, uris, _effectiveMsgValue());
+    }
+
+    /// @inheritdoc IMultiVault
     function createTriples(
         bytes32[] calldata subjectIds,
         bytes32[] calldata predicateIds,
@@ -733,6 +765,15 @@ contract MultiVault is
     function setAtomConfig(AtomConfig memory _atomConfig) external onlyTimelock {
         atomConfig = _atomConfig;
         emit AtomConfigUpdated(_atomConfig.atomCreationProtocolFee, _atomConfig.atomWalletDepositFee);
+    }
+
+    /// @inheritdoc IMultiVault
+    function setAtomUriConfig(uint32 maxUriCount, uint32 maxUriLength) external onlyTimelock {
+        if (maxUriCount == 0 || maxUriLength == 0) {
+            revert MultiVault_InvalidAtomUriConfig();
+        }
+        _atomUriConfig = AtomUriConfig({ maxUriCount: maxUriCount, maxUriLength: maxUriLength });
+        emit AtomUriConfigUpdated(maxUriCount, maxUriLength);
     }
 
     /// @inheritdoc IMultiVault
