@@ -23,13 +23,11 @@ contract MultiVaultStorageLayoutTest is BaseTest {
     ///      defense. See [`MultiVaultLib.Storage`].
     uint256 internal constant LAST_SYSTEM_UTILIZATION_EPOCH_SLOT = 37;
 
-    /// @dev Packed URI context limits appended after the v1.1.0 tail field.
+    /// @dev Slot 38 packs the atom URI configuration as two uint32 values.
     uint256 internal constant ATOM_URI_CONFIG_SLOT = 38;
 
-    /// @dev First slot of the post-`lastSystemUtilizationEpoch` upgrade-safety gap. The gap is
-    ///      `uint256[46]`, occupying slots 39 through 84 inclusive. (The dynamic-fee routing pair
-    ///      that briefly occupied slots 38/39 pre-release was removed when the fee hooks were
-    ///      standardized into the curve interface — no MultiVault storage tracks curves anymore.)
+    /// @dev First slot of the upgrade-safety gap after `atomUriConfig`. The remaining
+    ///      `uint256[46]` gap occupies slots 39 through 84 inclusive.
     uint256 internal constant GAP_FIRST_SLOT = 39;
     uint256 internal constant GAP_LAST_SLOT = 84;
 
