@@ -603,6 +603,40 @@ export const MultiVaultMigrationModeAbi = [
   },
   {
     "type": "function",
+    "name": "createAtomsWithUris",
+    "inputs": [
+      {
+        "name": "creator",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "data",
+        "type": "bytes[]",
+        "internalType": "bytes[]"
+      },
+      {
+        "name": "assets",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "uris",
+        "type": "bytes[][]",
+        "internalType": "bytes[][]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
     "name": "createTriples",
     "inputs": [
       {
@@ -961,6 +995,24 @@ export const MultiVaultMigrationModeAbi = [
         "name": "",
         "type": "address",
         "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getAtomUriConfig",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "maxUriCount",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "maxUriLength",
+        "type": "uint32",
+        "internalType": "uint32"
       }
     ],
     "stateMutability": "view"
@@ -2212,6 +2264,24 @@ export const MultiVaultMigrationModeAbi = [
   },
   {
     "type": "function",
+    "name": "setAtomUriConfig",
+    "inputs": [
+      {
+        "name": "maxUriCount",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "maxUriLength",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setBondingCurveConfig",
     "inputs": [
       {
@@ -2658,6 +2728,31 @@ export const MultiVaultMigrationModeAbi = [
   },
   {
     "type": "event",
+    "name": "AtomContextRegistered",
+    "inputs": [
+      {
+        "name": "termId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "registrant",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "uris",
+        "type": "bytes[]",
+        "indexed": false,
+        "internalType": "bytes[]"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "AtomCreated",
     "inputs": [
       {
@@ -2683,6 +2778,25 @@ export const MultiVaultMigrationModeAbi = [
         "type": "address",
         "indexed": false,
         "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "AtomUriConfigUpdated",
+    "inputs": [
+      {
+        "name": "maxUriCount",
+        "type": "uint32",
+        "indexed": false,
+        "internalType": "uint32"
+      },
+      {
+        "name": "maxUriLength",
+        "type": "uint32",
+        "indexed": false,
+        "internalType": "uint32"
       }
     ],
     "anonymous": false
@@ -3516,6 +3630,16 @@ export const MultiVaultMigrationModeAbi = [
   },
   {
     "type": "error",
+    "name": "MultiVault_AtomUriCountExceeded",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MultiVault_AtomUriLengthExceeded",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "MultiVault_BurnFromZeroAddress",
     "inputs": []
   },
@@ -3598,6 +3722,11 @@ export const MultiVaultMigrationModeAbi = [
   {
     "type": "error",
     "name": "MultiVault_InvalidArrayLength",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MultiVault_InvalidAtomUriConfig",
     "inputs": []
   },
   {

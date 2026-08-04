@@ -3,7 +3,7 @@ pragma solidity 0.8.29;
 
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
-import { ApprovalTypes } from "src/interfaces/IMultiVault.sol";
+import { ApprovalTypes, IMultiVault } from "src/interfaces/IMultiVault.sol";
 
 contract CreateAtomsForTest is BaseTest {
     uint256 internal CURVE_ID;
@@ -179,6 +179,40 @@ contract CreateAtomsForTest is BaseTest {
 
         resetPrank(users.bob);
         protocol.multiVault.createAtomsFor{ value: ATOM_COST[0] }(users.alice, data, assets);
+    }
+
+    function test_createAtomsWithUris_AttributesCreatorAndContextToApprovedUser() public {
+        setupApproval(users.alice, users.bob, ApprovalTypes.CREATION);
+
+        bytes memory atomData = "int:isrc:GBDUW0000059";
+        bytes32 expectedAtomId = calculateAtomId(atomData);
+        bytes[] memory data = _singleByteArr(string(atomData));
+        uint256[] memory assets = _singleUintArr(ATOM_COST[0]);
+        bytes[][] memory uris = new bytes[][](1);
+        uris[0] = new bytes[](2);
+        uris[0][0] = "ipfs://bafy-context";
+        uris[0][1] = "https://musicbrainz.org/recording/example";
+
+        vm.expectEmit(true, true, false, true, address(protocol.multiVault));
+        emit IMultiVault.AtomContextRegistered(expectedAtomId, users.alice, uris[0]);
+
+        resetPrank(users.bob);
+        bytes32[] memory ids =
+            protocol.multiVault.createAtomsWithUris{ value: ATOM_COST[0] }(users.alice, data, assets, uris);
+
+        assertEq(ids[0], expectedAtomId, "context must not affect identity");
+        assertEq(protocol.multiVault.getAtomCreator(ids[0]), users.alice, "creator must remain the approved user");
+    }
+
+    function test_createAtomsWithUris_RevertWhen_CreatorHasNotApprovedSender() public {
+        bytes[] memory data = _singleByteArr("uri-for-no-approval");
+        uint256[] memory assets = _singleUintArr(ATOM_COST[0]);
+        bytes[][] memory uris = new bytes[][](1);
+        uris[0] = _singleByteArr("ipfs://unauthorized-context");
+
+        resetPrank(users.bob);
+        vm.expectRevert(MultiVault.MultiVault_CreatorNotApproved.selector);
+        protocol.multiVault.createAtomsWithUris{ value: ATOM_COST[0] }(users.alice, data, assets, uris);
     }
 
     /* =================================================== */

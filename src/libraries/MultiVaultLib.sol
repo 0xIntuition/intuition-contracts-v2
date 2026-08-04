@@ -12,6 +12,7 @@ import { ITrustBonding } from "src/interfaces/ITrustBonding.sol";
 import {
     GeneralConfig,
     AtomConfig,
+    AtomUriConfig,
     TripleConfig,
     WalletConfig,
     VaultFees,
@@ -86,6 +87,9 @@ library MultiVaultLib {
     bytes32 internal constant TRIPLE_SALT = keccak256("TRIPLE_SALT");
     bytes32 internal constant COUNTER_SALT = keccak256("COUNTER_SALT");
 
+    uint32 internal constant DEFAULT_ATOM_URI_COUNT = 5;
+    uint32 internal constant DEFAULT_ATOM_URI_LENGTH = 700;
+
     /* =================================================== */
     /*                  STORAGE LAYOUT VIEW                */
     /* =================================================== */
@@ -147,6 +151,9 @@ library MultiVaultLib {
         //           `MultiVault.reinitialize` at upgrade time so the slot is always
         //           meaningful before the first `_rollover` runs.
         uint256 lastSystemUtilizationEpoch;
+        // slot 38 — packed atom URI context limits. Zero values resolve to defaults
+        //           for upgrade compatibility with proxies deployed before this slot existed.
+        AtomUriConfig atomUriConfig;
     }
 
     /// @dev Resolves the {Storage} struct view at slot 0. Under `DELEGATECALL` from {MultiVault} the
@@ -184,6 +191,31 @@ library MultiVaultLib {
     {
         uint256 _amount = _validatePayment(assets, payment);
         return _createAtoms(msg.sender, data, assets, _amount);
+    }
+
+    /// @dev Mirror of {MultiVault.createAtomsWithUris}. URI bytes are emitted as creation-time context but are
+    ///      excluded from atom ID calculation and contract storage.
+    function createAtomsWithUris(
+        address creator,
+        bytes[] calldata data,
+        uint256[] calldata assets,
+        bytes[][] calldata uris,
+        uint256 payment
+    ) public returns (bytes32[] memory) {
+        if (!_isApprovedToCreate(msg.sender, creator)) {
+            revert MultiVault.MultiVault_CreatorNotApproved();
+        }
+
+        uint256 length = data.length;
+        if (length != uris.length) {
+            revert MultiVault.MultiVault_ArraysNotSameLength();
+        }
+        _validateAtomUris(uris);
+
+        uint256 _amount = _validatePayment(assets, payment);
+        bytes32[] memory ids = _createAtoms(creator, data, assets, _amount);
+        _emitAtomContexts(ids, creator, uris);
+        return ids;
     }
 
     /// @dev Mirror of {MultiVault.createTriples}.
@@ -536,12 +568,51 @@ library MultiVaultLib {
             }
         }
 
+        _finalizeAtomBatch(sender, length, payment);
+
+        return ids;
+    }
+
+    function _finalizeAtomBatch(address sender, uint256 length, uint256 payment) private {
         uint256 atomCreationProtocolFees = _s().atomConfig.atomCreationProtocolFee * length;
         _accumulateStaticProtocolFees(atomCreationProtocolFees);
 
         _addUtilization(sender, int256(payment));
+    }
 
-        return ids;
+    function _emitAtomContexts(bytes32[] memory ids, address registrant, bytes[][] calldata uris) private {
+        uint256 length = ids.length;
+        for (uint256 i = 0; i < length;) {
+            if (uris[i].length != 0) {
+                emit IMultiVault.AtomContextRegistered(ids[i], registrant, uris[i]);
+            }
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function _validateAtomUris(bytes[][] calldata uris) private view {
+        AtomUriConfig memory config = _s().atomUriConfig;
+        if (config.maxUriCount == 0) config.maxUriCount = DEFAULT_ATOM_URI_COUNT;
+        if (config.maxUriLength == 0) config.maxUriLength = DEFAULT_ATOM_URI_LENGTH;
+        uint256 atomCount = uris.length;
+        for (uint256 i = 0; i < atomCount;) {
+            uint256 uriCount = uris[i].length;
+            if (uriCount > config.maxUriCount) revert MultiVault.MultiVault_AtomUriCountExceeded();
+
+            for (uint256 j = 0; j < uriCount;) {
+                if (uris[i][j].length > config.maxUriLength) {
+                    revert MultiVault.MultiVault_AtomUriLengthExceeded();
+                }
+                unchecked {
+                    ++j;
+                }
+            }
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     function _createAtom(address sender, bytes calldata data, uint256 assets) private returns (bytes32 atomId) {

@@ -233,6 +233,38 @@ contract MultiVaultUpgradeRegressionTest is Test {
         assertEq(multiVault.getAtomCreatedAt(atomId), uint48(block.timestamp), "creation time should be recorded");
     }
 
+    function test_upgrade_enablesUriAwareCreationWithSafeDefaults() external {
+        _upgradeMultiVault();
+
+        (uint32 maxUriCount, uint32 maxUriLength) = multiVault.getAtomUriConfig();
+        assertEq(maxUriCount, 5, "zeroed upgrade slot must resolve to default URI count");
+        assertEq(maxUriLength, 700, "zeroed upgrade slot must resolve to default URI length");
+
+        address creator = makeAddr("uri-creator");
+        uint256 atomCost = multiVault.getAtomCost();
+        vm.deal(creator, atomCost * 2);
+
+        bytes[] memory atomDatas = new bytes[](1);
+        atomDatas[0] = bytes("upgrade-regression-uri-atom");
+        uint256[] memory assets = new uint256[](1);
+        assets[0] = atomCost;
+        bytes[][] memory uris = new bytes[][](1);
+        uris[0] = new bytes[](1);
+        uris[0][0] = bytes("ipfs://upgrade-regression");
+
+        vm.prank(creator);
+        bytes32[] memory ids = multiVault.createAtomsWithUris{ value: atomCost }(creator, atomDatas, assets, uris);
+
+        assertEq(ids[0], multiVault.calculateAtomId(atomDatas[0]), "URI context must not affect identity");
+        assertEq(multiVault.getAtomCreator(ids[0]), creator, "URI-aware creation must preserve attribution");
+
+        atomDatas[0] = bytes("upgrade-regression-too-many-uris");
+        uris[0] = new bytes[](6);
+        vm.prank(creator);
+        vm.expectRevert(MultiVault.MultiVault_AtomUriCountExceeded.selector);
+        multiVault.createAtomsWithUris{ value: atomCost }(creator, atomDatas, assets, uris);
+    }
+
     function test_upgrade_preservesLegacyWriteFlowBehaviorAcrossMultiVaultLibExtraction() external {
         uint256 cleanFork = vm.snapshotState();
 

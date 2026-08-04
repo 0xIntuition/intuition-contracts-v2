@@ -252,6 +252,68 @@ contract MulticallTest is BaseTest {
         assertGt(totalShares, 0, "alice should hold shares from create + deposit");
     }
 
+    function test_multicall_createAtomsWithUris_isAllowed() public {
+        bytes memory atomBytes = abi.encodePacked("int:isrc:MULTICALL0001");
+        bytes32 expectedAtomId = calculateAtomId(atomBytes);
+
+        bytes[] memory atomDataArr = new bytes[](1);
+        atomDataArr[0] = atomBytes;
+        uint256[] memory createAssets = new uint256[](1);
+        createAssets[0] = ATOM_COST[0];
+        bytes[][] memory uris = new bytes[][](1);
+        uris[0] = new bytes[](5);
+        uris[0][0] = bytes("ipfs://multicall-context");
+        uris[0][1] = bytes("ar://multicall-context");
+        uris[0][2] = bytes("https://example.com/context");
+        uris[0][3] = bytes("intuition://context");
+        uris[0][4] = new bytes(700);
+
+        bytes[] memory data = new bytes[](1);
+        data[0] = abi.encodeCall(IMultiVault.createAtomsWithUris, (users.alice, atomDataArr, createAssets, uris));
+        uint256[] memory values = new uint256[](1);
+        values[0] = ATOM_COST[0];
+
+        vm.expectEmit(true, true, false, true, address(protocol.multiVault));
+        emit AtomCreated(
+            users.alice, expectedAtomId, atomBytes, protocol.multiVault.computeAtomWalletAddr(expectedAtomId)
+        );
+        vm.expectEmit(true, true, false, true, address(protocol.multiVault));
+        emit IMultiVault.AtomContextRegistered(expectedAtomId, users.alice, uris[0]);
+
+        resetPrank(users.alice);
+        protocol.multiVault.multicall{ value: ATOM_COST[0] }(data, values);
+
+        assertTrue(protocol.multiVault.isTermCreated(expectedAtomId), "atom should be created");
+        assertEq(protocol.multiVault.getAtomCreator(expectedAtomId), users.alice);
+    }
+
+    function test_multicall_createAtomsWithUris_EnforcesUriLimitsAndBubblesErrors() public {
+        bytes[] memory atomDataArr = new bytes[](1);
+        atomDataArr[0] = bytes("multicall-uri-limit");
+        uint256[] memory createAssets = new uint256[](1);
+        createAssets[0] = ATOM_COST[0];
+        bytes[][] memory uris = new bytes[][](1);
+        uris[0] = new bytes[](6);
+
+        bytes[] memory data = new bytes[](1);
+        data[0] = abi.encodeCall(IMultiVault.createAtomsWithUris, (users.alice, atomDataArr, createAssets, uris));
+        uint256[] memory values = new uint256[](1);
+        values[0] = ATOM_COST[0];
+
+        resetPrank(users.alice);
+        vm.expectRevert(MultiVault.MultiVault_AtomUriCountExceeded.selector);
+        protocol.multiVault.multicall{ value: ATOM_COST[0] }(data, values);
+        assertFalse(protocol.multiVault.isTermCreated(calculateAtomId(atomDataArr[0])));
+
+        uris[0] = new bytes[](1);
+        uris[0][0] = new bytes(701);
+        data[0] = abi.encodeCall(IMultiVault.createAtomsWithUris, (users.alice, atomDataArr, createAssets, uris));
+
+        vm.expectRevert(MultiVault.MultiVault_AtomUriLengthExceeded.selector);
+        protocol.multiVault.multicall{ value: ATOM_COST[0] }(data, values);
+        assertFalse(protocol.multiVault.isTermCreated(calculateAtomId(atomDataArr[0])));
+    }
+
     /// @notice The v1.1.0 fix that unlocks first-deposit on a counter-triple's non-default-curve
     ///         vault must also work when invoked through the value-bearing {multicall} entry point.
     function test_multicall_DepositCounterTripleNonDefault_Succeeds() public {

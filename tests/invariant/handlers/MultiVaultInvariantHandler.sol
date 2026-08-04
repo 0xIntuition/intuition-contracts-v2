@@ -100,6 +100,35 @@ contract MultiVaultInvariantHandler is Test {
         } catch { }
     }
 
+    /// @notice Create one atom with a fuzzed URI count and byte length spanning both sides of the configured limits.
+    function createAtomWithUris(uint256 actorSeed, uint256 assetSeed, uint256 uriCountSeed, uint256 uriLengthSeed)
+        public
+    {
+        address actor = _actor(actorSeed);
+        uint256 assets = _boundCreateAssets(assetSeed, MULTI_VAULT.getAtomCost());
+
+        bytes[] memory data = new bytes[](1);
+        data[0] = _freshAtomData();
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = assets;
+        bytes[][] memory uris = new bytes[][](1);
+        uint256 uriCount = bound(uriCountSeed, 0, 6);
+        uris[0] = new bytes[](uriCount);
+        uint256 uriLength = bound(uriLengthSeed, 0, 701);
+        for (uint256 i = 0; i < uriCount; i++) {
+            uris[0][i] = new bytes(uriLength);
+        }
+
+        vm.deal(actor, assets);
+        vm.prank(actor);
+        try MULTI_VAULT.createAtomsWithUris{ value: assets }(actor, data, amounts, uris) returns (bytes32[] memory ids)
+        {
+            _register(atomTerms, ids[0]);
+            ghost_valueIn += assets;
+            ghost_atomsCreated++;
+        } catch { }
+    }
+
     /// @notice Create a triple from three distinct, already-created atoms.
     function createTriple(uint256 actorSeed, uint256 subjectSeed, uint256 predicateSeed, uint256 objectSeed) public {
         uint256 atomCount = atomTerms.length;
@@ -198,7 +227,7 @@ contract MultiVaultInvariantHandler is Test {
         } catch { }
     }
 
-    /// @notice Drive `multicall` batching a fresh `createAtoms` with a `deposit` into an existing
+    /// @notice Drive `multicall` batching a fresh URI-aware atom creation with a deposit into an existing
     ///         vault, each allocated its own slice of `msg.value`. Mixes a create and a deposit in one
     ///         payable batch — the multi-selector value-accounting path.
     function multicallCreateAndDeposit(uint256 actorSeed, uint256 termSeed, uint256 assetSeed, bool useTriple) public {
@@ -215,8 +244,12 @@ contract MultiVaultInvariantHandler is Test {
         uint256[] memory createAmounts = new uint256[](1);
         createAmounts[0] = createValue;
 
+        bytes[][] memory uris = new bytes[][](1);
+        uris[0] = new bytes[](1);
+        uris[0][0] = bytes("ipfs://invariant-context");
+
         bytes[] memory data = new bytes[](2);
-        data[0] = abi.encodeCall(IMultiVault.createAtoms, (atomData, createAmounts));
+        data[0] = abi.encodeCall(IMultiVault.createAtomsWithUris, (actor, atomData, createAmounts, uris));
         data[1] = abi.encodeCall(IMultiVault.deposit, (actor, termId, DEFAULT_CURVE_ID, 0));
         uint256[] memory values = new uint256[](2);
         values[0] = createValue;

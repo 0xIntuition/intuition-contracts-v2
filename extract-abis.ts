@@ -7,6 +7,7 @@ import * as path from 'path';
 const CONTRACTS_TO_EXTRACT = [
   'MultiVault',
   'MultiVaultMigrationMode',
+  'FeeProxy',
   'BaseEmissionsController',
   'SatelliteEmissionsController',
   'TrustBonding',

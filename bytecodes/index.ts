@@ -1,5 +1,6 @@
 export { MultiVaultBytecode } from './MultiVault';
 export { MultiVaultMigrationModeBytecode } from './MultiVaultMigrationMode';
+export { FeeProxyBytecode } from './FeeProxy';
 export { BaseEmissionsControllerBytecode } from './BaseEmissionsController';
 export { SatelliteEmissionsControllerBytecode } from './SatelliteEmissionsController';
 export { TrustBondingBytecode } from './TrustBonding';

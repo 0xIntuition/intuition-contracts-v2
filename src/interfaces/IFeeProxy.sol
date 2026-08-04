@@ -148,11 +148,11 @@ struct AffiliateUserStats {
 ///         through this proxy only; it does not affect a user's ability to
 ///         redeem.
 ///
-///         Creation paths route through {MultiVault.createAtomsFor} and
-///         {MultiVault.createTriplesFor} using the
-///         {ApprovalTypes.CREATION} bit, so the credited atom/triple
-///         creator is the end user (`msg.sender` of the proxy call), not
-///         the proxy itself.
+///         Creation paths route through {MultiVault.createAtomsFor},
+///         {MultiVault.createAtomsWithUris}, and
+///         {MultiVault.createTriplesFor} using the {ApprovalTypes.CREATION}
+///         bit, so the credited atom/triple creator and URI-context registrant
+///         is the end user (`msg.sender` of the proxy call), not the proxy.
 ///
 ///         The protocol-level caps {maxBps}, {maxFixedFee}, and
 ///         {registrationFee} are storage-backed and governable by admin
@@ -275,8 +275,9 @@ interface IFeeProxy {
         uint256 totalForwardedAssets
     );
 
-    /// @notice Emitted once per {createAtomsVia} call as an aggregate
-    ///         ledger entry. Per-atom `AtomCreated` events are emitted by
+    /// @notice Emitted once per {createAtomsVia} or {createAtomsWithUrisVia}
+    ///         call as an aggregate ledger entry. Per-atom `AtomCreated` and
+    ///         optional `AtomContextRegistered` events are emitted by
     ///         {MultiVault} itself.
     /// @param user The end-user credited as atom creator on MultiVault.
     /// @param affiliate The affiliate mediating the call.
@@ -642,6 +643,28 @@ interface IFeeProxy {
         address affiliate,
         bytes[] calldata atomDatas,
         uint256[] calldata assets,
+        FeeGuard calldata feeGuard
+    ) external payable returns (bytes32[] memory termIds);
+
+    /// @notice URI-aware variant of {createAtomsVia}. Creation-time context
+    ///         is emitted by MultiVault without affecting atom identity or
+    ///         being written to contract storage.
+    /// @dev    Routes through {MultiVault.createAtomsWithUris}, preserving
+    ///         `msg.sender` as both atom creator and context registrant. Uses
+    ///         the same CREATION approval, fee, and refund rules as
+    ///         {createAtomsVia}. Reverts with {FeeProxy_LengthMismatch} when
+    ///         `atomDatas`, `assets`, and `uris` are not aligned.
+    /// @param  affiliate The affiliate mediating the creation.
+    /// @param  atomDatas Per-atom data payloads.
+    /// @param  assets Per-atom gross creation assets (pre-fee).
+    /// @param  uris Per-atom lists of creation-time context pointers.
+    /// @param  feeGuard Per-call front-run guard, applied to every atom.
+    /// @return termIds The IDs of the newly created atoms.
+    function createAtomsWithUrisVia(
+        address affiliate,
+        bytes[] calldata atomDatas,
+        uint256[] calldata assets,
+        bytes[][] calldata uris,
         FeeGuard calldata feeGuard
     ) external payable returns (bytes32[] memory termIds);
 

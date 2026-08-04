@@ -1,5 +1,6 @@
 export { MultiVaultAbi } from './MultiVault';
 export { MultiVaultMigrationModeAbi } from './MultiVaultMigrationMode';
+export { FeeProxyAbi } from './FeeProxy';
 export { BaseEmissionsControllerAbi } from './BaseEmissionsController';
 export { SatelliteEmissionsControllerAbi } from './SatelliteEmissionsController';
 export { TrustBondingAbi } from './TrustBonding';

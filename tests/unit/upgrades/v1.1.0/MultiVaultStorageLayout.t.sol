@@ -3,6 +3,7 @@ pragma solidity 0.8.29;
 
 import { BaseTest } from "tests/BaseTest.t.sol";
 import { ApprovalTypes } from "src/interfaces/IMultiVault.sol";
+import { AtomUriConfig } from "src/interfaces/IMultiVaultCore.sol";
 
 /// @title  MultiVaultStorageLayoutTest
 /// @notice Append-only storage layout regression for {MultiVault}.
@@ -16,17 +17,18 @@ import { ApprovalTypes } from "src/interfaces/IMultiVault.sol";
 ///           2. asserting the upgrade-safety gap immediately after the new field is zero
 ///              across its declared length and just past it (no spill).
 ///         Future PRs that append fields should extend this test by writing the new field at the
-///         next free slot (currently 38) and shrinking the asserted-zero range accordingly.
+///         next free slot (currently 39) and shrinking the asserted-zero range accordingly.
 contract MultiVaultStorageLayoutTest is BaseTest {
     /// @dev Slot of the `lastSystemUtilizationEpoch` field; load-bearing for the gap
     ///      defense. See [`MultiVaultLib.Storage`].
     uint256 internal constant LAST_SYSTEM_UTILIZATION_EPOCH_SLOT = 37;
 
-    /// @dev First slot of the post-`lastSystemUtilizationEpoch` upgrade-safety gap. The gap is
-    ///      `uint256[47]`, occupying slots 38 through 84 inclusive. (The dynamic-fee routing pair
-    ///      that briefly occupied slots 38/39 pre-release was removed when the fee hooks were
-    ///      standardized into the curve interface — no MultiVault storage tracks curves anymore.)
-    uint256 internal constant GAP_FIRST_SLOT = 38;
+    /// @dev Slot 38 packs the atom URI configuration as two uint32 values.
+    uint256 internal constant ATOM_URI_CONFIG_SLOT = 38;
+
+    /// @dev First slot of the upgrade-safety gap after `atomUriConfig`. The remaining
+    ///      `uint256[46]` gap occupies slots 39 through 84 inclusive.
+    uint256 internal constant GAP_FIRST_SLOT = 39;
     uint256 internal constant GAP_LAST_SLOT = 84;
 
     uint256 internal CURVE_ID;
@@ -60,7 +62,33 @@ contract MultiVaultStorageLayoutTest is BaseTest {
         );
     }
 
-    function test_storageLayout_gap47Slots_remainsZero() external {
+    function test_storageLayout_atomUriConfig_atSlot38() external {
+        (uint32 defaultCount, uint32 defaultLength) = protocol.multiVault.getAtomUriConfig();
+        assertEq(defaultCount, 5, "uninitialized storage must resolve to default count");
+        assertEq(defaultLength, 700, "uninitialized storage must resolve to default length");
+        assertEq(
+            uint256(vm.load(address(protocol.multiVault), bytes32(ATOM_URI_CONFIG_SLOT))),
+            0,
+            "upgrade-safe default must not require pre-existing storage"
+        );
+
+        AtomUriConfig memory config = AtomUriConfig({ maxUriCount: 3, maxUriLength: 512 });
+        resetPrank(users.timelock);
+        protocol.multiVault.setAtomUriConfig(config.maxUriCount, config.maxUriLength);
+
+        uint256 expectedPacked = uint256(config.maxUriCount) | (uint256(config.maxUriLength) << 32);
+        assertEq(
+            uint256(vm.load(address(protocol.multiVault), bytes32(ATOM_URI_CONFIG_SLOT))),
+            expectedPacked,
+            "slot 38 must pack URI count then URI length"
+        );
+
+        (uint32 storedCount, uint32 storedLength) = protocol.multiVault.getAtomUriConfig();
+        assertEq(storedCount, config.maxUriCount);
+        assertEq(storedLength, config.maxUriLength);
+    }
+
+    function test_storageLayout_gap46Slots_remainsZero() external {
         // Drive some natural activity so storage is fully exercised (atom creation,
         // utilization, fees, vault state) — gap slots must stay zero regardless. The
         // dynamic-fee deposit additionally proves fee-hook routing writes NO MultiVault
