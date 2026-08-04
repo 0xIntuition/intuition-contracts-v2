@@ -14,10 +14,14 @@ const CONTRACTS_TO_EXTRACT = [
   'BondingCurveRegistry',
   'LinearCurve',
   'OffsetProgressiveCurve',
+  'DynamicFeeFlatPriceCurve',
   'AtomWallet',
   'AtomWalletFactory',
+  'AtomWarden',
   'Trust',
-  'TrustToken'
+  'TrustToken',
+  'WrappedTrust',
+  'MultiVaultLib'
 ];
 
 interface ContractArtifact {
