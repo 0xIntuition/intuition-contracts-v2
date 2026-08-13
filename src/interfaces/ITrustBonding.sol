@@ -154,6 +154,14 @@ interface ITrustBonding {
     function previousEpoch() external view returns (uint256);
 
     /// @notice Returns the amount of TRUST tokens emitted per epoch
+    /// @dev The epoch's scheduled emission, scaled by the system utilization ratio. The schedule
+    ///      (`ICoreEmissionsController.getEmissionsAtEpoch`) is fixed, geometrically declining and entirely
+    ///      behaviour-independent, and the ratio is bounded above by `BASIS_POINTS_DIVISOR`. This value is
+    ///      therefore always LESS THAN OR EQUAL TO the scheduled amount: a 100% system ratio releases exactly
+    ///      the schedule, it does not raise it, and the lower bound is a reduction below the schedule whose
+    ///      remainder stays on the reclaim side. The ratio governs the split between released and reclaimed
+    ///      emissions inside a fixed ceiling — no utilization outcome, however favourable, can increase
+    ///      issuance or draw down more than the schedule provides.
     /// @param epoch The epoch to query
     /// @return The amount of TRUST tokens emitted in the specified epoch
     function emissionsForEpoch(uint256 epoch) external view returns (uint256);
@@ -187,6 +195,13 @@ interface ITrustBonding {
 
     /**
      * @notice Returns the amount of rewards a user is eligible for in a specific epoch
+     * @dev The account's veTRUST-proportional slice of the epoch's emissions —
+     *      `userBondedBalanceAtEpochEnd * emissionsForEpoch / totalBondedBalanceAtEpochEnd` — measured before
+     *      the personal utilization ratio is applied. Because the individual bonded balances sum to the total
+     *      and the ratio only ever scales a slice DOWN, the sum of every participant's claim is bounded by the
+     *      epoch budget by construction. No utilization outcome lets one account claim into another account's
+     *      entitlement, and claim ordering within an epoch does not change what anyone receives; a higher
+     *      ratio draws only on the reclaim residual, never on another participant's share.
      * @param _account The user's address
      * @param _epoch The epoch number to query
      * @return The amount of rewards the user is eligible for

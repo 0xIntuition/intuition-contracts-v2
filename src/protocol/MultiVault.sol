@@ -97,7 +97,8 @@ contract MultiVault is
     ///      Credited on deposit with the full amount sent in, and debited on redeem with the asset value that
     ///      leaves the vault. Those two bases differ by the fees charged on the way in, so aggregate activity
     ///      that deposits and then fully redeems does NOT net back to its prior value. See
-    ///      `personalUtilization` for the full rationale; the same semantics apply here.
+    ///      `personalUtilization` for the full rationale; the same semantics apply here, including that the
+    ///      counter is not time-weighted and that an epoch's slot is final once that epoch closes.
     mapping(uint256 epoch => int256 utilizationAmount) public totalUtilization;
 
     /// @notice Mapping of the TRUST token amount utilization for each user in each epoch
@@ -120,6 +121,19 @@ contract MultiVault is
     ///      for the whole epoch. This is intentional — utilization gates reward eligibility on activity, not on
     ///      duration, because duration is already priced by the bonding lock in `TrustBonding`. Consumers must
     ///      NOT read this as a time-weighted average balance.
+    ///
+    ///      Each epoch's slot is FINAL once that epoch closes. A redeem debits the epoch it executes in, never
+    ///      the epoch a matching deposit was credited to: `_removeUtilization` carries the user's last active
+    ///      epoch forward into the current one and subtracts there. A deposit made in epoch E and redeemed in
+    ///      E+1 therefore leaves E's slot standing, by design. Retroactively amending a settled epoch would
+    ///      make that epoch's reward depend on WHEN a user happens to claim rather than on what they did during
+    ///      it, which is a worse property than the residue it would remove.
+    ///
+    ///      The debit is deferred, not forgiven. It lands in E+1's slot, so E+1's delta is driven negative and
+    ///      its ratio floors. A deposit/redeem round-trip straddling an epoch boundary is therefore
+    ///      self-limiting across epochs rather than free: the ratio it buys in one epoch is paid for in the
+    ///      next. Sustaining a high ratio requires either a genuinely growing position or an alternating
+    ///      cadence that forfeits the floored epochs.
     mapping(address user => mapping(uint256 epoch => int256 utilizationAmount)) public personalUtilization;
 
     /// @notice Mapping of the last 3 active epochs for each user
@@ -828,14 +842,9 @@ contract MultiVault is
     /* =================================================== */
     /*                 INTERNAL WRAPPERS                   */
     /* =================================================== */
-    /* Thin internal wrappers retained for inheritance / harness compatibility. Each wraps a single
-       `DELEGATECALL` into the linked {MultiVaultLib}. The four MVMM-compat wrappers below
-       (`_computeAtomWalletAddr`, `_initializeTripleState`, `_setVaultTotals`, `_convertToAssets`)
-       keep {MultiVaultMigrationMode} resolving the legacy symbols through inheritance with zero
-       source edit. The four test-harness wrappers (`_burn`, `_validateRedeem`, `_addUtilization`,
-       `_removeUtilization`) keep `MultiVaultHarness` / `MultiVaultUtilizationHarness` unchanged. */
 
-    /// @dev internal function to compute the address of the atom wallet for a given atom ID
+    /// @dev internal function to compute the address of the atom wallet for a given atom ID. Wrapped here so
+    ///      {MultiVaultMigrationMode} resolves `_computeAtomWalletAddr` through inheritance.
     /// @param atomId the atom ID
     /// @return the address of the atom wallet
     function _computeAtomWalletAddr(bytes32 atomId) internal view returns (address) {

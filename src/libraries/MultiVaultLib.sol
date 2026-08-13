@@ -1176,6 +1176,10 @@ library MultiVaultLib {
     /*                 UTILIZATION TRACKING                */
     /* =================================================== */
 
+    /// @dev Credit utilization for `user` in the CURRENT epoch with the full amount sent in. Rolls the user's
+    ///      last active epoch forward first, so the current slot starts from their standing value rather than
+    ///      from zero. See the `personalUtilization` NatSpec on {MultiVault} for the full semantics — the
+    ///      gross-in/net-out residue, the absence of time-weighting, and why a closed epoch's slot is final.
     function _addUtilization(address user, int256 totalValue) private {
         _rollover(user);
 
@@ -1198,6 +1202,11 @@ library MultiVaultLib {
         emit IMultiVault.PersonalUtilizationAdded(user, epoch, totalValue, s.personalUtilization[user][epoch]);
     }
 
+    /// @dev Debit utilization for `user` in the CURRENT epoch with the asset value leaving the vault. The
+    ///      debit always lands in the epoch this call executes in — never in the epoch a matching deposit was
+    ///      credited to — because the rollover carries the prior value forward and the subtraction is applied
+    ///      here. A boundary round-trip is therefore deferred, not forgiven: it drives the following epoch's
+    ///      delta negative and floors that epoch's ratio. See {MultiVault.personalUtilization}.
     function _removeUtilization(address user, int256 amountToRemove) private {
         _rollover(user);
 
