@@ -124,7 +124,7 @@ contract DeployDynamicFeeFlatPriceCurve is SetupScript {
     /// @dev Seed schedule: the decided 13-tier cap with 1% + 0.5%/tier deposit fees and 2% + 0.5%/tier
     ///      withdrawal fees, both capped at 10%. Fee distribution: triangular fulcrum, alpha = BPS,
     ///      sigma = 4e18 (the nearest-first window). Exit fees go to the leaver's own
-    ///      tier (diamond-hands default), falling through to the nearest occupied tier when that tier
+    ///      tier (the exiting-tier default), falling through to the nearest occupied tier when that tier
     ///      has no residual holders. `growthG = 0.2` -> `growthGBps = 2000`, i.e. each tier band is
     ///      1.2x the one below it (compounding): widths run 5,000 -> 44,581 TRUST across the 13 tiers.
     ///      The terminal tier 12 begins at the tier-11 edge, ~197,903 TRUST, and absorbs everything

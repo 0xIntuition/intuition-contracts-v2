@@ -54,12 +54,12 @@ contract RegisterAffiliateTest is FeeProxyBaseTest {
 
     function test_registerAffiliate_RevertWhen_DepositBpsExceedsCap() external {
         FeeConfig memory fees = _sampleFeeConfig();
-        fees.depositBps = INITIAL_MAX_BPS + 1;
+        fees.depositBps = INITIAL_MAX_FEE_BPS + 1;
 
         vm.deal(affiliate, INITIAL_REGISTRATION_FEE);
         vm.startPrank(affiliate);
         vm.expectRevert(
-            abi.encodeWithSelector(IFeeProxy.FeeProxy_BpsExceedsCap.selector, fees.depositBps, INITIAL_MAX_BPS)
+            abi.encodeWithSelector(IFeeProxy.FeeProxy_BpsExceedsCap.selector, fees.depositBps, INITIAL_MAX_FEE_BPS)
         );
         feeProxy.registerAffiliate{ value: INITIAL_REGISTRATION_FEE }(fees, affiliateFeeRecipient);
         vm.stopPrank();
@@ -67,12 +67,12 @@ contract RegisterAffiliateTest is FeeProxyBaseTest {
 
     function test_registerAffiliate_RevertWhen_CreationBpsExceedsCap() external {
         FeeConfig memory fees = _sampleFeeConfig();
-        fees.creationBps = INITIAL_MAX_BPS + 1;
+        fees.creationBps = INITIAL_MAX_FEE_BPS + 1;
 
         vm.deal(affiliate, INITIAL_REGISTRATION_FEE);
         vm.startPrank(affiliate);
         vm.expectRevert(
-            abi.encodeWithSelector(IFeeProxy.FeeProxy_BpsExceedsCap.selector, fees.creationBps, INITIAL_MAX_BPS)
+            abi.encodeWithSelector(IFeeProxy.FeeProxy_BpsExceedsCap.selector, fees.creationBps, INITIAL_MAX_FEE_BPS)
         );
         feeProxy.registerAffiliate{ value: INITIAL_REGISTRATION_FEE }(fees, affiliateFeeRecipient);
         vm.stopPrank();

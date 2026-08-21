@@ -198,7 +198,7 @@ contract CurveFeeGuardrailsTest is BaseTest {
         makeDeposit(users.alice, users.alice, atomId, DYN, 120e18, 0);
 
         uint256 holderTier = dynamicFeeCurve.userTier(atomId, users.bob);
-        uint256 vaultTier = dynamicFeeCurve.tierOf(dynamicFeeCurve.vaultAssets(atomId));
+        uint256 vaultTier = dynamicFeeCurve.tierOf(dynamicFeeCurve.vaultStake(atomId));
         assertTrue(holderTier != vaultTier, "fixture must place the holder off the vault tier");
 
         // Quote against the ASSET value of the shares, which is what the write path passes, so this

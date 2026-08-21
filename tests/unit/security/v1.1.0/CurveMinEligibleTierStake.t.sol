@@ -20,6 +20,9 @@ import { DynamicFeeConfig } from "src/interfaces/IDynamicFeeFlatPriceCurve.sol";
 ///         With `fulcrumAlpha = BPS` the fulcrum sits on the source (`dStar = 0`) and `sigma = 4e18`
 ///         gives the nearest-first triangular window: weights 0.75 / 0.5 / 0.25 / 0 at distances
 ///         d = 1 / 2 / 3 / 4.
+///
+///         "Diamond slice" and "diamond-hands slice" below both mean the exiting-tier slice: the
+///         portion of a withdrawal fee that goes to the exiting tier's other holders.
 contract CurveMinEligibleTierStakeTest is Test {
     DynamicFeeFlatPriceCurve internal curve;
 
@@ -199,7 +202,7 @@ contract CurveMinEligibleTierStakeTest is Test {
     function test_subFloorTier_isAlsoExcludedFromTheDegenerateWholePoolFallback() external {
         DynamicFeeConfig memory config = _defaultConfig();
         config.fulcrumAlpha = 3750; // dStar = (1 - 0.375) * 4 = 2.5 tiers from the source
-        config.kernelSpread = 0.4e18; // no integer distance lands inside the window -> all weights zero
+        config.kernelSpread = 1e18 + 1; // tightest legal window; only dave clears the floor, and he is out of it
         DynamicFeeFlatPriceCurve c = _deploy(config);
         _seatFourTiers(c);
         _setFloor(c, 15e18);
@@ -321,29 +324,40 @@ contract CurveMinEligibleTierStakeTest is Test {
     ///      The ladder: attacker alone in tier 0 at exactly the floor, tiers 1 and 2 emptied via bridge
     ///      accounts, a sub-floor residual plus the victim in tier 3, vault left in tier 4 so that tier 0
     ///      sits at d = 4 = sigma.
+    ///
+    ///      The victim's own stake cannot be what holds the vault in tier 4: a deposit is booked band by
+    ///      band, so a position large enough to carry the vault across the tier-3 edge books most of
+    ///      itself at tier 4 and exits from there instead. A separate `topper` holds the vault up while
+    ///      the victim stays a genuine tier-3 holder, which is the configuration under test.
     function test_subFloorFold_cannotBeSteeredIntoTheDegenerateFallbackByAZeroWeightSeat() external {
         DynamicFeeFlatPriceCurve c = _deploy(_defaultConfig());
         address bridgeOne = makeAddr("bridge-one");
         address bridgeTwo = makeAddr("bridge-two");
         address bridgeThree = makeAddr("bridge-three");
+        address topper = makeAddr("topper");
 
         c.recordDeposit{ value: 0 }(T1, alice, 1e18); // attacker; bucket 0; vault -> 1e18    (tier 0)
         c.recordDeposit{ value: 0 }(T1, bridgeOne, 9.5e18); // bucket 0; vault -> 10.5e18 (tier 1)
         c.recordDeposit{ value: 0 }(T1, bridgeTwo, 12e18); // bucket 1; vault -> 22.5e18 (tier 2)
         c.recordDeposit{ value: 0 }(T1, bridgeThree, 14.4e18); // bucket 2; vault -> 36.9e18 (tier 3)
         c.recordDeposit{ value: 0 }(T1, carol, 0.5e18); // sub-floor residual; bucket 3
-        c.recordDeposit{ value: 0 }(T1, bob, 53e18); // victim; bucket 3; vault -> 90.4e18 (tier 4)
+        c.recordDeposit{ value: 0 }(T1, bob, 16e18); // victim; stays inside tier 3; vault -> 53.4e18
+        c.recordDeposit{ value: 0 }(T1, topper, 37e18); // bucket 4; vault -> 90.4e18 (tier 4)
+        assertEq(c.userTier(T1, bob), 3, "the victim must be a tier-3 holder");
 
         // Withdraw the bridges so tiers 1 and 2 are empty and tier 0 holds exactly the attacker's seat.
-        // The victim's own stake keeps the vault in tier 4, which is what puts tier 0 at d = sigma.
+        // The topper's stake keeps the vault in tier 4, which is what puts tier 0 at d = sigma.
         c.recordRedeem{ value: 0 }(T1, bridgeOne, 9.5e18);
         c.recordRedeem{ value: 0 }(T1, bridgeTwo, 12e18);
         c.recordRedeem{ value: 0 }(T1, bridgeThree, 14.4e18);
         assertEq(c.tierStake(T1, 0), 1e18, "tier 0 must hold exactly the attacker's seat");
+        assertEq(c.tierStake(T1, 1), 0, "tier 1 must be empty");
+        assertEq(c.tierStake(T1, 2), 0, "tier 2 must be empty");
         assertEq(c.tierUpperEdge(3), 53.68e18, "the vault must sit in tier 4 for tier 0 to land at d = sigma");
+        assertEq(c.tierOf(c.vaultStake(T1)), 4, "source tier must be 4 so tier 0 is exactly sigma away");
 
         _setFloor(c, 1e18);
-        c.recordRedeem{ value: 4e18 }(T1, bob, 53e18);
+        c.recordRedeem{ value: 4e18 }(T1, bob, 16e18);
 
         assertEq(c.claimable(alice, T1), 0, "a zero-weight seat must not capture the folded slice");
         assertEq(c.claimable(carol, T1), 0, "the sub-floor residual does not earn either");

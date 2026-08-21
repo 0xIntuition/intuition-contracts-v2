@@ -64,7 +64,7 @@ contract UnpauseAffiliateTest is FeeProxyBaseTest {
 
         // Drop the bps cap below the registered depositBps.
         vm.startPrank(feeProxyAdmin);
-        feeProxy.setMaxBps(SAMPLE_DEPOSIT_BPS - 1);
+        feeProxy.setMaxFeeBps(SAMPLE_DEPOSIT_BPS - 1);
         vm.stopPrank();
 
         // Unpause still succeeds.

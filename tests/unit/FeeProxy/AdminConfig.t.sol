@@ -5,29 +5,29 @@ import { FeeProxyBaseTest } from "tests/unit/FeeProxy/FeeProxyBase.t.sol";
 import { IFeeProxy, FeeConfig } from "src/interfaces/IFeeProxy.sol";
 
 contract AdminConfigTest is FeeProxyBaseTest {
-    function test_setMaxBps_Success() external {
-        uint256 previous = feeProxy.maxBps();
+    function test_setMaxFeeBps_Success() external {
+        uint256 previous = feeProxy.maxFeeBps();
         uint256 next = 5000;
 
         vm.prank(feeProxyAdmin);
         vm.expectEmit(false, false, false, true, address(feeProxy));
-        emit IFeeProxy.MaxBpsUpdated(previous, next);
-        feeProxy.setMaxBps(next);
+        emit IFeeProxy.MaxFeeBpsUpdated(previous, next);
+        feeProxy.setMaxFeeBps(next);
 
-        assertEq(feeProxy.maxBps(), next);
+        assertEq(feeProxy.maxFeeBps(), next);
     }
 
-    function test_setMaxBps_AcceptsBpsDivisor() external {
+    function test_setMaxFeeBps_AcceptsBpsDivisor() external {
         vm.prank(feeProxyAdmin);
-        feeProxy.setMaxBps(10_000);
+        feeProxy.setMaxFeeBps(10_000);
 
-        assertEq(feeProxy.maxBps(), 10_000);
+        assertEq(feeProxy.maxFeeBps(), 10_000);
     }
 
-    function test_setMaxBps_RevertWhen_AboveBpsDivisor() external {
+    function test_setMaxFeeBps_RevertWhen_AboveBpsDivisor() external {
         vm.prank(feeProxyAdmin);
-        vm.expectRevert(abi.encodeWithSelector(IFeeProxy.FeeProxy_MaxBpsOutOfRange.selector, 10_001));
-        feeProxy.setMaxBps(10_001);
+        vm.expectRevert(abi.encodeWithSelector(IFeeProxy.FeeProxy_MaxFeeBpsOutOfRange.selector, 10_001));
+        feeProxy.setMaxFeeBps(10_001);
     }
 
     function test_setMaxFixedFee_Success() external {
@@ -73,7 +73,7 @@ contract AdminConfigTest is FeeProxyBaseTest {
 
         // Drop caps below the registered values.
         vm.startPrank(feeProxyAdmin);
-        feeProxy.setMaxBps(SAMPLE_DEPOSIT_BPS - 1);
+        feeProxy.setMaxFeeBps(SAMPLE_DEPOSIT_BPS - 1);
         feeProxy.setMaxFixedFee(SAMPLE_CREATION_FIXED_FEE - 1);
         vm.stopPrank();
 
@@ -94,7 +94,7 @@ contract AdminConfigTest is FeeProxyBaseTest {
 
         // Drop the bps cap below the registered deposit bps.
         vm.startPrank(feeProxyAdmin);
-        feeProxy.setMaxBps(SAMPLE_DEPOSIT_BPS - 1);
+        feeProxy.setMaxFeeBps(SAMPLE_DEPOSIT_BPS - 1);
         vm.stopPrank();
 
         vm.deal(users.alice, 1 ether);
@@ -137,7 +137,7 @@ contract AdminConfigTest is FeeProxyBaseTest {
         _registerSampleAffiliate();
 
         vm.startPrank(feeProxyAdmin);
-        feeProxy.setMaxBps(SAMPLE_DEPOSIT_BPS - 1); // tightens against deposit bps only
+        feeProxy.setMaxFeeBps(SAMPLE_DEPOSIT_BPS - 1); // tightens against deposit bps only
         // Lift the fixed-fee cap so the creation fixed fee stays under the cap
         // even after the bps cap change.
         feeProxy.setMaxFixedFee(INITIAL_MAX_FIXED_FEE);

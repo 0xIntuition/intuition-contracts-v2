@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { Test } from "forge-std/src/Test.sol";
+import { Test, Vm } from "forge-std/src/Test.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 import { DynamicFeeFlatPriceCurve } from "src/protocol/curves/DynamicFeeFlatPriceCurve.sol";
@@ -15,6 +15,9 @@ import { DynamicFeeConfig } from "src/interfaces/IDynamicFeeFlatPriceCurve.sol";
 ///         hooks directly (forwarding the fee as native value), so the accounting is exercised without
 ///         MultiVault's own fee noise. Integration through the real MultiVault lives in
 ///         `tests/unit/MultiVault/DynamicFeeCurveRouting.t.sol`.
+///
+///         "Diamond slice" and "diamond-hands slice" below both mean the exiting-tier slice: the
+///         portion of a withdrawal fee that goes to the exiting tier's other holders.
 contract DynamicFeeFlatPriceCurveTest is Test {
     DynamicFeeFlatPriceCurve internal dynamicFeeCurve;
 
@@ -33,7 +36,15 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     bytes32 internal constant T2 = keccak256("term-2");
 
     event Claimed(address indexed account, uint256 amount);
-    event DepositRecorded(bytes32 indexed termId, address indexed account, uint256 netStake, uint256 fee, uint256 tier);
+
+    /// @dev Topic0s for the deposit events, used by the shape test below. Computed from the
+    ///      signatures rather than redeclaring the events locally: a redeclared copy silently goes
+    ///      stale when the contract's signature changes, which is exactly what happened to the old
+    ///      five-field `DepositRecorded` that used to sit here.
+    bytes32 internal constant DEPOSIT_RECORDED_TOPIC =
+        keccak256("DepositRecorded(bytes32,address,uint256,uint256,uint256,uint256,uint256)");
+    bytes32 internal constant DEPOSIT_BAND_RECORDED_TOPIC =
+        keccak256("DepositBandRecorded(bytes32,address,uint256,uint256,uint256)");
 
     function setUp() public {
         dynamicFeeCurve = _deploy(_defaultConfig());
@@ -98,6 +109,34 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         assertEq(dynamicFeeCurve.tierUpperEdge(2), 36.4e18, "edge 2");
         assertEq(dynamicFeeCurve.tierUpperEdge(3), 53.68e18, "edge 3");
         assertEq(dynamicFeeCurve.tierUpperEdge(4), 74.416e18, "edge 4");
+    }
+
+    /// @dev `_setConfig` ends with a zero-top-edge guard, and that guard is UNREACHABLE behind the
+    ///      validations that precede it. This records why, because an uncovered branch with no
+    ///      explanation reads to a reviewer as an untested one.
+    ///
+    ///      Both arms of `_tierUpperEdge` are bounded below by `width0`, which is already rejected at
+    ///      zero. At `g == 0` the edge is `width0 * (k + 1)`. At `g > 0` it is
+    ///      `width0 * (powWad - WAD) / gWad`, and `ratioWad - WAD` is EXACTLY `gWad` by construction —
+    ///      both are the same floored `g * WAD / BPS` — so at `k = 0` the quotient is exactly one, and
+    ///      `rpow` is monotonic in the exponent, so it only grows from there. The edge can therefore
+    ///      never fall below `width0`, let alone reach zero.
+    ///
+    ///      Asserting the invariant rather than the branch is the useful direction: it keeps the guard
+    ///      honest if a future change ever loosens the `width0` or `growthGBps` bounds that make it dead.
+    function testFuzz_tierUpperEdge_isNeverZeroForAnyValidSchedule(uint96 width0, uint8 tierCount, uint16 growthGBps)
+        external
+    {
+        DynamicFeeConfig memory config = _defaultConfig();
+        config.width0 = bound(width0, 1, type(uint96).max);
+        config.tierCount = bound(tierCount, 1, 64);
+        config.growthGBps = bound(growthGBps, 0, 5000);
+
+        DynamicFeeFlatPriceCurve curve = _deploy(config);
+
+        uint256 topEdge = curve.tierUpperEdge(config.tierCount - 1);
+        assertGe(topEdge, config.width0, "the top edge is bounded below by the first band's width");
+        assertGt(topEdge, 0, "so the degenerate-schedule guard can never fire");
     }
 
     /// @dev Each band compounds on the one below it: `width(k) = width0 * 1.2^k`. Tiers 0 and 1 happen
@@ -235,26 +274,52 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     }
 
     /// @dev End-to-end: the piecewise deposit fee for a ladder-spanning deposit equals the sum over
-    ///      bands of `width(k) * rate(k)` (each rounded up, as the contract does per chunk). This ties
-    ///      the width view to the fee the walk actually charges — if the two ever diverged (independent
-    ///      rounding of width vs edge), this equality would break.
-    function test_piecewiseFee_matchesWidthTimesRatePerBand() external view {
+    ///      bands of `grossFilling(width(k)) * rate(k)`. This ties the width/edge views to the fee the
+    ///      walk actually charges — if the two ever diverged (independent rounding of width vs edge),
+    ///      the equality would break.
+    ///
+    ///      The gross-up is the net-anchored traversal: the vault books the base less the fee, so the
+    ///      GROSS portion that carries the cursor across a band of net width `w` charged at `r` is
+    ///      `w * BPS / (BPS - r)`, not `w`. Charging `w * r` would be the old gross-anchored walk, and
+    ///      would make a split deposit structurally cheaper than the identical lump.
+    function test_piecewiseFee_matchesGrossedUpWidthTimesRatePerBand() external view {
         // Default schedule: edges 10/22/36.4/53.68/74.416. A 200e18 deposit from empty fills all four
         // finite bands and lands deep in the terminal tier 4, which absorbs the remainder.
-        uint256 amount = 200e18;
-        uint256 topTier = 4;
-        uint256 expected;
-        uint256 covered;
-        for (uint256 k = 0; k <= topTier; ++k) {
-            uint256 band = k < topTier ? dynamicFeeCurve.tierWidthAt(k) : amount - covered;
-            expected += _mulDivUp(band, dynamicFeeCurve.depositFeeBps(k), BPS);
-            covered += band;
-        }
-        assertEq(dynamicFeeCurve.quoteDepositFee(T1, amount), expected, "piecewise fee == sum(width*rate) per band");
+        assertEq(
+            dynamicFeeCurve.quoteDepositFee(T1, 200e18),
+            _expectedPiecewiseFrom(0, 200e18),
+            "piecewise fee == sum(grossedUpWidth*rate) per band"
+        );
+        // Golden value, so a change in the walk cannot be absorbed by an equally-changed expectation.
+        assertEq(dynamicFeeCurve.quoteDepositFee(T1, 200e18), 5_379_684_521_102_940_250, "golden 200e18 blend");
     }
 
     function _mulDivUp(uint256 x, uint256 y, uint256 d) private pure returns (uint256) {
         return (x * y + d - 1) / d;
+    }
+
+    /// @dev Independent restatement of the net-anchored piecewise walk, built only from the public
+    ///      ladder views (`tierOf` / `tierUpperEdge` / `depositFeeBps`). Used by the fee-blend tests so
+    ///      they express the RULE rather than a hand-computed constant, and so a per-band override is
+    ///      picked up automatically wherever the contract would pick it up.
+    function _expectedPiecewiseFrom(uint256 startAssets, uint256 amount) private view returns (uint256 fee) {
+        uint256 topTier = dynamicFeeCurve.getConfig().tierCount - 1;
+        uint256 remaining = amount;
+        uint256 cursor = startAssets;
+        uint256 k = dynamicFeeCurve.tierOf(startAssets);
+        while (remaining > 0) {
+            uint256 rate = dynamicFeeCurve.depositFeeBps(k);
+            uint256 chunk = remaining;
+            if (k < topTier) {
+                uint256 grossFillingBand = _mulDivUp(dynamicFeeCurve.tierUpperEdge(k) - cursor, BPS, BPS - rate);
+                if (grossFillingBand < chunk) chunk = grossFillingBand;
+            }
+            uint256 chunkFee = _mulDivUp(chunk, rate, BPS);
+            fee += chunkFee;
+            remaining -= chunk;
+            cursor += chunk - chunkFee;
+            ++k;
+        }
     }
 
     /// @dev External wrapper so the fuzz test can `try` the deployment (config may be rejected).
@@ -325,12 +390,20 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     ///      with the top tier absorbing the rest. A lump crossing several tiers pays each band's own
     ///      rate.
     function test_quoteDepositFee_piecewiseAcrossTraversedTiers() external {
-        // From empty: 10@1% + 12@1.5% + 14.4@2% + 17.28@2.5% + 46.32@3% = 2.3896e18.
-        assertEq(dynamicFeeCurve.quoteDepositFee(T1, 100e18), 2.3896e18, "piecewise blend from tier 0");
+        // From empty, each band charged at its own rate, with the gross-up that keeps the cursor on
+        // the NET the vault books.
+        assertEq(dynamicFeeCurve.quoteDepositFee(T1, 100e18), _expectedPiecewiseFrom(0, 100e18), "blend from tier 0");
+        assertEq(dynamicFeeCurve.quoteDepositFee(T1, 100e18), 2_379_684_521_102_940_250, "golden blend from tier 0");
+        // Strictly below the old gross-anchored 2.3896e18: the gross-up means each band is filled by
+        // slightly more gross than its net width, so the walk reaches the dearer bands slightly later.
+        assertLt(dynamicFeeCurve.quoteDepositFee(T1, 100e18), 2.3896e18, "net anchoring never charges more");
 
         _recordDeposit(T1, alice, 15e18, 0); // vault now mid tier 1
-        // From 15: 7@1.5% + 14.4@2% + 17.28@2.5% + 61.32@3% = 2.6646e18.
-        assertEq(dynamicFeeCurve.quoteDepositFee(T1, 100e18), 2.6646e18, "piecewise blend from a mid-band cursor");
+        assertEq(
+            dynamicFeeCurve.quoteDepositFee(T1, 100e18),
+            _expectedPiecewiseFrom(15e18, 100e18),
+            "blend from a mid-band cursor"
+        );
     }
 
     function test_quoteDepositFee_lumpNotCheaperThanStartTierRate() external view {
@@ -369,12 +442,12 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         assertEq(dynamicFeeCurve.protocolAccrued(), 1e18, "no prior tier -> whole fee to protocol");
         assertEq(dynamicFeeCurve.claimable(alice, T1), 0, "depositor earns nothing from own fee");
         assertEq(dynamicFeeCurve.userStake(T1, alice), 5e18, "stake tracked");
-        assertEq(dynamicFeeCurve.vaultAssets(T1), 5e18, "vault assets tracked");
+        assertEq(dynamicFeeCurve.vaultStake(T1), 5e18, "vault stake tracked");
     }
 
     function test_recordDeposit_feeFlowsToPriorTier() external {
         // alice enters at tier 0 (10e18 keeps the tier-0 stake evenly divisible -> no rounding dust).
-        _recordDeposit(T1, alice, 10e18, 0); // vaultAssets 0 -> 10 (now tier 1)
+        _recordDeposit(T1, alice, 10e18, 0); // vaultStake 0 -> 10 (now tier 1)
         assertEq(dynamicFeeCurve.userTier(T1, alice), 0, "alice bucket 0");
 
         // bob deposits while the vault sits in tier 1: the fee is distributed by the triangular kernel
@@ -388,43 +461,112 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         assertEq(dynamicFeeCurve.userTier(T1, bob), 1, "bob bucket 1");
     }
 
-    function test_recordDeposit_depositorExcludedFromOwnFee() external {
-        // Seed: alice at tier 0, bob at tier 1.
-        _recordDeposit(T1, alice, 15e18, 0); // -> vaultAssets 15 (tier 1)
-        _recordDeposit(T1, bob, 12e18, 1e18); // bob at tier 1; vaultAssets 27 (tier 2)
+    /// @dev A depositor's stake in the tiers BELOW the band being charged is a recipient of that
+    ///      band's fee, exactly like any other holder's. Nothing is excluded on the deposit leg, which
+    ///      is what makes one wallet and several wallets equivalent.
+    ///
+    ///      The guard that remains is structural: a band's fee reaches only the tiers below it, and
+    ///      the band's own stake lands after its fee is distributed, so no part of a deposit is ever
+    ///      paid out of the fee it itself generated.
+    function test_recordDeposit_depositorEarnsFromTheirOwnPriorTierStake() external {
+        // Seed: alice bucketed at tier 0, bob at tier 1.
+        _recordDeposit(T1, alice, 15e18, 0); // -> vaultStake 15 (tier 1)
+        _recordDeposit(T1, bob, 12e18, 1e18); // bob at bucket 1; vaultStake 27 (tier 2)
         uint256 aliceBefore = dynamicFeeCurve.claimable(alice, T1);
-
-        // bob deposits again while the vault is in tier 2. tier 1 is bob's OWN bucket and he is its only
-        // holder, so excluding him zeroes that tier's recipient stake; the kernel then normalizes over
-        // the remaining occupied tier (tier 0 = alice), which earns the whole pool. bob earns nothing
-        // from his own fee, and nothing leaks to protocol.
+        uint256 bobBefore = dynamicFeeCurve.claimable(bob, T1);
         uint256 protocolBefore = dynamicFeeCurve.protocolAccrued();
+
+        // bob deposits again from tier 2. He holds tier 1, which is a prior tier for both traversed
+        // bands, so he collects the kernel share of tier 1 while alice collects tier 0's.
         _recordDeposit(T1, bob, 12e18, 1e18);
 
-        assertEq(dynamicFeeCurve.claimable(bob, T1), 0, "bob excluded from his own deposit fee");
-        // ~1e18 to alice (a few wei short from the standard accumulator flooring, which stays as
-        // in-contract dust — NOT routed to protocol).
-        assertApproxEqAbs(
-            dynamicFeeCurve.claimable(alice, T1) - aliceBefore,
-            1e18,
-            1e3,
-            "the excluded slice redistributes to the other occupied tier (alice), not the protocol"
-        );
-        assertEq(dynamicFeeCurve.protocolAccrued(), protocolBefore, "no leak to protocol");
+        uint256 bobEarned = dynamicFeeCurve.claimable(bob, T1) - bobBefore;
+        uint256 aliceEarned = dynamicFeeCurve.claimable(alice, T1) - aliceBefore;
+
+        assertGt(bobEarned, 0, "bob earns on the stake he already held in a prior tier");
+        assertGt(aliceEarned, 0, "alice still earns her tier's share");
+        assertGt(bobEarned, aliceEarned, "tier 1 sits nearer the source than tier 0, so it earns more");
+        assertApproxEqAbs(bobEarned + aliceEarned, 1e18, 1e3, "the whole fee reaches the prior tiers");
+        // Each band distributes separately, so the per-share division leaves its own truncation
+        // remainder — a couple of wei across two bands, not a leak. Bounded, never a whole slice.
+        assertLe(dynamicFeeCurve.protocolAccrued() - protocolBefore, 1e3, "only bounded rounding reaches protocol");
     }
 
     function test_recordDeposit_avgEntryTierMovesBucket() external {
         // bob enters at tier 0; carol then pushes the vault up to tier 2.
         _recordDeposit(T1, bob, 5e18, 0); // bob bucket 0
         assertEq(dynamicFeeCurve.userTier(T1, bob), 0, "bob starts in bucket 0");
-        _recordDeposit(T1, carol, 20e18, 0); // vaultAssets 25 -> tier 2
+
+        // carol's 20e18 spans three bands from 5e18 (5 at tier 0, 12 at tier 1, 3 at tier 2), so her
+        // average entry tier is 0.9 and she books at bucket 1 — not bucket 0. The average follows where
+        // the money actually landed rather than the single pre-deposit tier.
+        _recordDeposit(T1, carol, 20e18, 0); // vaultStake 25 -> tier 2
+        assertEq(dynamicFeeCurve.userTier(T1, carol), 1, "carol books at bucket 1, weighted across her bands");
 
         // A follow-on deposit while the vault sits in tier 2 lifts bob's stake-weighted average so his
         // whole position migrates from bucket 0 to bucket 2.
         _recordDeposit(T1, bob, 20e18, 0);
         assertEq(dynamicFeeCurve.userTier(T1, bob), 2, "bob migrated to bucket 2");
-        assertEq(dynamicFeeCurve.tierStake(T1, 0), 20e18, "only carol remains in tier 0");
+        assertEq(dynamicFeeCurve.tierStake(T1, 0), 0, "nobody is left in tier 0");
+        assertEq(dynamicFeeCurve.tierStake(T1, 1), 20e18, "carol holds tier 1");
         assertEq(dynamicFeeCurve.tierStake(T1, 2), 25e18, "bob's whole stake moved to tier 2");
+    }
+
+    /// @dev The deposit event surface, pinned by shape AND by semantics. A deposit spanning two bands
+    ///      emits one {DepositBandRecorded} per band in ascending order plus exactly one summary
+    ///      {DepositRecorded} whose tier fields agree with the stored position.
+    ///
+    ///      Matched on a topic0 computed from the signature rather than on a locally redeclared event.
+    ///      A redeclared copy cannot fail when the contract's signature changes — which is precisely
+    ///      how the old five-field `DepositRecorded` declaration in this file went stale unnoticed.
+    function test_recordDeposit_emitsPerBandAndSummaryEvents() external {
+        uint256 fee = dynamicFeeCurve.quoteDepositFee(T1, 15e18);
+        uint256 netStake = 15e18 - fee;
+
+        vm.recordLogs();
+        _recordDeposit(T1, alice, netStake, fee);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        uint256 bandCount;
+        uint256 bandStakeSum;
+        uint256 bandFeeSum;
+        uint256 summaryCount;
+        uint256 lastBandTier;
+
+        for (uint256 i = 0; i < logs.length; ++i) {
+            if (logs[i].topics[0] == DEPOSIT_BAND_RECORDED_TOPIC) {
+                (uint256 bandTier, uint256 bandStake, uint256 bandFee) =
+                    abi.decode(logs[i].data, (uint256, uint256, uint256));
+                assertEq(logs[i].topics[1], T1, "band event carries the term");
+                assertEq(address(uint160(uint256(logs[i].topics[2]))), alice, "band event carries the account");
+                if (bandCount > 0) assertGt(bandTier, lastBandTier, "bands are emitted in ascending order");
+                lastBandTier = bandTier;
+                bandStakeSum += bandStake;
+                bandFeeSum += bandFee;
+                ++bandCount;
+            } else if (logs[i].topics[0] == DEPOSIT_RECORDED_TOPIC) {
+                (
+                    uint256 emittedStake,
+                    uint256 emittedFee,
+                    uint256 sourceTier,
+                    uint256 accountTier,
+                    uint256 accountAvgTier
+                ) = abi.decode(logs[i].data, (uint256, uint256, uint256, uint256, uint256));
+                assertEq(emittedStake, netStake, "summary carries the net stake");
+                assertEq(emittedFee, fee, "summary carries the forwarded fee");
+                assertEq(sourceTier, 0, "the vault started in tier 0");
+                assertEq(accountTier, dynamicFeeCurve.userTier(T1, alice), "summary tier matches the stored bucket");
+                assertEq(
+                    accountAvgTier, dynamicFeeCurve.userAvgTier(T1, alice), "summary average matches the stored one"
+                );
+                ++summaryCount;
+            }
+        }
+
+        assertEq(bandCount, 2, "15e18 into an empty vault crosses tier 0 and tier 1");
+        assertEq(summaryCount, 1, "exactly one summary event per deposit");
+        assertEq(bandStakeSum, netStake, "the band stakes reconstruct the deposit");
+        assertEq(bandFeeSum, fee, "the band fees reconstruct the forwarded fee exactly");
     }
 
     /* =================================================== */
@@ -505,30 +647,53 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         assertApproxEqAbs(t3, t1, 1e4, "symmetric: d=1 and d=3 earn equally");
     }
 
-    /// @dev Anti-leak degenerate guard: a fulcrum landing strictly BETWEEN occupied tiers with a
-    ///      sub-tier sigma zeroes every tier's weight (no integer distance falls inside the window).
-    ///      Rather than forfeit the pool to the protocol, the whole pot must be awarded to the occupied
-    ///      tier nearest the fulcrum (nearest-first on ties). Here dStar = 2.5 (alpha = 3750 over span
-    ///      4) sits exactly between d = 2 (carol) and d = 3 (bob); with sigma = 0.4 every weight is 0,
-    ///      and the tie breaks to the tier reached first in the nearest-first scan (d = 2, carol).
+    /// @dev Anti-leak degenerate guard: when every OCCUPIED prior tier falls outside the kernel window,
+    ///      the pool must be awarded to the occupied tier nearest the fulcrum rather than forfeited to
+    ///      the protocol, with ties breaking to the tier the nearest-first scan reaches first.
+    ///
+    ///      This reaches that state through an occupancy GAP rather than by collapsing sigma, because
+    ///      the gap version is the one that survives a realistic schedule. `_setConfig` does NOT floor
+    ///      sigma — it only rejects zero — so a sub-tier sigma would also work here; it is avoided
+    ///      because at `sigma <= WAD` every integer distance `d >= 1` gets zero weight and the
+    ///      degenerate branch fires for a reason that has nothing to do with occupancy, which is not
+    ///      the property under test.
+    ///
+    ///      With `sigma = WAD + 1` and dStar = 2.5 (alpha = 3750 over span 4) the window admits only
+    ///      d = 2 and d = 3 — exactly the two tiers this empties. What is left is alice at d = 4 and
+    ///      dave at d = 1, both 1.5 tiers out, both weight zero, tied on distance; the scan runs d = 1
+    ///      upward and keeps the incumbent, so dave takes it.
+    ///
+    ///      The bridges deposit to fill the middle bands and then withdraw, and a top-tier holder keeps
+    ///      the vault in tier 4 afterwards — the top tier is never a prior tier, so it cannot itself
+    ///      receive and does not perturb the weights.
     function test_fulcrum_degenerateGuard_awardsNearestNotProtocol() external {
         DynamicFeeConfig memory config = _defaultConfig();
         config.fulcrumAlpha = 3750; // dStar = (1 - 0.375) * 4 = 2.5 tiers from the source
-        config.kernelSpread = 0.4e18; // window ±0.4 tier -> no integer distance lands inside it
+        config.kernelSpread = WAD + 1; // the tightest window `_setConfig` permits: ±1 tier
         DynamicFeeFlatPriceCurve c = _deploy(config);
         address dave = makeAddr("dave-degen");
         address eve = makeAddr("eve-degen");
-        c.recordDeposit{ value: 0 }(T1, alice, 10e18); // tier 0
-        c.recordDeposit{ value: 0 }(T1, bob, 12e18); // tier 1 (d = 3)
-        c.recordDeposit{ value: 0 }(T1, carol, 14.4e18); // tier 2 (d = 2)
-        c.recordDeposit{ value: 0 }(T1, dave, 17.28e18); // tier 3
+        address bridgeOne = makeAddr("bridge-one-degen");
+        address bridgeTwo = makeAddr("bridge-two-degen");
+        address whale = makeAddr("whale-degen");
 
-        c.recordDeposit{ value: 5e18 }(T1, eve, 20.736e18);
+        c.recordDeposit{ value: 0 }(T1, alice, 10e18); // tier 0 (d = 4)
+        c.recordDeposit{ value: 0 }(T1, bridgeOne, 12e18); // fills tier 1 (d = 3)
+        c.recordDeposit{ value: 0 }(T1, bridgeTwo, 14.4e18); // fills tier 2 (d = 2)
+        c.recordDeposit{ value: 0 }(T1, dave, 17.28e18); // tier 3 (d = 1); vault -> tier 4
+        c.recordDeposit{ value: 0 }(T1, whale, 30e18); // sits in the top tier, holds the vault there
 
-        assertApproxEqAbs(c.claimable(carol, T1), 5e18, 1e4, "guard awards the pool to the nearest occupied tier");
-        assertEq(c.claimable(bob, T1), 0, "the tied-but-later tier gets nothing (nearest-first)");
-        assertEq(c.claimable(alice, T1), 0, "no other tier earns");
-        assertEq(c.claimable(dave, T1), 0, "no other tier earns");
+        // Empty the two in-window tiers. The whale's stake keeps the vault inside tier 4.
+        c.recordRedeem{ value: 0 }(T1, bridgeOne, 12e18);
+        c.recordRedeem{ value: 0 }(T1, bridgeTwo, 14.4e18);
+        assertEq(c.tierStake(T1, 1), 0, "tier 1 must be empty");
+        assertEq(c.tierStake(T1, 2), 0, "tier 2 must be empty");
+        assertEq(c.tierOf(c.vaultStake(T1)), 4, "the source tier must still be 4");
+
+        c.recordDeposit{ value: 5e18 }(T1, eve, 1e18);
+
+        assertApproxEqAbs(c.claimable(dave, T1), 5e18, 1e4, "guard awards the pool to the nearest occupied tier");
+        assertEq(c.claimable(alice, T1), 0, "the tied-but-farther tier gets nothing (nearest-first)");
         assertEq(c.protocolAccrued(), 0, "no leak to protocol");
     }
 
@@ -537,7 +702,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     ///      accumulator dust), for any alpha / sigma / pool.
     function testFuzz_fulcrum_conservation(uint256 alpha, uint256 sigma, uint256 pool) external {
         alpha = bound(alpha, 0, BPS);
-        sigma = bound(sigma, 1, 64e18);
+        sigma = bound(sigma, WAD + 1, 64e18);
         pool = bound(pool, 1, 1_000_000e18);
 
         DynamicFeeConfig memory config = _defaultConfig();
@@ -602,10 +767,11 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         assertEq(t0, 0, "d=4 earns nothing (pure fulcrum)");
     }
 
-    /// @dev The spike targets the nearest OCCUPIED prior tier and excludes the depositor's own stake:
-    ///      when dave (tier 3) tops up from tier 4, his own tier is skipped and the 100% spike lands on
-    ///      the next occupied prior tier (carol, tier 2). dave earns nothing from his own fee.
-    function test_depositToPriorTier_excludesDepositorTierAndSkipsToNextOccupied() external {
+    /// @dev The spike targets the nearest OCCUPIED prior tier, full stop — the depositor's own holding
+    ///      in that tier is a recipient like anyone else's. When dave (bucket 3) tops up from tier 4,
+    ///      the nearest occupied prior tier IS his own, so the 100% spike lands on him. Were it skipped,
+    ///      dave could route the same lump to carol simply by paying from a second wallet.
+    function test_depositToPriorTier_targetsNearestOccupiedPriorTierEvenWhenItIsTheDepositors() external {
         DynamicFeeConfig memory config = _defaultConfig();
         config.fulcrumAlpha = BPS;
         config.kernelSpread = 4e18;
@@ -618,13 +784,12 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         c.recordDeposit{ value: 0 }(T1, carol, 14.4e18); // tier 2
         c.recordDeposit{ value: 0 }(T1, dave, 17.28e18); // tier 3; vault -> tier 4
 
-        // dave tops up from tier 4; his own tier (3) is excluded, so the spike skips it to carol (tier 2).
+        // dave tops up from tier 4. The nearest occupied prior tier is 3, which is his own bucket, so
+        // the spike lands on him.
         c.recordDeposit{ value: 5e18 }(T1, dave, 1e18);
 
-        assertApproxEqAbs(
-            c.claimable(carol, T1), 5e18, 1e6, "spike skips the depositor's own tier to the next occupied one"
-        );
-        assertEq(c.claimable(dave, T1), 0, "depositor earns nothing from their own fee");
+        assertApproxEqAbs(c.claimable(dave, T1), 5e18, 1e6, "the spike lands on the nearest occupied prior tier");
+        assertEq(c.claimable(carol, T1), 0, "a farther prior tier is not the spike target");
         assertEq(c.claimable(bob, T1), 0, "a farther prior tier is not the spike target");
         assertEq(c.claimable(alice, T1), 0, "a farther prior tier is not the spike target");
         assertEq(c.protocolAccrued(), 0, "no leak to protocol");
@@ -644,11 +809,14 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         assertEq(c.protocolAccrued(), 1e18, "the whole fee routes to protocol when no prior tier exists");
     }
 
-    /// @dev No-recipient with tier > 0: when the ONLY occupied prior tier is the depositor's own
-    ///      pre-deposit bucket, the exclusion empties it in BOTH routing helpers — the spike finds no
-    ///      recipient and folds into the fulcrum, which also finds no eligible tier — so the whole fee
-    ///      folds to `protocolAccrued` and the payer earns nothing from their own fee.
-    function test_depositToPriorTier_onlyPriorTierIsDepositorsOwn_foldsToProtocol() external {
+    /// @dev The sole-occupant case, and the one the whole change exists for: when the ONLY occupied
+    ///      prior tier is the depositor's own, they receive the fee rather than forfeiting it. Both
+    ///      routing helpers find that tier — the spike lands its lump there and the fulcrum spread
+    ///      normalizes over it — so nothing reaches `protocolAccrued`.
+    ///
+    ///      Owning every prior tier is precisely the case where there is nobody else with a claim on
+    ///      the fee, so paying it to the protocol was taking value from the only party entitled to it.
+    function test_depositToPriorTier_onlyPriorTierIsDepositorsOwn_paysTheDepositor() external {
         DynamicFeeConfig memory config = _defaultConfig();
         config.depositToPriorTierBps = 5000; // spike enabled
         DynamicFeeFlatPriceCurve c = _deploy(config);
@@ -656,14 +824,12 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         // alice is the sole holder, bucketed at tier 0; this first deposit lifts the vault to tier 1.
         c.recordDeposit{ value: 0 }(T1, alice, 10e18);
 
-        // alice tops up with the source tier now at 1 (> 0). The only prior tier (0) holds nothing but
-        // her own excluded stake, so neither the spike nor the fulcrum has a recipient.
+        // alice tops up with the source tier now at 1 (> 0), and her 12e18 stays inside tier 1's band
+        // (10 -> 22), so the whole fee is sourced at tier 1 and tier 0 is its only recipient.
         c.recordDeposit{ value: 1e18 }(T1, alice, 12e18);
 
-        assertEq(c.claimable(alice, T1), 0, "the sole (excluded) prior holder earns nothing from their own fee");
-        assertEq(
-            c.protocolAccrued(), 1e18, "the whole fee folds to protocol when the only prior tier is the payer's own"
-        );
+        assertApproxEqAbs(c.claimable(alice, T1), 1e18, 1e3, "the sole prior holder receives their own fee");
+        assertEq(c.protocolAccrued(), 0, "nothing is forfeited to the protocol when a prior tier exists");
     }
 
     /// @dev Conservation with the spike enabled: the curve custodies the whole fee, and claimable +
@@ -673,7 +839,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         external
     {
         alpha = bound(alpha, 0, BPS);
-        sigma = bound(sigma, 1, 64e18);
+        sigma = bound(sigma, WAD + 1, 64e18);
         shareBps = bound(shareBps, 0, BPS);
         pool = bound(pool, 1, 1_000_000e18);
 
@@ -705,9 +871,9 @@ contract DynamicFeeFlatPriceCurveTest is Test {
 
     function test_recordRedeem_diamondSliceToResidualHolders_exiterExcluded() external {
         // carol seeds into tier 1; alice and bob both enter at tier 1 (same bucket).
-        _recordDeposit(T1, carol, 15e18, 0); // vaultAssets 15 (tier 1)
+        _recordDeposit(T1, carol, 15e18, 0); // vaultStake 15 (tier 1)
         _recordDeposit(T1, alice, 3e18, 0); // tier 1
-        _recordDeposit(T1, bob, 3e18, 0); // tier 1, vaultAssets 21 (still tier 1)
+        _recordDeposit(T1, bob, 3e18, 0); // tier 1, vaultStake 21 (still tier 1)
 
         // alice fully exits from tier 1; the withdrawal fee goes to the residual tier-1 holder (bob),
         // and alice is excluded.
@@ -726,8 +892,8 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         dynamicFeeCurve = _deploy(config);
 
         // alice at tier 0, bob at tier 1.
-        _recordDeposit(T1, alice, 15e18, 0); // vaultAssets 15 (tier 1)
-        _recordDeposit(T1, bob, 3e18, 0); // tier 1, vaultAssets 18
+        _recordDeposit(T1, alice, 15e18, 0); // vaultStake 15 (tier 1)
+        _recordDeposit(T1, bob, 3e18, 0); // tier 1, vaultStake 18
 
         // bob exits from tier 1; with full frontier routing, the fee targets prior tiers (tier 0 = alice).
         _recordRedeem(T1, bob, 3e18, 1e18);
@@ -738,13 +904,17 @@ contract DynamicFeeFlatPriceCurveTest is Test {
 
     function test_recordRedeem_partialExitKeepsResidualStake() external {
         _recordDeposit(T1, carol, 15e18, 0);
-        _recordDeposit(T1, alice, 6e18, 0); // tier 1
-        _recordDeposit(T1, bob, 6e18, 0); // tier 1
+        _recordDeposit(T1, alice, 6e18, 0); // 15 -> 21, entirely inside tier 1's band: bucket 1
+        // bob's 6e18 straddles the 22e18 edge (1 at tier 1, 5 at tier 2), so his stake-weighted average
+        // entry tier is 1.83 and he books at bucket 2 rather than bucket 1.
+        _recordDeposit(T1, bob, 6e18, 0);
+        assertEq(dynamicFeeCurve.userTier(T1, bob), 2, "bob books where his stake actually landed");
 
         _recordRedeem(T1, alice, 3e18, 0); // alice trims half, stays in tier 1
 
         assertEq(dynamicFeeCurve.userStake(T1, alice), 3e18, "residual stake retained");
-        assertEq(dynamicFeeCurve.tierStake(T1, 1), 9e18, "tier-1 stake = alice residual + bob");
+        assertEq(dynamicFeeCurve.tierStake(T1, 1), 3e18, "tier-1 stake = alice's residual alone");
+        assertEq(dynamicFeeCurve.tierStake(T1, 2), 6e18, "bob holds tier 2");
     }
 
     /* =================================================== */
@@ -896,8 +1066,9 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     }
 
     function test_sweepProtocol_onlyOwner_transfersAccrued() external {
-        // A deposit charged while the vault is still in tier 0 has no prior tier to reward, so the whole
-        // fee accrues to the protocol bucket (the only clean way the fulcrum kernel routes to protocol).
+        // 15e18 into an empty vault spans two bands: 10 at tier 0 and 5 at tier 1. The tier-0 band has
+        // no prior tier to reward, so its share of the fee is the part that accrues to the protocol.
+        // The tier-1 band's share reaches tier 0 — where alice's own band-0 stake has already landed.
         _recordDeposit(T1, alice, 15e18, 1e18);
 
         vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", bob));
@@ -905,11 +1076,40 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         dynamicFeeCurve.sweepProtocol(bob);
 
         uint256 accrued = dynamicFeeCurve.protocolAccrued();
-        assertEq(accrued, 1e18, "protocol accrued the no-prior-tier fee");
+        // Apportioned by band weight: 10e18*100bps of 1750e18 total weight.
+        assertEq(accrued, 571_428_571_428_571_428, "protocol accrued only the tier-0 band's share");
+        assertApproxEqAbs(
+            dynamicFeeCurve.claimable(alice, T1), 1e18 - accrued, 1e3, "the tier-1 band's share reached tier 0"
+        );
         uint256 balBefore = carol.balance;
         dynamicFeeCurve.sweepProtocol(carol); // owner == address(this)
         assertEq(carol.balance - balBefore, accrued, "swept to recipient");
         assertEq(dynamicFeeCurve.protocolAccrued(), 0, "protocol bucket cleared");
+    }
+
+    /// @dev The sweep's own guard, distinct from the `onlyOwner` one above: an owner who fat-fingers the
+    ///      recipient would otherwise burn the whole protocol bucket to the zero address irrecoverably.
+    function test_sweepProtocol_revertsOnZeroRecipient() external {
+        _recordDeposit(T1, alice, 15e18, 1e18);
+        assertGt(dynamicFeeCurve.protocolAccrued(), 0, "there must be something to sweep");
+
+        vm.expectRevert(abi.encodeWithSelector(DynamicFeeFlatPriceCurve.DynamicFeeFlatPriceCurve_ZeroAddress.selector));
+        dynamicFeeCurve.sweepProtocol(address(0));
+    }
+
+    /// @dev Sweeping an empty bucket is a no-op that returns zero rather than reverting or emitting.
+    ///      A monitor that sweeps on a schedule must not have to pre-check the balance, and an empty
+    ///      {ProtocolSwept} would be a misleading signal for anything watching the bucket.
+    function test_sweepProtocol_returnsZeroWhenNothingHasAccrued() external {
+        assertEq(dynamicFeeCurve.protocolAccrued(), 0, "the bucket starts empty");
+
+        uint256 balanceBefore = carol.balance;
+        vm.recordLogs();
+        uint256 swept = dynamicFeeCurve.sweepProtocol(carol);
+
+        assertEq(swept, 0, "an empty sweep returns zero");
+        assertEq(carol.balance, balanceBefore, "and moves nothing");
+        assertEq(vm.getRecordedLogs().length, 0, "and emits nothing a monitor could misread");
     }
 
     function test_initialize_revertsOnSecondCall() external {
@@ -917,11 +1117,187 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         dynamicFeeCurve.initialize(CURVE_NAME, owner, address(this), _defaultConfig());
     }
 
+    /// @dev Both halves of the initializer's zero-address guard. They are one `||` expression, so a test
+    ///      that only ever passes a zero OWNER leaves the MultiVault operand unexercised — and a curve
+    ///      initialized against the zero MultiVault would be permanently inert: every record hook is
+    ///      `onlyMultiVault`, and `multiVault` has no setter.
+    function test_initialize_revertsOnZeroOwner() external {
+        DynamicFeeFlatPriceCurve impl = new DynamicFeeFlatPriceCurve();
+        bytes memory initCall = abi.encodeWithSelector(
+            DynamicFeeFlatPriceCurve.initialize.selector, CURVE_NAME, address(0), address(this), _defaultConfig()
+        );
+
+        vm.expectRevert(abi.encodeWithSelector(DynamicFeeFlatPriceCurve.DynamicFeeFlatPriceCurve_ZeroAddress.selector));
+        new TransparentUpgradeableProxy(address(impl), proxyAdmin, initCall);
+    }
+
+    function test_initialize_revertsOnZeroMultiVault() external {
+        DynamicFeeFlatPriceCurve impl = new DynamicFeeFlatPriceCurve();
+        bytes memory initCall = abi.encodeWithSelector(
+            DynamicFeeFlatPriceCurve.initialize.selector, CURVE_NAME, owner, address(0), _defaultConfig()
+        );
+
+        vm.expectRevert(abi.encodeWithSelector(DynamicFeeFlatPriceCurve.DynamicFeeFlatPriceCurve_ZeroAddress.selector));
+        new TransparentUpgradeableProxy(address(impl), proxyAdmin, initCall);
+    }
+
+    /// @dev A deposit that mints nothing still forwards a fee. MultiVault invokes the hook on every
+    ///      deposit into a hook curve, including ones whose net stake rounds to zero, so this is a live
+    ///      path rather than a defensive one. There is no band to walk, so the fee is distributed once
+    ///      from the vault's CURRENT tier — the branch the band replay never reaches.
+    function test_recordDeposit_zeroNetStake_stillDistributesTheFeeFromTheCurrentTier() external {
+        // Seat alice in tier 0 and leave the vault in tier 1, so a fee released now has a prior tier.
+        _recordDeposit(T1, alice, 12e18, 0);
+        assertEq(dynamicFeeCurve.tierOf(dynamicFeeCurve.vaultStake(T1)), 1, "the vault must be out of tier 0");
+        assertEq(dynamicFeeCurve.userTier(T1, alice), 0, "alice must hold the tier below");
+
+        uint256 aliceBefore = dynamicFeeCurve.claimable(alice, T1);
+        uint256 vaultBefore = dynamicFeeCurve.vaultStake(T1);
+        uint256 protocolBefore = dynamicFeeCurve.protocolAccrued();
+
+        _recordDeposit(T1, bob, 0, 1e18);
+
+        assertEq(dynamicFeeCurve.vaultStake(T1), vaultBefore, "a zero-stake deposit moves no stake");
+        assertEq(dynamicFeeCurve.userStake(T1, bob), 0, "and mints the depositor nothing");
+        assertApproxEqAbs(
+            dynamicFeeCurve.claimable(alice, T1) - aliceBefore, 1e18, 1e3, "the whole fee still reaches the prior tier"
+        );
+        assertEq(dynamicFeeCurve.protocolAccrued(), protocolBefore, "and none of it is orphaned");
+    }
+
+    /// @dev The same path with no prior tier to reach: released from tier 0, a zero-stake deposit's fee
+    ///      has nowhere to go but the protocol bucket. Pins that it is never silently forfeited.
+    function test_recordDeposit_zeroNetStake_inTierZero_accruesTheFeeToTheProtocol() external {
+        uint256 protocolBefore = dynamicFeeCurve.protocolAccrued();
+
+        _recordDeposit(T1, bob, 0, 1e18);
+
+        assertEq(dynamicFeeCurve.vaultStake(T1), 0, "nothing landed");
+        assertEq(dynamicFeeCurve.protocolAccrued() - protocolBefore, 1e18, "the undistributable fee is retained");
+    }
+
     /// @dev The name-only initializer inherited from {LinearCurve} stays on the ABI but is inert: the
     ///      proxy's atomic 4-arg init already consumed the one-shot `initializer` slot.
     function test_initialize_inheritedLinearCurveInitializer_isInert() external {
         vm.expectRevert(abi.encodeWithSignature("InvalidInitialization()"));
         LinearCurve(address(dynamicFeeCurve)).initialize("Some Other Name");
+    }
+
+    /* =================================================== */
+    /*        A VAULT THAT FALLS BELOW ITS HOLDERS         */
+    /* =================================================== */
+
+    /// @dev The drawdown case, pinned because it is the one most likely to be reported as a bug.
+    ///
+    ///      Buckets are `round(avgEntryTier)` and are deliberately NOT re-priced when the vault
+    ///      shrinks, so after a large exit the surviving holders can all sit ABOVE the vault's current
+    ///      tier. A deposit fee reaches only the tiers strictly below its band, so in that state a new
+    ///      deposit pays nobody and its fee accrues to {protocolAccrued}. That is the tier-0 rule
+    ///      generalized — the mechanism pays "whoever was here before you climbed", and when everyone
+    ///      is above you there is no such party.
+    ///
+    ///      Three bounding claims come with it in the contract NatSpec, and a defence is only as good
+    ///      as its test, so all three are asserted here: already-earned credit does not move, the fee
+    ///      is retained rather than destroyed, and the behaviour reverses on the way back up with no
+    ///      intervention.
+    function test_vaultFallsBelowItsHolders_feeGoesToProtocolAndRecoversOnTheWayBackUp() external {
+        // Alice climbs several bands in one deposit, so she books a bucket above tier 0 and her whole
+        // stake sits in that one bucket — tier 0 is left genuinely empty.
+        _recordDeposit(T1, alice, 39e18, 0);
+        uint256 aliceBucket = dynamicFeeCurve.userTier(T1, alice);
+        assertGt(aliceBucket, 0, "alice must book a bucket above tier 0 for this scenario to exist");
+        assertEq(dynamicFeeCurve.tierStake(T1, 0), 0, "tier 0 must be empty, or someone is below her");
+
+        // The drawdown: she exits most of her position and the vault falls back down the ladder.
+        _recordRedeem(T1, alice, 35e18, 0);
+        uint256 vaultTier = dynamicFeeCurve.tierOf(dynamicFeeCurve.vaultStake(T1));
+        assertLt(vaultTier, aliceBucket, "the vault must end BELOW its surviving holder");
+        assertEq(dynamicFeeCurve.userTier(T1, alice), aliceBucket, "a redeem must not re-price her bucket");
+
+        uint256 aliceEarnedBeforeDrawdownDeposit = dynamicFeeCurve.claimable(alice, T1);
+        uint256 protocolBefore = dynamicFeeCurve.protocolAccrued();
+        uint256 balanceBefore = address(dynamicFeeCurve).balance;
+
+        // A deposit while the vault sits below every holder. Contained in the vault's current band.
+        uint256 strandedFee = 1e18;
+        _recordDeposit(T1, bob, 2e18, strandedFee);
+
+        assertEq(
+            dynamicFeeCurve.claimable(alice, T1),
+            aliceEarnedBeforeDrawdownDeposit,
+            "a holder above the vault earns nothing from a deposit below her"
+        );
+        assertEq(
+            dynamicFeeCurve.protocolAccrued() - protocolBefore,
+            strandedFee,
+            "the whole fee is retained by the protocol rather than forfeited"
+        );
+        assertEq(
+            address(dynamicFeeCurve).balance, balanceBefore + strandedFee, "and it is actually held, not destroyed"
+        );
+
+        // RECOVERY, with no intervention: climb back past her bucket and she earns again. The band
+        // that crosses ABOVE her bucket is the one that can reach her.
+        uint256 aliceBeforeRecovery = dynamicFeeCurve.claimable(alice, T1);
+        _recordDeposit(T1, carol, 40e18, 1e18);
+
+        assertGt(
+            dynamicFeeCurve.tierOf(dynamicFeeCurve.vaultStake(T1)),
+            aliceBucket,
+            "the recovery deposit must carry the vault back above her"
+        );
+        assertGt(
+            dynamicFeeCurve.claimable(alice, T1), aliceBeforeRecovery, "she earns again once the vault climbs past her"
+        );
+        // Monotonicity: the drawdown never clawed anything back, it only paused new credit.
+        assertGe(
+            dynamicFeeCurve.claimable(alice, T1),
+            aliceEarnedBeforeDrawdownDeposit,
+            "already-earned credit is never reduced by a drawdown"
+        );
+    }
+
+    /// @dev The redeem leg is explicitly NOT affected by a drawdown, and that asymmetry is load-bearing:
+    ///      exits are exactly the activity a drawdown produces, so if withdrawal fees also stranded
+    ///      themselves the mechanism would go dark precisely when it is busiest. Withdrawal fees key on
+    ///      the exiter's own recorded bucket, not on where the vault happens to sit, so they keep paying
+    ///      that tier's remaining occupants all the way down.
+    function test_vaultFallsBelowItsHolders_redeemFeesStillReachTheExitersCohort() external {
+        // A whale carries the vault up to tier 2, then two small holders enter INSIDE that band so both
+        // book bucket 2. Entering inside one band is what makes them share a bucket — a holder who
+        // climbs several bands books their stake-weighted average instead and lands somewhere lower.
+        address whale = makeAddr("whale");
+        _recordDeposit(T1, whale, 30e18, 0);
+        assertEq(dynamicFeeCurve.tierOf(dynamicFeeCurve.vaultStake(T1)), 2, "the whale must leave the vault in tier 2");
+
+        _recordDeposit(T1, alice, 1e18, 0);
+        _recordDeposit(T1, bob, 1e18, 0);
+        uint256 sharedBucket = dynamicFeeCurve.userTier(T1, alice);
+        assertEq(sharedBucket, 2, "alice must book the band she entered in");
+        assertEq(dynamicFeeCurve.userTier(T1, bob), sharedBucket, "both holders must share a bucket");
+
+        // The drawdown: the whale leaves and the vault falls far below the bucket those two still hold.
+        _recordRedeem(T1, whale, 28e18, 0);
+        assertLt(
+            dynamicFeeCurve.tierOf(dynamicFeeCurve.vaultStake(T1)),
+            sharedBucket,
+            "the vault must end below the shared bucket"
+        );
+
+        uint256 bobBefore = dynamicFeeCurve.claimable(bob, T1);
+        uint256 protocolBefore = dynamicFeeCurve.protocolAccrued();
+
+        // Alice exits a little more. Her withdrawal fee must still find bob, who shares her bucket.
+        uint256 exitFee = 1e18;
+        _recordRedeem(T1, alice, 1e18, exitFee);
+
+        assertApproxEqAbs(
+            dynamicFeeCurve.claimable(bob, T1) - bobBefore,
+            exitFee,
+            1e3,
+            "the exit fee still reaches the cohort even with the vault below them"
+        );
+        assertEq(dynamicFeeCurve.protocolAccrued(), protocolBefore, "and none of it is stranded in the protocol");
     }
 
     /* =================================================== */
@@ -998,25 +1374,29 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     }
 
     /// @dev The piecewise walk must consult EACH traversed band's own override, not just the entry
-    ///      band's. Baseline lump of 100e18 from empty is 2.3896e18 (10 at 1% + 12 at 1.5% + 14.4 at
-    ///      2% + 17.28 at 2.5% + 46.32 at 3%); overriding only the middle band (tier 2, width 14.4)
-    ///      to 5% moves it to 2.8216e18.
+    ///      band's. Overriding only the middle band (tier 2) upward must raise the blend, and by
+    ///      exactly what the independent per-band restatement says.
     function test_quoteDepositFee_piecewiseConsultsOverriddenMiddleBand() external {
-        assertEq(dynamicFeeCurve.quoteDepositFee(T1, 100e18), 2.3896e18, "baseline piecewise blend");
+        uint256 baseline = dynamicFeeCurve.quoteDepositFee(T1, 100e18);
+        assertEq(baseline, _expectedPiecewiseFrom(0, 100e18), "baseline piecewise blend");
 
         dynamicFeeCurve.setTierFeeOverride(2, 500, 0);
 
-        // 10 at 1% + 12 at 1.5% + 14.4 at 5% + 17.28 at 2.5% + 46.32 at 3%
-        // = 0.1 + 0.18 + 0.72 + 0.432 + 1.3896
-        assertEq(dynamicFeeCurve.quoteDepositFee(T1, 100e18), 2.8216e18, "middle band charged at its override");
+        uint256 overridden = dynamicFeeCurve.quoteDepositFee(T1, 100e18);
+        assertEq(overridden, _expectedPiecewiseFrom(0, 100e18), "middle band charged at its override");
+        assertGt(overridden, baseline, "raising a traversed band's rate raises the blend");
     }
 
     /// @dev Zeroing a middle band removes exactly that band's contribution and nothing else.
     function test_quoteDepositFee_piecewiseWithZeroedMiddleBand() external {
+        uint256 baseline = dynamicFeeCurve.quoteDepositFee(T1, 100e18);
+
         dynamicFeeCurve.setTierFeeOverride(2, 0, 0);
 
-        // Baseline 2.3896e18 minus the tier-2 band's 14.4 at 2% = 0.288e18.
-        assertEq(dynamicFeeCurve.quoteDepositFee(T1, 100e18), 2.1016e18, "zeroed band drops only its own slice");
+        uint256 zeroed = dynamicFeeCurve.quoteDepositFee(T1, 100e18);
+        assertEq(zeroed, _expectedPiecewiseFrom(0, 100e18), "zeroed band drops only its own slice");
+        assertLt(zeroed, baseline, "zeroing a traversed band lowers the blend");
+        assertEq(zeroed, 2_094_623_296_613_144_331, "golden blend with tier 2 zeroed");
     }
 
     function test_setTierFeeOverride_appliesToQuoteRedeemFee() external {
@@ -1059,7 +1439,11 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         assertEq(dynamicFeeCurve.withdrawalFeeBps(2), 300, "withdrawal back on the formula");
         (bool isSet,,) = dynamicFeeCurve.tierFeeOverride(2);
         assertFalse(isSet, "override cleared");
-        assertEq(dynamicFeeCurve.quoteDepositFee(T1, 100e18), 2.3896e18, "piecewise blend back to baseline");
+        assertEq(
+            dynamicFeeCurve.quoteDepositFee(T1, 100e18),
+            _expectedPiecewiseFrom(0, 100e18),
+            "piecewise blend back to baseline"
+        );
     }
 
     function test_setTierFeeOverride_revertsWhenNotOwner() external {
@@ -1231,8 +1615,8 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         ReentrantClaimer attacker = new ReentrantClaimer(dynamicFeeCurve, T1);
         // Give the attacker an earned balance: alice at tier 0, attacker at tier 1, then carol deposits
         // from tier 2 so the tier-1 slice pays the attacker.
-        _recordDeposit(T1, alice, 15e18, 0); // vaultAssets 15 -> tier 1
-        _recordDeposit(T1, address(attacker), 12e18, 0); // enters tier 1; vaultAssets 27 -> tier 2
+        _recordDeposit(T1, alice, 15e18, 0); // vaultStake 15 -> tier 1
+        _recordDeposit(T1, address(attacker), 12e18, 0); // enters tier 1; vaultStake 27 -> tier 2
         _recordDeposit(T1, carol, 12e18, 1e18); // from tier 2, pays tier 1 (attacker) + tier 0 (alice)
 
         assertGt(dynamicFeeCurve.claimable(address(attacker), T1), 0, "attacker has earnings");

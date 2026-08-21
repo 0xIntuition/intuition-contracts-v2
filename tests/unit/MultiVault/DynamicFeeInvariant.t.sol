@@ -21,6 +21,18 @@ contract DynamicFeeInvariantHandler is Test {
 
     address[] internal actors;
 
+    /// @dev Successful deposits. The invariants below are all "nothing bad happened" statements, which
+    ///      hold trivially over a run in which nothing happened — so the count is what proves the lane
+    ///      ran at all. See {afterInvariant}.
+    uint256 public depositsLanded;
+
+    /// @dev Same anti-vacuity role as {depositsLanded}, for the two ladder/kernel retune actions. A
+    ///      retune that always bounced off validation would leave this lane looking like it covers the
+    ///      admin surface while covering none of it, and every `setConfig` here is inside a try/catch
+    ///      that would hide it.
+    uint256 public ladderRetunesLanded;
+    uint256 public kernelRetunesLanded;
+
     constructor(
         MultiVault multiVault,
         DynamicFeeFlatPriceCurve curve,
@@ -46,7 +58,9 @@ contract DynamicFeeInvariantHandler is Test {
         uint256 amount = bound(amountSeed, 1e17, 200e18);
         vm.deal(actor, actor.balance + amount);
         vm.prank(actor);
-        try MULTI_VAULT.deposit{ value: amount }(actor, ATOM_ID, CURVE_ID, 0) { } catch { }
+        try MULTI_VAULT.deposit{ value: amount }(actor, ATOM_ID, CURVE_ID, 0) {
+            ++depositsLanded;
+        } catch { }
     }
 
     function redeem(uint256 actorSeed, uint256 sharesSeed) external {
@@ -74,6 +88,48 @@ contract DynamicFeeInvariantHandler is Test {
         vm.prank(OWNER);
         try CURVE.setConfig(cfg) { } catch { }
     }
+
+    /// @dev Retune the LADDER SHAPE, not just the fee rates — the riskier half of the admin surface.
+    ///      Changing `width0`, `growthGBps` or `tierCount` moves where every FUTURE tier decision lands
+    ///      while live positions keep the buckets they were recorded with, so the accounting has to
+    ///      survive a ladder that no longer matches the one those buckets were assigned under. That is
+    ///      the stated model of this admin surface ("a retune is an economic action") and it was
+    ///      previously never exercised: the fuzzer only ever moved the base rates.
+    ///
+    ///      Bounds are chosen so most proposals are ACCEPTED rather than bouncing off validation. A
+    ///      range that mostly reverts would leave the lane looking exercised while testing nothing —
+    ///      the same failure mode the open-prank bug produced. {ladderRetunesLanded} is the tripwire.
+    function retuneLadder(uint256 widthSeed, uint256 growthSeed, uint256 tierSeed, uint256 floorSeed) external {
+        DynamicFeeConfig memory cfg = CURVE.getConfig();
+        cfg.width0 = bound(widthSeed, 1e17, 500e18);
+        cfg.growthGBps = bound(growthSeed, 0, 8000);
+        // Grow-only, so never propose a shrink: `_setConfig` rejects it outright and every call would
+        // silently bounce. Growing by at most two at a time keeps the ladder reachable by test-scale
+        // deposits instead of jumping straight to the 64-tier ceiling.
+        cfg.tierCount = bound(tierSeed, cfg.tierCount, cfg.tierCount + 2);
+        if (cfg.tierCount > CURVE.MAX_TIER_COUNT()) cfg.tierCount = CURVE.MAX_TIER_COUNT();
+        cfg.minEligibleTierStake = bound(floorSeed, 0, CURVE.MAX_MIN_ELIGIBLE_TIER_STAKE());
+        vm.prank(OWNER);
+        try CURVE.setConfig(cfg) {
+            ++ladderRetunesLanded;
+        } catch { }
+    }
+
+    /// @dev The kernel knobs. `fulcrumAlpha` slides the most-earning band along the ladder and
+    ///      `kernelSpread` sets how wide the earning window is. Neither changes how much fee is
+    ///      CHARGED — only who receives it — which makes them the levers most likely to surface an
+    ///      asymmetry between what is collected and what is credited. Includes the sub-tier spreads
+    ///      that collapse the distribution into a single-tier lump, since that is reachable by
+    ///      governance and the accounting must hold there too.
+    function retuneKernel(uint256 alphaSeed, uint256 spreadSeed) external {
+        DynamicFeeConfig memory cfg = CURVE.getConfig();
+        cfg.fulcrumAlpha = bound(alphaSeed, 0, 10_000);
+        cfg.kernelSpread = bound(spreadSeed, 1, CURVE.MAX_KERNEL_SPREAD());
+        vm.prank(OWNER);
+        try CURVE.setConfig(cfg) {
+            ++kernelRetunesLanded;
+        } catch { }
+    }
 }
 
 /// @title  DynamicFeeInvariantTest
@@ -93,6 +149,12 @@ contract DynamicFeeInvariantTest is BaseTest {
         atomId = createSimpleAtom("invariant", ATOM_COST[0], users.alice);
         // Seed the dynamic vault so it exists before the fuzzer starts.
         makeDeposit(users.alice, users.alice, atomId, DYNAMIC_FEE_CURVE_ID, 10e18, 0);
+        // `makeDeposit` leaves a prank open (via `resetPrank`). An open prank makes every `vm.prank`
+        // inside the handler revert with "cannot override an ongoing prank", and because each action is
+        // wrapped in try/catch that failure is silent — the whole lane dies and the invariants below are
+        // asserted against a vault frozen exactly as `setUp` left it. Closing it here is what makes the
+        // fuzzer able to transact at all.
+        vm.stopPrank();
 
         address[] memory actors = new address[](ACTOR_COUNT);
         actors[0] = users.alice;
@@ -103,6 +165,15 @@ contract DynamicFeeInvariantTest is BaseTest {
             protocol.multiVault, dynamicFeeCurve, DYNAMIC_FEE_CURVE_ID, atomId, users.admin, actors
         );
         targetContract(address(handler));
+    }
+
+    /// @dev Anti-vacuity tripwire. Runs once the fuzzer is done, when "the run did something" is a
+    ///      meaningful thing to assert — an `invariant_` function cannot express it, because invariants
+    ///      are also evaluated against the initial state before any call has been made.
+    function afterInvariant() external view {
+        assertGt(handler.depositsLanded(), 0, "the fuzz run must land at least one deposit");
+        assertGt(handler.ladderRetunesLanded(), 0, "the fuzz run must land at least one ladder retune");
+        assertGt(handler.kernelRetunesLanded(), 0, "the fuzz run must land at least one kernel retune");
     }
 
     /// @dev Flat par: totalAssets == totalShares on the dynamic vault, always.

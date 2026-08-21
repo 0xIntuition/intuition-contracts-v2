@@ -20,7 +20,7 @@ contract FeeProxyUpgradeRegressionTest is FeeProxyBaseTest {
 
     uint256 internal constant SLOT_MULTI_VAULT = 0;
     uint256 internal constant SLOT_TREASURY = 1;
-    uint256 internal constant SLOT_MAX_BPS = 2;
+    uint256 internal constant SLOT_MAX_FEE_BPS = 2;
     uint256 internal constant SLOT_MAX_FIXED_FEE = 3;
     uint256 internal constant SLOT_REGISTRATION_FEE = 4;
     uint256 internal constant SLOT_AFFILIATE_CONFIGS = 5;
@@ -41,7 +41,9 @@ contract FeeProxyUpgradeRegressionTest is FeeProxyBaseTest {
             uint256(uint160(address(treasury))),
             "slot 1: treasury"
         );
-        assertEq(uint256(vm.load(address(feeProxy), bytes32(SLOT_MAX_BPS))), INITIAL_MAX_BPS, "slot 2: maxBps");
+        assertEq(
+            uint256(vm.load(address(feeProxy), bytes32(SLOT_MAX_FEE_BPS))), INITIAL_MAX_FEE_BPS, "slot 2: maxFeeBps"
+        );
         assertEq(
             uint256(vm.load(address(feeProxy), bytes32(SLOT_MAX_FIXED_FEE))),
             INITIAL_MAX_FIXED_FEE,

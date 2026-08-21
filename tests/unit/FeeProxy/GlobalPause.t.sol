@@ -131,12 +131,12 @@ contract GlobalPauseTest is FeeProxyBaseTest {
         feeProxy.pause();
 
         vm.startPrank(feeProxyAdmin);
-        feeProxy.setMaxBps(1000);
+        feeProxy.setMaxFeeBps(1000);
         feeProxy.setMaxFixedFee(2 ether);
         feeProxy.setRegistrationFee(0.5 ether);
         vm.stopPrank();
 
-        assertEq(feeProxy.maxBps(), 1000);
+        assertEq(feeProxy.maxFeeBps(), 1000);
         assertEq(feeProxy.maxFixedFee(), 2 ether);
         assertEq(feeProxy.registrationFee(), 0.5 ether);
     }

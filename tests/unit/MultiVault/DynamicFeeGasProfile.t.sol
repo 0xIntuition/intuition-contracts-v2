@@ -19,6 +19,20 @@ contract DynamicFeeGasProfileTest is BaseTest {
     uint256 internal constant MAX_REDEEM_OVERHEAD = 200_000;
     uint256 internal constant MAX_CLAIM_PER_TERM = 30_000;
 
+    /// @dev A deposit that sweeps the WHOLE ladder is a different cost class from a steady-state one
+    ///      and gets its own ceiling rather than loosening the one above. The hook replays the deposit
+    ///      band by band — one fee distribution and one position move each — so the work is
+    ///      O(bands x span), dominated by `sum(k) for k in 1..bands` accumulator writes.
+    ///
+    ///      Measured: ~232k overhead sweeping this suite's 5-tier ladder, and ~887k for the whole
+    ///      `recordDeposit` on a 13-tier ladder (see
+    ///      {DynamicFeeThirteenTierExampleTest.test_thirteenTier_fullLadderSweepGas}). Both are far
+    ///      inside a block, and the depositor pays in full — there is no path by which the cost of
+    ///      one account's ladder sweep can be imposed on anyone else. This ceiling is set to catch a
+    ///      regression in KIND (a replay that becomes quadratic in something other than tier count),
+    ///      not to pin the constant.
+    uint256 internal constant MAX_FULL_LADDER_DEPOSIT_OVERHEAD = 400_000;
+
     /// @dev Absolute ceilings for the NON-hook (default-curve) steady-state path. Optimized builds
     ///      measure ~89k deposit / ~87k redeem with the generic fee-hook dispatch in place (the
     ///      per-operation registry resolution + hook-getter staticcalls cost ~5k on deposit and
@@ -97,6 +111,34 @@ contract DynamicFeeGasProfileTest is BaseTest {
 
         assertLt(gasDefault, MAX_DEFAULT_DEPOSIT_GAS, "hookless deposit absolute ceiling");
         assertLt(gasDynamic - gasDefault, MAX_DEPOSIT_OVERHEAD, "dynamic-fee deposit overhead ceiling");
+    }
+
+    /// @dev Worst case for the per-band deposit replay: a single deposit that crosses the WHOLE
+    ///      ladder, so the hook runs one fee distribution and one position move per band instead of
+    ///      one for the transaction. The work is O(bands x span), bounded by `tierCount`, and the
+    ///      depositor pays it — nobody else can be made to. Recorded here so the cost of crossing the
+    ///      ladder is a measured number rather than an assumption.
+    function test_gasProfile_deposit_fullLadderCrossing() external {
+        bytes32 atomId = createSimpleAtom("gas-deposit-ladder", ATOM_COST[0], users.alice);
+
+        // Populate the low tiers so every band the sweep crosses has a real cohort to credit, which
+        // is what makes each band's distribution do its full amount of work.
+        makeDeposit(users.alice, users.alice, atomId, DYNAMIC_FEE_CURVE_ID, 3e18, 0);
+        makeDeposit(users.bob, users.bob, atomId, DYNAMIC_FEE_CURVE_ID, 5e18, 0);
+        makeDeposit(users.charlie, users.charlie, atomId, DYNAMIC_FEE_CURVE_ID, 8e18, 0);
+
+        makeDeposit(users.alice, users.alice, atomId, DEFAULT_CURVE_ID, 3e18, 0);
+
+        // The BaseTest ladder tops out at 26.84e18, so 60e18 sweeps every remaining band.
+        uint256 gasDefault = _measuredDeposit(users.alice, atomId, DEFAULT_CURVE_ID, 60e18);
+        uint256 gasDynamic = _measuredDeposit(users.alice, atomId, DYNAMIC_FEE_CURVE_ID, 60e18);
+
+        console2.log("full-ladder deposit gas (default):  ", gasDefault);
+        console2.log("full-ladder deposit gas (dynamic):  ", gasDynamic);
+        console2.log("full-ladder dynamic-fee overhead:   ", gasDynamic - gasDefault);
+        console2.log("bands crossed (depositor userTier): ", dynamicFeeCurve.userTier(atomId, users.alice));
+
+        assertLt(gasDynamic - gasDefault, MAX_FULL_LADDER_DEPOSIT_OVERHEAD, "full-ladder deposit overhead ceiling");
     }
 
     function test_gasProfile_redeem_dynamicOverheadVsDefault() external {

@@ -27,13 +27,12 @@ import { VotingEscrow, LockedBalance } from "src/external/curve/VotingEscrow.sol
  *           of the total TRUST supply has been locked.
  *         - Rewards for epoch `n` become claimable in epoch `n+1` and are forfeited if not claimed
  *           before the next epoch ends (i.e. only the previous epoch's rewards are claimable).
- *         - This version of the TrustBonding contract introduces the utilization-based rewards model,
- *           where the emitted rewards are based on the system utilizationRatio from the MultiVault
- *           contract, whereas the user's rewards are based on their own (personal) utilizationRatio.
- *         - utilizationRatio is defined as percentage of how much did the personal or system utilization
- *           change from epoch to epoch when compared to the target utilization, which represents the
- *           amount of TRUST tokens that were claimed as rewards in the previous epoch (on both the
- *           personal and the system level).
+ *         - Rewards follow a utilization-based model: emitted rewards scale with the system
+ *           utilizationRatio from the MultiVault contract, and a user's rewards scale with their own
+ *           (personal) utilizationRatio.
+ *         - utilizationRatio is the epoch-over-epoch change in personal or system utilization,
+ *           measured against the target utilization — the TRUST claimed as rewards in the previous
+ *           epoch, on the personal and system level respectively.
  *
  * @dev    Extended from the Solidity implementation of the Curve Finance's `VotingEscrow`
  *         contract (originally written in Vyper), as used by the Stargate Finance protocol:
@@ -64,8 +63,8 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Mapping of epochs to the total claimed rewards for that epoch among all users
-    /// @dev Also serves as the target the NEXT epoch's system utilization ratio is measured against —
-    ///      deliberately the rewards actually CLAIMED for the prior epoch, not those earned or eligible.
+    /// @dev Also serves as the target the next epoch's system utilization ratio is measured against —
+    ///      the rewards actually claimed for the prior epoch, not those earned or eligible.
     ///      Claiming is optional; declining to claim leaves this counter lower and can only shift the following
     ///      ratio within its hard `[systemUtilizationLowerBound, BASIS_POINTS_DIVISOR]` bounds. Emissions are
     ///      minted on a fixed, pre-scheduled per-epoch schedule: the utilization ratios only split that fixed
@@ -496,7 +495,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     /// @dev Pausing gates `claimRewards` and the bonding entry points (`deposit_for`,
     ///      `create_lock`, `increase_amount`, `increase_unlock_time`,
     ///      `increase_amount_and_time`, `withdraw_and_create_lock`). `withdraw` and
-    ///      `checkpoint` deliberately remain callable while paused: a pause must never
+    ///      `checkpoint` remain callable while paused: a pause must never
     ///      trap users' locked TRUST, and global bookkeeping must stay current so
     ///      supply/voting-power accounting does not go stale across a pause window.
     function pause() external onlyRole(PAUSER_ROLE) {

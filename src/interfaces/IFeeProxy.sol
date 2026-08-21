@@ -8,7 +8,7 @@ pragma solidity 0.8.29;
 /// @notice Per-affiliate fee configuration. Fixed-fee fields are denominated
 ///         in TRUST wei; bps fields are denominated in basis points where
 ///         `1 bps = 0.01%` (10_000 bps = 100%).
-/// @dev    Bps fields are capped at {IFeeProxy.maxBps} and fixed-fee fields
+/// @dev    Bps fields are capped at {IFeeProxy.maxFeeBps} and fixed-fee fields
 ///         are capped at {IFeeProxy.maxFixedFee} at registration time and on
 ///         every subsequent {IFeeProxy.updateAffiliateFees} call. The
 ///         routing entry points additionally re-check the active caps at
@@ -69,7 +69,7 @@ struct FeeGuard {
 }
 
 /// @notice Aggregate on-chain analytics for a registered affiliate. The
-///         counters are intentionally storage-backed so builder dashboards can
+///         counters are storage-backed so builder dashboards can
 ///         read basic usage without a custom indexer.
 /// @dev    Counts are per successful routing transaction through this proxy,
 ///         not per item inside a batch. `uniqueUsers` counts unique proxy-call
@@ -142,7 +142,7 @@ struct AffiliateUserStats {
 ///         {MultiVault} on the deposit and creation paths, applies a
 ///         per-affiliate fee, forwards the remaining value to MultiVault,
 ///         and refunds any excess `msg.value` with a pull-fallback ledger.
-/// @dev    Redemptions are deliberately not proxied: users redeem directly
+/// @dev    Redemptions are not proxied: users redeem directly
 ///         against {MultiVault} regardless of affiliate state, so no
 ///         affiliate can sit between a holder and their exit. A paused affiliate blocks new deposits and creations
 ///         through this proxy only; it does not affect a user's ability to
@@ -154,22 +154,20 @@ struct AffiliateUserStats {
 ///         bit, so the credited atom/triple creator and URI-context registrant
 ///         is the end user (`msg.sender` of the proxy call), not the proxy.
 ///
-///         The protocol-level caps {maxBps}, {maxFixedFee}, and
+///         The protocol-level caps {maxFeeBps}, {maxFixedFee}, and
 ///         {registrationFee} are storage-backed and governable by admin
-///         via {setMaxBps}, {setMaxFixedFee}, {setRegistrationFee}. They
-///         are intentionally not Solidity `constant`s so the protocol can
+///         via {setMaxFeeBps}, {setMaxFixedFee}, {setRegistrationFee}. They
+///         are not Solidity `constant`s, so the protocol can
 ///         tune fee headroom and registration-spam pricing over time
 ///         without an implementation upgrade.
 ///
-///         V1 intentionally does not support third-party relayers or gas
+///         V1 does not support third-party relayers or gas
 ///         sponsorship inside this proxy. Routing calls are user-submitted:
 ///         deposit receivers must approve this proxy for MultiVault DEPOSIT
 ///         routing, and delegated receivers (`receiver != msg.sender`) must
 ///         also approve `msg.sender`; creation attribution is bound to
 ///         `msg.sender`, who must approve this proxy for MultiVault CREATION
-///         routing. Future sponsorship should be handled by smart-wallet /
-///         paymaster infrastructure rather than by allowing arbitrary relayers
-///         to route through the singleton on a user's behalf.
+///         routing.
 ///
 ///         The implementation is expected to expose a SCW-safe `receive()`
 ///         that accepts ETH only from the configured {multiVault} or from
@@ -224,9 +222,9 @@ interface IFeeProxy {
     event RegistrationFeeForwarded(address indexed treasury, uint256 amount);
 
     /// @notice Emitted when admin updates the protocol-level bps cap.
-    /// @param previous The prior {maxBps} value.
-    /// @param current The new {maxBps} value.
-    event MaxBpsUpdated(uint256 previous, uint256 current);
+    /// @param previous The prior {maxFeeBps} value.
+    /// @param current The new {maxFeeBps} value.
+    event MaxFeeBpsUpdated(uint256 previous, uint256 current);
 
     /// @notice Emitted when admin updates the protocol-level fixed-fee
     ///         cap.
@@ -312,14 +310,14 @@ interface IFeeProxy {
         uint256 tripleCount
     );
 
-    /// @notice Emitted whenever a fee is credited to an affiliate's
-    ///         `feeRecipient`. The exact accrual model (push at fee time
-    ///         vs. pull via a separate claim) is an implementation detail
-    ///         of the T2–T7 fan-out; this event marks the credit point.
+    /// @notice Emitted after a fee has been transferred to an affiliate's
+    ///         `feeRecipient`. The transfer is a push at fee time, so there
+    ///         is no claimable balance behind this event. Also emitted with
+    ///         `amount == 0` on a fee-free route, where no transfer occurs.
     /// @param affiliate The affiliate the fee belongs to.
     /// @param user The end-user that paid the fee.
-    /// @param amount The fee amount credited.
-    event AffiliateFeeAccrued(address indexed affiliate, address indexed user, uint256 amount);
+    /// @param amount The fee amount paid.
+    event AffiliateFeePaid(address indexed affiliate, address indexed user, uint256 amount);
 
     /// @notice Emitted when a refund cannot be pushed to the user and is
     ///         instead credited to the pull-fallback ledger.
@@ -370,7 +368,7 @@ interface IFeeProxy {
 
     /// @notice Thrown when a configured bps exceeds the protocol-level cap.
     /// @param bps The configured bps value.
-    /// @param cap The active {maxBps} cap.
+    /// @param cap The active {maxFeeBps} cap.
     error FeeProxy_BpsExceedsCap(uint256 bps, uint256 cap);
 
     /// @notice Thrown when a configured fixed fee exceeds the protocol-
@@ -435,10 +433,10 @@ interface IFeeProxy {
     /// @param gross The gross assets the fee was computed against.
     error FeeProxy_FeeExceedsGross(uint256 fee, uint256 gross);
 
-    /// @notice Thrown when admin attempts to set {maxBps} to a value
+    /// @notice Thrown when admin attempts to set {maxFeeBps} to a value
     ///         greater than 10_000 (100%).
     /// @param requested The requested value.
-    error FeeProxy_MaxBpsOutOfRange(uint256 requested);
+    error FeeProxy_MaxFeeBpsOutOfRange(uint256 requested);
 
     /// @notice Thrown when {claimRefundTo} is called with the FeeProxy itself
     ///         as the recipient. Routing a refund to `address(this)` would
@@ -486,8 +484,9 @@ interface IFeeProxy {
     /// @dev    Reverts with {FeeProxy_AffiliateNotRegistered} if `affiliate`
     ///         has no row, and with {FeeProxy_AffiliateAlreadyPaused} if the
     ///         row is already paused. Pausing affects future {depositVia} /
-    ///         {depositBatchVia} / {createAtomsVia} / {createTriplesVia}
-    ///         calls only; the affiliate's own {updateAffiliateFees} and
+    ///         {depositBatchVia} / {createAtomsVia} /
+    ///         {createAtomsWithUrisVia} / {createTriplesVia} calls only; the
+    ///         affiliate's own {updateAffiliateFees} and
     ///         {updateFeeRecipient} entry points remain callable so the
     ///         affiliate can fix the conditions that triggered the pause
     ///         before admin reverses it. User redemptions against
@@ -513,7 +512,7 @@ interface IFeeProxy {
     /// @notice Affiliate-owned update of its own {FeeConfig}. Reverts with
     ///         {FeeProxy_AffiliateNotRegistered} if `msg.sender` is not
     ///         registered. The new configuration must satisfy the active
-    ///         {maxBps} / {maxFixedFee} caps on both deposit and creation
+    ///         {maxFeeBps} / {maxFixedFee} caps on both deposit and creation
     ///         sides; otherwise reverts with {FeeProxy_BpsExceedsCap} or
     ///         {FeeProxy_FixedFeeExceedsCap}.
     /// @dev    Callable while the row is per-affiliate paused and while the
@@ -540,16 +539,17 @@ interface IFeeProxy {
     /// @notice Globally pauses the routing and registration entry points.
     ///         Restricted to the pauser role.
     /// @dev    While paused, {registerAffiliate}, {depositVia},
-    ///         {depositBatchVia}, {createAtomsVia}, and {createTriplesVia}
-    ///         revert. {claimRefund}, {claimRefundTo}, the affiliate-owned
-    ///         update entry points, admin cap setters, and the pause-control
-    ///         surface continue to work so users can recover refunds and
-    ///         admins can stage configuration during the incident. Reverses
-    ///         via {unpause} by an admin.
+    ///         {depositBatchVia}, {createAtomsVia},
+    ///         {createAtomsWithUrisVia}, and {createTriplesVia} revert.
+    ///         {claimRefund}, {claimRefundTo}, the affiliate-owned update
+    ///         entry points, admin cap setters, and the pause-control surface
+    ///         continue to work so users can recover refunds and admins can
+    ///         stage configuration during the incident. Reverses via
+    ///         {unpause} by an admin.
     function pause() external;
 
     /// @notice Reverses the global pause set by {pause}. Restricted to the
-    ///         admin role (intentionally a tighter role than {pause} itself
+    ///         admin role (a tighter role than {pause} itself
     ///         so an operational pauser cannot also unilaterally restart the
     ///         contract).
     function unpause() external;
@@ -726,18 +726,18 @@ interface IFeeProxy {
 
     /// @notice Updates the protocol-level cap on per-affiliate bps fields.
     /// @dev    Restricted to admin role. Reverts with
-    ///         {FeeProxy_MaxBpsOutOfRange} if `newMaxBps > 10_000`.
+    ///         {FeeProxy_MaxFeeBpsOutOfRange} if `newMaxFeeBps > 10_000`.
     ///         Existing affiliate rows are not rewritten, but routing entry
     ///         points enforce the active cap at execution time, so a cap drop
     ///         blocks any now-over-cap side until the affiliate updates its
-    ///         row. Emits {MaxBpsUpdated}.
-    /// @param  newMaxBps The new cap, in bps (≤ 10_000).
-    function setMaxBps(uint256 newMaxBps) external;
+    ///         row. Emits {MaxFeeBpsUpdated}.
+    /// @param  newMaxFeeBps The new cap, in bps (≤ 10_000).
+    function setMaxFeeBps(uint256 newMaxFeeBps) external;
 
     /// @notice Updates the protocol-level cap on per-affiliate fixed-fee
     ///         fields.
     /// @dev    Restricted to admin role. Same execution-time cap semantics as
-    ///         {setMaxBps}. Emits {MaxFixedFeeUpdated}.
+    ///         {setMaxFeeBps}. Emits {MaxFixedFeeUpdated}.
     /// @param  newMaxFixedFee The new fixed-fee cap, in TRUST wei.
     function setMaxFixedFee(uint256 newMaxFixedFee) external;
 
@@ -811,8 +811,8 @@ interface IFeeProxy {
     /* =================================================== */
 
     /// @notice Returns the current protocol-level cap on per-affiliate bps
-    ///         fields. Storage-backed and governable via {setMaxBps}.
-    function maxBps() external view returns (uint256);
+    ///         fields. Storage-backed and governable via {setMaxFeeBps}.
+    function maxFeeBps() external view returns (uint256);
 
     /// @notice Returns the current protocol-level cap on per-affiliate
     ///         fixed-fee fields (TRUST wei). Storage-backed and governable

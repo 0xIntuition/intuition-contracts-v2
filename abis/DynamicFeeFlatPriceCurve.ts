@@ -1340,7 +1340,7 @@ export const DynamicFeeFlatPriceCurveAbi = [
   },
   {
     "type": "function",
-    "name": "vaultAssets",
+    "name": "vaultStake",
     "inputs": [
       {
         "name": "termId",
@@ -1350,7 +1350,7 @@ export const DynamicFeeFlatPriceCurveAbi = [
     ],
     "outputs": [
       {
-        "name": "assets",
+        "name": "stake",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -1447,6 +1447,43 @@ export const DynamicFeeFlatPriceCurveAbi = [
   },
   {
     "type": "event",
+    "name": "DepositBandRecorded",
+    "inputs": [
+      {
+        "name": "termId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "bandTier",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "bandStake",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "bandFee",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "DepositRecorded",
     "inputs": [
       {
@@ -1474,7 +1511,19 @@ export const DynamicFeeFlatPriceCurveAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "tier",
+        "name": "sourceTier",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "accountTier",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "accountAvgTier",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"

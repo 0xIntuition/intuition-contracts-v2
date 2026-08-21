@@ -15,7 +15,7 @@ flowchart LR
     DynamicFeeFlatPriceCurve__creditByWeight["_creditByWeight"]
     DynamicFeeFlatPriceCurve__fulcrumDistance["_fulcrumDistance"]
     DynamicFeeFlatPriceCurve__isEligibleStake["_isEligibleStake"]
-    DynamicFeeFlatPriceCurve__nearestOccupiedTier["_nearestOccupiedTier"]
+    DynamicFeeFlatPriceCurve__nearestEligibleTier["_nearestEligibleTier"]
     DynamicFeeFlatPriceCurve__payFulcrumTiers["_payFulcrumTiers"]
     DynamicFeeFlatPriceCurve__settle["_settle"]
     DynamicFeeFlatPriceCurve__tierOf["_tierOf"]
@@ -25,11 +25,11 @@ flowchart LR
     DynamicFeeFlatPriceCurve_recordRedeem["recordRedeem"]
   end
   DynamicFeeFlatPriceCurve_recordRedeem --> DynamicFeeFlatPriceCurve__isEligibleStake
-  DynamicFeeFlatPriceCurve_recordRedeem --> DynamicFeeFlatPriceCurve__nearestOccupiedTier
+  DynamicFeeFlatPriceCurve_recordRedeem --> DynamicFeeFlatPriceCurve__nearestEligibleTier
   DynamicFeeFlatPriceCurve_recordRedeem --> DynamicFeeFlatPriceCurve__payFulcrumTiers
   DynamicFeeFlatPriceCurve_recordRedeem --> DynamicFeeFlatPriceCurve__settle
   DynamicFeeFlatPriceCurve_recordRedeem --> DynamicFeeFlatPriceCurve__tierOf
-  DynamicFeeFlatPriceCurve__nearestOccupiedTier --> DynamicFeeFlatPriceCurve__isEligibleStake
+  DynamicFeeFlatPriceCurve__nearestEligibleTier --> DynamicFeeFlatPriceCurve__isEligibleStake
   DynamicFeeFlatPriceCurve__payFulcrumTiers --> DynamicFeeFlatPriceCurve__awardNearestOrProtocol
   DynamicFeeFlatPriceCurve__payFulcrumTiers --> DynamicFeeFlatPriceCurve__creditByWeight
   DynamicFeeFlatPriceCurve__payFulcrumTiers --> DynamicFeeFlatPriceCurve__weighPriorTiers
@@ -46,7 +46,7 @@ flowchart LR
 ```text
 DynamicFeeFlatPriceCurve.recordRedeem
   DynamicFeeFlatPriceCurve._isEligibleStake
-  DynamicFeeFlatPriceCurve._nearestOccupiedTier
+  DynamicFeeFlatPriceCurve._nearestEligibleTier
     DynamicFeeFlatPriceCurve._isEligibleStake
   DynamicFeeFlatPriceCurve._payFulcrumTiers
     DynamicFeeFlatPriceCurve._awardNearestOrProtocol

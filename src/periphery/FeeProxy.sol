@@ -20,29 +20,19 @@ import {
 /**
  * @title  FeeProxy
  * @author 0xIntuition
- * @notice Multi-tenant community fee proxy. Sits between community-side
- *         periphery callers and the core {MultiVault} on the deposit and
- *         creation paths. Applies per-affiliate fee math, forwards the net
- *         assets to MultiVault, credits the end user as the on-chain creator
- *         on creation flows (via {MultiVault.createAtomsFor} /
- *         {MultiVault.createAtomsWithUris} /
- *         {MultiVault.createTriplesFor}), and refunds excess `msg.value` with
- *         a push-then-pull-fallback flow that is safe for smart-contract
- *         wallets.
- * @dev    Redemptions are not proxied; users redeem directly against
- *         {MultiVault} regardless of affiliate state. Two pause surfaces are
- *         available: per-affiliate {pauseAffiliate} (reversible via
+ * @notice Multi-tenant community fee proxy; the external surface and its routing
+ *         rules are documented on {IFeeProxy}. Applies per-affiliate fee math,
+ *         forwards the net assets to {MultiVault}, and refunds excess
+ *         `msg.value` with a push-then-pull-fallback flow that is safe for
+ *         smart-contract wallets.
+ * @dev    Two pause surfaces: per-affiliate {pauseAffiliate} (reversible via
  *         {unpauseAffiliate}) and global {pause} (reversible via {unpause}).
  *         Affiliates own their fee row post-registration via
  *         {updateAffiliateFees} and {updateFeeRecipient}; the routing entry
  *         points re-check the relevant side's cap at execution time, so
  *         lowering a protocol-level cap immediately blocks now-over-cap
- *         affiliates until they bring their row under the new cap. V1 is a
- *         user-submitted, no-sponsorship router: deposit receivers must
- *         approve this proxy on {MultiVault}, delegated receivers must also
- *         approve the caller, creation creators are bound to `msg.sender` and
- *         must approve this proxy, and per-affiliate analytics are stored
- *         on-chain for lightweight builder dashboards.
+ *         affiliates until they bring their row under the new cap.
+ *         Per-affiliate counters are stored on-chain for builder dashboards.
  */
 contract FeeProxy is
     IFeeProxy,
@@ -81,7 +71,7 @@ contract FeeProxy is
     address public treasury;
 
     /// @inheritdoc IFeeProxy
-    uint256 public maxBps;
+    uint256 public maxFeeBps;
 
     /// @inheritdoc IFeeProxy
     uint256 public maxFixedFee;
@@ -131,21 +121,21 @@ contract FeeProxy is
     ///                          membership and is the only role that can
     ///                          {unpause} the contract or
     ///                          {unpauseAffiliate} a row).
-    /// @param  maxBps_          Initial bps cap (must be ≤ {BPS_DIVISOR}).
+    /// @param  maxFeeBps_       Initial bps cap (must be ≤ {BPS_DIVISOR}).
     /// @param  maxFixedFee_     Initial fixed-fee cap (TRUST wei).
     /// @param  registrationFee_ Initial registration fee (TRUST wei).
     function initialize(
         address multiVault_,
         address treasury_,
         address admin_,
-        uint256 maxBps_,
+        uint256 maxFeeBps_,
         uint256 maxFixedFee_,
         uint256 registrationFee_
     ) external initializer {
         if (multiVault_ == address(0) || treasury_ == address(0) || admin_ == address(0)) {
             revert FeeProxy_ZeroAddress();
         }
-        if (maxBps_ > BPS_DIVISOR) revert FeeProxy_MaxBpsOutOfRange(maxBps_);
+        if (maxFeeBps_ > BPS_DIVISOR) revert FeeProxy_MaxFeeBpsOutOfRange(maxFeeBps_);
 
         __AccessControl_init();
         __Pausable_init();
@@ -156,7 +146,7 @@ contract FeeProxy is
 
         multiVault = multiVault_;
         treasury = treasury_;
-        maxBps = maxBps_;
+        maxFeeBps = maxFeeBps_;
         maxFixedFee = maxFixedFee_;
         registrationFee = registrationFee_;
     }
@@ -276,18 +266,18 @@ contract FeeProxy is
         _assertSideWithinCaps(row.fees.depositBps, row.fees.depositFixedFee);
         _assertFeeGuard(row.fees.depositBps, row.fees.depositFixedFee, feeGuard);
 
-        uint256 fee = _calcFee(grossAssets, row.fees.depositBps, row.fees.depositFixedFee);
-        if (fee >= grossAssets) revert FeeProxy_FeeExceedsGross(fee, grossAssets);
-        uint256 forwarded = grossAssets - fee;
+        uint256 affiliateFee = _calcFee(grossAssets, row.fees.depositBps, row.fees.depositFixedFee);
+        if (affiliateFee >= grossAssets) revert FeeProxy_FeeExceedsGross(affiliateFee, grossAssets);
+        uint256 forwardedAssets = grossAssets - affiliateFee;
 
-        _payAffiliate(row.feeRecipient, affiliate, msg.sender, fee);
+        _payAffiliate(row.feeRecipient, affiliate, msg.sender, affiliateFee);
 
-        shares = IMultiVault(multiVault).deposit{ value: forwarded }(receiver, termId, curveId, minShares);
+        shares = IMultiVault(multiVault).deposit{ value: forwardedAssets }(receiver, termId, curveId, minShares);
 
-        _recordAffiliateStats(affiliate, msg.sender, grossAssets, fee, forwarded, false);
+        _recordAffiliateStats(affiliate, msg.sender, grossAssets, affiliateFee, forwardedAssets, false);
         _refundExcess(msg.sender, msg.value - grossAssets);
 
-        emit DepositedVia(msg.sender, affiliate, termId, grossAssets, fee, forwarded, shares);
+        emit DepositedVia(msg.sender, affiliate, termId, grossAssets, affiliateFee, forwardedAssets, shares);
     }
 
     /// @inheritdoc IFeeProxy
@@ -309,16 +299,20 @@ contract FeeProxy is
 
         RoutingFlow memory flow = _setupRoutingFlow(affiliate, assets, feeGuard, false);
 
-        _payAffiliate(flow.feeRecipient, affiliate, msg.sender, flow.fee);
+        _payAffiliate(flow.feeRecipient, affiliate, msg.sender, flow.affiliateFee);
 
-        shares = IMultiVault(multiVault).depositBatch{ value: flow.totalForwarded }(
+        shares = IMultiVault(multiVault).depositBatch{ value: flow.totalForwardedAssets }(
             receiver, termIds, curveIds, flow.forwardedAssets, minShares
         );
 
-        _recordAffiliateStats(affiliate, msg.sender, flow.totalGross, flow.fee, flow.totalForwarded, false);
-        _refundExcess(msg.sender, msg.value - flow.totalGross);
+        _recordAffiliateStats(
+            affiliate, msg.sender, flow.totalGrossAssets, flow.affiliateFee, flow.totalForwardedAssets, false
+        );
+        _refundExcess(msg.sender, msg.value - flow.totalGrossAssets);
 
-        emit DepositedBatchVia(msg.sender, affiliate, flow.totalGross, flow.fee, flow.totalForwarded);
+        emit DepositedBatchVia(
+            msg.sender, affiliate, flow.totalGrossAssets, flow.affiliateFee, flow.totalForwardedAssets
+        );
     }
 
     /// @inheritdoc IFeeProxy
@@ -335,16 +329,20 @@ contract FeeProxy is
 
         RoutingFlow memory flow = _setupRoutingFlow(affiliate, assets, feeGuard, true);
 
-        _payAffiliate(flow.feeRecipient, affiliate, msg.sender, flow.fee);
+        _payAffiliate(flow.feeRecipient, affiliate, msg.sender, flow.affiliateFee);
 
-        termIds = IMultiVault(multiVault).createAtomsFor{ value: flow.totalForwarded }(
+        termIds = IMultiVault(multiVault).createAtomsFor{ value: flow.totalForwardedAssets }(
             msg.sender, atomDatas, flow.forwardedAssets
         );
 
-        _recordAffiliateStats(affiliate, msg.sender, flow.totalGross, flow.fee, flow.totalForwarded, true);
-        _refundExcess(msg.sender, msg.value - flow.totalGross);
+        _recordAffiliateStats(
+            affiliate, msg.sender, flow.totalGrossAssets, flow.affiliateFee, flow.totalForwardedAssets, true
+        );
+        _refundExcess(msg.sender, msg.value - flow.totalGrossAssets);
 
-        emit CreatedAtomsVia(msg.sender, affiliate, flow.totalGross, flow.fee, flow.totalForwarded, atomDatas.length);
+        emit CreatedAtomsVia(
+            msg.sender, affiliate, flow.totalGrossAssets, flow.affiliateFee, flow.totalForwardedAssets, atomDatas.length
+        );
     }
 
     /// @inheritdoc IFeeProxy
@@ -362,16 +360,20 @@ contract FeeProxy is
 
         RoutingFlow memory flow = _setupRoutingFlow(affiliate, assets, feeGuard, true);
 
-        _payAffiliate(flow.feeRecipient, affiliate, msg.sender, flow.fee);
+        _payAffiliate(flow.feeRecipient, affiliate, msg.sender, flow.affiliateFee);
 
-        termIds = IMultiVault(multiVault).createAtomsWithUris{ value: flow.totalForwarded }(
+        termIds = IMultiVault(multiVault).createAtomsWithUris{ value: flow.totalForwardedAssets }(
             msg.sender, atomDatas, flow.forwardedAssets, uris
         );
 
-        _recordAffiliateStats(affiliate, msg.sender, flow.totalGross, flow.fee, flow.totalForwarded, true);
-        _refundExcess(msg.sender, msg.value - flow.totalGross);
+        _recordAffiliateStats(
+            affiliate, msg.sender, flow.totalGrossAssets, flow.affiliateFee, flow.totalForwardedAssets, true
+        );
+        _refundExcess(msg.sender, msg.value - flow.totalGrossAssets);
 
-        emit CreatedAtomsVia(msg.sender, affiliate, flow.totalGross, flow.fee, flow.totalForwarded, atomDatas.length);
+        emit CreatedAtomsVia(
+            msg.sender, affiliate, flow.totalGrossAssets, flow.affiliateFee, flow.totalForwardedAssets, atomDatas.length
+        );
     }
 
     /// @inheritdoc IFeeProxy
@@ -404,16 +406,25 @@ contract FeeProxy is
         bytes32[] calldata objectIds,
         RoutingFlow memory flow
     ) private returns (bytes32[] memory termIds) {
-        _payAffiliate(flow.feeRecipient, affiliate, msg.sender, flow.fee);
+        _payAffiliate(flow.feeRecipient, affiliate, msg.sender, flow.affiliateFee);
 
-        termIds = IMultiVault(multiVault).createTriplesFor{ value: flow.totalForwarded }(
+        termIds = IMultiVault(multiVault).createTriplesFor{ value: flow.totalForwardedAssets }(
             msg.sender, subjectIds, predicateIds, objectIds, flow.forwardedAssets
         );
 
-        _recordAffiliateStats(affiliate, msg.sender, flow.totalGross, flow.fee, flow.totalForwarded, true);
-        _refundExcess(msg.sender, msg.value - flow.totalGross);
+        _recordAffiliateStats(
+            affiliate, msg.sender, flow.totalGrossAssets, flow.affiliateFee, flow.totalForwardedAssets, true
+        );
+        _refundExcess(msg.sender, msg.value - flow.totalGrossAssets);
 
-        emit CreatedTriplesVia(msg.sender, affiliate, flow.totalGross, flow.fee, flow.totalForwarded, subjectIds.length);
+        emit CreatedTriplesVia(
+            msg.sender,
+            affiliate,
+            flow.totalGrossAssets,
+            flow.affiliateFee,
+            flow.totalForwardedAssets,
+            subjectIds.length
+        );
     }
 
     /// @inheritdoc IFeeProxy
@@ -435,11 +446,11 @@ contract FeeProxy is
     /* =================================================== */
 
     /// @inheritdoc IFeeProxy
-    function setMaxBps(uint256 newMaxBps) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newMaxBps > BPS_DIVISOR) revert FeeProxy_MaxBpsOutOfRange(newMaxBps);
-        uint256 previous = maxBps;
-        maxBps = newMaxBps;
-        emit MaxBpsUpdated(previous, newMaxBps);
+    function setMaxFeeBps(uint256 newMaxFeeBps) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newMaxFeeBps > BPS_DIVISOR) revert FeeProxy_MaxFeeBpsOutOfRange(newMaxFeeBps);
+        uint256 previous = maxFeeBps;
+        maxFeeBps = newMaxFeeBps;
+        emit MaxFeeBpsUpdated(previous, newMaxFeeBps);
     }
 
     /// @inheritdoc IFeeProxy
@@ -547,9 +558,9 @@ contract FeeProxy is
     ///      Bundling these fields into one struct keeps the call-site stack
     ///      lean enough to compile without `via-ir`.
     struct RoutingFlow {
-        uint256 totalGross;
-        uint256 fee;
-        uint256 totalForwarded;
+        uint256 totalGrossAssets;
+        uint256 affiliateFee;
+        uint256 totalForwardedAssets;
         address feeRecipient;
         uint256[] forwardedAssets;
     }
@@ -572,18 +583,18 @@ contract FeeProxy is
         _assertFeeGuard(bps, fixedFee, feeGuard);
 
         // `_sum` rejects any zero per-leg, and the caller pre-validates a
-        // nonzero array length, so `totalGross` is strictly positive here.
-        uint256 totalGross = _sum(assets);
-        if (msg.value < totalGross) revert FeeProxy_InsufficientValue(msg.value, totalGross);
+        // nonzero array length, so `totalGrossAssets` is strictly positive here.
+        uint256 totalGrossAssets = _sum(assets);
+        if (msg.value < totalGrossAssets) revert FeeProxy_InsufficientValue(msg.value, totalGrossAssets);
 
-        uint256 fee = _calcFee(totalGross, bps, fixedFee);
-        if (fee >= totalGross) revert FeeProxy_FeeExceedsGross(fee, totalGross);
+        uint256 affiliateFee = _calcFee(totalGrossAssets, bps, fixedFee);
+        if (affiliateFee >= totalGrossAssets) revert FeeProxy_FeeExceedsGross(affiliateFee, totalGrossAssets);
 
-        flow.totalGross = totalGross;
-        flow.fee = fee;
-        flow.totalForwarded = totalGross - fee;
+        flow.totalGrossAssets = totalGrossAssets;
+        flow.affiliateFee = affiliateFee;
+        flow.totalForwardedAssets = totalGrossAssets - affiliateFee;
         flow.feeRecipient = row.feeRecipient;
-        flow.forwardedAssets = _allocate(assets, flow.totalForwarded, totalGross);
+        flow.forwardedAssets = _allocate(assets, flow.totalForwardedAssets, totalGrossAssets);
     }
 
     /// @dev Workhorse for {claimRefund} / {claimRefundTo}. Debits
@@ -603,13 +614,13 @@ contract FeeProxy is
     /// @dev Records dashboard-friendly affiliate analytics after a successful
     ///      MultiVault call. Keep this after the routed external call so
     ///      reverted routes never inflate counters; refund push/fallback
-    ///      outcome is intentionally tracked independently. A batch is counted
+    ///      outcome is tracked independently. A batch is counted
     ///      as one routed transaction because it consumed one proxy entry point.
     function _recordAffiliateStats(
         address affiliate,
         address user,
         uint256 grossAssets,
-        uint256 fee,
+        uint256 affiliateFee,
         uint256 forwardedAssets,
         bool isCreation
     ) internal {
@@ -622,33 +633,33 @@ contract FeeProxy is
 
         aggregate.txCount += 1;
         aggregate.totalGrossAssets += grossAssets;
-        aggregate.totalFees += fee;
+        aggregate.totalFees += affiliateFee;
         aggregate.totalForwardedAssets += forwardedAssets;
 
         userStats.txCount += 1;
         userStats.totalGrossAssets += grossAssets;
-        userStats.totalFees += fee;
+        userStats.totalFees += affiliateFee;
         userStats.totalForwardedAssets += forwardedAssets;
 
         if (isCreation) {
             aggregate.creationCount += 1;
             aggregate.creationGrossAssets += grossAssets;
-            aggregate.creationFees += fee;
+            aggregate.creationFees += affiliateFee;
             aggregate.creationForwardedAssets += forwardedAssets;
 
             userStats.creationCount += 1;
             userStats.creationGrossAssets += grossAssets;
-            userStats.creationFees += fee;
+            userStats.creationFees += affiliateFee;
             userStats.creationForwardedAssets += forwardedAssets;
         } else {
             aggregate.depositCount += 1;
             aggregate.depositGrossAssets += grossAssets;
-            aggregate.depositFees += fee;
+            aggregate.depositFees += affiliateFee;
             aggregate.depositForwardedAssets += forwardedAssets;
 
             userStats.depositCount += 1;
             userStats.depositGrossAssets += grossAssets;
-            userStats.depositFees += fee;
+            userStats.depositFees += affiliateFee;
             userStats.depositForwardedAssets += forwardedAssets;
         }
     }
@@ -685,7 +696,7 @@ contract FeeProxy is
     }
 
     /// @dev Reverts if any field in `fees` exceeds the active protocol-level
-    ///      caps {maxBps} / {maxFixedFee}. Used at registration and on every
+    ///      caps {maxFeeBps} / {maxFixedFee}. Used at registration and on every
     ///      {updateAffiliateFees} call.
     function _assertFeesWithinCaps(FeeConfig calldata fees) internal view {
         _assertSideWithinCaps(fees.depositBps, fees.depositFixedFee);
@@ -699,7 +710,7 @@ contract FeeProxy is
     ///      protocol-cap drop immediately blocks now-over-cap affiliates
     ///      without separately blocking the orthogonal side's flow.
     function _assertSideWithinCaps(uint256 bps, uint256 fixedFee) internal view {
-        uint256 bpsCap = maxBps;
+        uint256 bpsCap = maxFeeBps;
         uint256 fixedCap = maxFixedFee;
         if (bps > bpsCap) revert FeeProxy_BpsExceedsCap(bps, bpsCap);
         if (fixedFee > fixedCap) revert FeeProxy_FixedFeeExceedsCap(fixedFee, fixedCap);
@@ -723,17 +734,17 @@ contract FeeProxy is
         return (grossAssets * bps) / BPS_DIVISOR + fixedFee;
     }
 
-    /// @dev Pushes the accrued affiliate fee to `feeRecipient`. Reverts on
+    /// @dev Pushes the affiliate fee to `feeRecipient` and emits
+    ///      {AffiliateFeePaid} once the transfer has settled. Reverts on
     ///      transfer failure (an affiliate that wires a bricked recipient is
-    ///      responsible for migrating, not the protocol). Emits
-    ///      {AffiliateFeeAccrued} at the credit point.
+    ///      responsible for migrating, not the protocol).
     function _payAffiliate(address feeRecipient, address affiliate, address user, uint256 amount) internal {
         if (amount == 0) {
-            emit AffiliateFeeAccrued(affiliate, user, 0);
+            emit AffiliateFeePaid(affiliate, user, 0);
             return;
         }
         Address.sendValue(payable(feeRecipient), amount);
-        emit AffiliateFeeAccrued(affiliate, user, amount);
+        emit AffiliateFeePaid(affiliate, user, amount);
     }
 
     /// @dev Pushes a refund to `user`. On push failure (e.g. an SCW with a

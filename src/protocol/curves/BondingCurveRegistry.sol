@@ -19,7 +19,7 @@ import { IBondingCurveRegistry } from "src/interfaces/IBondingCurveRegistry.sol"
  *         supplying a new "vault" for each term (atom or triple).
  * @dev    The registry is responsible for interacting with the curves, to fetch the mathematical
  *         computations given the provided economic state and the desired curve implementation.
- *         You can think of the registry as a concierge the MultiVault uses to access various
+ *         The registry acts as a concierge the MultiVault uses to access various
  *         economic incentive patterns.
  */
 contract BondingCurveRegistry is IBondingCurveRegistry, Ownable2StepUpgradeable {

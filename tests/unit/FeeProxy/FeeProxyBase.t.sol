@@ -51,7 +51,7 @@ abstract contract FeeProxyBaseTest is BaseTest {
     /*                  PROTOCOL-LEVEL CAPS                */
     /* =================================================== */
 
-    uint256 internal constant INITIAL_MAX_BPS = 2000; // 20%
+    uint256 internal constant INITIAL_MAX_FEE_BPS = 2000; // 20%
     uint256 internal constant INITIAL_MAX_FIXED_FEE = 1 ether;
     uint256 internal constant INITIAL_REGISTRATION_FEE = 0.1 ether;
 
@@ -106,7 +106,7 @@ abstract contract FeeProxyBaseTest is BaseTest {
                 address(protocol.multiVault),
                 treasury,
                 feeProxyAdmin,
-                INITIAL_MAX_BPS,
+                INITIAL_MAX_FEE_BPS,
                 INITIAL_MAX_FIXED_FEE,
                 INITIAL_REGISTRATION_FEE
             )

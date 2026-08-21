@@ -72,17 +72,17 @@ contract AtomWarden is IAtomWarden, Initializable, AccessControlUpgradeable, EIP
     ///         `_grantRole` / `_revokeRole` overrides below. Used to bound
     ///         `setSignatureThreshold` so a misconfigured threshold cannot brick claims.
     /// @dev Appended after `signatureThreshold` for storage-layout compatibility with v2.
-    /// @dev This is a ROLE-GRANT TALLY, not a census of usable signing keys, and it fails closed in
+    /// @dev This is a role-grant tally, not a census of usable signing keys, and it fails closed in
     ///      both directions. Both effects are liveness-only — neither can authorize a claim that the
     ///      quorum would otherwise reject — but both are worth knowing operationally:
-    ///        - INFLATION: granting `SIGNER_ROLE` to `address(0)` succeeds and increments this count,
+    ///        - Inflation: granting `SIGNER_ROLE` to `address(0)` succeeds and increments this count,
     ///          permitting a `signatureThreshold` the quorum can never satisfy. The phantom entry can
     ///          never sign, because signature recovery never returns the zero address and the
     ///          strictly-ascending rule seeds at it. Never grant the role to the zero address.
-    ///        - DEFLATION: any single signer may `renounceRole` unilaterally. If the count reaches
-    ///          zero the quorum fails closed AND the admin cannot repair it by lowering the threshold,
+    ///        - Deflation: any single signer may `renounceRole` unilaterally. If the count reaches
+    ///          zero the quorum fails closed and the admin cannot repair it by lowering the threshold,
     ///          because `setSignatureThreshold` requires `newThreshold <= signerCount` and every value
-    ///          then reverts. Recovery requires a `grantRole` FIRST, then the threshold change.
+    ///          then reverts. Recovery requires a `grantRole` first, then the threshold change.
     uint256 public signerCount;
 
     /// @notice Maximum allowed `validAfter - block.timestamp` on a `ClaimAuthorization`,
@@ -122,8 +122,8 @@ contract AtomWarden is IAtomWarden, Initializable, AccessControlUpgradeable, EIP
     uint256 public currentClaimWindowId;
 
     /// @notice Number of authorized claims counted in the window identified by
-    ///         `currentClaimWindowId`. Resets when the window rolls over; deliberately
-    ///         preserved across `setClaimCapWindow` so a retune never grants fresh
+    ///         `currentClaimWindowId`. Resets when the window rolls over, and is
+    ///         preserved across `setClaimCapWindow`, so a retune never grants fresh
     ///         budget mid-window.
     /// @dev Appended after `currentClaimWindowId` for storage-layout compatibility.
     uint256 public claimsInWindow;
@@ -287,7 +287,7 @@ contract AtomWarden is IAtomWarden, Initializable, AccessControlUpgradeable, EIP
      *      address must (a) hold `SIGNER_ROLE` and (b) be strictly greater than the
      *      previous recovered address — the ascending-order rule (Gnosis Safe convention)
      *      provides O(1) deduplication and a canonical bundle layout. Off-chain producers
-     *      MUST sort signers by recovered address (not by key index) before concatenating.
+     *      must sort signers by recovered address (not by key index) before concatenating.
      */
     function claimWithAuthorization(ClaimAuthorization calldata authorization, bytes calldata signature)
         external
@@ -461,8 +461,8 @@ contract AtomWarden is IAtomWarden, Initializable, AccessControlUpgradeable, EIP
 
     /// @notice Halts all user-driven claim entry points (`claimOwnershipOverAddressAtom`,
     ///         `claimWithAuthorization`, `claimAsCreatorAfterExpiry`). Operator paths
-    ///         (`grantAtomWalletOwnership`, `batchGrantAtomWalletOwnership`) are NOT gated
-    ///         on pause by design — they remain available as a manual override during
+    ///         (`grantAtomWalletOwnership`, `batchGrantAtomWalletOwnership`) are not gated
+    ///         on pause — they remain available as a manual override during
     ///         incidents. Reverts with `EnforcedPause()` from `PausableUpgradeable` on
     ///         double-pause.
     function pause() external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -492,8 +492,8 @@ contract AtomWarden is IAtomWarden, Initializable, AccessControlUpgradeable, EIP
         }
     }
 
-    /// @dev Mirrors `_grantRole`. Decrements only on a real revocation. We intentionally
-    ///      do NOT auto-clamp `signatureThreshold` when a revocation drops `signerCount`
+    /// @dev Mirrors `_grantRole`. Decrements only on a real revocation. The threshold is not
+    ///      auto-clamped when a revocation drops `signerCount`
     ///      below the current threshold — claims will revert with `InsufficientSigners`
     ///      until admin lowers the threshold, which surfaces the misconfiguration loudly
     ///      rather than silently weakening the quorum.
@@ -565,7 +565,7 @@ contract AtomWarden is IAtomWarden, Initializable, AccessControlUpgradeable, EIP
      * @param  authorization The claim authorization being verified.
      * @param  signature     Concatenation of N * 65-byte ECDSA signatures, each over the
      *                       same `_hashTypedDataV4` digest of `authorization`. Producers
-     *                       MUST sort signers by recovered address ascending before
+     *                       must sort signers by recovered address ascending before
      *                       concatenating; the contract enforces strictly-ascending
      *                       recovered addresses to deduplicate and canonicalize the bundle.
      * @return firstSigner   The lowest recovered signer address — emitted as the
@@ -718,7 +718,7 @@ contract AtomWarden is IAtomWarden, Initializable, AccessControlUpgradeable, EIP
 
     /// @dev Re-anchors `currentClaimWindowId` under the new window length — a stale id
     ///      computed with the old divisor is meaningless under the new one — while
-    ///      deliberately preserving `claimsInWindow`, so changing the window length never
+    ///      preserving `claimsInWindow`, so changing the window length never
     ///      grants fresh budget mid-window. Spent claims keep counting against the cap
     ///      until the re-anchored window rolls over naturally.
     function _setClaimCapWindow(uint256 newValue) internal {

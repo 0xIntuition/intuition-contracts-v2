@@ -222,7 +222,7 @@ contract DynamicFeeThirteenTierExampleTest is Test {
         assertEq(dynamicFeeCurve.userStake(TERM, alice), 1500e18, "alice's stake");
 
         // 2. Her deposit lifted the vault into tier 1.
-        assertEq(dynamicFeeCurve.vaultAssets(TERM), 1500e18, "vault holds alice's stake");
+        assertEq(dynamicFeeCurve.vaultStake(TERM), 1500e18, "vault holds alice's stake");
         assertEq(dynamicFeeCurve.tierOf(1500e18), 1, "vault is now in tier 1");
 
         // 3. bob's 900 TRUST stays inside tier 1 -> one band at 1.5%.
@@ -268,5 +268,36 @@ contract DynamicFeeThirteenTierExampleTest is Test {
         // 1,000 TRUST at the overridden 10% rather than the formulaic 7%.
         assertEq(dynamicFeeCurve.quoteDepositFee(TERM, 1000e18), 100e18, "whale entry pays the top-tier override");
         assertEq(dynamicFeeCurve.quoteRedeemFee(TERM, bob, 1000e18), 100e18, "whale exit pays the top-tier override");
+    }
+
+    /* =================================================== */
+    /*                    GAS: FULL SWEEP                  */
+    /* =================================================== */
+
+    /// @notice Worst-case cost of the per-band deposit replay on the SHIPPED 13-tier ladder.
+    /// @dev    A single deposit that sweeps the whole ladder runs one fee distribution and one
+    ///         position move per band, so the work is O(bands x span) — the dominant term is the
+    ///         accumulator writes, `sum(k) for k in 1..bands`. Recorded here because the 5-tier test
+    ///         ladder understates it and this is the schedule that ships. The depositor pays it in
+    ///         full; there is no path by which another account can be made to bear it.
+    function test_thirteenTier_fullLadderSweepGas() external {
+        // Populate the low bands so every distribution the sweep triggers has a cohort to credit,
+        // which is the expensive path rather than the short-circuit to `protocolAccrued`.
+        dynamicFeeCurve.recordDeposit{ value: 0 }(TERM, alice, 900e18);
+        dynamicFeeCurve.recordDeposit{ value: 0 }(TERM, bob, 4000e18);
+
+        uint256 sweep = 400_000e18; // past the ~257k terminal edge: every band is crossed
+        uint256 fee = dynamicFeeCurve.quoteDepositFee(TERM, sweep);
+
+        uint256 gasBefore = gasleft();
+        dynamicFeeCurve.recordDeposit{ value: fee }(TERM, alice, sweep - fee);
+        uint256 gasUsed = gasBefore - gasleft();
+
+        emit log_named_uint("13-tier full-sweep recordDeposit gas", gasUsed);
+        emit log_named_uint("depositor booked tier", dynamicFeeCurve.userTier(TERM, alice));
+
+        // Loose ceiling: the point is to pin the ORDER of the cost so a regression that turns the
+        // replay quadratic in something other than the tier count fails loudly.
+        assertLt(gasUsed, 2_000_000, "a full 13-band sweep stays well inside a block");
     }
 }

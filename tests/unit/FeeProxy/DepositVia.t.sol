@@ -20,7 +20,7 @@ contract DepositViaTest is FeeProxyBaseTest {
         vm.deal(users.alice, gross);
         vm.startPrank(users.alice);
         vm.expectEmit(true, true, true, false, address(feeProxy));
-        emit IFeeProxy.AffiliateFeeAccrued(affiliate, users.alice, expectedFee);
+        emit IFeeProxy.AffiliateFeePaid(affiliate, users.alice, expectedFee);
         uint256 shares =
             feeProxy.depositVia{ value: gross }(affiliate, users.alice, atomId, CURVE_ID, gross, 0, _looseFeeGuard());
         vm.stopPrank();

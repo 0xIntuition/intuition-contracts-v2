@@ -24,9 +24,9 @@ import "@account-abstraction/core/Helpers.sol";
  *         associated with a corresponding atom. Implements ERC-1271 for contract-signature
  *         validation and standard token receiver interfaces (ERC-721, ERC-1155).
  * @dev    Ownership is rooted entirely in the Coinbase Smart Wallet MultiOwnable model via
- *         `CoinbaseSmartWalletLib`. A single `_claimant` slot records the primary owner that
+ *         `CoinbaseSmartWalletLib`. A single `_primaryOwner` slot records the primary owner that
  *         completed the claim — `owner()` returns either the AtomWarden (pre-claim) or
- *         `_claimant` (post-claim) so ERC-1271 integrations that expect a single principal
+ *         `_primaryOwner` (post-claim) so ERC-1271 integrations that expect a single principal
  *         keep working. Execution and signer-management surfaces gate on the MultiOwnable
  *         peer-owner set seeded by `completeClaim`. Signature validation is delegated to
  *         `CoinbaseSmartWalletLib`; pre-claim wallets reject all signatures because the
@@ -93,10 +93,11 @@ contract AtomWallet is Initializable, BaseAccount, ReentrancyGuardUpgradeable, I
     /// @notice The primary owner address recorded at `completeClaim` / `transferOwnership`.
     ///         Zero until claim. Read through `owner()` rather than directly so the
     ///         pre-claim AtomWarden resolution remains the single source of truth there.
-    address private _claimant;
+    ///         The primary owner is the AtomWarden pre-claim and the claimant afterwards.
+    address private _primaryOwner;
 
     /// @dev Storage gap for upgrade safety. Any new storage variable added above this
-    ///      line MUST decrement the gap size by an equal number of slots so the total
+    ///      line must decrement the gap size by an equal number of slots so the total
     ///      reserved layout footprint stays at 50 slots. Failure to do so will shift
     ///      every downstream slot when this wallet is inherited from or upgraded.
     uint256[49] private __gap;
@@ -208,21 +209,21 @@ contract AtomWallet is Initializable, BaseAccount, ReentrancyGuardUpgradeable, I
     /**
      * @notice Execute a sequence (batch) of transactions (called by the EntryPoint, any
      *         MultiOwnable address owner, or the wallet itself)
-     * @dev    WHY THIS OVERRIDE EXISTS, given `_requireForExecute` above already fixes authorization:
+     * @dev    This override exists, given `_requireForExecute` above already fixes authorization,
      *         solely to attach `nonReentrant`. A `view` hook cannot hold a reentrancy guard, and
      *         Solidity does not permit `super.executeBatch(...)` because the base declares it
      *         `external` — an external function cannot be invoked internally. Restating the body is
      *         therefore the only way to add the guard.
      *
      *         The body below is `BaseAccount.executeBatch` copied verbatim — same `Exec` helpers, same
-     *         loop, same branches. That is deliberate: `Exec.call` performs a raw call that does NOT
+     *         loop, same branches. `Exec.call` performs a raw call that does not
      *         copy return data into memory, whereas Solidity's `target.call{value:}(data)` always
-     *         does. Rewriting the loop with a plain `.call` would make every SUCCESSFUL leg copy the
+     *         does. Rewriting the loop with a plain `.call` would make every successful leg copy the
      *         callee's return data, so a target returning a large payload inflates memory-expansion
-     *         gas for the whole batch — a return-bomb griefing surface upstream deliberately avoids.
+     *         gas for the whole batch — a return-bomb griefing surface that upstream avoids.
      *
-     *         Failure semantics, also upstream's: EVERY failed call reverts. `callsLength == 1` does
-     *         not decide WHETHER to revert, only HOW to encode it. With one call the failing index is
+     *         Failure semantics, also upstream's: every failed call reverts. `callsLength == 1` does
+     *         not decide whether to revert, only how to encode it. With one call the failing index is
      *         necessarily 0 and carries no information, so the target's raw revert data is bubbled
      *         unchanged and the caller decodes it against the target's own ABI exactly as if they had
      *         called `execute`. With more than one call the index is the only way to identify the
@@ -297,7 +298,7 @@ contract AtomWallet is Initializable, BaseAccount, ReentrancyGuardUpgradeable, I
      * @notice Transfers primary ownership of a claimed wallet to a new owner.
      * @dev Callable by any registered MultiOwnable address owner or the wallet itself —
      *      the same trust model as `addOwnerAddress` / `removeOwnerAtIndex`. Rotates the
-     *      primary `_claimant` slot and the MultiOwnable peer-owner registry atomically.
+     *      `_primaryOwner` slot and the MultiOwnable peer-owner registry atomically.
      *      Pre-claim is implicitly forbidden because the MultiOwnable registry is empty
      *      until `completeClaim` seeds it; no external caller can pass the modifier check.
      * @param newOwner the new primary owner of the wallet
@@ -307,8 +308,8 @@ contract AtomWallet is Initializable, BaseAccount, ReentrancyGuardUpgradeable, I
             revert AtomWallet_InvalidOwner();
         }
 
-        address oldOwner = _claimant;
-        _claimant = newOwner;
+        address oldOwner = _primaryOwner;
+        _primaryOwner = newOwner;
 
         // Sync the MultiOwnable registry with the new primary owner: remove the
         // outgoing owner, then add the incoming one. The `isOwnerAddress(newOwner)`
@@ -355,7 +356,7 @@ contract AtomWallet is Initializable, BaseAccount, ReentrancyGuardUpgradeable, I
 
         address previousOwner = owner();
         isClaimed = true;
-        _claimant = newOwner;
+        _primaryOwner = newOwner;
 
         // Seed MultiOwnable registry so signature validation uses the Coinbase path
         CoinbaseSmartWalletLib.addOwnerAddress(newOwner);
@@ -367,7 +368,7 @@ contract AtomWallet is Initializable, BaseAccount, ReentrancyGuardUpgradeable, I
      * @notice Claims the accumulated fees from the MultiVault contract to the AtomWallet owner
      * @dev Callable by the EntryPoint, any MultiOwnable address owner, or the wallet itself.
      *      Proceeds are routed to `owner()` (the primary owner — pre-claim AtomWarden,
-     *      post-claim `_claimant`) by the MultiVault. `nonReentrant` is shared with
+     *      post-claim `_primaryOwner`) by the MultiVault. `nonReentrant` is shared with
      *      `execute`/`executeBatch`, so a nested `execute → claimAtomWalletDepositFees`
      *      self-call reverts on the guard; peer owners should invoke this function directly
      *      (EOA call, or a UserOp targeting `claimAtomWalletDepositFees()`) rather than
@@ -417,19 +418,19 @@ contract AtomWallet is Initializable, BaseAccount, ReentrancyGuardUpgradeable, I
 
     /**
      * @notice Returns the primary owner of the wallet. If the wallet has been claimed,
-     *         the owner is the recorded `_claimant`. Otherwise the owner is the
+     *         the owner is the recorded `_primaryOwner`. Otherwise the owner is the
      *         AtomWarden, resolved dynamically from the MultiVault.
      * @dev Pre-claim reads resolve through `multiVault.getAtomWarden()` and therefore
      *      reflect the *current* AtomWarden proxy address — including any address change
      *      that happens after this wallet was deployed (e.g. an admin pointing MultiVault
-     *      at a redeployed AtomWarden). Post-claim, the value is the `_claimant` slot set
+     *      at a redeployed AtomWarden). Post-claim, the value is the `_primaryOwner` slot set
      *      by `completeClaim` / `transferOwnership` and is immune to AtomWarden rotation.
      *      Exposed for ERC-1271 integrations and downstream consumers that expect a single
      *      primary-owner principal alongside the MultiOwnable peer-owner set.
      * @return the primary owner of the wallet
      */
     function owner() public view returns (address) {
-        return isClaimed ? _claimant : multiVault.getAtomWarden();
+        return isClaimed ? _primaryOwner : multiVault.getAtomWarden();
     }
 
     /* =================================================== */

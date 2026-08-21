@@ -121,8 +121,9 @@ contract MultiVaultInvariantHandler is Test {
 
         vm.deal(actor, assets);
         vm.prank(actor);
-        try MULTI_VAULT.createAtomsWithUris{ value: assets }(actor, data, amounts, uris) returns (bytes32[] memory ids)
-        {
+        try MULTI_VAULT.createAtomsWithUris{ value: assets }(actor, data, amounts, uris) returns (
+            bytes32[] memory ids
+        ) {
             _register(atomTerms, ids[0]);
             ghost_valueIn += assets;
             ghost_atomsCreated++;

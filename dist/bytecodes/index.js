@@ -18,7 +18,7 @@ import {
   TrustBytecode,
   TrustTokenBytecode,
   WrappedTrustBytecode
-} from "../chunk-SUWHJGAJ.js";
+} from "../chunk-L77CUNWB.js";
 export {
   AtomWalletBytecode,
   AtomWalletFactoryBytecode,

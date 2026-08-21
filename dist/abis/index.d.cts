@@ -6351,7 +6351,7 @@ declare const FeeProxyAbi: readonly [{
         readonly type: "address";
         readonly internalType: "address";
     }, {
-        readonly name: "maxBps_";
+        readonly name: "maxFeeBps_";
         readonly type: "uint256";
         readonly internalType: "uint256";
     }, {
@@ -6395,7 +6395,7 @@ declare const FeeProxyAbi: readonly [{
     readonly stateMutability: "view";
 }, {
     readonly type: "function";
-    readonly name: "maxBps";
+    readonly name: "maxFeeBps";
     readonly inputs: readonly [];
     readonly outputs: readonly [{
         readonly name: "";
@@ -6582,9 +6582,9 @@ declare const FeeProxyAbi: readonly [{
     readonly stateMutability: "nonpayable";
 }, {
     readonly type: "function";
-    readonly name: "setMaxBps";
+    readonly name: "setMaxFeeBps";
     readonly inputs: readonly [{
-        readonly name: "newMaxBps";
+        readonly name: "newMaxFeeBps";
         readonly type: "uint256";
         readonly internalType: "uint256";
     }];
@@ -6689,7 +6689,7 @@ declare const FeeProxyAbi: readonly [{
     readonly stateMutability: "nonpayable";
 }, {
     readonly type: "event";
-    readonly name: "AffiliateFeeAccrued";
+    readonly name: "AffiliateFeePaid";
     readonly inputs: readonly [{
         readonly name: "affiliate";
         readonly type: "address";
@@ -6995,7 +6995,7 @@ declare const FeeProxyAbi: readonly [{
     readonly anonymous: false;
 }, {
     readonly type: "event";
-    readonly name: "MaxBpsUpdated";
+    readonly name: "MaxFeeBpsUpdated";
     readonly inputs: readonly [{
         readonly name: "previous";
         readonly type: "uint256";
@@ -7309,7 +7309,7 @@ declare const FeeProxyAbi: readonly [{
     readonly inputs: readonly [];
 }, {
     readonly type: "error";
-    readonly name: "FeeProxy_MaxBpsOutOfRange";
+    readonly name: "FeeProxy_MaxFeeBpsOutOfRange";
     readonly inputs: readonly [{
         readonly name: "requested";
         readonly type: "uint256";
@@ -12863,14 +12863,14 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
     readonly stateMutability: "view";
 }, {
     readonly type: "function";
-    readonly name: "vaultAssets";
+    readonly name: "vaultStake";
     readonly inputs: readonly [{
         readonly name: "termId";
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }];
     readonly outputs: readonly [{
-        readonly name: "assets";
+        readonly name: "stake";
         readonly type: "uint256";
         readonly internalType: "uint256";
     }];
@@ -12946,6 +12946,36 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
     readonly anonymous: false;
 }, {
     readonly type: "event";
+    readonly name: "DepositBandRecorded";
+    readonly inputs: readonly [{
+        readonly name: "termId";
+        readonly type: "bytes32";
+        readonly indexed: true;
+        readonly internalType: "bytes32";
+    }, {
+        readonly name: "account";
+        readonly type: "address";
+        readonly indexed: true;
+        readonly internalType: "address";
+    }, {
+        readonly name: "bandTier";
+        readonly type: "uint256";
+        readonly indexed: false;
+        readonly internalType: "uint256";
+    }, {
+        readonly name: "bandStake";
+        readonly type: "uint256";
+        readonly indexed: false;
+        readonly internalType: "uint256";
+    }, {
+        readonly name: "bandFee";
+        readonly type: "uint256";
+        readonly indexed: false;
+        readonly internalType: "uint256";
+    }];
+    readonly anonymous: false;
+}, {
+    readonly type: "event";
     readonly name: "DepositRecorded";
     readonly inputs: readonly [{
         readonly name: "termId";
@@ -12968,7 +12998,17 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
         readonly indexed: false;
         readonly internalType: "uint256";
     }, {
-        readonly name: "tier";
+        readonly name: "sourceTier";
+        readonly type: "uint256";
+        readonly indexed: false;
+        readonly internalType: "uint256";
+    }, {
+        readonly name: "accountTier";
+        readonly type: "uint256";
+        readonly indexed: false;
+        readonly internalType: "uint256";
+    }, {
+        readonly name: "accountAvgTier";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";

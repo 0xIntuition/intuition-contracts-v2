@@ -449,21 +449,21 @@ interface IMultiVault {
 
     /// @notice Simulates a redemption of shares from a vault
     /// @dev Returns the net assets the user would receive after fees and the shares to be burned
-    /// @dev ACCOUNT-AGNOSTIC. This signature carries no account, so a curve fee hook is quoted with
+    /// @dev Account-agnostic. This signature carries no account, so a curve fee hook is quoted with
     ///      `address(0)` and any curve pricing its fee off per-holder state falls back to a
     ///      vault-level default. On the dynamic-fee curve a holder's rate keys on their recorded tier
     ///      while the fallback uses the vault's current tier, so this figure can differ from execution
-    ///      in EITHER direction. Do NOT derive a redemption `minAssets` from it on a hook-bearing
-    ///      curve — over-statement makes the slippage guard reject the redemption. Use the curve's own
-    ///      account-aware view for the holder's true curve fee. Note that view is net of the CURVE's
-    ///      fee only and is NOT a drop-in replacement for this figure: to derive a holder-accurate
+    ///      in either direction, so it is not a source for a redemption `minAssets` on a hook-bearing
+    ///      curve: over-statement makes the slippage guard reject the redemption. The curve's own
+    ///      account-aware view gives the holder's true curve fee. That view is net of the curve's
+    ///      fee only and is not a drop-in replacement for this figure: to derive a holder-accurate
     ///      net, take the value returned here, add back the account-less curve fee it was computed
     ///      with (`quoteRedeemFee(termId, address(0), grossAssets)`), then subtract the account's own
     ///      curve fee. On hookless curves (including the default curve) this caveat does not apply.
-    /// @dev CAN REVERT. If the accumulated fees would consume the entire redemption, this reverts with
+    /// @dev Can revert. If the accumulated fees would consume the entire redemption, this reverts with
     ///      `MultiVault_RedeemYieldsNoAssets` rather than returning zero — the same floor the write
     ///      path enforces, surfaced here so a preview cannot report a payout the execution will not
-    ///      make. In practice this affects only dust redemptions. Callers previewing a SET of
+    ///      make. In practice this affects only dust redemptions. Callers previewing a set of
     ///      positions should tolerate a revert on any single one rather than assuming a total.
     /// @param termId The ID of the term (atom or triple)
     /// @param curveId The ID of the bonding curve

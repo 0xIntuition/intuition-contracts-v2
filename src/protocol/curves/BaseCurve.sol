@@ -21,7 +21,7 @@ abstract contract BaseCurve is IBaseCurve, Initializable {
     /* =================================================== */
 
     /// @notice The name of the curve
-    /// @dev This base deliberately declares exactly one state variable, so inheriting curves own
+    /// @dev This base declares exactly one state variable, so inheriting curves own
     ///      every slot from 1 onward and no storage gap is required today.
     string public name;
 

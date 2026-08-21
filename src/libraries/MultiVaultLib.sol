@@ -25,40 +25,32 @@ import { MultiVaultCore } from "src/protocol/MultiVaultCore.sol";
 /**
  * @title  MultiVaultLib
  * @author 0xIntuition
- * @notice Stateless logic library extracted from {MultiVault}. Its exported entrypoints are declared
- *         `public` (internal helpers remain `private`), so the Solidity compiler treats this library as a
- *         separately-deployed contract and emits
- *         a 20-byte placeholder (`__$keccak256("src/libraries/MultiVaultLib.sol:MultiVaultLib")$__`)
- *         at every call site in {MultiVault}'s bytecode. The standard Solidity linker resolves the
- *         placeholder to the library's deployed address at link time; consumer deployment tooling
- *         performs this step as part of the implementation deployment, so no dedicated library-deployment
- *         step is required in the deploy script. Each resolved call site executes as a `DELEGATECALL`
- *         into the linked library.
+ * @notice Stateless logic library extracted from {MultiVault}. Exported entrypoints are `public`
+ *         (internal helpers stay `private`), so the compiler treats this library as a separately
+ *         deployed contract and emits a 20-byte linker placeholder at every call site in
+ *         {MultiVault}'s bytecode, which the standard Solidity linker resolves to the library's
+ *         deployed address at link time. Consumer deployment tooling performs that step as part of
+ *         the implementation deployment, so no dedicated library-deployment step is needed.
  *
- *         Every call from {MultiVault} into a library function compiles to `DELEGATECALL`. Under
- *         `DELEGATECALL`, `address(this)`, `msg.sender`, `msg.value`, and storage all reflect the
- *         {MultiVault} call context — the library is logic-only and operates on {MultiVault}'s
- *         storage in place. Payable entrypoints receive an explicit `payment` argument from
- *         {MultiVault} so direct calls use raw `msg.value` and `multicall` sub-calls use
- *         their allocated virtual value without teaching this library about multicall state.
+ *         Every call site executes as a `DELEGATECALL`, under which `address(this)`, `msg.sender`,
+ *         `msg.value` and storage all reflect the {MultiVault} call context — the library is
+ *         logic-only and operates on {MultiVault}'s storage in place. Payable entrypoints take an
+ *         explicit `payment` argument, so direct calls use raw `msg.value` and `multicall` sub-calls
+ *         use their allocated virtual value without this library knowing about multicall state.
  *
- *         Conventions (load-bearing):
- *           1. The library has no state variables. All state lives on {MultiVault}.
- *           2. Storage access goes through a single `Storage` struct anchored at slot 0, whose
- *              field layout mirrors {MultiVault}'s storage layout exactly. The slot order is
- *              load-bearing and needs to be carefully maintained.
+ *         Conventions:
+ *           1. No state variables. All state lives on {MultiVault}.
+ *           2. Storage access goes through a single `Storage` struct anchored at slot 0, whose field
+ *              layout mirrors {MultiVault}'s storage layout exactly. The slot order must be preserved.
  *           3. Errors stay declared on {MultiVault} and {MultiVaultCore}. The library reverts via
  *              `revert MultiVault.MultiVault_X()` / `revert MultiVaultCore.MultiVaultCore_X()`,
- *              preserving every selector exactly so test references like
- *              `MultiVault.MultiVault_X.selector` continue to resolve.
- *           4. Events stay declared on {IMultiVault} and are emitted from the library via
- *              `emit IMultiVault.X(...)`. Because emit runs under `DELEGATECALL`, every event topic
- *              carries {MultiVault}'s address as the emitter — indexer semantics are bit-identical
- *              to the pre-refactor implementation.
+ *              preserving every selector.
+ *           4. Events stay declared on {IMultiVault} and are emitted via `emit IMultiVault.X(...)`.
+ *              Because emit runs under `DELEGATECALL`, every event topic carries {MultiVault}'s
+ *              address as the emitter.
  *           5. Calls between library functions are not `DELEGATECALL` — they compile to internal
- *              `JUMP`s within the library's own bytecode. So one external `DELEGATECALL` from
- *              {MultiVault} into a library entrypoint executes the entire transitive call graph
- *              inside the library with no further boundary cost.
+ *              `JUMP`s within the library's own bytecode, so one external entry from {MultiVault}
+ *              executes the entire transitive call graph with no further boundary cost.
  *
  *         Access control and pausability are enforced by {MultiVault}'s modifiers on the calling
  *         external function. The library does not re-check them.
@@ -97,7 +89,7 @@ library MultiVaultLib {
     /// @dev Struct that mirrors {MultiVault}'s storage layout starting at slot 0. The field order
     ///      and packing must match `forge inspect MultiVault storage-layout` exactly — pinned by the
     ///      storage-layout regression suite in CI and re-verified on every upgrade. Field names here
-    ///      are library-local; the SLOT positions are what's load-bearing.
+    ///      are library-local; the slot positions are what must be preserved.
     struct Storage {
         // slot 0
         uint256 totalTermsCreated;
@@ -131,7 +123,7 @@ library MultiVaultLib {
         mapping(address => uint256) accumulatedAtomWalletDepositFees;
         // slot 30
         // Credited on deposit with the full amount sent in, debited on redeem with the asset value leaving the
-        // vault; the bases differ by the entry-side fees, so a round-trip intentionally does not net to zero.
+        // vault; the bases differ by the entry-side fees, so a round-trip does not net to zero.
         // See the `totalUtilization` / `personalUtilization` NatSpec on MultiVault for the full rationale.
         mapping(uint256 => int256) totalUtilization;
         // slot 31
@@ -166,10 +158,10 @@ library MultiVaultLib {
         }
     }
 
-    /// @dev The fee-hook decision and quote for one deposit/redeem, resolved EXACTLY ONCE during
+    /// @dev The fee-hook decision and quote for one deposit/redeem, resolved exactly once during
     ///      calculation and carried verbatim to the record phase. This makes netted == forwarded a
     ///      dataflow guarantee rather than a convention: a curve whose quote or hook getter reads
-    ///      MultiVault state (which mutates between calculation and record) can no longer produce a
+    ///      MultiVault state (which mutates between calculation and record) cannot produce a
     ///      forwarded value that differs from what was withheld from the user.
     struct CurveHook {
         /// @dev The vault's curve iff it advertises the hook for this path; address(0) = no hook.
@@ -546,7 +538,7 @@ library MultiVaultLib {
     /*                  ATOM / TRIPLE CREATION             */
     /* =================================================== */
 
-    function _createAtoms(address sender, bytes[] calldata data, uint256[] calldata assets, uint256 payment)
+    function _createAtoms(address creator, bytes[] calldata data, uint256[] calldata assets, uint256 payment)
         private
         returns (bytes32[] memory)
     {
@@ -562,22 +554,22 @@ library MultiVaultLib {
         bytes32[] memory ids = new bytes32[](length);
 
         for (uint256 i = 0; i < length;) {
-            ids[i] = _createAtom(sender, data[i], assets[i]);
+            ids[i] = _createAtom(creator, data[i], assets[i]);
             unchecked {
                 ++i;
             }
         }
 
-        _finalizeAtomBatch(sender, length, payment);
+        _finalizeAtomBatch(creator, length, payment);
 
         return ids;
     }
 
-    function _finalizeAtomBatch(address sender, uint256 length, uint256 payment) private {
+    function _finalizeAtomBatch(address creator, uint256 length, uint256 payment) private {
         uint256 atomCreationProtocolFees = _s().atomConfig.atomCreationProtocolFee * length;
         _accumulateStaticProtocolFees(atomCreationProtocolFees);
 
-        _addUtilization(sender, int256(payment));
+        _addUtilization(creator, int256(payment));
     }
 
     function _emitAtomContexts(bytes32[] memory ids, address registrant, bytes[][] calldata uris) private {
@@ -615,7 +607,7 @@ library MultiVaultLib {
         }
     }
 
-    function _createAtom(address sender, bytes calldata data, uint256 assets) private returns (bytes32 atomId) {
+    function _createAtom(address creator, bytes calldata data, uint256 assets) private returns (bytes32 atomId) {
         uint256 length = data.length;
 
         if (length == 0) {
@@ -634,7 +626,7 @@ library MultiVaultLib {
         }
 
         s.atoms[atomId] = data;
-        s.atomCreators[atomId] = sender;
+        s.atomCreators[atomId] = creator;
         s.atomCreatedAt[atomId] = uint48(block.timestamp);
         uint256 curveId = s.bondingCurveConfig.defaultCurveId;
 
@@ -645,12 +637,20 @@ library MultiVaultLib {
         address atomWallet = _accumulateAtomWalletFees(atomId, assetsAfterFixedFees);
 
         uint256 userSharesAfter =
-            _updateVaultOnCreation(sender, atomId, curveId, assetsAfterFees, sharesForReceiver, VaultType.ATOM);
+            _updateVaultOnCreation(creator, atomId, curveId, assetsAfterFees, sharesForReceiver, VaultType.ATOM);
 
-        emit IMultiVault.AtomCreated(sender, atomId, data, atomWallet);
+        emit IMultiVault.AtomCreated(creator, atomId, data, atomWallet);
 
         emit IMultiVault.Deposited(
-            sender, sender, atomId, curveId, assets, assetsAfterFees, sharesForReceiver, userSharesAfter, VaultType.ATOM
+            creator,
+            creator,
+            atomId,
+            curveId,
+            assets,
+            assetsAfterFees,
+            sharesForReceiver,
+            userSharesAfter,
+            VaultType.ATOM
         );
 
         ++s.totalTermsCreated;
@@ -697,7 +697,7 @@ library MultiVaultLib {
         return ids;
     }
 
-    function _createTriple(address sender, bytes32 subjectId, bytes32 predicateId, bytes32 objectId, uint256 assets)
+    function _createTriple(address creator, bytes32 subjectId, bytes32 predicateId, bytes32 objectId, uint256 assets)
         private
         returns (bytes32 tripleId)
     {
@@ -722,7 +722,7 @@ library MultiVaultLib {
         _accumulateVaultProtocolFees(assetsAfterFixedFees);
 
         uint256 userSharesAfter =
-            _updateVaultOnCreation(sender, tripleId, curveId, assetsAfterFees, sharesForReceiver, VaultType.TRIPLE);
+            _updateVaultOnCreation(creator, tripleId, curveId, assetsAfterFees, sharesForReceiver, VaultType.TRIPLE);
 
         if (_shouldChargeAtomDepositFraction(tripleId)) {
             _increaseProRataVaultsAssets(
@@ -732,11 +732,11 @@ library MultiVaultLib {
 
         _initializeOppositeTripleVault(tripleId, curveId);
 
-        emit IMultiVault.TripleCreated(sender, tripleId, subjectId, predicateId, objectId);
+        emit IMultiVault.TripleCreated(creator, tripleId, subjectId, predicateId, objectId);
 
         emit IMultiVault.Deposited(
-            sender,
-            sender,
+            creator,
+            creator,
             tripleId,
             curveId,
             assets,
@@ -896,8 +896,8 @@ library MultiVaultLib {
     }
 
     /// @dev Resolve `curveId` through the registry and return the curve address iff it exposes the
-    ///      standardized deposit fee hook; address(0) otherwise. The explicit zero-address guard is
-    ///      load-bearing: an unregistered id must fall through so the canonical
+    ///      standardized deposit fee hook; address(0) otherwise. The explicit zero-address guard matters here:
+    ///      an unregistered id must fall through so the canonical
     ///      `BondingCurveRegistry_InvalidCurveId` still surfaces from the pricing call, instead of a
     ///      bare call-to-codeless-account revert here.
     function _depositFeeHookCurve(uint256 curveId) private view returns (address) {
@@ -947,10 +947,10 @@ library MultiVaultLib {
         emit IMultiVault.ProtocolFeeAccrued(epoch, msg.sender, fees);
     }
 
-    function _accumulateStaticProtocolFees(uint256 assets) private {
+    function _accumulateStaticProtocolFees(uint256 protocolFeeAmount) private {
         uint256 epoch = currentEpoch();
-        _s().accumulatedProtocolFees[epoch] += assets;
-        emit IMultiVault.ProtocolFeeAccrued(epoch, msg.sender, assets);
+        _s().accumulatedProtocolFees[epoch] += protocolFeeAmount;
+        emit IMultiVault.ProtocolFeeAccrued(epoch, msg.sender, protocolFeeAmount);
     }
 
     function _accumulateAtomWalletFees(bytes32 termId, uint256 assets) private returns (address) {
@@ -1025,7 +1025,7 @@ library MultiVaultLib {
         }
 
         // Layer the curve's own deposit fee on top of MultiVault's fees (0 for any hookless curve);
-        // it is withheld from the minted net here and the SAME quote is forwarded to the curve in
+        // it is withheld from the minted net here and the same quote is forwarded to the curve in
         // `_processDeposit` via the carried `hook` — quoted exactly once.
         hook.curve = _depositFeeHookCurve(curveId);
         if (hook.curve != address(0)) {
@@ -1048,11 +1048,11 @@ library MultiVaultLib {
         uint256 assetsAfterFixedFees = assets - tripleCost;
 
         uint256 protocolFee = _feeOnRaw(assetsAfterFixedFees, s.vaultFees.protocolFee);
-        uint256 atomDepositFraction = _shouldChargeAtomDepositFraction(termId)
+        uint256 atomDepositFractionAmount = _shouldChargeAtomDepositFraction(termId)
             ? _feeOnRaw(assetsAfterFixedFees, s.tripleConfig.atomDepositFractionForTriple)
             : 0;
 
-        uint256 assetsAfterFees = assetsAfterFixedFees - protocolFee - atomDepositFraction;
+        uint256 assetsAfterFees = assetsAfterFixedFees - protocolFee - atomDepositFractionAmount;
         uint256 shares = _convertToShares(termId, curveId, assetsAfterFees);
 
         return (shares, assetsAfterFixedFees, assetsAfterFees);
@@ -1080,14 +1080,14 @@ library MultiVaultLib {
             uint256 protocolFee = _feeOnRaw(assetsAfterMinSharesCost, _s().vaultFees.protocolFee);
             uint256 entryFee =
                 _shouldChargeFees(termId) ? _feeOnRaw(assetsAfterMinSharesCost, _s().vaultFees.entryFee) : 0;
-            uint256 atomDepositFraction = _shouldChargeAtomDepositFraction(termId)
+            uint256 atomDepositFractionAmount = _shouldChargeAtomDepositFraction(termId)
                 ? _feeOnRaw(assetsAfterMinSharesCost, _s().tripleConfig.atomDepositFractionForTriple)
                 : 0;
-            assetsAfterFees = assetsAfterMinSharesCost - protocolFee - entryFee - atomDepositFraction;
+            assetsAfterFees = assetsAfterMinSharesCost - protocolFee - entryFee - atomDepositFractionAmount;
         }
 
         // Layer the curve's own deposit fee on top of MultiVault's fees (0 for any hookless curve);
-        // it is withheld from the minted net here and the SAME quote is forwarded to the curve in
+        // it is withheld from the minted net here and the same quote is forwarded to the curve in
         // `_processDeposit` via the carried `hook` — quoted exactly once.
         hook.curve = _depositFeeHookCurve(curveId);
         if (hook.curve != address(0)) {
@@ -1127,7 +1127,7 @@ library MultiVaultLib {
         uint256 exitFee = _shouldChargeExitFees(termId, curveId, shares) ? _feeOnRaw(assets, s.vaultFees.exitFee) : 0;
 
         // Layer the curve's own withdrawal fee on top of MultiVault's fees (0 for any hookless
-        // curve); the SAME quote is forwarded to the curve in `_processRedeem` via the carried
+        // curve); the same quote is forwarded to the curve in `_processRedeem` via the carried
         // `hook` — quoted exactly once. The account-less preview path passes `address(0)`; the hook
         // curve decides its own fallback semantics for it.
         hook.curve = _redeemFeeHookCurve(curveId);
@@ -1137,7 +1137,7 @@ library MultiVaultLib {
 
         // Defense in depth: reject a redemption that would return nothing, independently of the
         // caller-supplied `minAssets`. Without this, a curve fee rate that consumes the whole
-        // redemption burns the redeemer's shares for a zero payout WITHOUT reverting, and the
+        // redemption burns the redeemer's shares for a zero payout without reverting, and the
         // account-less preview reports the same zero, so a front end deriving `minAssets` from it
         // derives no protection either. The curve's own immutable cap ceilings are the primary
         // guard; this floor holds regardless of which curve is attached.
@@ -1176,7 +1176,7 @@ library MultiVaultLib {
     /*                 UTILIZATION TRACKING                */
     /* =================================================== */
 
-    /// @dev Credit utilization for `user` in the CURRENT epoch with the full amount sent in. Rolls the user's
+    /// @dev Credit utilization for `user` in the current epoch with the full amount sent in. Rolls the user's
     ///      last active epoch forward first, so the current slot starts from their standing value rather than
     ///      from zero. See the `personalUtilization` NatSpec on {MultiVault} for the full semantics — the
     ///      gross-in/net-out residue, the absence of time-weighting, and why a closed epoch's slot is final.
@@ -1202,7 +1202,7 @@ library MultiVaultLib {
         emit IMultiVault.PersonalUtilizationAdded(user, epoch, totalValue, s.personalUtilization[user][epoch]);
     }
 
-    /// @dev Debit utilization for `user` in the CURRENT epoch with the asset value leaving the vault. The
+    /// @dev Debit utilization for `user` in the current epoch with the asset value leaving the vault. The
     ///      debit always lands in the epoch this call executes in — never in the epoch a matching deposit was
     ///      credited to — because the rollover carries the prior value forward and the subtraction is applied
     ///      here. A boundary round-trip is therefore deferred, not forgiven: it drives the following epoch's
@@ -1282,11 +1282,11 @@ library MultiVaultLib {
             vaultType
         );
 
-        uint256 sharesTotal = _mint(receiver, termId, curveId, shares);
+        uint256 receiverSharesAfter = _mint(receiver, termId, curveId, shares);
 
         _mint(BURN_ADDRESS, termId, curveId, minShare);
 
-        return sharesTotal;
+        return receiverSharesAfter;
     }
 
     function _updateVaultOnDeposit(
@@ -1310,7 +1310,7 @@ library MultiVaultLib {
     }
 
     function _updateVaultOnRedeem(
-        address sender,
+        address account,
         bytes32 termId,
         uint256 curveId,
         uint256 assets,
@@ -1321,7 +1321,7 @@ library MultiVaultLib {
 
         _setVaultTotals(termId, curveId, vaultState.totalAssets - assets, vaultState.totalShares - shares, vaultType);
 
-        return _burn(sender, termId, curveId, shares);
+        return _burn(account, termId, curveId, shares);
     }
 
     /// @dev Seeds the opposite-side triple vault with min-shares minted to {BURN_ADDRESS}. Called
@@ -1562,8 +1562,8 @@ library MultiVaultLib {
         return _shouldChargeFees(atomIds[0]) && _shouldChargeFees(atomIds[1]) && _shouldChargeFees(atomIds[2]);
     }
 
-    /// @dev Counter-stake is intentionally scoped per curve: it only blocks holding both sides of a triple on
-    ///      the SAME curve. Holding opposing sides on different curves is allowed and is not a bypass — each
+    /// @dev Counter-stake is scoped per curve: it only blocks holding both sides of a triple on the
+    ///      same curve. Holding opposing sides on different curves is allowed and is not a bypass — each
     ///      curve prices its own vault independently, so the two positions carry genuine opposing exposure.
     function _hasCounterStake(bytes32 tripleId, uint256 curveId, address receiver) private view returns (bool) {
         Storage storage s = _s();
@@ -1592,8 +1592,8 @@ library MultiVaultLib {
         );
     }
 
-    function _feeOnRaw(uint256 amount, uint256 fee) private view returns (uint256) {
-        return amount.mulDivUp(fee, _s().generalConfig.feeDenominator);
+    function _feeOnRaw(uint256 amount, uint256 feeBps) private view returns (uint256) {
+        return amount.mulDivUp(feeBps, _s().generalConfig.feeDenominator);
     }
 
     function _isTermCreated(bytes32 termId) private view returns (bool) {

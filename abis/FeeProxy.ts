@@ -670,7 +670,7 @@ export const FeeProxyAbi = [
         "internalType": "address"
       },
       {
-        "name": "maxBps_",
+        "name": "maxFeeBps_",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -728,7 +728,7 @@ export const FeeProxyAbi = [
   },
   {
     "type": "function",
-    "name": "maxBps",
+    "name": "maxFeeBps",
     "inputs": [],
     "outputs": [
       {
@@ -972,10 +972,10 @@ export const FeeProxyAbi = [
   },
   {
     "type": "function",
-    "name": "setMaxBps",
+    "name": "setMaxFeeBps",
     "inputs": [
       {
-        "name": "newMaxBps",
+        "name": "newMaxFeeBps",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -1111,7 +1111,7 @@ export const FeeProxyAbi = [
   },
   {
     "type": "event",
-    "name": "AffiliateFeeAccrued",
+    "name": "AffiliateFeePaid",
     "inputs": [
       {
         "name": "affiliate",
@@ -1494,7 +1494,7 @@ export const FeeProxyAbi = [
   },
   {
     "type": "event",
-    "name": "MaxBpsUpdated",
+    "name": "MaxFeeBpsUpdated",
     "inputs": [
       {
         "name": "previous",
@@ -1901,7 +1901,7 @@ export const FeeProxyAbi = [
   },
   {
     "type": "error",
-    "name": "FeeProxy_MaxBpsOutOfRange",
+    "name": "FeeProxy_MaxFeeBpsOutOfRange",
     "inputs": [
       {
         "name": "requested",

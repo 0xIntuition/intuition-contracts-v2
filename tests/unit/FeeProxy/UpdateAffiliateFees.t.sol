@@ -86,7 +86,7 @@ contract UpdateAffiliateFeesTest is FeeProxyBaseTest {
 
         // Admin drops the bps cap below the original deposit bps.
         vm.startPrank(feeProxyAdmin);
-        feeProxy.setMaxBps(SAMPLE_DEPOSIT_BPS - 1);
+        feeProxy.setMaxFeeBps(SAMPLE_DEPOSIT_BPS - 1);
         vm.stopPrank();
 
         // Affiliate brings the row under the new cap while still paused.
@@ -115,11 +115,11 @@ contract UpdateAffiliateFeesTest is FeeProxyBaseTest {
     function test_updateAffiliateFees_RevertWhen_DepositBpsExceedsCap() external {
         _registerSampleAffiliate();
         FeeConfig memory next = _sampleFeeConfig();
-        next.depositBps = INITIAL_MAX_BPS + 1;
+        next.depositBps = INITIAL_MAX_FEE_BPS + 1;
 
         vm.startPrank(affiliate);
         vm.expectRevert(
-            abi.encodeWithSelector(IFeeProxy.FeeProxy_BpsExceedsCap.selector, next.depositBps, INITIAL_MAX_BPS)
+            abi.encodeWithSelector(IFeeProxy.FeeProxy_BpsExceedsCap.selector, next.depositBps, INITIAL_MAX_FEE_BPS)
         );
         feeProxy.updateAffiliateFees(next);
         vm.stopPrank();
@@ -128,11 +128,11 @@ contract UpdateAffiliateFeesTest is FeeProxyBaseTest {
     function test_updateAffiliateFees_RevertWhen_CreationBpsExceedsCap() external {
         _registerSampleAffiliate();
         FeeConfig memory next = _sampleFeeConfig();
-        next.creationBps = INITIAL_MAX_BPS + 1;
+        next.creationBps = INITIAL_MAX_FEE_BPS + 1;
 
         vm.startPrank(affiliate);
         vm.expectRevert(
-            abi.encodeWithSelector(IFeeProxy.FeeProxy_BpsExceedsCap.selector, next.creationBps, INITIAL_MAX_BPS)
+            abi.encodeWithSelector(IFeeProxy.FeeProxy_BpsExceedsCap.selector, next.creationBps, INITIAL_MAX_FEE_BPS)
         );
         feeProxy.updateAffiliateFees(next);
         vm.stopPrank();

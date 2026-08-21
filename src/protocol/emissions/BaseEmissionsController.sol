@@ -136,7 +136,7 @@ contract BaseEmissionsController is
     /* =================================================== */
 
     /// @inheritdoc IBaseEmissionsController
-    /// @dev Intentionally non-payable. The bridge gas is drawn from this contract's own balance, not from
+    /// @dev Non-payable. The bridge gas is drawn from this contract's own balance, not from
     ///      `msg.value` — the controller is kept funded for exactly this. Use the `payable` `mintAndBridge`
     ///      overload to supply gas per call instead.
     function mintAndBridgeCurrentEpoch() external nonReentrant onlyRole(CONTROLLER_ROLE) {
@@ -226,7 +226,7 @@ contract BaseEmissionsController is
 
         // Mint new TRUST using the calculated epoch emissions
         ITrust(_TRUST_TOKEN).mint(address(this), amount);
-        // The `approve` return value is intentionally unchecked. TRUST is a first-party, standards-compliant
+        // The `approve` return value is unchecked. TRUST is a first-party, standards-compliant
         // ERC-20 that returns true and permits non-zero -> non-zero allowance updates, so neither the
         // silent-failure nor the USDT-style approve-race concern applies. The approval is also granted and
         // fully consumed inside this single call: `_bridgeTokensViaERC20` below pulls exactly `amount`, and

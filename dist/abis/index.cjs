@@ -8279,7 +8279,7 @@ var FeeProxyAbi = [
         "internalType": "address"
       },
       {
-        "name": "maxBps_",
+        "name": "maxFeeBps_",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -8337,7 +8337,7 @@ var FeeProxyAbi = [
   },
   {
     "type": "function",
-    "name": "maxBps",
+    "name": "maxFeeBps",
     "inputs": [],
     "outputs": [
       {
@@ -8581,10 +8581,10 @@ var FeeProxyAbi = [
   },
   {
     "type": "function",
-    "name": "setMaxBps",
+    "name": "setMaxFeeBps",
     "inputs": [
       {
-        "name": "newMaxBps",
+        "name": "newMaxFeeBps",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -8720,7 +8720,7 @@ var FeeProxyAbi = [
   },
   {
     "type": "event",
-    "name": "AffiliateFeeAccrued",
+    "name": "AffiliateFeePaid",
     "inputs": [
       {
         "name": "affiliate",
@@ -9103,7 +9103,7 @@ var FeeProxyAbi = [
   },
   {
     "type": "event",
-    "name": "MaxBpsUpdated",
+    "name": "MaxFeeBpsUpdated",
     "inputs": [
       {
         "name": "previous",
@@ -9510,7 +9510,7 @@ var FeeProxyAbi = [
   },
   {
     "type": "error",
-    "name": "FeeProxy_MaxBpsOutOfRange",
+    "name": "FeeProxy_MaxFeeBpsOutOfRange",
     "inputs": [
       {
         "name": "requested",
@@ -16750,7 +16750,7 @@ var DynamicFeeFlatPriceCurveAbi = [
   },
   {
     "type": "function",
-    "name": "vaultAssets",
+    "name": "vaultStake",
     "inputs": [
       {
         "name": "termId",
@@ -16760,7 +16760,7 @@ var DynamicFeeFlatPriceCurveAbi = [
     ],
     "outputs": [
       {
-        "name": "assets",
+        "name": "stake",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -16857,6 +16857,43 @@ var DynamicFeeFlatPriceCurveAbi = [
   },
   {
     "type": "event",
+    "name": "DepositBandRecorded",
+    "inputs": [
+      {
+        "name": "termId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "bandTier",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "bandStake",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "bandFee",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "DepositRecorded",
     "inputs": [
       {
@@ -16884,7 +16921,19 @@ var DynamicFeeFlatPriceCurveAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "tier",
+        "name": "sourceTier",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "accountTier",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "accountAvgTier",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"

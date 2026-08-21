@@ -318,6 +318,40 @@ every recipient tier's denominator, and their `rewardDebt` is re-based to the po
 
 `protocolAccrued` is sweepable by the owner. Nothing on this path can touch principal.
 
+### The eligibility floor, and where an excluded tier's share goes
+
+`minEligibleTierStake` gates who may _receive_. A tier holding less than the floor earns nothing and sits in **no**
+recipient denominator — it is absent from the fulcrum spread, from the degenerate whole-pool fallback, from the
+deposit-side prior-tier spike, and from both whale-exit reroute scans. It is a gate on the **tier's total**, never on an
+individual position: a small holder sharing a tier that clears the floor earns normally, and splitting one position into
+ten inside a tier changes nothing in either direction.
+
+Where the excluded share goes **differs by leg**, and the asymmetry is deliberate:
+
+| leg                      | an excluded tier's share                                                                                                                                                                                                                                            |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| deposit-fee spread       | absorbed by the tiers that already qualified, in proportion to their existing kernel weights. The earning window does **not** slide down to pull in a further tier — the triangular kernel returns a hard zero beyond σ, and crediting a tier it says earns nothing would change the mechanism rather than fix a dust case. |
+| redeem-fee exiting-tier slice | a sub-floor residual cohort orphans the slice and it accrues to `protocolAccrued` instead of being redistributed. Every redistribution route out of that branch concentrates on a single tier and would be purchasable by anyone willing to post the floor. |
+
+Nothing is forfeited on either path — every wei terminates in a recipient tier or in `protocolAccrued`. Read that as a
+statement about _these branches_, not about the whole fee path: the accumulator separately leaves the sub-wei dust
+described below, which reaches neither.
+
+The floor ships at `0`, which disables it entirely and reproduces the plain "holds any stake at all" test. See §7 for
+its ceiling and what that ceiling does and does not guarantee.
+
+#### Sizing a floor: the two legs steer differently
+
+The deposit leg is safe from floor-steering. A large holder cannot push a tier below the floor for their own deposits
+and thereby steer their fee toward another tier they hold, because the tier is judged on its **full** stake including
+theirs — a tier they dominate is _more_ likely to qualify, not less, and the remaining holders keep their pro-rata share
+of every slice that lands there.
+
+A floor is therefore sized against the **redeem** leg, which judges post-exclusion stake. An exiter whose own residual
+dominates their tier can push the remaining cohort under the floor and orphan the exiting-tier slice to
+`protocolAccrued`. That destroys value for the remaining holders rather than capturing it — no route pays it to the
+exiter — so it is a griefing cost bounded by the exiter's own fee, not a recapture.
+
 ### Precision, stated plainly
 
 Credits use a MasterChef-style `accFeePerShare` accumulator, which is O(1) per deposit instead of O(cohort). The
@@ -333,14 +367,68 @@ protocolAccrued              1 wei                            (1 699 wei)
 That ≈1 700-wei residue stays as an unattributed contract balance. It is the standard integer- accumulator trade-off, it
 is bounded and monotonic, and **no holder's principal is exposed to it** — the curve only ever holds fees.
 
+### The earning window, as the vault climbs
+
+Because `d*` is a _fraction of the span_, which prior tiers earn depends on where the vault sits, not on the recipient
+tier alone. Substituting `d = tier − j` and `d* = (1 − α)·tier`, prior tier `j` earns a non-zero share iff
+
+```text
+|α·tier − j| < σ          tier = the source tier, i.e. the vault's tier
+```
+
+For non-zero `α` that is a bounded band of source tiers, `(j − σ)/α < tier < (j + σ)/α`, roughly `2σ/α` tiers wide. A
+cohort drops out of the spread once the vault climbs past the upper end of its band, and participates again if the vault
+falls back inside; the condition is re-evaluated on every fee. Accrued credit is unaffected, since `accFeePerShare` is
+never decremented.
+
+| configuration                     | which prior tiers earn                                                                     |
+| --------------------------------- | ------------------------------------------------------------------------------------------ |
+| `α = 0`                           | the condition collapses to `j < σ`: the earliest σ tiers earn from every source tier, and no window ever closes |
+| `α = 1, σ = 4`, vault in tier 6   | `\|6 − j\| < 4` admits tiers 3–5, in the 50 / 33.3 / 16.7 split                              |
+| `α = 0.6, σ = 3`, vault in tier 6 | `\|3.6 − j\| < 3` admits tiers 1–5; tier 0 receives nothing                                  |
+
+### Buckets are not re-priced on a drawdown
+
+When a vault falls back down the ladder, buckets are left where they are. A bucket is `round(avgEntryTier)`, so after a
+drawdown the remaining holders can all sit _above_ the vault's current tier. A deposit fee reaches only the tiers
+strictly below its band, so those holders earn nothing from it, and if no bucket sits below the current tier the whole
+fee accrues to `protocolAccrued` — the tier-0 rule generalised.
+
+Three things bound that:
+
+- `accFeePerShare` is monotonic, so only _new_ credit stops; nothing already earned is lost.
+- The redeem leg is unaffected, since withdrawal fees key on the exiter's own bucket.
+- It reverses as the vault climbs back past a bucket.
+
+Re-bucketing holders downward instead would rewrite entitlements on every redeem, and would let an exit be sized to move
+another holder's tier.
+
+### The deposit and withdrawal schedules are coupled
+
+A holder bucketed at the vault's current tier earns from every band a later deposit opens above them, so a position
+opened immediately before a large deposit and closed after it captures real value. The withdrawal fee paid on exit is
+what makes that unprofitable — and that holds only while the withdrawal rate stays a sufficient fraction of the deposit
+rate at the same tier.
+
+`depositCapBps` and `withdrawalCapBps` are set independently, so **the ratio between the two schedules is itself a
+constraint**, not just their absolute levels. The reference ladder keeps withdrawal a full percentage point above
+deposit at every tier.
+
+Entitlement carries no dwell requirement, no time-weighting and no minimum holding period: it is established at
+`recordDeposit` time against the tier's then-current accumulator. Earning from a later depositor or exiter is the
+intended mechanic, and it is bounded — a sandwich around a deposit cannot extract more than that deposit's own fee, and
+no party can earn more than the fees actually collected. A position opened one transaction before an exit is as entitled
+as one held for a year, and because credit divides across the recipient tier's stake, a small position that is the
+tier's only other occupant receives the whole slice.
+
 ---
 
 ## 5. The redeem side, in one paragraph
 
 The withdrawal fee is charged at the **exiting holder's** tier rate and goes to the _residual holders of that same tier_
-— the diamond-hands default — with the exiter excluded. A configurable `withdrawalToFulcrumTiersBps` slice instead
+— the exiting-tier default — with the exiter excluded. A configurable `withdrawalToFulcrumTiersBps` slice instead
 routes to the prior tiers through the same fulcrum kernel (0 in both schedules here, so today the whole fee is the
-diamond slice). When the exiting tier has no residual cohort — a departing whale who was alone in their band — the slice
+exiting-tier slice). When the exiting tier has no residual cohort — a departing whale who was alone in their band — the slice
 does not fall to the protocol: it is rerouted to the nearest occupied tier, searched **above first**, so the stayer who
 sat above the whale earns it, then below. Only when no tier at all holds stake does it reach `protocolAccrued`. See
 [`generated/curve-record-redeem.md`](./generated/curve-record-redeem.md).

@@ -55,7 +55,7 @@ forge script script/intuition/FeeProxyDeploy.s.sol:FeeProxyDeploy \
 ///           - `<NETWORK>_FEE_PROXY_PROXY_ADMIN_OWNER`  — TUP proxy admin
 ///             (typically the protocol's upgrades timelock).
 ///         Optional env vars (per chain; sensible defaults supplied):
-///           - `<NETWORK>_FEE_PROXY_MAX_BPS`            — initial bps cap.
+///           - `<NETWORK>_FEE_PROXY_MAX_FEE_BPS`        — initial bps cap.
 ///           - `<NETWORK>_FEE_PROXY_MAX_FIXED_FEE`      — initial fixed-fee
 ///             cap, in TRUST wei.
 ///           - `<NETWORK>_FEE_PROXY_REGISTRATION_FEE`   — initial registration
@@ -68,8 +68,8 @@ contract FeeProxyDeploy is SetupScript {
 
     /// @dev Default protocol-level caps applied if the per-network env var is
     ///      unset. Chosen as conservative starting points; admin can re-tune
-    ///      post-deploy via `setMaxBps` / `setMaxFixedFee` / `setRegistrationFee`.
-    uint256 public constant DEFAULT_MAX_BPS = 1000; // 10%
+    ///      post-deploy via `setMaxFeeBps` / `setMaxFixedFee` / `setRegistrationFee`.
+    uint256 public constant DEFAULT_MAX_FEE_BPS = 1000; // 10%
     uint256 public constant DEFAULT_MAX_FIXED_FEE = 1 ether; // 1 TRUST
     uint256 public constant DEFAULT_REGISTRATION_FEE = 10 ether; // 10 TRUST
 
@@ -89,7 +89,7 @@ contract FeeProxyDeploy is SetupScript {
     address internal FEE_PROXY_TREASURY;
     address internal FEE_PROXY_ADMIN;
     address internal FEE_PROXY_PROXY_ADMIN_OWNER;
-    uint256 internal FEE_PROXY_MAX_BPS;
+    uint256 internal FEE_PROXY_MAX_FEE_BPS;
     uint256 internal FEE_PROXY_MAX_FIXED_FEE;
     uint256 internal FEE_PROXY_REGISTRATION_FEE;
 
@@ -103,7 +103,7 @@ contract FeeProxyDeploy is SetupScript {
         info("FEE_PROXY_TREASURY", FEE_PROXY_TREASURY);
         info("FEE_PROXY_ADMIN", FEE_PROXY_ADMIN);
         info("FEE_PROXY_PROXY_ADMIN_OWNER", FEE_PROXY_PROXY_ADMIN_OWNER);
-        info("FEE_PROXY_MAX_BPS", FEE_PROXY_MAX_BPS);
+        info("FEE_PROXY_MAX_FEE_BPS", FEE_PROXY_MAX_FEE_BPS);
         info("FEE_PROXY_MAX_FIXED_FEE", FEE_PROXY_MAX_FIXED_FEE);
         info("FEE_PROXY_REGISTRATION_FEE", FEE_PROXY_REGISTRATION_FEE);
     }
@@ -118,7 +118,7 @@ contract FeeProxyDeploy is SetupScript {
             FEE_PROXY_MULTI_VAULT,
             FEE_PROXY_TREASURY,
             FEE_PROXY_ADMIN,
-            FEE_PROXY_MAX_BPS,
+            FEE_PROXY_MAX_FEE_BPS,
             FEE_PROXY_MAX_FIXED_FEE,
             FEE_PROXY_REGISTRATION_FEE
         );
@@ -133,7 +133,7 @@ contract FeeProxyDeploy is SetupScript {
         require(feeProxyContract.treasury() == FEE_PROXY_TREASURY, "treasury mismatch");
         require(feeProxyContract.hasRole(feeProxyContract.DEFAULT_ADMIN_ROLE(), FEE_PROXY_ADMIN), "admin mismatch");
         require(feeProxyContract.hasRole(feeProxyContract.PAUSER_ROLE(), FEE_PROXY_ADMIN), "pauser mismatch");
-        require(feeProxyContract.maxBps() == FEE_PROXY_MAX_BPS, "maxBps mismatch");
+        require(feeProxyContract.maxFeeBps() == FEE_PROXY_MAX_FEE_BPS, "maxFeeBps mismatch");
         require(feeProxyContract.maxFixedFee() == FEE_PROXY_MAX_FIXED_FEE, "maxFixedFee mismatch");
         require(feeProxyContract.registrationFee() == FEE_PROXY_REGISTRATION_FEE, "registrationFee mismatch");
         require(!feeProxyContract.paused(), "deployed paused");
@@ -161,7 +161,7 @@ contract FeeProxyDeploy is SetupScript {
         FEE_PROXY_ADMIN = vm.envAddress(string.concat(prefix, "_FEE_PROXY_ADMIN"));
         FEE_PROXY_PROXY_ADMIN_OWNER = vm.envAddress(string.concat(prefix, "_FEE_PROXY_PROXY_ADMIN_OWNER"));
 
-        FEE_PROXY_MAX_BPS = vm.envOr(string.concat(prefix, "_FEE_PROXY_MAX_BPS"), DEFAULT_MAX_BPS);
+        FEE_PROXY_MAX_FEE_BPS = vm.envOr(string.concat(prefix, "_FEE_PROXY_MAX_FEE_BPS"), DEFAULT_MAX_FEE_BPS);
         FEE_PROXY_MAX_FIXED_FEE = vm.envOr(string.concat(prefix, "_FEE_PROXY_MAX_FIXED_FEE"), DEFAULT_MAX_FIXED_FEE);
         FEE_PROXY_REGISTRATION_FEE =
             vm.envOr(string.concat(prefix, "_FEE_PROXY_REGISTRATION_FEE"), DEFAULT_REGISTRATION_FEE);

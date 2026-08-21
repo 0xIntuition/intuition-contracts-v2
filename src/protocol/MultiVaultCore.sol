@@ -337,14 +337,14 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
     }
 
     /// @dev Internal function to get the static costs that go into creating an atom
-    /// @dev ASSUMES A 1:1 DEFAULT CURVE. `generalConfig.minShare` is a SHARE quantity, added here to
-    ///      an ASSET quantity, while the create path funds the ghost-share seed with
-    ///      `_minAssetsForCurve(defaultCurveId, minShare)` ASSETS. The advertised cost and the funded
+    /// @dev Assumes a 1:1 default curve. `generalConfig.minShare` is a share quantity, added here to
+    ///      an asset quantity, while the create path funds the ghost-share seed with
+    ///      `_minAssetsForCurve(defaultCurveId, minShare)` assets. The advertised cost and the funded
     ///      credit are equal only for a curve that mints 1:1 from an empty domain. This holds by
     ///      construction for the deployed configuration (`defaultCurveId == 1`, `LinearCurve`,
-    ///      flat 1:1) and is load-bearing: repointing `defaultCurveId` at a non-1:1 curve would
+    ///      flat 1:1). Repointing `defaultCurveId` at a non-1:1 curve would
     ///      silently under-collateralise or strand value here, with no revert and no event.
-    ///      Do not change `defaultCurveId` without re-deriving this.
+    ///      Changing `defaultCurveId` requires re-deriving this.
     /// @return atomCost the static costs of creating an atom
     function _getAtomCost() internal view returns (uint256) {
         return atomConfig.atomCreationProtocolFee + generalConfig.minShare;

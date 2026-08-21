@@ -82,14 +82,14 @@ contract AccessControlTest is FeeProxyBaseTest {
         vm.stopPrank();
     }
 
-    function test_setMaxBps_OnlyAdminRole() external {
+    function test_setMaxFeeBps_OnlyAdminRole() external {
         vm.startPrank(users.alice);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IAccessControl.AccessControlUnauthorizedAccount.selector, users.alice, feeProxy.DEFAULT_ADMIN_ROLE()
             )
         );
-        feeProxy.setMaxBps(500);
+        feeProxy.setMaxFeeBps(500);
         vm.stopPrank();
     }
 
@@ -171,9 +171,9 @@ contract AccessControlTest is FeeProxyBaseTest {
         );
     }
 
-    function test_initialize_revertsWhen_maxBpsAboveDivisor() external {
+    function test_initialize_revertsWhen_maxFeeBpsAboveDivisor() external {
         FeeProxy impl = new FeeProxy();
-        vm.expectRevert(abi.encodeWithSelector(IFeeProxy.FeeProxy_MaxBpsOutOfRange.selector, 10_001));
+        vm.expectRevert(abi.encodeWithSelector(IFeeProxy.FeeProxy_MaxFeeBpsOutOfRange.selector, 10_001));
         new TransparentUpgradeableProxy(
             address(impl),
             users.admin,

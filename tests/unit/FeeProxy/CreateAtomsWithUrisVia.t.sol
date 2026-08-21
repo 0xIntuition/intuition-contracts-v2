@@ -38,9 +38,7 @@ contract CreateAtomsWithUrisViaTest is FeeProxyBaseTest {
         assertEq(ids[0], expectedAtomId, "context must not affect identity");
         assertEq(protocol.multiVault.getAtomCreator(ids[0]), users.alice, "caller must be credited as creator");
         assertNotEq(protocol.multiVault.getAtomCreator(ids[0]), address(feeProxy), "proxy must not own attribution");
-        assertEq(
-            affiliateFeeRecipient.balance - recipientBalanceBefore, expectedFee, "affiliate fee must be unchanged"
-        );
+        assertEq(affiliateFeeRecipient.balance - recipientBalanceBefore, expectedFee, "affiliate fee must be unchanged");
         assertEq(address(feeProxy).balance, 0, "proxy holds no residual ETH");
 
         AffiliateStats memory stats = feeProxy.affiliateStats(affiliate);

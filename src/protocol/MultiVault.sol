@@ -29,17 +29,16 @@ import { MultiVaultLib } from "src/libraries/MultiVaultLib.sol";
  *         associated with atoms & triples using TRUST as the base asset.
  *
  * @dev    Heavy write-path bodies (`createAtoms`, `createTriples`, `deposit`, `depositBatch`,
- *         `redeem`, `redeemBatch`, plus the full transitive call graph they used to inline) live in
- *         {MultiVaultLib}, a separately-deployed `public`-function library linked into this
- *         contract's bytecode via the Solidity placeholder mechanism. Every library call from this
- *         contract compiles to a single `DELEGATECALL`, under which the library executes in this
- *         contract's storage context (`address(this)`, `msg.sender`, `msg.value`, and storage all
- *         reflect the {MultiVault} call). The split itself is a pure-refactor for runtime bytecode
- *         size; storage layout, function selectors, errors, events, and semantics are unchanged by
- *         the extraction. Subsequent upgrades may extend the contract — including appending new
- *         state — provided storage extensions remain append-only at the tail of the layout and the
- *         {MultiVaultLib.Storage} mirror stays slot-aligned with the contract, so previously
- *         occupied slot positions are preserved across upgrades.
+ *         `redeem`, `redeemBatch`, plus their transitive call graph) live in {MultiVaultLib}, a
+ *         separately-deployed `public`-function library linked into this contract's bytecode via the
+ *         Solidity placeholder mechanism. Every library call from this contract compiles to a single
+ *         `DELEGATECALL`, under which the library executes in this contract's storage context
+ *         (`address(this)`, `msg.sender`, `msg.value`, and storage all reflect the {MultiVault}
+ *         call). The split is a pure refactor for runtime bytecode size: storage layout, function
+ *         selectors, errors, events, and semantics are unchanged by the extraction. Upgrades may
+ *         extend the contract, including appending new state, provided storage extensions remain
+ *         append-only at the tail of the layout and the {MultiVaultLib.Storage} mirror stays
+ *         slot-aligned with the contract, so occupied slot positions are preserved across upgrades.
  */
 contract MultiVault is
     IMultiVault,
@@ -96,38 +95,35 @@ contract MultiVault is
     /// @dev Epoch -> aggregate TRUST moved through the protocol by all users during that epoch.
     ///      Credited on deposit with the full amount sent in, and debited on redeem with the asset value that
     ///      leaves the vault. Those two bases differ by the fees charged on the way in, so aggregate activity
-    ///      that deposits and then fully redeems does NOT net back to its prior value. See
+    ///      that deposits and then fully redeems does not net back to its prior value. See
     ///      `personalUtilization` for the full rationale; the same semantics apply here, including that the
     ///      counter is not time-weighted and that an epoch's slot is final once that epoch closes.
     mapping(uint256 epoch => int256 utilizationAmount) public totalUtilization;
 
     /// @notice Mapping of the TRUST token amount utilization for each user in each epoch
     /// @dev User -> Epoch -> TRUST moved through the protocol by that user during that epoch.
-    ///      Utilization is credited on deposit with the FULL amount sent in (`msg.value`) and debited on redeem
-    ///      with the asset value that LEAVES the vault for the redeemed shares (`rawAssetsBeforeFees`). Those two
-    ///      bases deliberately differ by the fees charged on the way in, so a deposit followed by a full redeem
-    ///      intentionally does NOT net to zero: it leaves a residue equal to the fees the user paid and the
-    ///      protocol retained.
+    ///      Utilization is credited on deposit with the full amount sent in (`msg.value`) and debited on redeem
+    ///      with the asset value that leaves the vault for the redeemed shares (`rawAssetsBeforeFees`). Those two
+    ///      bases differ by the fees charged on the way in, so a deposit followed by a full redeem does not net
+    ///      to zero: it leaves a residue equal to the fees the user paid and the protocol retained.
     ///
-    ///      This asymmetry is by design. Utilization measures a user's net economic contribution to the protocol
-    ///      during the epoch — capital committed, plus the fees they contributed — and NOT their vault balance.
-    ///      There is deliberately NO invariant that `personalUtilization` equals a user's share value or TVL, and
-    ///      NO invariant that a deposit/redeem round-trip restores it to its prior value. Consumers must not
-    ///      assume either property.
+    ///      Utilization measures a user's net economic contribution to the protocol during the epoch — capital
+    ///      committed, plus the fees they contributed — rather than their vault balance. No invariant ties
+    ///      `personalUtilization` to a user's share value or TVL, and none restores it to its prior value across
+    ///      a deposit/redeem round-trip.
     ///
-    ///      Utilization is also deliberately NOT time-weighted. It is a running signed counter mutated at the
-    ///      moment of each deposit and redeem; it carries no notion of how long capital stayed in the vault.
-    ///      Capital committed in the final block of an epoch counts exactly the same as identical capital held
-    ///      for the whole epoch. This is intentional — utilization gates reward eligibility on activity, not on
-    ///      duration, because duration is already priced by the bonding lock in `TrustBonding`. Consumers must
-    ///      NOT read this as a time-weighted average balance.
+    ///      It is not time-weighted. It is a running signed counter mutated at the moment of each deposit and
+    ///      redeem, and carries no notion of how long capital stayed in the vault. Capital committed in the final
+    ///      block of an epoch counts the same as identical capital held for the whole epoch: utilization gates
+    ///      reward eligibility on activity rather than duration, because duration is already priced by the
+    ///      bonding lock in `TrustBonding`.
     ///
-    ///      Each epoch's slot is FINAL once that epoch closes. A redeem debits the epoch it executes in, never
+    ///      Each epoch's slot is final once that epoch closes. A redeem debits the epoch it executes in, never
     ///      the epoch a matching deposit was credited to: `_removeUtilization` carries the user's last active
     ///      epoch forward into the current one and subtracts there. A deposit made in epoch E and redeemed in
-    ///      E+1 therefore leaves E's slot standing, by design. Retroactively amending a settled epoch would
-    ///      make that epoch's reward depend on WHEN a user happens to claim rather than on what they did during
-    ///      it, which is a worse property than the residue it would remove.
+    ///      E+1 therefore leaves E's slot standing. Retroactively amending a settled epoch would make that
+    ///      epoch's reward depend on when a user happens to claim rather than on what they did during it, which
+    ///      is a worse property than the residue it would remove.
     ///
     ///      The debit is deferred, not forgiven. It lands in E+1's slot, so E+1's delta is driven negative and
     ///      its ratio floors. A deposit/redeem round-trip straddling an epoch boundary is therefore
@@ -544,7 +540,7 @@ contract MultiVault is
     ///         non-payable functions, including view functions, because every
     ///         delegatecall observes the outer call's physical `CALLVALUE`.
     ///
-    ///         SECURITY INVARIANT: every payable external entry point added in
+    ///         Security invariant: every payable external entry point added in
     ///         a future upgrade, other than this dispatcher, must be
     ///         `nonReentrant` and must either consume only
     ///         `_effectiveMsgValue()` or enforce `requiresZeroValue`. Any
@@ -820,7 +816,7 @@ contract MultiVault is
     }
 
     /// @inheritdoc IMultiVault
-    /// @dev Permissionless by design. The recipient is always `generalConfig.protocolMultisig`, which only
+    /// @dev Permissionless. The recipient is always `generalConfig.protocolMultisig`, which only
     ///      timelocked governance can change — never the caller and never a parameter. An arbitrary caller
     ///      can therefore only push already-accrued fees to their intended destination, at their own gas.
     function sweepAccumulatedProtocolFees(uint256 epoch) external nonReentrant {
@@ -861,9 +857,9 @@ contract MultiVault is
     ///      four single-line fee-amount external view getters above (`protocolFeeAmount` &c.) don't
     ///      pay a DELEGATECALL per query — they're hot off-chain reads.
     /// @param amount the raw amount to calculate the fee on
-    /// @param fee the fee bps (numerator)
-    function _feeOnRaw(uint256 amount, uint256 fee) internal view returns (uint256) {
-        return amount.mulDivUp(fee, generalConfig.feeDenominator);
+    /// @param feeBps the fee bps (numerator)
+    function _feeOnRaw(uint256 amount, uint256 feeBps) internal view returns (uint256) {
+        return amount.mulDivUp(feeBps, generalConfig.feeDenominator);
     }
 
     /// @dev Initialize the triple-state mappings. Wrapped here so {MultiVaultMigrationMode} resolves

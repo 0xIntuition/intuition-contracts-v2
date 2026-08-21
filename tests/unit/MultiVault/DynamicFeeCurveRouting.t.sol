@@ -70,7 +70,7 @@ contract DynamicFeeCurveRoutingTest is BaseTest {
         // The curve booked the position and received the deposit fee (native).
         assertEq(dynamicFeeCurve.userStake(atomId, users.alice), shares, "curve ledger mirrors the vault shares");
         assertGt(address(dynamicFeeCurve).balance, curveBalanceBefore, "curve received the deposit fee");
-        assertGt(dynamicFeeCurve.vaultAssets(atomId), 0, "curve tracks cumulative net stake");
+        assertGt(dynamicFeeCurve.vaultStake(atomId), 0, "curve tracks cumulative net stake");
     }
 
     function test_deposit_defaultCurve_leavesDynamicFeeCurveUntouched() external {
@@ -80,7 +80,7 @@ contract DynamicFeeCurveRoutingTest is BaseTest {
         makeDeposit(users.alice, users.alice, atomId, DEFAULT_CURVE_ID, 10e18, 0);
 
         assertEq(dynamicFeeCurve.userStake(atomId, users.alice), 0, "default-curve deposit does not touch the curve");
-        assertEq(dynamicFeeCurve.vaultAssets(atomId), 0, "no dynamic-fee accounting for the default curve");
+        assertEq(dynamicFeeCurve.vaultStake(atomId), 0, "no dynamic-fee accounting for the default curve");
         assertEq(address(dynamicFeeCurve).balance, curveBalanceBefore, "no fee forwarded for the default curve");
     }
 

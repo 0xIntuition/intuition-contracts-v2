@@ -157,7 +157,7 @@ interface ITrustBonding {
     /// @dev The epoch's scheduled emission, scaled by the system utilization ratio. The schedule
     ///      (`ICoreEmissionsController.getEmissionsAtEpoch`) is fixed, geometrically declining and entirely
     ///      behaviour-independent, and the ratio is bounded above by `BASIS_POINTS_DIVISOR`. This value is
-    ///      therefore always LESS THAN OR EQUAL TO the scheduled amount: a 100% system ratio releases exactly
+    ///      therefore always less than or equal to the scheduled amount: a 100% system ratio releases exactly
     ///      the schedule, it does not raise it, and the lower bound is a reduction below the schedule whose
     ///      remainder stays on the reclaim side. The ratio governs the split between released and reclaimed
     ///      emissions inside a fixed ceiling — no utilization outcome, however favourable, can increase
@@ -198,7 +198,7 @@ interface ITrustBonding {
      * @dev The account's veTRUST-proportional slice of the epoch's emissions —
      *      `userBondedBalanceAtEpochEnd * emissionsForEpoch / totalBondedBalanceAtEpochEnd` — measured before
      *      the personal utilization ratio is applied. Because the individual bonded balances sum to the total
-     *      and the ratio only ever scales a slice DOWN, the sum of every participant's claim is bounded by the
+     *      and the ratio only ever scales a slice down, the sum of every participant's claim is bounded by the
      *      epoch budget by construction. No utilization outcome lets one account claim into another account's
      *      entitlement, and claim ordering within an epoch does not change what anyone receives; a higher
      *      ratio draws only on the reclaim residual, never on another participant's share.
@@ -220,7 +220,7 @@ interface ITrustBonding {
      * @notice Returns the system utilization ratio for a specific epoch
      * @dev Derived from the change in `MultiVault.totalUtilization` between `_epoch - 1` and `_epoch`, measured
      *      against the rewards the system claimed in the prior epoch. It is a point-in-time delta of a signed
-     *      counter and is deliberately NOT time-weighted: it carries no notion of how long capital stayed in
+     *      counter and is not time-weighted: it carries no notion of how long capital stayed in
      *      the vaults. See the `totalUtilization` / `personalUtilization` NatSpec on `MultiVault` for the full
      *      semantics, including why a deposit/redeem round-trip does not net to zero.
      * @param _epoch The epoch number to query
@@ -232,7 +232,7 @@ interface ITrustBonding {
      * @notice Returns the personal utilization ratio for a user in a specific epoch
      * @dev Derived from the change in the user's `MultiVault.personalUtilization` between `_epoch - 1` and
      *      `_epoch`, measured against the rewards that user claimed in the prior epoch. It is a point-in-time
-     *      delta of a signed counter and is deliberately NOT time-weighted: capital committed in the final
+     *      delta of a signed counter and is not time-weighted: capital committed in the final
      *      block of an epoch counts the same as identical capital held for the whole epoch. Duration is priced
      *      by the bonding lock, not here. See the `personalUtilization` NatSpec on `MultiVault` for the full
      *      semantics, including why a deposit/redeem round-trip does not net to zero.
