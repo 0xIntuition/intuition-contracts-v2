@@ -64,10 +64,10 @@ contract CurveSplitEdgeMeasurementTest is Test {
             depositCapBps: 1000,
             fulcrumAlphaBps: 10_000,
             kernelSpread: 4e18,
-            withdrawalBaseBps: 200,
-            withdrawalGrowthBps: 50,
-            withdrawalCapBps: 1000,
-            withdrawalToFulcrumTiersBps: 0,
+            redeemBaseBps: 200,
+            redeemGrowthBps: 50,
+            redeemCapBps: 1000,
+            redeemToFulcrumTiersBps: 0,
             depositToPriorTierBps: 0,
             minEligibleTierStake: 0
         });
@@ -276,10 +276,10 @@ contract CurveSplitEdgeMeasurementTest is Test {
             depositCapBps: 1000,
             fulcrumAlphaBps: alpha,
             kernelSpread: sigma,
-            withdrawalBaseBps: 200,
-            withdrawalGrowthBps: 50,
-            withdrawalCapBps: 1000,
-            withdrawalToFulcrumTiersBps: 0,
+            redeemBaseBps: 200,
+            redeemGrowthBps: 50,
+            redeemCapBps: 1000,
+            redeemToFulcrumTiersBps: 0,
             depositToPriorTierBps: 0,
             minEligibleTierStake: 0
         });

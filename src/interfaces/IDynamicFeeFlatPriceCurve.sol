@@ -44,25 +44,25 @@ struct DynamicFeeConfig {
     ///      the three nearest tiers earn 50 / 33.3 / 16.7 when all three are eligible; an empty or
     ///      sub-floor tier drops out of the normalization and changes the split.
     uint256 kernelSpread;
-    /// @dev Withdrawal fee in tier 0, in bps.
-    uint256 withdrawalBaseBps;
-    /// @dev Added withdrawal-fee bps per tier climbed.
-    uint256 withdrawalGrowthBps;
-    /// @dev Cap on the per-tier withdrawal fee, in bps.
-    uint256 withdrawalCapBps;
-    /// @dev Fraction (bps, `0..BPS`) of each withdrawal fee routed to the prior tiers through the
+    /// @dev Redeem fee in tier 0, in bps.
+    uint256 redeemBaseBps;
+    /// @dev Added redeem-fee bps per tier climbed.
+    uint256 redeemGrowthBps;
+    /// @dev Cap on the per-tier redeem fee, in bps.
+    uint256 redeemCapBps;
+    /// @dev Fraction (bps, `0..BPS`) of each redeem fee routed to the prior tiers through the
     ///      triangular kernel. The remainder goes to the exiting tier's other holders, so `0` routes
-    ///      the whole withdrawal fee there. If that cohort is empty the remainder reroutes to the
+    ///      the whole redeem fee there. If that cohort is empty the remainder reroutes to the
     ///      nearest eligible tier; if it holds stake but less than `minEligibleTierStake` the
     ///      remainder accrues to the protocol bucket. Entitlement carries no dwell requirement.
-    uint256 withdrawalToFulcrumTiersBps;
+    uint256 redeemToFulcrumTiersBps;
     /// @dev Fraction (bps, `0..BPS`) of each deposit fee paid as a single lump to the nearest eligible
     ///      prior tier, on top of the kernel spread. The remaining `BPS - depositToPriorTierBps` is
     ///      spread by the kernel. The search runs downward from the source tier and applies
     ///      `minEligibleTierStake`; no stake is excluded on the deposit path. If no prior tier
     ///      qualifies, the lump rejoins the kernel pool and ultimately the protocol bucket, so it is
     ///      never forfeited. `0` gives a pure kernel spread and is the default.
-    ///      This field and `withdrawalToFulcrumTiersBps` each name the allocation being opted into
+    ///      This field and `redeemToFulcrumTiersBps` each name the allocation being opted into
     ///      rather than a common side of the split, so on both legs `0` is the default and a larger
     ///      value means more of what the name points at.
     uint256 depositToPriorTierBps;
@@ -80,16 +80,16 @@ struct DynamicFeeConfig {
 
 /// @notice Owner-set manual fee rate for a single tier, consulted before the formulaic schedule.
 ///         `isSet == false` inherits `min(cap, base + tier * growth)`. `isSet == true` replaces both the
-///         deposit and withdrawal rate for that tier, bounded by the schedule's `depositCapBps` and
-///         `withdrawalCapBps`, so an override stays inside the same envelope while an explicit 0-bps
+///         deposit and redeem rate for that tier, bounded by the schedule's `depositCapBps` and
+///         `redeemCapBps`, so an override stays inside the same envelope while an explicit 0-bps
 ///         override remains expressible.
 struct TierFeeOverride {
     /// @dev Whether this tier carries a manual override, distinguishing an explicit 0 bps from unset.
     bool isSet;
     /// @dev Manual deposit fee for the tier, in bps.
     uint16 depositFeeBps;
-    /// @dev Manual withdrawal fee for the tier, in bps.
-    uint16 withdrawalFeeBps;
+    /// @dev Manual redeem fee for the tier, in bps.
+    uint16 redeemFeeBps;
 }
 
 /**
@@ -152,16 +152,16 @@ interface IDynamicFeeFlatPriceCurve {
     /// @return amount The total claimable amount
     function claimableAcross(address account, bytes32[] calldata termIds) external view returns (uint256 amount);
 
-    /// @notice Account-aware redeem preview, net of this curve's withdrawal fee only.
+    /// @notice Account-aware redeem preview, net of this curve's redeem fee only.
     /// @dev MultiVault's protocol and exit fees are not modelled here, so `assetsAfterCurveFee` is
     ///      gross of them and may exceed the execution payout, equalling it only when those fees are
     ///      zero or round to zero. It has to be composed with them to give a `minAssets` value.
     /// @param termId The term being redeemed from
     /// @param account The redeeming account
     /// @param shares The share amount to preview
-    /// @return assetsAfterCurveFee Gross assets less this curve's withdrawal fee for `account`,
+    /// @return assetsAfterCurveFee Gross assets less this curve's redeem fee for `account`,
     ///                             still gross of MultiVault's own protocol and exit fees
-    /// @return fee The curve withdrawal fee `account` would pay
+    /// @return fee The curve redeem fee `account` would pay
     function previewRedeemFor(bytes32 termId, address account, uint256 shares)
         external
         view

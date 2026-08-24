@@ -81,10 +81,10 @@ contract DynamicFeeInvariantHandler is Test {
         try CURVE.claim(terms) { } catch { }
     }
 
-    function retune(uint256 depositBaseSeed, uint256 withdrawalBaseSeed) external {
+    function retune(uint256 depositBaseSeed, uint256 redeemBaseSeed) external {
         DynamicFeeConfig memory cfg = CURVE.getConfig();
         cfg.depositBaseBps = uint16(bound(depositBaseSeed, 0, cfg.depositCapBps));
-        cfg.withdrawalBaseBps = uint16(bound(withdrawalBaseSeed, 0, cfg.withdrawalCapBps));
+        cfg.redeemBaseBps = uint16(bound(redeemBaseSeed, 0, cfg.redeemCapBps));
         vm.prank(OWNER);
         try CURVE.setConfig(cfg) { } catch { }
     }

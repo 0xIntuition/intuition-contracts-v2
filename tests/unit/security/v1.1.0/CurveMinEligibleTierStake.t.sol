@@ -22,7 +22,7 @@ import { DynamicFeeConfig } from "src/interfaces/IDynamicFeeFlatPriceCurve.sol";
 ///         d = 1 / 2 / 3 / 4.
 ///
 ///         "Diamond slice" and "diamond-hands slice" below both mean the exiting-tier slice: the
-///         portion of a withdrawal fee that goes to the exiting tier's other holders.
+///         portion of a redeem fee that goes to the exiting tier's other holders.
 contract CurveMinEligibleTierStakeTest is Test {
     DynamicFeeFlatPriceCurve internal curve;
 
@@ -77,10 +77,10 @@ contract CurveMinEligibleTierStakeTest is Test {
             depositCapBps: 1000,
             fulcrumAlphaBps: 10_000,
             kernelSpread: 4e18,
-            withdrawalBaseBps: 200,
-            withdrawalGrowthBps: 50,
-            withdrawalCapBps: 1000,
-            withdrawalToFulcrumTiersBps: 0,
+            redeemBaseBps: 200,
+            redeemGrowthBps: 50,
+            redeemCapBps: 1000,
+            redeemToFulcrumTiersBps: 0,
             depositToPriorTierBps: 0,
             minEligibleTierStake: 0
         });
@@ -244,9 +244,9 @@ contract CurveMinEligibleTierStakeTest is Test {
     }
 
     /// @dev Second reported pathology: a one-wei co-occupant of the exiting tier capturing the whole
-    ///      withdrawal fee through the diamond-hands slice. `denom` is the exiting tier's residual cohort,
+    ///      redeem fee through the diamond-hands slice. `denom` is the exiting tier's residual cohort,
     ///      so a sub-floor cohort must fall through to the reroute rather than collect.
-    ///      Note `denom` is exactly the OTHER holders' stake and does not depend on the withdrawal size —
+    ///      Note `denom` is exactly the OTHER holders' stake and does not depend on the redemption size —
     ///      an exiter cannot size a partial redeem to steer this branch.
     function test_dustResidualCohort_doesNotTakeTheDiamondSlice() external {
         // alice funds tier 0; bob and carol both land in tier 1, carol with one wei.
@@ -544,7 +544,7 @@ contract CurveMinEligibleTierStakeTest is Test {
 
     /// @dev The ceiling is what keeps the floor from being a strict expansion of owner power: without it
     ///      the owner could disqualify every tier and route the entire fee stream — deposit AND
-    ///      withdrawal — into the sweepable protocol bucket in a single transaction.
+    ///      redeem — into the sweepable protocol bucket in a single transaction.
     function test_setConfig_revertsWhenTheFloorExceedsTheImmutableCeiling() external {
         uint256 ceiling = curve.MAX_MIN_ELIGIBLE_TIER_STAKE();
         address curveOwner = curve.owner();

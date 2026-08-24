@@ -40,10 +40,10 @@ contract DynamicFeeSymbolicTest is Test {
             depositCapBps: DEPOSIT_CAP_BPS,
             fulcrumAlphaBps: 10_000,
             kernelSpread: 4e18,
-            withdrawalBaseBps: 200,
-            withdrawalGrowthBps: 50,
-            withdrawalCapBps: WITHDRAWAL_CAP_BPS,
-            withdrawalToFulcrumTiersBps: 0,
+            redeemBaseBps: 200,
+            redeemGrowthBps: 50,
+            redeemCapBps: WITHDRAWAL_CAP_BPS,
+            redeemToFulcrumTiersBps: 0,
             depositToPriorTierBps: 0,
             minEligibleTierStake: 0
         });
@@ -61,14 +61,14 @@ contract DynamicFeeSymbolicTest is Test {
         assert(curve.depositFeeBps(tier) <= DEPOSIT_CAP_BPS);
     }
 
-    /// @notice The formulaic withdrawal rate never exceeds the configured cap, across the whole
+    /// @notice The formulaic redeem rate never exceeds the configured cap, across the whole
     ///         schedulable tier domain `[0, MAX_TIER_COUNT)`.
-    function check_withdrawalFeeBps_neverExceedsCap(uint256 tier) public view {
+    function check_redeemFeeBps_neverExceedsCap(uint256 tier) public view {
         tier = tier % curve.MAX_TIER_COUNT();
-        assert(curve.withdrawalFeeBps(tier) <= WITHDRAWAL_CAP_BPS);
+        assert(curve.redeemFeeBps(tier) <= WITHDRAWAL_CAP_BPS);
     }
 
-    /// @notice A withdrawal fee never exceeds the gross assets it is charged on (principal at par: the
+    /// @notice A redeem fee never exceeds the gross assets it is charged on (principal at par: the
     ///         most a redeemer can lose is the fee, never more than they hold).
     function check_quoteRedeemFee_neverExceedsGross(address account, uint256 grossAssets) public view {
         grossAssets = uint256(uint128(grossAssets)); // keep gross * bps within 256 bits

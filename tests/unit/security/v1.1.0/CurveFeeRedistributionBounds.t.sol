@@ -8,8 +8,8 @@ import { DynamicFeeConfig } from "src/interfaces/IDynamicFeeFlatPriceCurve.sol";
 /// @notice Executed economic regressions on the WITHDRAWAL side of the fee redistribution.
 ///
 ///         The existing adversarial-economics suite covers the deposit-side sandwich and asserts that
-///         earnings stay bounded by the victim's fee. The withdrawal side had no equivalent, and it is
-///         the sharper surface: the shipped schedule sets `withdrawalToFulcrumTiersBps = 0`, which
+///         earnings stay bounded by the victim's fee. The redeem side had no equivalent, and it is
+///         the sharper surface: the shipped schedule sets `redeemToFulcrumTiersBps = 0`, which
 ///         routes the ENTIRE exit fee to the exiting holder's tier rather than diluting it across the
 ///         fulcrum spread.
 ///
@@ -36,11 +36,11 @@ contract CurveFeeRedistributionBoundsTest is BaseTest {
     /*        WITHDRAWAL-SIDE FRONT-RUN (MIRROR)           */
     /* =================================================== */
 
-    /// @dev The withdrawal-side mirror of the deposit sandwich test. An account that opens a position
+    /// @dev The redeem-side mirror of the deposit sandwich test. An account that opens a position
     ///      immediately before a visible exit earns from that exit — intended — but must never earn
-    ///      MORE than the withdrawal fee the exiting holder actually paid. That is the conservation
+    ///      MORE than the redeem fee the exiting holder actually paid. That is the conservation
     ///      bound, and it is what distinguishes redistribution from inflation.
-    function test_frontRun_withdrawalEarningsBoundedByExitFee() external {
+    function test_frontRun_redeemEarningsBoundedByExitFee() external {
         bytes32 atomId = _atom("wd-frontrun");
 
         // A long-standing holder establishes the tier.
@@ -65,8 +65,8 @@ contract CurveFeeRedistributionBoundsTest is BaseTest {
     }
 
     /// @dev The exiting holder must never earn from the fee they themselves just paid. This is the
-    ///      self-exclusion property the redistribution rests on, asserted on the withdrawal path.
-    function test_exitingHolderEarnsNothingFromTheirOwnWithdrawalFee() external {
+    ///      self-exclusion property the redistribution rests on, asserted on the redeem path.
+    function test_exitingHolderEarnsNothingFromTheirOwnRedeemFee() external {
         bytes32 atomId = _atom("wd-self-exclusion");
 
         makeDeposit(users.charlie, users.charlie, atomId, DYN, 5e18, 0);
@@ -81,13 +81,13 @@ contract CurveFeeRedistributionBoundsTest is BaseTest {
 
         uint256 afterExit = dynamicFeeCurve.claimable(users.bob, atomId);
 
-        assertLe(afterExit, beforeExit, "the exiting holder must not gain from their own withdrawal fee");
+        assertLe(afterExit, beforeExit, "the exiting holder must not gain from their own redeem fee");
     }
 
-    /// @dev Conservation across a full withdrawal cycle: everything the curve owes, plus the protocol
+    /// @dev Conservation across a full redeem cycle: everything the curve owes, plus the protocol
     ///      bucket, never exceeds what the curve actually custodies. This is the property that makes
     ///      the redistribution safe regardless of how the split lands.
-    function test_withdrawalRedistribution_neverOwesMoreThanItHolds() external {
+    function test_redeemRedistribution_neverOwesMoreThanItHolds() external {
         bytes32 atomId = _atom("wd-conservation");
         address[3] memory parties = [address(users.alice), address(users.bob), address(users.charlie)];
 
@@ -115,10 +115,10 @@ contract CurveFeeRedistributionBoundsTest is BaseTest {
     }
 
     /// @dev The shipped schedule routes the whole exit fee to the exiting tier. Pin that, because it
-    ///      is the configuration every other withdrawal-side property is measured against, and a
+    ///      is the configuration every other redeem-side property is measured against, and a
     ///      silent change to it would alter the economics without failing anything else.
     function test_shippedSchedule_routesEntireExitFeeToTheExitingTier() external view {
         DynamicFeeConfig memory cfg = dynamicFeeCurve.getConfig();
-        assertEq(cfg.withdrawalToFulcrumTiersBps, 0, "shipped schedule sends the whole exit fee to the exiting tier");
+        assertEq(cfg.redeemToFulcrumTiersBps, 0, "shipped schedule sends the whole exit fee to the exiting tier");
     }
 }

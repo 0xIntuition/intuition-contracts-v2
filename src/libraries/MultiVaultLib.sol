@@ -924,7 +924,7 @@ library MultiVaultLib {
         IBaseCurve(hook.curve).recordDeposit{ value: hook.fee }(termId, account, shares);
     }
 
-    /// @dev Forward the curve-level withdrawal fee (native) to the vault's curve and book the exit;
+    /// @dev Forward the curve-level redeem fee (native) to the vault's curve and book the exit;
     ///      a no-op for any curve without the redeem hook. Always invoked on a hook curve so the
     ///      curve's per-user share ledger stays in lockstep with the vault. `hook` carries the
     ///      decision and quote resolved during {_calculateRedeem} — never re-resolved here.
@@ -1124,7 +1124,7 @@ library MultiVaultLib {
         uint256 protocolFee = _feeOnRaw(assets, s.vaultFees.protocolFee);
         uint256 exitFee = _shouldChargeExitFees(termId, curveId, shares) ? _feeOnRaw(assets, s.vaultFees.exitFee) : 0;
 
-        // Layer the curve's own withdrawal fee on top of MultiVault's fees (0 for any hookless
+        // Layer the curve's own redeem fee on top of MultiVault's fees (0 for any hookless
         // curve); the same quote is forwarded to the curve in `_processRedeem` via the carried
         // `hook` — quoted exactly once. The account-less preview path passes `address(0)`; the hook
         // curve decides its own fallback semantics for it.

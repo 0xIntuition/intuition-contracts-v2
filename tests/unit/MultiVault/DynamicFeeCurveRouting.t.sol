@@ -153,10 +153,10 @@ contract DynamicFeeCurveRoutingTest is BaseTest {
     /*                      REDEEM                         */
     /* =================================================== */
 
-    function test_redeem_dynamicCurve_forwardsWithdrawalFee() external {
+    function test_redeem_dynamicCurve_forwardsRedeemFee() external {
         bytes32 atomId = _atom("routing-redeem");
 
-        // Two holders so the exiting tier has a residual recipient for the withdrawal fee.
+        // Two holders so the exiting tier has a residual recipient for the redeem fee.
         makeDeposit(users.alice, users.alice, atomId, DYNAMIC_CURVE_ID, 8e18, 0);
         makeDeposit(users.bob, users.bob, atomId, DYNAMIC_CURVE_ID, 8e18, 0);
 
@@ -168,7 +168,7 @@ contract DynamicFeeCurveRoutingTest is BaseTest {
 
         assertGt(assets, 0, "receiver got net proceeds");
         assertEq(users.bob.balance - receiverBefore, assets, "receiver paid the net");
-        assertGt(address(dynamicFeeCurve).balance, curveBalanceBefore, "curve received the withdrawal fee");
+        assertGt(address(dynamicFeeCurve).balance, curveBalanceBefore, "curve received the redeem fee");
     }
 
     /* =================================================== */

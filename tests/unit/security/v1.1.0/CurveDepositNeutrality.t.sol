@@ -28,7 +28,7 @@ import { DynamicFeeConfig } from "src/interfaces/IDynamicFeeFlatPriceCurve.sol";
 ///         that migration. Band-aligned equality is the exact property; the sub-band residual is
 ///         measured in {testFuzz_subBandSplitAdvantage_staysBounded} rather than assumed away.
 ///
-///         "Diamond slice" below means the exiting-tier slice: the portion of a withdrawal fee that
+///         "Diamond slice" below means the exiting-tier slice: the portion of a redeem fee that
 ///         goes to the exiting tier's other holders.
 contract CurveDepositNeutralityTest is Test {
     DynamicFeeFlatPriceCurve internal curve;
@@ -137,10 +137,10 @@ contract CurveDepositNeutralityTest is Test {
             depositCapBps: 1000,
             fulcrumAlphaBps: 10_000,
             kernelSpread: 4e18,
-            withdrawalBaseBps: 200,
-            withdrawalGrowthBps: 50,
-            withdrawalCapBps: 1000,
-            withdrawalToFulcrumTiersBps: 0,
+            redeemBaseBps: 200,
+            redeemGrowthBps: 50,
+            redeemCapBps: 1000,
+            redeemToFulcrumTiersBps: 0,
             depositToPriorTierBps: 0,
             minEligibleTierStake: 0
         });
@@ -639,12 +639,12 @@ contract CurveDepositNeutralityTest is Test {
     /// @dev PARTIAL exits are where the redeem-side exclusion actually does work, and the full-exit
     ///      cases above cannot test it: at `residual == 0` the exclusion is arithmetically a no-op.
     ///
-    ///      With `residual > 0` the exiter still holds stake in the very tier their withdrawal fee
+    ///      With `residual > 0` the exiter still holds stake in the very tier their redeem fee
     ///      lands on. The diamond slice is sized against a denominator that deliberately OMITS that
     ///      residual (`tierStake[exitTier] - residual`), so crediting the residual anyway would pay
     ///      out more than the fee collected — a solvency hole, not merely an unfairness. This pins
     ///      both halves: the exiter earns nothing, and the cohort that does earn is paid in full.
-    function test_partialExit_exiterEarnsNothingFromTheirOwnWithdrawalFee() external {
+    function test_partialExit_exiterEarnsNothingFromTheirOwnRedeemFee() external {
         _deposit(alice, 8e18); // bystander in tier 0
         (, uint256 bobStake) = _deposit(bob, 12e18); // bob books bucket 1
         _deposit(carol, 2e18); // carol stays inside tier 1, sharing bob's bucket
@@ -826,7 +826,7 @@ contract CurveDepositNeutralityTest is Test {
     ///        lump — real, reachable, and pinned deliberately in
     ///        {test_subTierKernelSpread_collapsesTheSpreadIntoASingleTierLump}. Leaving it in range here
     ///        would silently convert a spread-distribution property into a winner-takes-all one.
-    ///      - the withdrawal fields stay at their defaults: this is the DEPOSIT-neutrality suite, and
+    ///      - the redeem fields stay at their defaults: this is the DEPOSIT-neutrality suite, and
     ///        fuzzing the exit schedule would widen the search space without widening what is proven.
     function _ladderConfig(LadderSeed memory seed) internal pure returns (DynamicFeeConfig memory config) {
         config = _defaultConfig();

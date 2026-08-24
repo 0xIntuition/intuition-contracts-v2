@@ -208,7 +208,7 @@ contract DynamicFeeAdversarialEconomicsTest is BaseTest {
 
         DynamicFeeConfig memory cfg = dynamicFeeCurve.getConfig();
         cfg.depositBaseBps = 500;
-        cfg.withdrawalBaseBps = 500;
+        cfg.redeemBaseBps = 500;
         resetPrank(users.admin);
         dynamicFeeCurve.setConfig(cfg);
 
