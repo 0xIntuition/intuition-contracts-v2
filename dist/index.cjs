@@ -497,7 +497,7 @@ var MultiVaultAbi = [
     "name": "createAtoms",
     "inputs": [
       {
-        "name": "atomDatas",
+        "name": "data",
         "type": "bytes[]",
         "internalType": "bytes[]"
       },
@@ -526,7 +526,7 @@ var MultiVaultAbi = [
         "internalType": "address"
       },
       {
-        "name": "atomDatas",
+        "name": "data",
         "type": "bytes[]",
         "internalType": "bytes[]"
       },
@@ -555,7 +555,7 @@ var MultiVaultAbi = [
         "internalType": "address"
       },
       {
-        "name": "atomDatas",
+        "name": "data",
         "type": "bytes[]",
         "internalType": "bytes[]"
       },
@@ -4330,7 +4330,7 @@ var MultiVaultMigrationModeAbi = [
     "name": "createAtoms",
     "inputs": [
       {
-        "name": "atomDatas",
+        "name": "data",
         "type": "bytes[]",
         "internalType": "bytes[]"
       },
@@ -4359,7 +4359,7 @@ var MultiVaultMigrationModeAbi = [
         "internalType": "address"
       },
       {
-        "name": "atomDatas",
+        "name": "data",
         "type": "bytes[]",
         "internalType": "bytes[]"
       },
@@ -4388,7 +4388,7 @@ var MultiVaultMigrationModeAbi = [
         "internalType": "address"
       },
       {
-        "name": "atomDatas",
+        "name": "data",
         "type": "bytes[]",
         "internalType": "bytes[]"
       },

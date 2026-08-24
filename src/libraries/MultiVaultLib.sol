@@ -177,19 +177,19 @@ library MultiVaultLib {
     /// @dev Mirror of {MultiVault.createAtoms}. {MultiVault}'s external function forwards to this
     ///      one via `DELEGATECALL`; the library handles the full call graph (payment validation,
     ///      per-atom creation loop, fee accumulation, utilization tracking) internally.
-    function createAtoms(bytes[] calldata atomDatas, uint256[] calldata assets, uint256 payment)
+    function createAtoms(bytes[] calldata data, uint256[] calldata assets, uint256 payment)
         public
         returns (bytes32[] memory)
     {
         uint256 _assetsSum = _validatePayment(assets, payment);
-        return _createAtoms(msg.sender, atomDatas, assets, _assetsSum);
+        return _createAtoms(msg.sender, data, assets, _assetsSum);
     }
 
     /// @dev Mirror of {MultiVault.createAtomsWithUris}. URI bytes are emitted as creation-time context but are
     ///      excluded from atom ID calculation and contract storage.
     function createAtomsWithUris(
         address creator,
-        bytes[] calldata atomDatas,
+        bytes[] calldata data,
         uint256[] calldata assets,
         bytes[][] calldata uris,
         uint256 payment
@@ -198,14 +198,14 @@ library MultiVaultLib {
             revert MultiVault.MultiVault_CreatorNotApproved();
         }
 
-        uint256 length = atomDatas.length;
+        uint256 length = data.length;
         if (length != uris.length) {
             revert MultiVault.MultiVault_ArraysNotSameLength();
         }
         _validateAtomUris(uris);
 
         uint256 _assetsSum = _validatePayment(assets, payment);
-        bytes32[] memory ids = _createAtoms(creator, atomDatas, assets, _assetsSum);
+        bytes32[] memory ids = _createAtoms(creator, data, assets, _assetsSum);
         _emitAtomContexts(ids, creator, uris);
         return ids;
     }
@@ -227,7 +227,7 @@ library MultiVaultLib {
     ///      to `creator` instead of `msg.sender`. Requires `creator` to have
     ///      granted `msg.sender` an approval whose CREATION bit is set, unless
     ///      `creator == msg.sender` (self-creation short-circuit).
-    function createAtomsFor(address creator, bytes[] calldata atomDatas, uint256[] calldata assets, uint256 payment)
+    function createAtomsFor(address creator, bytes[] calldata data, uint256[] calldata assets, uint256 payment)
         public
         returns (bytes32[] memory)
     {
@@ -235,7 +235,7 @@ library MultiVaultLib {
             revert MultiVault.MultiVault_CreatorNotApproved();
         }
         uint256 _assetsSum = _validatePayment(assets, payment);
-        return _createAtoms(creator, atomDatas, assets, _assetsSum);
+        return _createAtoms(creator, data, assets, _assetsSum);
     }
 
     /// @dev Mirror of {MultiVault.createTriplesFor}. On-behalf-of variant that
@@ -538,11 +538,11 @@ library MultiVaultLib {
     /*                  ATOM / TRIPLE CREATION             */
     /* =================================================== */
 
-    function _createAtoms(address creator, bytes[] calldata atomDatas, uint256[] calldata assets, uint256 payment)
+    function _createAtoms(address creator, bytes[] calldata data, uint256[] calldata assets, uint256 payment)
         private
         returns (bytes32[] memory)
     {
-        uint256 length = atomDatas.length;
+        uint256 length = data.length;
         if (length == 0) {
             revert MultiVault.MultiVault_NoAtomDataProvided();
         }
@@ -554,7 +554,7 @@ library MultiVaultLib {
         bytes32[] memory ids = new bytes32[](length);
 
         for (uint256 i = 0; i < length;) {
-            ids[i] = _createAtom(creator, atomDatas[i], assets[i]);
+            ids[i] = _createAtom(creator, data[i], assets[i]);
             unchecked {
                 ++i;
             }
@@ -607,8 +607,8 @@ library MultiVaultLib {
         }
     }
 
-    function _createAtom(address creator, bytes calldata atomData, uint256 assets) private returns (bytes32 atomId) {
-        uint256 length = atomData.length;
+    function _createAtom(address creator, bytes calldata data, uint256 assets) private returns (bytes32 atomId) {
+        uint256 length = data.length;
 
         if (length == 0) {
             revert MultiVault.MultiVault_NoAtomDataProvided();
@@ -620,12 +620,12 @@ library MultiVaultLib {
             revert MultiVault.MultiVault_AtomDataTooLong();
         }
 
-        atomId = _calculateAtomId(atomData);
+        atomId = _calculateAtomId(data);
         if (s.atoms[atomId].length != 0) {
-            revert MultiVault.MultiVault_AtomExists(atomData);
+            revert MultiVault.MultiVault_AtomExists(data);
         }
 
-        s.atoms[atomId] = atomData;
+        s.atoms[atomId] = data;
         s.atomCreators[atomId] = creator;
         s.atomCreatedAt[atomId] = uint48(block.timestamp);
         uint256 curveId = s.bondingCurveConfig.defaultCurveId;
@@ -639,7 +639,7 @@ library MultiVaultLib {
         uint256 receiverSharesAfter =
             _updateVaultOnCreation(creator, atomId, curveId, assetsAfterFees, sharesForReceiver, VaultType.ATOM);
 
-        emit IMultiVault.AtomCreated(creator, atomId, atomData, atomWallet);
+        emit IMultiVault.AtomCreated(creator, atomId, data, atomWallet);
 
         emit IMultiVault.Deposited(
             creator,
@@ -1629,8 +1629,8 @@ library MultiVaultLib {
        same storage slots. Logic-identical to the parent contract; {MultiVaultCore} stays
        untouched and remains the public-getter source of truth. */
 
-    function _calculateAtomId(bytes memory atomData) private pure returns (bytes32) {
-        return keccak256(abi.encodePacked(ATOM_SALT, keccak256(atomData)));
+    function _calculateAtomId(bytes memory data) private pure returns (bytes32) {
+        return keccak256(abi.encodePacked(ATOM_SALT, keccak256(data)));
     }
 
     function _calculateTripleId(bytes32 subjectId, bytes32 predicateId, bytes32 objectId)

@@ -553,7 +553,7 @@ export const MultiVaultMigrationModeAbi = [
     "name": "createAtoms",
     "inputs": [
       {
-        "name": "atomDatas",
+        "name": "data",
         "type": "bytes[]",
         "internalType": "bytes[]"
       },
@@ -582,7 +582,7 @@ export const MultiVaultMigrationModeAbi = [
         "internalType": "address"
       },
       {
-        "name": "atomDatas",
+        "name": "data",
         "type": "bytes[]",
         "internalType": "bytes[]"
       },
@@ -611,7 +611,7 @@ export const MultiVaultMigrationModeAbi = [
         "internalType": "address"
       },
       {
-        "name": "atomDatas",
+        "name": "data",
         "type": "bytes[]",
         "internalType": "bytes[]"
       },

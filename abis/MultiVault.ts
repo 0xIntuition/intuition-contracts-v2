@@ -435,7 +435,7 @@ export const MultiVaultAbi = [
     "name": "createAtoms",
     "inputs": [
       {
-        "name": "atomDatas",
+        "name": "data",
         "type": "bytes[]",
         "internalType": "bytes[]"
       },
@@ -464,7 +464,7 @@ export const MultiVaultAbi = [
         "internalType": "address"
       },
       {
-        "name": "atomDatas",
+        "name": "data",
         "type": "bytes[]",
         "internalType": "bytes[]"
       },
@@ -493,7 +493,7 @@ export const MultiVaultAbi = [
         "internalType": "address"
       },
       {
-        "name": "atomDatas",
+        "name": "data",
         "type": "bytes[]",
         "internalType": "bytes[]"
       },

@@ -617,24 +617,24 @@ contract MultiVault is
        execute on this contract before the forward — they need slots on this contract's storage. */
 
     /// @inheritdoc IMultiVault
-    function createAtoms(bytes[] calldata atomDatas, uint256[] calldata assets)
+    function createAtoms(bytes[] calldata data, uint256[] calldata assets)
         external
         payable
         whenNotPaused
         nonReentrant
         returns (bytes32[] memory)
     {
-        return MultiVaultLib.createAtoms(atomDatas, assets, _effectiveMsgValue());
+        return MultiVaultLib.createAtoms(data, assets, _effectiveMsgValue());
     }
 
     /// @inheritdoc IMultiVault
     function createAtomsWithUris(
         address creator,
-        bytes[] calldata atomDatas,
+        bytes[] calldata data,
         uint256[] calldata assets,
         bytes[][] calldata uris
     ) external payable whenNotPaused nonReentrant returns (bytes32[] memory) {
-        return MultiVaultLib.createAtomsWithUris(creator, atomDatas, assets, uris, _effectiveMsgValue());
+        return MultiVaultLib.createAtomsWithUris(creator, data, assets, uris, _effectiveMsgValue());
     }
 
     /// @inheritdoc IMultiVault
@@ -648,14 +648,14 @@ contract MultiVault is
     }
 
     /// @inheritdoc IMultiVault
-    function createAtomsFor(address creator, bytes[] calldata atomDatas, uint256[] calldata assets)
+    function createAtomsFor(address creator, bytes[] calldata data, uint256[] calldata assets)
         external
         payable
         whenNotPaused
         nonReentrant
         returns (bytes32[] memory)
     {
-        return MultiVaultLib.createAtomsFor(creator, atomDatas, assets, _effectiveMsgValue());
+        return MultiVaultLib.createAtomsFor(creator, data, assets, _effectiveMsgValue());
     }
 
     /// @inheritdoc IMultiVault

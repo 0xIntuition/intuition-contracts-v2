@@ -328,7 +328,7 @@ declare const MultiVaultAbi: readonly [{
     readonly type: "function";
     readonly name: "createAtoms";
     readonly inputs: readonly [{
-        readonly name: "atomDatas";
+        readonly name: "data";
         readonly type: "bytes[]";
         readonly internalType: "bytes[]";
     }, {
@@ -350,7 +350,7 @@ declare const MultiVaultAbi: readonly [{
         readonly type: "address";
         readonly internalType: "address";
     }, {
-        readonly name: "atomDatas";
+        readonly name: "data";
         readonly type: "bytes[]";
         readonly internalType: "bytes[]";
     }, {
@@ -372,7 +372,7 @@ declare const MultiVaultAbi: readonly [{
         readonly type: "address";
         readonly internalType: "address";
     }, {
-        readonly name: "atomDatas";
+        readonly name: "data";
         readonly type: "bytes[]";
         readonly internalType: "bytes[]";
     }, {
@@ -3285,7 +3285,7 @@ declare const MultiVaultMigrationModeAbi: readonly [{
     readonly type: "function";
     readonly name: "createAtoms";
     readonly inputs: readonly [{
-        readonly name: "atomDatas";
+        readonly name: "data";
         readonly type: "bytes[]";
         readonly internalType: "bytes[]";
     }, {
@@ -3307,7 +3307,7 @@ declare const MultiVaultMigrationModeAbi: readonly [{
         readonly type: "address";
         readonly internalType: "address";
     }, {
-        readonly name: "atomDatas";
+        readonly name: "data";
         readonly type: "bytes[]";
         readonly internalType: "bytes[]";
     }, {
@@ -3329,7 +3329,7 @@ declare const MultiVaultMigrationModeAbi: readonly [{
         readonly type: "address";
         readonly internalType: "address";
     }, {
-        readonly name: "atomDatas";
+        readonly name: "data";
         readonly type: "bytes[]";
         readonly internalType: "bytes[]";
     }, {
