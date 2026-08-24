@@ -115,7 +115,7 @@ contract CreateTriplesViaTest is FeeProxyBaseTest {
 
         vm.deal(users.alice, 3 ether);
         vm.startPrank(users.alice);
-        vm.expectRevert(IFeeProxy.FeeProxy_ZeroValue.selector);
+        vm.expectRevert(IFeeProxy.FeeProxy_ZeroAssets.selector);
         feeProxy.createTriplesVia{ value: 3 ether }(
             affiliate, subjectIds, predicateIds, objectIds, assets, _looseFeeGuard()
         );
