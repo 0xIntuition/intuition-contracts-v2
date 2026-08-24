@@ -7,7 +7,7 @@ Hand-authored companion to the generated graphs in [`generated/`](./generated), 
 
 - **A flat 1:1 pricing surface**, inherited verbatim from `LinearCurve`. Nothing about `previewDeposit` /
   `previewRedeem` / `currentPrice` differs from the audited linear curve. The vault stays at par.
-- **The entire per-vault fee economy**: a tier ladder, per-tier deposit and withdrawal rates, and the pull-based
+- **The entire per-vault fee economy**: a tier ladder, per-tier deposit and redeem rates, and the pull-based
   accounting that redistributes those fees to earlier cohorts.
 
 All prices are flat. **Everything interesting is in the fees.**
@@ -22,7 +22,7 @@ Tiers are contiguous bands of _cumulative net vault assets_. The cumulative uppe
 geometric series
 
 ```text
-edge(k) = width0 · ((1 + g)^(k+1) − 1) / g          g = growthGBps / 10 000
+edge(k) = width0 · ((1 + g)^(k+1) − 1) / g          g = tierWidthGrowthBps / 10 000
 width(k) = edge(k) − edge(k−1)                      edge(−1) = 0
 ```
 
@@ -35,7 +35,7 @@ Two schedules appear in this repository. Both are 13 tiers; only the width numbe
 |                   | reference ladder                                        | deploy seed                                               |
 | ----------------- | ------------------------------------------------------- | --------------------------------------------------------- |
 | `width0`          | 1 000 TRUST                                             | 5 000 TRUST                                               |
-| `growthGBps`      | 5 000 (`g = 0.5`, each band 1.5× the one below)         | 2 000 (`g = 0.2`, each band 1.2× the one below)           |
+| `tierWidthGrowthBps`      | 5 000 (`g = 0.5`, each band 1.5× the one below)         | 2 000 (`g = 0.2`, each band 1.2× the one below)           |
 | top of the ladder | tier-11 edge ≈ 257 493 TRUST                            | tier-11 edge ≈ 197 903 TRUST                              |
 | where it lives    | the executable worked-example fixture in the test suite | `_defaultConfig()` in the dynamic-fee-curve deploy script |
 
@@ -45,10 +45,10 @@ below uses the reference ladder, because that is the one the test fixture pins e
 
 ### The reference ladder, in full
 
-Fee rates are `min(cap, base + tier·growth)`: deposit `1% + 0.5%/tier`, withdrawal `2% + 0.5%/tier`, both capped at 10%.
+Fee rates are `min(cap, base + tier·growth)`: deposit `1% + 0.5%/tier`, redeem `2% + 0.5%/tier`, both capped at 10%.
 Inside 13 tiers **the cap never binds**, so every rate is exactly the formula.
 
-| tier | band (cumulative TRUST)            |           width | deposit fee | withdrawal fee |
+| tier | band (cumulative TRUST)            |           width | deposit fee | redeem fee |
 | ---: | ---------------------------------- | --------------: | ----------: | -------------: |
 |    0 | 0 → 1 000                          |           1 000 |       1.0 % |          2.0 % |
 |    1 | 1 000 → 2 500                      |           1 500 |       1.5 % |          2.5 % |
@@ -253,7 +253,7 @@ Three ideas, in order:
    deposit (tier 3 in our example), so the candidate recipients are tiers `[0, 3)`. Per-band targeting across the
    traversed bands is a candidate refinement, not current behaviour.
 3. **A sliding fulcrum picks the most-earning band.** Each prior tier at integer distance `d` below the source earns a
-   triangular weight `max(0, 1 − |d − d*| / σ)`, peaking at a fulcrum `d* = (1 − fulcrumAlpha/BPS) · span`. Because `d*`
+   triangular weight `max(0, 1 − |d − d*| / σ)`, peaking at a fulcrum `d* = (1 − fulcrumAlphaBps/BPS) · span`. Because `d*`
    is a _fraction of the span_, the most-earning band slides up the ladder as the vault grows.
 
 ```mermaid
@@ -278,7 +278,7 @@ flowchart TB
   fulcrum -- "span == 0 (first-tier deposit)" --> prot
 ```
 
-The configured kernel — `fulcrumAlpha = BPS`, `kernelSpread = σ = 4` tiers — puts the fulcrum at `d* = 0`, which reduces
+The configured kernel — `fulcrumAlphaBps = BPS`, `kernelSpread = σ = 4` tiers — puts the fulcrum at `d* = 0`, which reduces
 the tent to the nearest-first window `1 − d/4`:
 
 | distance `d` below the source tier | raw weight |
@@ -397,21 +397,21 @@ fee accrues to `protocolAccrued` — the tier-0 rule generalised.
 Three things bound that:
 
 - `accFeePerShare` is monotonic, so only _new_ credit stops; nothing already earned is lost.
-- The redeem leg is unaffected, since withdrawal fees key on the exiter's own bucket.
+- The redeem leg is unaffected, since redeem fees key on the exiter's own bucket.
 - It reverses as the vault climbs back past a bucket.
 
 Re-bucketing holders downward instead would rewrite entitlements on every redeem, and would let an exit be sized to move
 another holder's tier.
 
-### The deposit and withdrawal schedules are coupled
+### The deposit and redeem schedules are coupled
 
 A holder bucketed at the vault's current tier earns from every band a later deposit opens above them, so a position
-opened immediately before a large deposit and closed after it captures real value. The withdrawal fee paid on exit is
-what makes that unprofitable — and that holds only while the withdrawal rate stays a sufficient fraction of the deposit
+opened immediately before a large deposit and closed after it captures real value. The redeem fee paid on exit is
+what makes that unprofitable — and that holds only while the redeem rate stays a sufficient fraction of the deposit
 rate at the same tier.
 
-`depositCapBps` and `withdrawalCapBps` are set independently, so **the ratio between the two schedules is itself a
-constraint**, not just their absolute levels. The reference ladder keeps withdrawal a full percentage point above
+`depositCapBps` and `redeemCapBps` are set independently, so **the ratio between the two schedules is itself a
+constraint**, not just their absolute levels. The reference ladder keeps redeem a full percentage point above
 deposit at every tier.
 
 Entitlement carries no dwell requirement, no time-weighting and no minimum holding period: it is established at
@@ -425,8 +425,8 @@ tier's only other occupant receives the whole slice.
 
 ## 5. The redeem side, in one paragraph
 
-The withdrawal fee is charged at the **exiting holder's** tier rate and goes to the _residual holders of that same tier_
-— the exiting-tier default — with the exiter excluded. A configurable `withdrawalToFulcrumTiersBps` slice instead
+The redeem fee is charged at the **exiting holder's** tier rate and goes to the _residual holders of that same tier_
+— the exiting-tier default — with the exiter excluded. A configurable `redeemToFulcrumTiersBps` slice instead
 routes to the prior tiers through the same fulcrum kernel (0 in both schedules here, so today the whole fee is the
 exiting-tier slice). When the exiting tier has no residual cohort — a departing whale who was alone in their band — the slice
 does not fall to the protocol: it is rerouted to the nearest occupied tier, searched **above first**, so the stayer who
@@ -447,7 +447,7 @@ read-only view. See [`generated/curve-claim.md`](./generated/curve-claim.md).
 
 | lever                        | bound                                                                                                                                                                                    |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `setConfig`                  | `width0 ∈ (0, uint128.max]`, `tierCount ∈ [1, 64]` and **grow-only** once live, `growthGBps ≤ 100·BPS`, `fulcrumAlpha ≤ BPS`, `kernelSpread ∈ (0, 64]`, `base ≤ cap ≤ BPS` on both sides |
+| `setConfig`                  | `width0 ∈ (0, uint128.max]`, `tierCount ∈ [1, 64]` and **grow-only** once live, `tierWidthGrowthBps ≤ 100·BPS`, `fulcrumAlphaBps ≤ BPS`, `kernelSpread ∈ (0, 64]`, `base ≤ cap ≤ BPS` on both sides |
 | a retune with live positions | recorded bucket ids and already-booked / pending earnings are untouched (accumulators are index-keyed); all _future_ tier decisions use the new schedule immediately                     |
 | `setTierFeeOverride`         | must stay within the schedule's declared per-tier caps — an override retunes a rate inside the same envelope, it does not bypass the cap                                                 |
 | `sweepProtocol`              | `protocolAccrued` only                                                                                                                                                                   |
@@ -456,7 +456,7 @@ Two of those bounds are defensive rather than cosmetic, and are worth confirming
 
 - **Grow-only `tierCount`.** Shrinking could strand an occupied bucket above the schedule, where the distribution walk
   would never visit it.
-- **Capped withdrawal override.** A BPS-level withdrawal rate would consume the entire redeem and underflow
+- **Capped redeem override.** A BPS-level redeem rate would consume the entire redeem and underflow
   `assets − fees` in `MultiVault`, bricking redeems for that tier until retuned.
 
 `setConfig` also probes the top edge under the new schedule at configuration time. The compounding edge math would

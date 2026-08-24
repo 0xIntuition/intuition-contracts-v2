@@ -17,7 +17,7 @@ import { DynamicFeeConfig } from "src/interfaces/IDynamicFeeFlatPriceCurve.sol";
 ///         `tests/unit/MultiVault/DynamicFeeCurveRouting.t.sol`.
 ///
 ///         "Diamond slice" and "diamond-hands slice" below both mean the exiting-tier slice: the
-///         portion of a withdrawal fee that goes to the exiting tier's other holders.
+///         portion of a redeem fee that goes to the exiting tier's other holders.
 contract DynamicFeeFlatPriceCurveTest is Test {
     DynamicFeeFlatPriceCurve internal dynamicFeeCurve;
 
@@ -69,33 +69,33 @@ contract DynamicFeeFlatPriceCurveTest is Test {
 
     /// @dev width0 = 10 TRUST, 5 tiers, g = 0.2. Deposit 1% +0.5%/tier (cap 10%), triangular fulcrum
     ///      alpha = BPS, sigma = 4e18 (nearest-first window),
-    ///      withdrawal 2% +0.5%/tier, all → own tier. Widths compound at 1.2x: 10, 12, 14.4, 17.28,
+    ///      redeem 2% +0.5%/tier, all → own tier. Widths compound at 1.2x: 10, 12, 14.4, 17.28,
     ///      20.736; edges: 10, 22, 36.4, 53.68, 74.416 (×1e18).
     function _defaultConfig() internal pure returns (DynamicFeeConfig memory config) {
         config = DynamicFeeConfig({
             width0: 10e18,
             tierCount: 5,
-            growthGBps: 2000,
+            tierWidthGrowthBps: 2000,
             depositBaseBps: 100,
             depositGrowthBps: 50,
             depositCapBps: 1000,
-            fulcrumAlpha: 10_000,
+            fulcrumAlphaBps: 10_000,
             kernelSpread: 4e18,
-            withdrawalBaseBps: 200,
-            withdrawalGrowthBps: 50,
-            withdrawalCapBps: 1000,
-            withdrawalToFulcrumTiersBps: 0,
+            redeemBaseBps: 200,
+            redeemGrowthBps: 50,
+            redeemCapBps: 1000,
+            redeemToFulcrumTiersBps: 0,
             depositToPriorTierBps: 0,
             minEligibleTierStake: 0
         });
     }
 
-    function _recordDeposit(bytes32 termId, address account, uint256 netStake, uint256 fee) internal {
-        dynamicFeeCurve.recordDeposit{ value: fee }(termId, account, netStake);
+    function _recordDeposit(bytes32 termId, address account, uint256 shares, uint256 fee) internal {
+        dynamicFeeCurve.recordDeposit{ value: fee }(termId, account, shares);
     }
 
-    function _recordRedeem(bytes32 termId, address account, uint256 withdrawnStake, uint256 fee) internal {
-        dynamicFeeCurve.recordRedeem{ value: fee }(termId, account, withdrawnStake);
+    function _recordRedeem(bytes32 termId, address account, uint256 shares, uint256 fee) internal {
+        dynamicFeeCurve.recordRedeem{ value: fee }(termId, account, shares);
     }
 
     /* =================================================== */
@@ -123,14 +123,16 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     ///      never fall below `width0`, let alone reach zero.
     ///
     ///      Asserting the invariant rather than the branch is the useful direction: it keeps the guard
-    ///      honest if a future change ever loosens the `width0` or `growthGBps` bounds that make it dead.
-    function testFuzz_tierUpperEdge_isNeverZeroForAnyValidSchedule(uint96 width0, uint8 tierCount, uint16 growthGBps)
-        external
-    {
+    ///      honest if a future change ever loosens the `width0` or `tierWidthGrowthBps` bounds that make it dead.
+    function testFuzz_tierUpperEdge_isNeverZeroForAnyValidSchedule(
+        uint96 width0,
+        uint8 tierCount,
+        uint16 tierWidthGrowthBps
+    ) external {
         DynamicFeeConfig memory config = _defaultConfig();
         config.width0 = bound(width0, 1, type(uint96).max);
         config.tierCount = bound(tierCount, 1, 64);
-        config.growthGBps = bound(growthGBps, 0, 5000);
+        config.tierWidthGrowthBps = bound(tierWidthGrowthBps, 0, 5000);
 
         DynamicFeeFlatPriceCurve curve = _deploy(config);
 
@@ -164,14 +166,14 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     ///           edge(k-1)`. The piecewise fee walk charges each band by its edge span, so the public
     ///           width view must agree with it to the wei — a width computed from an independently
     ///           rounded `(1+g)^k` would drift from the real band and misreport what a depositor pays.
-    function testFuzz_tierLadder_invariants(uint256 width0, uint256 growthGBps, uint256 tierCount) external {
+    function testFuzz_tierLadder_invariants(uint256 width0, uint256 tierWidthGrowthBps, uint256 tierCount) external {
         width0 = bound(width0, 1, 1e30);
-        growthGBps = bound(growthGBps, 0, 100 * 10_000);
+        tierWidthGrowthBps = bound(tierWidthGrowthBps, 0, 100 * 10_000);
         tierCount = bound(tierCount, 1, dynamicFeeCurve.MAX_TIER_COUNT());
 
         DynamicFeeConfig memory config = _defaultConfig();
         config.width0 = width0;
-        config.growthGBps = growthGBps;
+        config.tierWidthGrowthBps = tierWidthGrowthBps;
         config.tierCount = tierCount;
 
         // An over-steep schedule is rejected at config time; that is the guarantee under test.
@@ -215,7 +217,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     function test_tierWidthAt_matchesEdgeDelta_onNonExactRatio() external {
         DynamicFeeConfig memory config = _defaultConfig();
         config.width0 = 1e18;
-        config.growthGBps = 1; // g = 0.0001 -> (1+g)^k is irrational in WAD
+        config.tierWidthGrowthBps = 1; // g = 0.0001 -> (1+g)^k is irrational in WAD
         config.tierCount = dynamicFeeCurve.MAX_TIER_COUNT();
         DynamicFeeFlatPriceCurve curve = _deploy(config);
 
@@ -229,7 +231,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         }
     }
 
-    /// @dev The exact deployed 13-tier production schedule (`width0 = 5000 TRUST`, `growthGBps = 2000`):
+    /// @dev The exact deployed 13-tier production schedule (`width0 = 5000 TRUST`, `tierWidthGrowthBps = 2000`):
     ///      pin the edges, the widths as edge deltas, and that the widths sum to the top edge. This is
     ///      the schedule that actually ships, so it gets an explicit fixture rather than only fuzz
     ///      coverage. Terminal tier 12 begins at the tier-11 edge (~197,903 TRUST); tier 12's own
@@ -237,7 +239,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     function test_deployedProductionSchedule_edgesWidthsAndSum() external {
         DynamicFeeConfig memory config = _defaultConfig();
         config.width0 = 5000e18;
-        config.growthGBps = 2000; // g = 0.2
+        config.tierWidthGrowthBps = 2000; // g = 0.2
         config.tierCount = 13;
         DynamicFeeFlatPriceCurve curve = _deploy(config);
 
@@ -327,12 +329,12 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         return _deploy(config);
     }
 
-    /// @dev `growthGBps = 0` degenerates to a flat ladder: every band is exactly `width0` wide and the
+    /// @dev `tierWidthGrowthBps = 0` degenerates to a flat ladder: every band is exactly `width0` wide and the
     ///      edges are plain multiples. The closed form divides by `g`, so this case is handled
     ///      explicitly rather than falling into a division by zero.
     function test_tierMath_zeroGrowthGivesConstantWidths() external {
         DynamicFeeConfig memory config = _defaultConfig();
-        config.growthGBps = 0;
+        config.tierWidthGrowthBps = 0;
         DynamicFeeFlatPriceCurve flatCurve = _deploy(config);
 
         for (uint256 k = 0; k < 5; ++k) {
@@ -350,7 +352,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         DynamicFeeConfig memory config = _defaultConfig();
         config.width0 = type(uint128).max;
         config.tierCount = dynamicFeeCurve.MAX_TIER_COUNT();
-        config.growthGBps = 100 * BPS; // 100x per tier, compounded 64 times
+        config.tierWidthGrowthBps = 100 * BPS; // 100x per tier, compounded 64 times
 
         vm.expectRevert(FixedPointMathLib.RPowOverflow.selector);
         this.deployWithConfig(config);
@@ -372,10 +374,10 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         assertEq(dynamicFeeCurve.depositFeeBps(100), 1000, "far tier caps at 10%");
     }
 
-    function test_withdrawalFeeBps_growsAndCaps() external view {
-        assertEq(dynamicFeeCurve.withdrawalFeeBps(0), 200, "tier 0 = base");
-        assertEq(dynamicFeeCurve.withdrawalFeeBps(2), 300, "tier 2");
-        assertEq(dynamicFeeCurve.withdrawalFeeBps(1000), 1000, "caps at 10%");
+    function test_redeemFeeBps_growsAndCaps() external view {
+        assertEq(dynamicFeeCurve.redeemFeeBps(0), 200, "tier 0 = base");
+        assertEq(dynamicFeeCurve.redeemFeeBps(2), 300, "tier 2");
+        assertEq(dynamicFeeCurve.redeemFeeBps(1000), 1000, "caps at 10%");
     }
 
     function test_quoteDepositFee_singleBand_usesBandRate() external {
@@ -521,10 +523,10 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     ///      how the old five-field `DepositRecorded` declaration in this file went stale unnoticed.
     function test_recordDeposit_emitsPerBandAndSummaryEvents() external {
         uint256 fee = dynamicFeeCurve.quoteDepositFee(T1, 15e18);
-        uint256 netStake = 15e18 - fee;
+        uint256 shares = 15e18 - fee;
 
         vm.recordLogs();
-        _recordDeposit(T1, alice, netStake, fee);
+        _recordDeposit(T1, alice, shares, fee);
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
         uint256 bandCount;
@@ -552,7 +554,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
                     uint256 accountTier,
                     uint256 accountAvgTier
                 ) = abi.decode(logs[i].data, (uint256, uint256, uint256, uint256, uint256));
-                assertEq(emittedStake, netStake, "summary carries the net stake");
+                assertEq(emittedStake, shares, "summary carries the net stake");
                 assertEq(emittedFee, fee, "summary carries the forwarded fee");
                 assertEq(sourceTier, 0, "the vault started in tier 0");
                 assertEq(accountTier, dynamicFeeCurve.userTier(T1, alice), "summary tier matches the stored bucket");
@@ -565,7 +567,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
 
         assertEq(bandCount, 2, "15e18 into an empty vault crosses tier 0 and tier 1");
         assertEq(summaryCount, 1, "exactly one summary event per deposit");
-        assertEq(bandStakeSum, netStake, "the band stakes reconstruct the deposit");
+        assertEq(bandStakeSum, shares, "the band stakes reconstruct the deposit");
         assertEq(bandFeeSum, fee, "the band fees reconstruct the forwarded fee exactly");
     }
 
@@ -595,7 +597,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         returns (uint256 tier0, uint256 tier1, uint256 tier2, uint256 tier3)
     {
         DynamicFeeConfig memory config = _defaultConfig();
-        config.fulcrumAlpha = alpha;
+        config.fulcrumAlphaBps = alpha;
         config.kernelSpread = sigma;
         config.depositToPriorTierBps = shareBps;
         DynamicFeeFlatPriceCurve c = _deploy(config);
@@ -668,7 +670,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     ///      receive and does not perturb the weights.
     function test_fulcrum_degenerateGuard_awardsNearestNotProtocol() external {
         DynamicFeeConfig memory config = _defaultConfig();
-        config.fulcrumAlpha = 3750; // dStar = (1 - 0.375) * 4 = 2.5 tiers from the source
+        config.fulcrumAlphaBps = 3750; // dStar = (1 - 0.375) * 4 = 2.5 tiers from the source
         config.kernelSpread = WAD + 1; // the tightest window `_setConfig` permits: ±1 tier
         DynamicFeeFlatPriceCurve c = _deploy(config);
         address dave = makeAddr("dave-degen");
@@ -706,7 +708,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         pool = bound(pool, 1, 1_000_000e18);
 
         DynamicFeeConfig memory config = _defaultConfig();
-        config.fulcrumAlpha = alpha;
+        config.fulcrumAlphaBps = alpha;
         config.kernelSpread = sigma;
         DynamicFeeFlatPriceCurve c = _deploy(config);
         address dave = makeAddr("dave-fuzz");
@@ -773,7 +775,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     ///      dave could route the same lump to carol simply by paying from a second wallet.
     function test_depositToPriorTier_targetsNearestOccupiedPriorTierEvenWhenItIsTheDepositors() external {
         DynamicFeeConfig memory config = _defaultConfig();
-        config.fulcrumAlpha = BPS;
+        config.fulcrumAlphaBps = BPS;
         config.kernelSpread = 4e18;
         config.depositToPriorTierBps = BPS; // 100% spike -> unambiguous routing target
         DynamicFeeFlatPriceCurve c = _deploy(config);
@@ -844,7 +846,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         pool = bound(pool, 1, 1_000_000e18);
 
         DynamicFeeConfig memory config = _defaultConfig();
-        config.fulcrumAlpha = alpha;
+        config.fulcrumAlphaBps = alpha;
         config.kernelSpread = sigma;
         config.depositToPriorTierBps = shareBps;
         DynamicFeeFlatPriceCurve c = _deploy(config);
@@ -875,7 +877,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         _recordDeposit(T1, alice, 3e18, 0); // tier 1
         _recordDeposit(T1, bob, 3e18, 0); // tier 1, vaultStake 21 (still tier 1)
 
-        // alice fully exits from tier 1; the withdrawal fee goes to the residual tier-1 holder (bob),
+        // alice fully exits from tier 1; the redeem fee goes to the residual tier-1 holder (bob),
         // and alice is excluded.
         _recordRedeem(T1, alice, 3e18, 0.3e18);
 
@@ -886,9 +888,9 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     }
 
     function test_recordRedeem_frontierPolicyRoutesToPriorTiers() external {
-        // Reconfigure to 100% frontier routing (withdrawalToFulcrumTiersBps = BPS).
+        // Reconfigure to 100% frontier routing (redeemToFulcrumTiersBps = BPS).
         DynamicFeeConfig memory config = _defaultConfig();
-        config.withdrawalToFulcrumTiersBps = BPS;
+        config.redeemToFulcrumTiersBps = BPS;
         dynamicFeeCurve = _deploy(config);
 
         // alice at tier 0, bob at tier 1.
@@ -934,7 +936,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
 
         // bob, the sole holder of tier 1, exits fully -> diamond slice orphaned -> nearest above = tier 2.
         vm.expectEmit(true, true, true, true);
-        emit DynamicFeeFlatPriceCurve.WithdrawalFeeRerouted(T1, 1, 2, 1e18);
+        emit DynamicFeeFlatPriceCurve.RedeemFeeRerouted(T1, 1, 2, 1e18);
         _recordRedeem(T1, bob, 8e18, 1e18);
 
         assertApproxEqAbs(dynamicFeeCurve.claimable(carol, T1), 1e18, 1e3, "tier-2 stayer earns the whale exit fee");
@@ -948,7 +950,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         _recordDeposit(T1, bob, 10e18, 0); // books tier 1 (sole, top occupied); vault -> 25
 
         vm.expectEmit(true, true, true, true);
-        emit DynamicFeeFlatPriceCurve.WithdrawalFeeRerouted(T1, 1, 0, 1e18);
+        emit DynamicFeeFlatPriceCurve.RedeemFeeRerouted(T1, 1, 0, 1e18);
         _recordRedeem(T1, bob, 10e18, 1e18);
 
         assertApproxEqAbs(dynamicFeeCurve.claimable(alice, T1), 1e18, 1e3, "tier-0 holder earns when nothing above");
@@ -1258,8 +1260,8 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     }
 
     /// @dev The redeem leg is explicitly NOT affected by a drawdown, and that asymmetry is load-bearing:
-    ///      exits are exactly the activity a drawdown produces, so if withdrawal fees also stranded
-    ///      themselves the mechanism would go dark precisely when it is busiest. Withdrawal fees key on
+    ///      exits are exactly the activity a drawdown produces, so if redeem fees also stranded
+    ///      themselves the mechanism would go dark precisely when it is busiest. Redeem fees key on
     ///      the exiter's own recorded bucket, not on where the vault happens to sit, so they keep paying
     ///      that tier's remaining occupants all the way down.
     function test_vaultFallsBelowItsHolders_redeemFeesStillReachTheExitersCohort() external {
@@ -1287,7 +1289,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         uint256 bobBefore = dynamicFeeCurve.claimable(bob, T1);
         uint256 protocolBefore = dynamicFeeCurve.protocolAccrued();
 
-        // Alice exits a little more. Her withdrawal fee must still find bob, who shares her bucket.
+        // Alice exits a little more. Her redeem fee must still find bob, who shares her bucket.
         uint256 exitFee = 1e18;
         _recordRedeem(T1, alice, 1e18, exitFee);
 
@@ -1308,16 +1310,16 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         dynamicFeeCurve.setTierFeeOverride(2, 750, 900);
 
         assertEq(dynamicFeeCurve.depositFeeBps(2), 750, "tier 2 deposit uses the override");
-        assertEq(dynamicFeeCurve.withdrawalFeeBps(2), 900, "tier 2 withdrawal uses the override");
+        assertEq(dynamicFeeCurve.redeemFeeBps(2), 900, "tier 2 redeem uses the override");
     }
 
     function test_setTierFeeOverride_getterExposesStoredOverride() external {
         dynamicFeeCurve.setTierFeeOverride(3, 111, 222);
 
-        (bool isSet, uint16 depositBps, uint16 withdrawalBps) = dynamicFeeCurve.tierFeeOverride(3);
+        (bool isSet, uint16 depositBps, uint16 redeemBps) = dynamicFeeCurve.tierFeeOverride(3);
         assertTrue(isSet, "override marked set");
         assertEq(depositBps, 111, "stored deposit bps");
-        assertEq(withdrawalBps, 222, "stored withdrawal bps");
+        assertEq(redeemBps, 222, "stored redeem bps");
     }
 
     /// @dev The core sparsity guarantee: overriding one tier leaves every other tier on the formula.
@@ -1328,9 +1330,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         for (uint256 tier = 0; tier < tierCount; ++tier) {
             if (tier == 2) continue;
             assertEq(dynamicFeeCurve.depositFeeBps(tier), 100 + tier * 50, "untouched tier keeps formulaic deposit");
-            assertEq(
-                dynamicFeeCurve.withdrawalFeeBps(tier), 200 + tier * 50, "untouched tier keeps formulaic withdrawal"
-            );
+            assertEq(dynamicFeeCurve.redeemFeeBps(tier), 200 + tier * 50, "untouched tier keeps formulaic redeem");
             (bool isSet,,) = dynamicFeeCurve.tierFeeOverride(tier);
             assertFalse(isSet, "untouched tier carries no override");
         }
@@ -1341,18 +1341,18 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         dynamicFeeCurve.setTierFeeOverride(1, 0, 0);
 
         assertEq(dynamicFeeCurve.depositFeeBps(1), 0, "explicit 0-bps deposit override");
-        assertEq(dynamicFeeCurve.withdrawalFeeBps(1), 0, "explicit 0-bps withdrawal override");
+        assertEq(dynamicFeeCurve.redeemFeeBps(1), 0, "explicit 0-bps redeem override");
         (bool isSet,,) = dynamicFeeCurve.tierFeeOverride(1);
         assertTrue(isSet, "0-bps is a real override, not 'unset'");
     }
 
     /// @dev The override replaces the formula rate but stays within the schedule's declared caps: it
-    ///      may set any rate up to `depositCapBps` / `withdrawalCapBps` (both 1000 here), not beyond.
+    ///      may set any rate up to `depositCapBps` / `redeemCapBps` (both 1000 here), not beyond.
     function test_setTierFeeOverride_maySetRateUpToTheCap() external {
         dynamicFeeCurve.setTierFeeOverride(0, 1000, 1000);
 
         assertEq(dynamicFeeCurve.depositFeeBps(0), 1000, "override may sit exactly at the deposit cap");
-        assertEq(dynamicFeeCurve.withdrawalFeeBps(0), 1000, "override may sit exactly at the withdrawal cap");
+        assertEq(dynamicFeeCurve.redeemFeeBps(0), 1000, "override may sit exactly at the redeem cap");
     }
 
     function test_setTierFeeOverride_revertsOnDepositBpsAboveCap() external {
@@ -1361,8 +1361,8 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         dynamicFeeCurve.setTierFeeOverride(0, 1001, 0);
     }
 
-    function test_setTierFeeOverride_revertsOnWithdrawalBpsAboveCap() external {
-        // withdrawalCapBps = 1000, so 1001 is out of range.
+    function test_setTierFeeOverride_revertsOnRedeemBpsAboveCap() external {
+        // redeemCapBps = 1000, so 1001 is out of range.
         vm.expectRevert(DynamicFeeFlatPriceCurve.DynamicFeeFlatPriceCurve_InvalidTierOverride.selector);
         dynamicFeeCurve.setTierFeeOverride(0, 0, 1001);
     }
@@ -1436,7 +1436,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         dynamicFeeCurve.clearTierFeeOverride(2);
 
         assertEq(dynamicFeeCurve.depositFeeBps(2), 200, "deposit back on the formula");
-        assertEq(dynamicFeeCurve.withdrawalFeeBps(2), 300, "withdrawal back on the formula");
+        assertEq(dynamicFeeCurve.redeemFeeBps(2), 300, "redeem back on the formula");
         (bool isSet,,) = dynamicFeeCurve.tierFeeOverride(2);
         assertFalse(isSet, "override cleared");
         assertEq(
@@ -1527,7 +1527,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     /// @dev The fulcrum position is a fraction of the span, so it must lie in `[0, BPS]`.
     function test_setConfig_revertsOnFulcrumAlphaAboveBps() external {
         DynamicFeeConfig memory config = _defaultConfig();
-        config.fulcrumAlpha = BPS + 1;
+        config.fulcrumAlphaBps = BPS + 1;
         vm.expectRevert(DynamicFeeFlatPriceCurve.DynamicFeeFlatPriceCurve_InvalidConfig.selector);
         dynamicFeeCurve.setConfig(config);
     }
@@ -1566,7 +1566,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         dynamicFeeCurve.setConfig(config);
 
         config = _defaultConfig();
-        config.growthGBps = 100 * BPS + 1;
+        config.tierWidthGrowthBps = 100 * BPS + 1;
         vm.expectRevert(DynamicFeeFlatPriceCurve.DynamicFeeFlatPriceCurve_InvalidConfig.selector);
         dynamicFeeCurve.setConfig(config);
     }
@@ -1593,9 +1593,9 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         assertEq(dynamicFeeCurve.tierOf(15e18), 0, "tierOf follows the new schedule (15 < new width0 20)");
     }
 
-    function test_setConfig_revertsOnWithdrawalShareAboveBps() external {
+    function test_setConfig_revertsOnRedeemShareAboveBps() external {
         DynamicFeeConfig memory config = _defaultConfig();
-        config.withdrawalToFulcrumTiersBps = BPS + 1;
+        config.redeemToFulcrumTiersBps = BPS + 1;
         vm.expectRevert(DynamicFeeFlatPriceCurve.DynamicFeeFlatPriceCurve_InvalidConfig.selector);
         dynamicFeeCurve.setConfig(config);
     }

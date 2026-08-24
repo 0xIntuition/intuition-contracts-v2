@@ -260,7 +260,7 @@ declare const MultiVaultAbi: readonly [{
     readonly type: "function";
     readonly name: "claimAtomWalletDepositFees";
     readonly inputs: readonly [{
-        readonly name: "termId";
+        readonly name: "atomId";
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }];
@@ -643,7 +643,7 @@ declare const MultiVaultAbi: readonly [{
     readonly type: "function";
     readonly name: "getAtomCreatedAt";
     readonly inputs: readonly [{
-        readonly name: "termId";
+        readonly name: "atomId";
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }];
@@ -657,7 +657,7 @@ declare const MultiVaultAbi: readonly [{
     readonly type: "function";
     readonly name: "getAtomCreator";
     readonly inputs: readonly [{
-        readonly name: "termId";
+        readonly name: "atomId";
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }];
@@ -886,7 +886,7 @@ declare const MultiVaultAbi: readonly [{
     readonly type: "function";
     readonly name: "getTripleIdFromCounterId";
     readonly inputs: readonly [{
-        readonly name: "counterId";
+        readonly name: "counterTripleId";
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }];
@@ -1256,7 +1256,7 @@ declare const MultiVaultAbi: readonly [{
     readonly type: "function";
     readonly name: "isAtom";
     readonly inputs: readonly [{
-        readonly name: "atomId";
+        readonly name: "termId";
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }];
@@ -1284,7 +1284,7 @@ declare const MultiVaultAbi: readonly [{
     readonly type: "function";
     readonly name: "isTermCreated";
     readonly inputs: readonly [{
-        readonly name: "id";
+        readonly name: "termId";
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }];
@@ -1322,7 +1322,7 @@ declare const MultiVaultAbi: readonly [{
     readonly type: "function";
     readonly name: "maxRedeem";
     readonly inputs: readonly [{
-        readonly name: "sender";
+        readonly name: "account";
         readonly type: "address";
         readonly internalType: "address";
     }, {
@@ -1409,7 +1409,7 @@ declare const MultiVaultAbi: readonly [{
         readonly type: "uint256";
         readonly internalType: "uint256";
     }, {
-        readonly name: "assetsAfterFixedFees";
+        readonly name: "feeBaseAssets";
         readonly type: "uint256";
         readonly internalType: "uint256";
     }, {
@@ -1487,7 +1487,7 @@ declare const MultiVaultAbi: readonly [{
         readonly type: "uint256";
         readonly internalType: "uint256";
     }, {
-        readonly name: "assetsAfterFixedFees";
+        readonly name: "feeBaseAssets";
         readonly type: "uint256";
         readonly internalType: "uint256";
     }, {
@@ -2049,7 +2049,7 @@ declare const MultiVaultAbi: readonly [{
         readonly indexed: true;
         readonly internalType: "address";
     }, {
-        readonly name: "amount";
+        readonly name: "feeAmount";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
@@ -2129,7 +2129,7 @@ declare const MultiVaultAbi: readonly [{
         readonly indexed: false;
         readonly internalType: "uint256";
     }, {
-        readonly name: "totalShares";
+        readonly name: "receiverSharesAfter";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
@@ -2269,7 +2269,7 @@ declare const MultiVaultAbi: readonly [{
         readonly indexed: true;
         readonly internalType: "address";
     }, {
-        readonly name: "amount";
+        readonly name: "feeAmount";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
@@ -2289,7 +2289,7 @@ declare const MultiVaultAbi: readonly [{
         readonly indexed: true;
         readonly internalType: "address";
     }, {
-        readonly name: "amount";
+        readonly name: "feeAmount";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
@@ -2304,7 +2304,7 @@ declare const MultiVaultAbi: readonly [{
         readonly indexed: true;
         readonly internalType: "address";
     }, {
-        readonly name: "receiver";
+        readonly name: "account";
         readonly type: "address";
         readonly indexed: true;
         readonly internalType: "address";
@@ -2324,17 +2324,17 @@ declare const MultiVaultAbi: readonly [{
         readonly indexed: false;
         readonly internalType: "uint256";
     }, {
-        readonly name: "totalShares";
+        readonly name: "accountSharesAfter";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
     }, {
-        readonly name: "assets";
+        readonly name: "assetsAfterFees";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
     }, {
-        readonly name: "fees";
+        readonly name: "totalFees";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
@@ -2638,7 +2638,7 @@ declare const MultiVaultAbi: readonly [{
     readonly type: "error";
     readonly name: "MultiVaultCore_AtomDoesNotExist";
     readonly inputs: readonly [{
-        readonly name: "termId";
+        readonly name: "atomId";
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }];
@@ -2658,7 +2658,7 @@ declare const MultiVaultAbi: readonly [{
     readonly type: "error";
     readonly name: "MultiVaultCore_TripleDoesNotExist";
     readonly inputs: readonly [{
-        readonly name: "termId";
+        readonly name: "tripleId";
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }];
@@ -2830,7 +2830,7 @@ declare const MultiVaultAbi: readonly [{
     readonly type: "error";
     readonly name: "MultiVault_TripleExists";
     readonly inputs: readonly [{
-        readonly name: "termId";
+        readonly name: "tripleId";
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }, {
@@ -3217,7 +3217,7 @@ declare const MultiVaultMigrationModeAbi: readonly [{
     readonly type: "function";
     readonly name: "claimAtomWalletDepositFees";
     readonly inputs: readonly [{
-        readonly name: "termId";
+        readonly name: "atomId";
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }];
@@ -3600,7 +3600,7 @@ declare const MultiVaultMigrationModeAbi: readonly [{
     readonly type: "function";
     readonly name: "getAtomCreatedAt";
     readonly inputs: readonly [{
-        readonly name: "termId";
+        readonly name: "atomId";
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }];
@@ -3614,7 +3614,7 @@ declare const MultiVaultMigrationModeAbi: readonly [{
     readonly type: "function";
     readonly name: "getAtomCreator";
     readonly inputs: readonly [{
-        readonly name: "termId";
+        readonly name: "atomId";
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }];
@@ -3843,7 +3843,7 @@ declare const MultiVaultMigrationModeAbi: readonly [{
     readonly type: "function";
     readonly name: "getTripleIdFromCounterId";
     readonly inputs: readonly [{
-        readonly name: "counterId";
+        readonly name: "counterTripleId";
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }];
@@ -4213,7 +4213,7 @@ declare const MultiVaultMigrationModeAbi: readonly [{
     readonly type: "function";
     readonly name: "isAtom";
     readonly inputs: readonly [{
-        readonly name: "atomId";
+        readonly name: "termId";
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }];
@@ -4241,7 +4241,7 @@ declare const MultiVaultMigrationModeAbi: readonly [{
     readonly type: "function";
     readonly name: "isTermCreated";
     readonly inputs: readonly [{
-        readonly name: "id";
+        readonly name: "termId";
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }];
@@ -4279,7 +4279,7 @@ declare const MultiVaultMigrationModeAbi: readonly [{
     readonly type: "function";
     readonly name: "maxRedeem";
     readonly inputs: readonly [{
-        readonly name: "sender";
+        readonly name: "account";
         readonly type: "address";
         readonly internalType: "address";
     }, {
@@ -4366,7 +4366,7 @@ declare const MultiVaultMigrationModeAbi: readonly [{
         readonly type: "uint256";
         readonly internalType: "uint256";
     }, {
-        readonly name: "assetsAfterFixedFees";
+        readonly name: "feeBaseAssets";
         readonly type: "uint256";
         readonly internalType: "uint256";
     }, {
@@ -4444,7 +4444,7 @@ declare const MultiVaultMigrationModeAbi: readonly [{
         readonly type: "uint256";
         readonly internalType: "uint256";
     }, {
-        readonly name: "assetsAfterFixedFees";
+        readonly name: "feeBaseAssets";
         readonly type: "uint256";
         readonly internalType: "uint256";
     }, {
@@ -5016,7 +5016,7 @@ declare const MultiVaultMigrationModeAbi: readonly [{
         readonly indexed: true;
         readonly internalType: "address";
     }, {
-        readonly name: "amount";
+        readonly name: "feeAmount";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
@@ -5096,7 +5096,7 @@ declare const MultiVaultMigrationModeAbi: readonly [{
         readonly indexed: false;
         readonly internalType: "uint256";
     }, {
-        readonly name: "totalShares";
+        readonly name: "receiverSharesAfter";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
@@ -5236,7 +5236,7 @@ declare const MultiVaultMigrationModeAbi: readonly [{
         readonly indexed: true;
         readonly internalType: "address";
     }, {
-        readonly name: "amount";
+        readonly name: "feeAmount";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
@@ -5256,7 +5256,7 @@ declare const MultiVaultMigrationModeAbi: readonly [{
         readonly indexed: true;
         readonly internalType: "address";
     }, {
-        readonly name: "amount";
+        readonly name: "feeAmount";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
@@ -5271,7 +5271,7 @@ declare const MultiVaultMigrationModeAbi: readonly [{
         readonly indexed: true;
         readonly internalType: "address";
     }, {
-        readonly name: "receiver";
+        readonly name: "account";
         readonly type: "address";
         readonly indexed: true;
         readonly internalType: "address";
@@ -5291,17 +5291,17 @@ declare const MultiVaultMigrationModeAbi: readonly [{
         readonly indexed: false;
         readonly internalType: "uint256";
     }, {
-        readonly name: "totalShares";
+        readonly name: "accountSharesAfter";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
     }, {
-        readonly name: "assets";
+        readonly name: "assetsAfterFees";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
     }, {
-        readonly name: "fees";
+        readonly name: "totalFees";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
@@ -5605,7 +5605,7 @@ declare const MultiVaultMigrationModeAbi: readonly [{
     readonly type: "error";
     readonly name: "MultiVaultCore_AtomDoesNotExist";
     readonly inputs: readonly [{
-        readonly name: "termId";
+        readonly name: "atomId";
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }];
@@ -5625,7 +5625,7 @@ declare const MultiVaultMigrationModeAbi: readonly [{
     readonly type: "error";
     readonly name: "MultiVaultCore_TripleDoesNotExist";
     readonly inputs: readonly [{
-        readonly name: "termId";
+        readonly name: "tripleId";
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }];
@@ -5801,7 +5801,7 @@ declare const MultiVaultMigrationModeAbi: readonly [{
     readonly type: "error";
     readonly name: "MultiVault_TripleExists";
     readonly inputs: readonly [{
-        readonly name: "termId";
+        readonly name: "tripleId";
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }, {
@@ -6090,7 +6090,7 @@ declare const FeeProxyAbi: readonly [{
         readonly type: "bytes[]";
         readonly internalType: "bytes[]";
     }, {
-        readonly name: "assets";
+        readonly name: "grossAssets";
         readonly type: "uint256[]";
         readonly internalType: "uint256[]";
     }, {
@@ -6125,7 +6125,7 @@ declare const FeeProxyAbi: readonly [{
         readonly type: "bytes[]";
         readonly internalType: "bytes[]";
     }, {
-        readonly name: "assets";
+        readonly name: "grossAssets";
         readonly type: "uint256[]";
         readonly internalType: "uint256[]";
     }, {
@@ -6172,7 +6172,7 @@ declare const FeeProxyAbi: readonly [{
         readonly type: "bytes32[]";
         readonly internalType: "bytes32[]";
     }, {
-        readonly name: "assets";
+        readonly name: "grossAssets";
         readonly type: "uint256[]";
         readonly internalType: "uint256[]";
     }, {
@@ -6215,7 +6215,7 @@ declare const FeeProxyAbi: readonly [{
         readonly type: "uint256[]";
         readonly internalType: "uint256[]";
     }, {
-        readonly name: "assets";
+        readonly name: "grossAssets";
         readonly type: "uint256[]";
         readonly internalType: "uint256[]";
     }, {
@@ -6476,11 +6476,11 @@ declare const FeeProxyAbi: readonly [{
         readonly internalType: "uint256";
     }];
     readonly outputs: readonly [{
-        readonly name: "fee";
+        readonly name: "affiliateFee";
         readonly type: "uint256";
         readonly internalType: "uint256";
     }, {
-        readonly name: "forwarded";
+        readonly name: "forwardedAssets";
         readonly type: "uint256";
         readonly internalType: "uint256";
     }];
@@ -6498,11 +6498,11 @@ declare const FeeProxyAbi: readonly [{
         readonly internalType: "uint256";
     }];
     readonly outputs: readonly [{
-        readonly name: "fee";
+        readonly name: "affiliateFee";
         readonly type: "uint256";
         readonly internalType: "uint256";
     }, {
-        readonly name: "forwarded";
+        readonly name: "forwardedAssets";
         readonly type: "uint256";
         readonly internalType: "uint256";
     }];
@@ -6681,7 +6681,7 @@ declare const FeeProxyAbi: readonly [{
     readonly type: "function";
     readonly name: "updateFeeRecipient";
     readonly inputs: readonly [{
-        readonly name: "recipient";
+        readonly name: "feeRecipient";
         readonly type: "address";
         readonly internalType: "address";
     }];
@@ -6701,7 +6701,7 @@ declare const FeeProxyAbi: readonly [{
         readonly indexed: true;
         readonly internalType: "address";
     }, {
-        readonly name: "amount";
+        readonly name: "affiliateFee";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
@@ -6862,7 +6862,7 @@ declare const FeeProxyAbi: readonly [{
         readonly indexed: false;
         readonly internalType: "uint256";
     }, {
-        readonly name: "totalFee";
+        readonly name: "affiliateFee";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
@@ -6897,7 +6897,7 @@ declare const FeeProxyAbi: readonly [{
         readonly indexed: false;
         readonly internalType: "uint256";
     }, {
-        readonly name: "totalFee";
+        readonly name: "affiliateFee";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
@@ -6932,7 +6932,7 @@ declare const FeeProxyAbi: readonly [{
         readonly indexed: false;
         readonly internalType: "uint256";
     }, {
-        readonly name: "totalFee";
+        readonly name: "affiliateFee";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
@@ -6967,7 +6967,7 @@ declare const FeeProxyAbi: readonly [{
         readonly indexed: false;
         readonly internalType: "uint256";
     }, {
-        readonly name: "fee";
+        readonly name: "affiliateFee";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
@@ -7072,7 +7072,7 @@ declare const FeeProxyAbi: readonly [{
         readonly indexed: true;
         readonly internalType: "address";
     }, {
-        readonly name: "amount";
+        readonly name: "registrationFee";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
@@ -7263,7 +7263,7 @@ declare const FeeProxyAbi: readonly [{
         readonly type: "uint256";
         readonly internalType: "uint256";
     }, {
-        readonly name: "gross";
+        readonly name: "grossAssets";
         readonly type: "uint256";
         readonly internalType: "uint256";
     }];
@@ -7363,7 +7363,7 @@ declare const FeeProxyAbi: readonly [{
     readonly type: "error";
     readonly name: "FeeProxy_RegistrationFeeMismatch";
     readonly inputs: readonly [{
-        readonly name: "sent";
+        readonly name: "supplied";
         readonly type: "uint256";
         readonly internalType: "uint256";
     }, {
@@ -7385,7 +7385,7 @@ declare const FeeProxyAbi: readonly [{
     readonly inputs: readonly [];
 }, {
     readonly type: "error";
-    readonly name: "FeeProxy_ZeroValue";
+    readonly name: "FeeProxy_ZeroAssets";
     readonly inputs: readonly [];
 }, {
     readonly type: "error";
@@ -11902,6 +11902,16 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
     readonly stateMutability: "view";
 }, {
     readonly type: "function";
+    readonly name: "MAX_REDEEM_CAP_BPS";
+    readonly inputs: readonly [];
+    readonly outputs: readonly [{
+        readonly name: "";
+        readonly type: "uint256";
+        readonly internalType: "uint256";
+    }];
+    readonly stateMutability: "view";
+}, {
+    readonly type: "function";
     readonly name: "MAX_SHARES";
     readonly inputs: readonly [];
     readonly outputs: readonly [{
@@ -11913,16 +11923,6 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
 }, {
     readonly type: "function";
     readonly name: "MAX_TIER_COUNT";
-    readonly inputs: readonly [];
-    readonly outputs: readonly [{
-        readonly name: "";
-        readonly type: "uint256";
-        readonly internalType: "uint256";
-    }];
-    readonly stateMutability: "view";
-}, {
-    readonly type: "function";
-    readonly name: "MAX_WITHDRAWAL_CAP_BPS";
     readonly inputs: readonly [];
     readonly outputs: readonly [{
         readonly name: "";
@@ -12126,20 +12126,6 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
     readonly stateMutability: "view";
 }, {
     readonly type: "function";
-    readonly name: "earned";
-    readonly inputs: readonly [{
-        readonly name: "user";
-        readonly type: "address";
-        readonly internalType: "address";
-    }];
-    readonly outputs: readonly [{
-        readonly name: "amount";
-        readonly type: "uint256";
-        readonly internalType: "uint256";
-    }];
-    readonly stateMutability: "view";
-}, {
-    readonly type: "function";
     readonly name: "getConfig";
     readonly inputs: readonly [];
     readonly outputs: readonly [{
@@ -12155,7 +12141,7 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "growthGBps";
+            readonly name: "tierWidthGrowthBps";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
@@ -12171,7 +12157,7 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "fulcrumAlpha";
+            readonly name: "fulcrumAlphaBps";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
@@ -12179,19 +12165,19 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "withdrawalBaseBps";
+            readonly name: "redeemBaseBps";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "withdrawalGrowthBps";
+            readonly name: "redeemGrowthBps";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "withdrawalCapBps";
+            readonly name: "redeemCapBps";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "withdrawalToFulcrumTiersBps";
+            readonly name: "redeemToFulcrumTiersBps";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
@@ -12253,7 +12239,7 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "growthGBps";
+            readonly name: "tierWidthGrowthBps";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
@@ -12269,7 +12255,7 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "fulcrumAlpha";
+            readonly name: "fulcrumAlphaBps";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
@@ -12277,19 +12263,19 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "withdrawalBaseBps";
+            readonly name: "redeemBaseBps";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "withdrawalGrowthBps";
+            readonly name: "redeemGrowthBps";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "withdrawalCapBps";
+            readonly name: "redeemCapBps";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "withdrawalToFulcrumTiersBps";
+            readonly name: "redeemToFulcrumTiersBps";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
@@ -12568,7 +12554,7 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
         readonly type: "address";
         readonly internalType: "address";
     }, {
-        readonly name: "netStake";
+        readonly name: "shares";
         readonly type: "uint256";
         readonly internalType: "uint256";
     }];
@@ -12586,12 +12572,26 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
         readonly type: "address";
         readonly internalType: "address";
     }, {
-        readonly name: "withdrawnStake";
+        readonly name: "shares";
         readonly type: "uint256";
         readonly internalType: "uint256";
     }];
     readonly outputs: readonly [];
     readonly stateMutability: "payable";
+}, {
+    readonly type: "function";
+    readonly name: "redeemFeeBps";
+    readonly inputs: readonly [{
+        readonly name: "tier";
+        readonly type: "uint256";
+        readonly internalType: "uint256";
+    }];
+    readonly outputs: readonly [{
+        readonly name: "";
+        readonly type: "uint256";
+        readonly internalType: "uint256";
+    }];
+    readonly stateMutability: "view";
 }, {
     readonly type: "function";
     readonly name: "renounceOwnership";
@@ -12606,7 +12606,7 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }, {
-        readonly name: "user";
+        readonly name: "account";
         readonly type: "address";
         readonly internalType: "address";
     }];
@@ -12632,7 +12632,7 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "growthGBps";
+            readonly name: "tierWidthGrowthBps";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
@@ -12648,7 +12648,7 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "fulcrumAlpha";
+            readonly name: "fulcrumAlphaBps";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
@@ -12656,19 +12656,19 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "withdrawalBaseBps";
+            readonly name: "redeemBaseBps";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "withdrawalGrowthBps";
+            readonly name: "redeemGrowthBps";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "withdrawalCapBps";
+            readonly name: "redeemCapBps";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "withdrawalToFulcrumTiersBps";
+            readonly name: "redeemToFulcrumTiersBps";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
@@ -12695,7 +12695,7 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
         readonly type: "uint16";
         readonly internalType: "uint16";
     }, {
-        readonly name: "newWithdrawalFeeBps";
+        readonly name: "newRedeemFeeBps";
         readonly type: "uint16";
         readonly internalType: "uint16";
     }];
@@ -12732,7 +12732,7 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
         readonly type: "uint16";
         readonly internalType: "uint16";
     }, {
-        readonly name: "withdrawalFeeBps";
+        readonly name: "redeemFeeBps";
         readonly type: "uint16";
         readonly internalType: "uint16";
     }];
@@ -12773,7 +12773,7 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
     readonly type: "function";
     readonly name: "tierUpperEdge";
     readonly inputs: readonly [{
-        readonly name: "k";
+        readonly name: "tier";
         readonly type: "uint256";
         readonly internalType: "uint256";
     }];
@@ -12787,7 +12787,7 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
     readonly type: "function";
     readonly name: "tierWidthAt";
     readonly inputs: readonly [{
-        readonly name: "k";
+        readonly name: "tier";
         readonly type: "uint256";
         readonly internalType: "uint256";
     }];
@@ -12815,7 +12815,7 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }, {
-        readonly name: "user";
+        readonly name: "account";
         readonly type: "address";
         readonly internalType: "address";
     }];
@@ -12833,7 +12833,7 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }, {
-        readonly name: "user";
+        readonly name: "account";
         readonly type: "address";
         readonly internalType: "address";
     }];
@@ -12851,7 +12851,7 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }, {
-        readonly name: "user";
+        readonly name: "account";
         readonly type: "address";
         readonly internalType: "address";
     }];
@@ -12871,20 +12871,6 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
     }];
     readonly outputs: readonly [{
         readonly name: "stake";
-        readonly type: "uint256";
-        readonly internalType: "uint256";
-    }];
-    readonly stateMutability: "view";
-}, {
-    readonly type: "function";
-    readonly name: "withdrawalFeeBps";
-    readonly inputs: readonly [{
-        readonly name: "tier";
-        readonly type: "uint256";
-        readonly internalType: "uint256";
-    }];
-    readonly outputs: readonly [{
-        readonly name: "";
         readonly type: "uint256";
         readonly internalType: "uint256";
     }];
@@ -12918,12 +12904,12 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
         readonly indexed: false;
         readonly internalType: "uint256";
     }, {
-        readonly name: "growthGBps";
+        readonly name: "tierWidthGrowthBps";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
     }, {
-        readonly name: "fulcrumAlpha";
+        readonly name: "fulcrumAlphaBps";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
@@ -12988,7 +12974,7 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
         readonly indexed: true;
         readonly internalType: "address";
     }, {
-        readonly name: "netStake";
+        readonly name: "shares";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
@@ -13096,6 +13082,31 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
     readonly anonymous: false;
 }, {
     readonly type: "event";
+    readonly name: "RedeemFeeRerouted";
+    readonly inputs: readonly [{
+        readonly name: "termId";
+        readonly type: "bytes32";
+        readonly indexed: true;
+        readonly internalType: "bytes32";
+    }, {
+        readonly name: "exitTier";
+        readonly type: "uint256";
+        readonly indexed: false;
+        readonly internalType: "uint256";
+    }, {
+        readonly name: "recipientTier";
+        readonly type: "uint256";
+        readonly indexed: false;
+        readonly internalType: "uint256";
+    }, {
+        readonly name: "amount";
+        readonly type: "uint256";
+        readonly indexed: false;
+        readonly internalType: "uint256";
+    }];
+    readonly anonymous: false;
+}, {
+    readonly type: "event";
     readonly name: "RedeemRecorded";
     readonly inputs: readonly [{
         readonly name: "termId";
@@ -13108,7 +13119,7 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
         readonly indexed: true;
         readonly internalType: "address";
     }, {
-        readonly name: "withdrawnStake";
+        readonly name: "shares";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
@@ -13148,35 +13159,10 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
         readonly indexed: false;
         readonly internalType: "uint16";
     }, {
-        readonly name: "withdrawalFeeBps";
+        readonly name: "redeemFeeBps";
         readonly type: "uint16";
         readonly indexed: false;
         readonly internalType: "uint16";
-    }];
-    readonly anonymous: false;
-}, {
-    readonly type: "event";
-    readonly name: "WithdrawalFeeRerouted";
-    readonly inputs: readonly [{
-        readonly name: "termId";
-        readonly type: "bytes32";
-        readonly indexed: true;
-        readonly internalType: "bytes32";
-    }, {
-        readonly name: "exitTier";
-        readonly type: "uint256";
-        readonly indexed: false;
-        readonly internalType: "uint256";
-    }, {
-        readonly name: "recipientTier";
-        readonly type: "uint256";
-        readonly indexed: false;
-        readonly internalType: "uint256";
-    }, {
-        readonly name: "amount";
-        readonly type: "uint256";
-        readonly indexed: false;
-        readonly internalType: "uint256";
     }];
     readonly anonymous: false;
 }, {
@@ -16093,7 +16079,7 @@ declare const MultiVaultLibAbi: readonly [{
         readonly type: "uint256";
         readonly internalType: "uint256";
     }, {
-        readonly name: "assetsAfterFixedFees";
+        readonly name: "feeBaseAssets";
         readonly type: "uint256";
         readonly internalType: "uint256";
     }, {
@@ -16127,7 +16113,7 @@ declare const MultiVaultLibAbi: readonly [{
         readonly type: "uint256";
         readonly internalType: "uint256";
     }, {
-        readonly name: "assetsAfterMinSharesCost";
+        readonly name: "feeBaseAssets";
         readonly type: "uint256";
         readonly internalType: "uint256";
     }, {
@@ -16179,7 +16165,7 @@ declare const MultiVaultLibAbi: readonly [{
         readonly type: "uint256";
         readonly internalType: "uint256";
     }, {
-        readonly name: "assetsAfterFixedFees";
+        readonly name: "feeBaseAssets";
         readonly type: "uint256";
         readonly internalType: "uint256";
     }, {
@@ -16364,7 +16350,7 @@ declare const MultiVaultLibAbi: readonly [{
     readonly type: "function";
     readonly name: "maxRedeem";
     readonly inputs: readonly [{
-        readonly name: "sender";
+        readonly name: "account";
         readonly type: "address";
         readonly internalType: "address";
     }, {
@@ -16467,7 +16453,7 @@ declare const MultiVaultLibAbi: readonly [{
         readonly indexed: true;
         readonly internalType: "address";
     }, {
-        readonly name: "amount";
+        readonly name: "feeAmount";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
@@ -16512,7 +16498,7 @@ declare const MultiVaultLibAbi: readonly [{
         readonly indexed: false;
         readonly internalType: "uint256";
     }, {
-        readonly name: "totalShares";
+        readonly name: "receiverSharesAfter";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
@@ -16587,7 +16573,7 @@ declare const MultiVaultLibAbi: readonly [{
         readonly indexed: true;
         readonly internalType: "address";
     }, {
-        readonly name: "amount";
+        readonly name: "feeAmount";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
@@ -16602,7 +16588,7 @@ declare const MultiVaultLibAbi: readonly [{
         readonly indexed: true;
         readonly internalType: "address";
     }, {
-        readonly name: "receiver";
+        readonly name: "account";
         readonly type: "address";
         readonly indexed: true;
         readonly internalType: "address";
@@ -16622,17 +16608,17 @@ declare const MultiVaultLibAbi: readonly [{
         readonly indexed: false;
         readonly internalType: "uint256";
     }, {
-        readonly name: "totalShares";
+        readonly name: "accountSharesAfter";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
     }, {
-        readonly name: "assets";
+        readonly name: "assetsAfterFees";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
     }, {
-        readonly name: "fees";
+        readonly name: "totalFees";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
@@ -16776,7 +16762,7 @@ declare const MultiVaultLibAbi: readonly [{
     readonly type: "error";
     readonly name: "MultiVaultCore_TripleDoesNotExist";
     readonly inputs: readonly [{
-        readonly name: "termId";
+        readonly name: "tripleId";
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }];
@@ -16916,7 +16902,7 @@ declare const MultiVaultLibAbi: readonly [{
     readonly type: "error";
     readonly name: "MultiVault_TripleExists";
     readonly inputs: readonly [{
-        readonly name: "termId";
+        readonly name: "tripleId";
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }, {

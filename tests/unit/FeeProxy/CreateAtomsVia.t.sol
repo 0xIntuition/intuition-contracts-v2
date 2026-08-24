@@ -114,7 +114,7 @@ contract CreateAtomsViaTest is FeeProxyBaseTest {
 
         vm.deal(users.alice, 2 ether);
         vm.startPrank(users.alice);
-        vm.expectRevert(IFeeProxy.FeeProxy_ZeroValue.selector);
+        vm.expectRevert(IFeeProxy.FeeProxy_ZeroAssets.selector);
         feeProxy.createAtomsVia{ value: 2 ether }(affiliate, atomDatas, assets, _looseFeeGuard());
         vm.stopPrank();
     }

@@ -329,7 +329,7 @@ export const FeeProxyAbi = [
         "internalType": "bytes[]"
       },
       {
-        "name": "assets",
+        "name": "grossAssets",
         "type": "uint256[]",
         "internalType": "uint256[]"
       },
@@ -375,7 +375,7 @@ export const FeeProxyAbi = [
         "internalType": "bytes[]"
       },
       {
-        "name": "assets",
+        "name": "grossAssets",
         "type": "uint256[]",
         "internalType": "uint256[]"
       },
@@ -436,7 +436,7 @@ export const FeeProxyAbi = [
         "internalType": "bytes32[]"
       },
       {
-        "name": "assets",
+        "name": "grossAssets",
         "type": "uint256[]",
         "internalType": "uint256[]"
       },
@@ -492,7 +492,7 @@ export const FeeProxyAbi = [
         "internalType": "uint256[]"
       },
       {
-        "name": "assets",
+        "name": "grossAssets",
         "type": "uint256[]",
         "internalType": "uint256[]"
       },
@@ -834,12 +834,12 @@ export const FeeProxyAbi = [
     ],
     "outputs": [
       {
-        "name": "fee",
+        "name": "affiliateFee",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "forwarded",
+        "name": "forwardedAssets",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -863,12 +863,12 @@ export const FeeProxyAbi = [
     ],
     "outputs": [
       {
-        "name": "fee",
+        "name": "affiliateFee",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "forwarded",
+        "name": "forwardedAssets",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -1101,7 +1101,7 @@ export const FeeProxyAbi = [
     "name": "updateFeeRecipient",
     "inputs": [
       {
-        "name": "recipient",
+        "name": "feeRecipient",
         "type": "address",
         "internalType": "address"
       }
@@ -1126,7 +1126,7 @@ export const FeeProxyAbi = [
         "internalType": "address"
       },
       {
-        "name": "amount",
+        "name": "affiliateFee",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -1330,7 +1330,7 @@ export const FeeProxyAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "totalFee",
+        "name": "affiliateFee",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -1373,7 +1373,7 @@ export const FeeProxyAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "totalFee",
+        "name": "affiliateFee",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -1416,7 +1416,7 @@ export const FeeProxyAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "totalFee",
+        "name": "affiliateFee",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -1459,7 +1459,7 @@ export const FeeProxyAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "fee",
+        "name": "affiliateFee",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -1592,7 +1592,7 @@ export const FeeProxyAbi = [
         "internalType": "address"
       },
       {
-        "name": "amount",
+        "name": "registrationFee",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -1840,7 +1840,7 @@ export const FeeProxyAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "gross",
+        "name": "grossAssets",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -1973,7 +1973,7 @@ export const FeeProxyAbi = [
     "name": "FeeProxy_RegistrationFeeMismatch",
     "inputs": [
       {
-        "name": "sent",
+        "name": "supplied",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -2002,7 +2002,7 @@ export const FeeProxyAbi = [
   },
   {
     "type": "error",
-    "name": "FeeProxy_ZeroValue",
+    "name": "FeeProxy_ZeroAssets",
     "inputs": []
   },
   {

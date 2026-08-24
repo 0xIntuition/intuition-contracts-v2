@@ -11,7 +11,7 @@ import { DynamicFeeConfig } from "src/interfaces/IDynamicFeeFlatPriceCurve.sol";
 ///         vault-level payout floor behind them.
 ///
 ///         Each test is written to fail if its guard is removed:
-///           - the immutable deposit/withdrawal cap ceilings, which bound the configuration space so
+///           - the immutable deposit/redeem cap ceilings, which bound the configuration space so
 ///             no stored schedule can consume a deposit or a redemption;
 ///           - the read-time clamp that applies the LIVE cap to a stored per-tier override, so that
 ///             lowering a cap tightens every tier rather than leaving overridden tiers at the old rate;
@@ -32,11 +32,11 @@ contract CurveFeeGuardrailsTest is BaseTest {
     /*              CAP CEILINGS (CONFIG SPACE)            */
     /* =================================================== */
 
-    /// @dev A withdrawal cap above the immutable ceiling must be unstorable. Guard: the
-    ///      `MAX_WITHDRAWAL_CAP_BPS` bound in `_setConfig`. Removing it lets the schedule through.
-    function test_setConfig_revertsWhenWithdrawalCapExceedsCeiling() external {
+    /// @dev A redeem cap above the immutable ceiling must be unstorable. Guard: the
+    ///      `MAX_REDEEM_CAP_BPS` bound in `_setConfig`. Removing it lets the schedule through.
+    function test_setConfig_revertsWhenRedeemCapExceedsCeiling() external {
         DynamicFeeConfig memory cfg = _config();
-        cfg.withdrawalCapBps = uint16(dynamicFeeCurve.MAX_WITHDRAWAL_CAP_BPS() + 1);
+        cfg.redeemCapBps = uint16(dynamicFeeCurve.MAX_REDEEM_CAP_BPS() + 1);
 
         vm.startPrank(dynamicFeeCurve.owner());
         vm.expectRevert(
@@ -60,11 +60,11 @@ contract CurveFeeGuardrailsTest is BaseTest {
     }
 
     /// @dev The schedule that the round-2 proof of concept used to zero a redeemer's payout — a 99%
-    ///      withdrawal rate inside a `BPS`-wide cap — must now be unreachable at configuration time.
+    ///      redeem rate inside a `BPS`-wide cap — must now be unreachable at configuration time.
     function test_setConfig_rejectsScheduleCapableOfZeroingAPayout() external {
         DynamicFeeConfig memory cfg = _config();
-        cfg.withdrawalCapBps = 10_000;
-        cfg.withdrawalBaseBps = 9900;
+        cfg.redeemCapBps = 10_000;
+        cfg.redeemBaseBps = 9900;
 
         vm.startPrank(dynamicFeeCurve.owner());
         vm.expectRevert(
@@ -76,7 +76,7 @@ contract CurveFeeGuardrailsTest is BaseTest {
 
     /// @dev A tier override may never be set above the live cap either.
     function test_setTierFeeOverride_revertsAboveLiveCap() external {
-        uint256 cap = _config().withdrawalCapBps;
+        uint256 cap = _config().redeemCapBps;
 
         vm.startPrank(dynamicFeeCurve.owner());
         vm.expectRevert(
@@ -91,13 +91,13 @@ contract CurveFeeGuardrailsTest is BaseTest {
     /* =================================================== */
 
     /// @dev Lowering a cap must tighten a tier that already carries an override. Guard: the read-time
-    ///      clamp in `_withdrawalFeeBps`. With the clamp removed the override survives the reduction
+    ///      clamp in `_redeemFeeBps`. With the clamp removed the override survives the reduction
     ///      and this assertion fails, which is what makes this test gating rather than decorative.
-    function test_loweringWithdrawalCap_tightensAnExistingTierOverride() external {
+    function test_loweringRedeemCap_tightensAnExistingTierOverride() external {
         bytes32 atomId = _atom("clamp-withdraw");
         DynamicFeeConfig memory cfg = _config();
 
-        uint16 highRate = uint16(cfg.withdrawalCapBps);
+        uint16 highRate = uint16(cfg.redeemCapBps);
         vm.startPrank(dynamicFeeCurve.owner());
         dynamicFeeCurve.setTierFeeOverride(0, 0, highRate);
         vm.stopPrank();
@@ -107,8 +107,8 @@ contract CurveFeeGuardrailsTest is BaseTest {
 
         // Tighten the schedule to a strictly lower cap.
         uint16 loweredCap = highRate / 2;
-        cfg.withdrawalCapBps = loweredCap;
-        if (cfg.withdrawalBaseBps > loweredCap) cfg.withdrawalBaseBps = loweredCap;
+        cfg.redeemCapBps = loweredCap;
+        if (cfg.redeemBaseBps > loweredCap) cfg.redeemBaseBps = loweredCap;
         vm.startPrank(dynamicFeeCurve.owner());
         dynamicFeeCurve.setConfig(cfg);
         vm.stopPrank();

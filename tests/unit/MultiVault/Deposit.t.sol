@@ -175,7 +175,7 @@ contract DepositTest is BaseTest {
 
         // Counter vault on the non-default curve holds bob's shares plus the min-share seed for itself.
         // The min-share seed for the counter side is the same minShare burned to BURN_ADDRESS as the
-        // calc path's _isNewVault branch deducted from assetsAfterMinSharesCost.
+        // calc path's _isNewVault branch deducted from feeBaseAssets.
         (, uint256 counterTotalShares) = protocol.multiVault.getVault(counterId, nonDefaultCurve);
         assertEq(counterTotalShares, shares + minShare, "counter non-default totalShares == bob + minShare seed");
         assertEq(
@@ -284,7 +284,7 @@ contract DepositTest is BaseTest {
     }
 
     /// @dev Floor for fuzz `assets`: must clear both `minDeposit` and the 2*minShare bootstrap cost
-    ///      that the triple calc path deducts from `assetsAfterMinSharesCost` for a new vault.
+    ///      that the triple calc path deducts from `feeBaseAssets` for a new vault.
     function _minAssetsForBootstrap(uint256 minShare) internal view returns (uint256) {
         uint256 minDeposit = protocol.multiVault.getGeneralConfig().minDeposit;
         uint256 floor = minShare * 2 + 1;

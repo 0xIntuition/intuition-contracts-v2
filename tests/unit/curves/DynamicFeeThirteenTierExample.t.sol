@@ -57,27 +57,27 @@ contract DynamicFeeThirteenTierExampleTest is Test {
     /* =================================================== */
 
     /// @notice The 13-tier default schedule.
-    /// @dev    `width0 = 1000 TRUST`, `growthG = 0.5` (growthGBps = 5000) compounds each band to 1.5x
+    /// @dev    `width0 = 1000 TRUST`, `growthG = 0.5` (tierWidthGrowthBps = 5000) compounds each band to 1.5x
     ///         the one below it — widths 1000, 1500, 2250, 3375, ... — giving the cumulative edges
-    ///         asserted in {test_thirteenTierConfig_tierEdges}. Deposit fee 1% + 0.5%/tier, withdrawal fee
+    ///         asserted in {test_thirteenTierConfig_tierEdges}. Deposit fee 1% + 0.5%/tier, redeem fee
     ///         2% + 0.5%/tier, both capped at 10% (the cap never binds inside 13 tiers — the
     ///         schedule is fully expressed by the formula). Fee distribution: triangular fulcrum kernel,
     ///         alpha = BPS, sigma = 4e18 (the nearest-first window, ~50/33/17);
-    ///         withdrawal fees route entirely to the leaver's own tier (pure diamond-hands).
+    ///         redeem fees route entirely to the leaver's own tier (pure diamond-hands).
     function _thirteenTierDefaultConfig() internal pure returns (DynamicFeeConfig memory config) {
         config = DynamicFeeConfig({
             width0: 1000e18,
             tierCount: TIER_COUNT,
-            growthGBps: 5000,
+            tierWidthGrowthBps: 5000,
             depositBaseBps: 100,
             depositGrowthBps: 50,
             depositCapBps: 1000,
-            fulcrumAlpha: 10_000,
+            fulcrumAlphaBps: 10_000,
             kernelSpread: 4e18,
-            withdrawalBaseBps: 200,
-            withdrawalGrowthBps: 50,
-            withdrawalCapBps: 1000,
-            withdrawalToFulcrumTiersBps: 0,
+            redeemBaseBps: 200,
+            redeemGrowthBps: 50,
+            redeemCapBps: 1000,
+            redeemToFulcrumTiersBps: 0,
             depositToPriorTierBps: 0,
             minEligibleTierStake: 0
         });
@@ -160,12 +160,12 @@ contract DynamicFeeThirteenTierExampleTest is Test {
     function test_thirteenTierConfig_formulaicFeeSchedule() external view {
         for (uint256 tier = 0; tier < TIER_COUNT; ++tier) {
             assertEq(dynamicFeeCurve.depositFeeBps(tier), 100 + tier * 50, "deposit fee = 1% + 0.5%/tier");
-            assertEq(dynamicFeeCurve.withdrawalFeeBps(tier), 200 + tier * 50, "withdrawal fee = 2% + 0.5%/tier");
+            assertEq(dynamicFeeCurve.redeemFeeBps(tier), 200 + tier * 50, "redeem fee = 2% + 0.5%/tier");
         }
         // Endpoints, spelled out: 1% -> 7% in, 2% -> 8% out.
         assertEq(dynamicFeeCurve.depositFeeBps(0), 100, "tier 0 deposit = 1%");
         assertEq(dynamicFeeCurve.depositFeeBps(TOP_TIER), 700, "tier 12 deposit = 7% (formula)");
-        assertEq(dynamicFeeCurve.withdrawalFeeBps(TOP_TIER), 800, "tier 12 withdrawal = 8% (formula)");
+        assertEq(dynamicFeeCurve.redeemFeeBps(TOP_TIER), 800, "tier 12 redeem = 8% (formula)");
     }
 
     /// @dev The worked example's single override: the terminal tier is re-priced to a flat 10%/10%.
@@ -173,11 +173,7 @@ contract DynamicFeeThirteenTierExampleTest is Test {
         _applyThirteenTierOverrides(dynamicFeeCurve);
 
         assertEq(dynamicFeeCurve.depositFeeBps(TOP_TIER), OVERRIDDEN_DEPOSIT_BPS, "top tier deposit overridden to 10%");
-        assertEq(
-            dynamicFeeCurve.withdrawalFeeBps(TOP_TIER),
-            OVERRIDDEN_WITHDRAWAL_BPS,
-            "top tier withdrawal overridden to 10%"
-        );
+        assertEq(dynamicFeeCurve.redeemFeeBps(TOP_TIER), OVERRIDDEN_WITHDRAWAL_BPS, "top tier redeem overridden to 10%");
     }
 
     /// @dev The sparsity guarantee at full 13-tier width: the override touches tier 12 and NOTHING
@@ -188,7 +184,7 @@ contract DynamicFeeThirteenTierExampleTest is Test {
         for (uint256 tier = 0; tier < TIER_COUNT; ++tier) {
             if (tier == OVERRIDDEN_TIER) continue;
             assertEq(dynamicFeeCurve.depositFeeBps(tier), 100 + tier * 50, "other tier keeps formulaic deposit");
-            assertEq(dynamicFeeCurve.withdrawalFeeBps(tier), 200 + tier * 50, "other tier keeps formulaic withdrawal");
+            assertEq(dynamicFeeCurve.redeemFeeBps(tier), 200 + tier * 50, "other tier keeps formulaic redeem");
             (bool isSet,,) = dynamicFeeCurve.tierFeeOverride(tier);
             assertFalse(isSet, "other tier carries no override");
         }

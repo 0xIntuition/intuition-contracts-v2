@@ -478,22 +478,22 @@ abstract contract BaseTest is Modifiers, Test {
     /// @dev Default dynamic-fee schedule for tests: 5 tiers of width 5 TRUST growing 20% per tier
     ///      (edges 5, 11, 18, 26, 35 e18 — small enough that ordinary test deposits cross tiers),
     ///      deposit fee 1% +0.5%/tier capped at 10%, triangular fulcrum distribution
-    ///      (alpha = BPS, sigma = 4e18 — nearest-first window), withdrawal fee
+    ///      (alpha = BPS, sigma = 4e18 — nearest-first window), redeem fee
     ///      2% +0.5%/tier, all routed to the leaver's own tier.
     function _getDefaultDynamicFeeConfig() internal pure returns (DynamicFeeConfig memory config) {
         config = DynamicFeeConfig({
             width0: 5e18,
             tierCount: 5,
-            growthGBps: 2000,
+            tierWidthGrowthBps: 2000,
             depositBaseBps: 100,
             depositGrowthBps: 50,
             depositCapBps: 1000,
-            fulcrumAlpha: 10_000,
+            fulcrumAlphaBps: 10_000,
             kernelSpread: 4e18,
-            withdrawalBaseBps: 200,
-            withdrawalGrowthBps: 50,
-            withdrawalCapBps: 1000,
-            withdrawalToFulcrumTiersBps: 0,
+            redeemBaseBps: 200,
+            redeemGrowthBps: 50,
+            redeemCapBps: 1000,
+            redeemToFulcrumTiersBps: 0,
             depositToPriorTierBps: 0,
             minEligibleTierStake: 0
         });

@@ -17,12 +17,12 @@ import { DynamicFeeConfig } from "src/interfaces/IDynamicFeeFlatPriceCurve.sol";
 ///
 ///         The ladder used throughout: `width0 = 10 TRUST`, 5 tiers, `g = 0.2`. Widths compound 1.2x —
 ///         10, 12, 14.4, 17.28, 20.736 — so the cumulative edges are 10, 22, 36.4, 53.68, 74.416 (x1e18).
-///         With `fulcrumAlpha = BPS` the fulcrum sits on the source (`dStar = 0`) and `sigma = 4e18`
+///         With `fulcrumAlphaBps = BPS` the fulcrum sits on the source (`dStar = 0`) and `sigma = 4e18`
 ///         gives the nearest-first triangular window: weights 0.75 / 0.5 / 0.25 / 0 at distances
 ///         d = 1 / 2 / 3 / 4.
 ///
 ///         "Diamond slice" and "diamond-hands slice" below both mean the exiting-tier slice: the
-///         portion of a withdrawal fee that goes to the exiting tier's other holders.
+///         portion of a redeem fee that goes to the exiting tier's other holders.
 contract CurveMinEligibleTierStakeTest is Test {
     DynamicFeeFlatPriceCurve internal curve;
 
@@ -71,16 +71,16 @@ contract CurveMinEligibleTierStakeTest is Test {
         config = DynamicFeeConfig({
             width0: 10e18,
             tierCount: 5,
-            growthGBps: 2000,
+            tierWidthGrowthBps: 2000,
             depositBaseBps: 100,
             depositGrowthBps: 50,
             depositCapBps: 1000,
-            fulcrumAlpha: 10_000,
+            fulcrumAlphaBps: 10_000,
             kernelSpread: 4e18,
-            withdrawalBaseBps: 200,
-            withdrawalGrowthBps: 50,
-            withdrawalCapBps: 1000,
-            withdrawalToFulcrumTiersBps: 0,
+            redeemBaseBps: 200,
+            redeemGrowthBps: 50,
+            redeemCapBps: 1000,
+            redeemToFulcrumTiersBps: 0,
             depositToPriorTierBps: 0,
             minEligibleTierStake: 0
         });
@@ -201,7 +201,7 @@ contract CurveMinEligibleTierStakeTest is Test {
     ///      nearest tier that actually qualifies.
     function test_subFloorTier_isAlsoExcludedFromTheDegenerateWholePoolFallback() external {
         DynamicFeeConfig memory config = _defaultConfig();
-        config.fulcrumAlpha = 3750; // dStar = (1 - 0.375) * 4 = 2.5 tiers from the source
+        config.fulcrumAlphaBps = 3750; // dStar = (1 - 0.375) * 4 = 2.5 tiers from the source
         config.kernelSpread = 1e18 + 1; // tightest legal window; only dave clears the floor, and he is out of it
         DynamicFeeFlatPriceCurve c = _deploy(config);
         _seatFourTiers(c);
@@ -244,9 +244,9 @@ contract CurveMinEligibleTierStakeTest is Test {
     }
 
     /// @dev Second reported pathology: a one-wei co-occupant of the exiting tier capturing the whole
-    ///      withdrawal fee through the diamond-hands slice. `denom` is the exiting tier's residual cohort,
+    ///      redeem fee through the diamond-hands slice. `denom` is the exiting tier's residual cohort,
     ///      so a sub-floor cohort must fall through to the reroute rather than collect.
-    ///      Note `denom` is exactly the OTHER holders' stake and does not depend on the withdrawal size —
+    ///      Note `denom` is exactly the OTHER holders' stake and does not depend on the redemption size —
     ///      an exiter cannot size a partial redeem to steer this branch.
     function test_dustResidualCohort_doesNotTakeTheDiamondSlice() external {
         // alice funds tier 0; bob and carol both land in tier 1, carol with one wei.
@@ -544,7 +544,7 @@ contract CurveMinEligibleTierStakeTest is Test {
 
     /// @dev The ceiling is what keeps the floor from being a strict expansion of owner power: without it
     ///      the owner could disqualify every tier and route the entire fee stream — deposit AND
-    ///      withdrawal — into the sweepable protocol bucket in a single transaction.
+    ///      redeem — into the sweepable protocol bucket in a single transaction.
     function test_setConfig_revertsWhenTheFloorExceedsTheImmutableCeiling() external {
         uint256 ceiling = curve.MAX_MIN_ELIGIBLE_TIER_STAKE();
         address curveOwner = curve.owner();

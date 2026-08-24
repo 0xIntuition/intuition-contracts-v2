@@ -169,7 +169,7 @@ contract DepositBatchViaTest is FeeProxyBaseTest {
 
         vm.deal(users.alice, 1 ether);
         vm.startPrank(users.alice);
-        vm.expectRevert(IFeeProxy.FeeProxy_ZeroValue.selector);
+        vm.expectRevert(IFeeProxy.FeeProxy_ZeroAssets.selector);
         feeProxy.depositBatchVia{ value: 1 ether }(
             affiliate, users.alice, termIds, curveIds, assets, minShares, _looseFeeGuard()
         );
@@ -186,7 +186,7 @@ contract DepositBatchViaTest is FeeProxyBaseTest {
         uint256[] memory minShares = _toUintArray(0);
 
         vm.startPrank(users.alice);
-        vm.expectRevert(IFeeProxy.FeeProxy_ZeroValue.selector);
+        vm.expectRevert(IFeeProxy.FeeProxy_ZeroAssets.selector);
         feeProxy.depositBatchVia{ value: 0 }(
             affiliate, users.alice, termIds, curveIds, assets, minShares, _looseFeeGuard()
         );

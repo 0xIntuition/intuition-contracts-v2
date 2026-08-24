@@ -47,12 +47,12 @@ contract MockFeeHookCurve is LinearCurve {
         return redeemHookEnabled;
     }
 
-    function quoteDepositFee(bytes32, uint256 assets) external view override returns (uint256) {
-        return (assets * depositFeeBps) / BPS;
+    function quoteDepositFee(bytes32, uint256 baseAssets) external view override returns (uint256) {
+        return (baseAssets * depositFeeBps) / BPS;
     }
 
-    function quoteRedeemFee(bytes32, address, uint256 assets) external view override returns (uint256) {
-        return (assets * redeemFeeBps) / BPS;
+    function quoteRedeemFee(bytes32, address, uint256 grossAssets) external view override returns (uint256) {
+        return (grossAssets * redeemFeeBps) / BPS;
     }
 
     function recordDeposit(bytes32 termId, address account, uint256 shares) external payable override {

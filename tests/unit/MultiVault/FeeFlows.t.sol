@@ -86,10 +86,10 @@ contract FeeFlowsTest is BaseTest {
 
     function _expectRedeem(address who, bytes32 termId, uint256 curveId, uint256 shares)
         internal
-        returns (uint256 assetsAfterFees, uint256 rawAssetsBeforeFees)
+        returns (uint256 assetsAfterFees, uint256 assetsBeforeFees)
     {
         (uint256 expAssetsAfter,) = protocol.multiVault.previewRedeem(termId, curveId, shares);
-        rawAssetsBeforeFees = protocol.multiVault.convertToAssets(termId, curveId, shares);
+        assetsBeforeFees = protocol.multiVault.convertToAssets(termId, curveId, shares);
         vm.startPrank(who);
         assetsAfterFees = protocol.multiVault.redeem(who, termId, curveId, shares, expAssetsAfter);
         vm.stopPrank();
@@ -332,13 +332,13 @@ contract FeeFlowsTest is BaseTest {
         uint256 userShares = protocol.multiVault.getShares(users.alice, atom, nonDefaultId);
         uint256 half = userShares / 2;
 
-        (uint256 assetsAfterFees, uint256 rawAssetsBeforeFees) = _expectRedeem(users.alice, atom, nonDefaultId, half);
+        (uint256 assetsAfterFees, uint256 assetsBeforeFees) = _expectRedeem(users.alice, atom, nonDefaultId, half);
         assetsAfterFees; // silence
 
-        // expected exit fee = ceil(rawAssetsBeforeFees * exitBps / den)
+        // expected exit fee = ceil(assetsBeforeFees * exitBps / den)
         VaultFees memory vf = _vf();
         GeneralConfig memory gc = _gc();
-        uint256 expectedExit = _mulDivUp(rawAssetsBeforeFees, vf.exitFee, gc.feeDenominator);
+        uint256 expectedExit = _mulDivUp(assetsBeforeFees, vf.exitFee, gc.feeDenominator);
 
         (uint256 aDef1,) = _vault(atom, defaultId);
         assertEq(aDef1 - aDef0, expectedExit, "default must receive exit fee from non-default redeem");

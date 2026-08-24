@@ -19,7 +19,7 @@ import { DynamicFeeConfig } from "src/interfaces/IDynamicFeeFlatPriceCurve.sol";
 ///
 ///         The ladder: `width0 = 10 TRUST`, 5 tiers, `g = 0.2`. Widths compound 1.2x — 10, 12, 14.4,
 ///         17.28, 20.736 — so the cumulative edges are 10, 22, 36.4, 53.68, 74.416 (x1e18). With
-///         `fulcrumAlpha = BPS` the fulcrum sits on the source (`dStar = 0`) and `sigma = 4e18` gives
+///         `fulcrumAlphaBps = BPS` the fulcrum sits on the source (`dStar = 0`) and `sigma = 4e18` gives
 ///         the nearest-first window: weights 0.75 / 0.5 / 0.25 / 0 at d = 1 / 2 / 3 / 4.
 ///
 ///         WHAT IS DELIBERATELY NOT CLAIMED. Exact `lump >= split` for EVERY decomposition does not
@@ -28,7 +28,7 @@ import { DynamicFeeConfig } from "src/interfaces/IDynamicFeeFlatPriceCurve.sol";
 ///         that migration. Band-aligned equality is the exact property; the sub-band residual is
 ///         measured in {testFuzz_subBandSplitAdvantage_staysBounded} rather than assumed away.
 ///
-///         "Diamond slice" below means the exiting-tier slice: the portion of a withdrawal fee that
+///         "Diamond slice" below means the exiting-tier slice: the portion of a redeem fee that
 ///         goes to the exiting tier's other holders.
 contract CurveDepositNeutralityTest is Test {
     DynamicFeeFlatPriceCurve internal curve;
@@ -131,16 +131,16 @@ contract CurveDepositNeutralityTest is Test {
         config = DynamicFeeConfig({
             width0: 10e18,
             tierCount: 5,
-            growthGBps: 2000,
+            tierWidthGrowthBps: 2000,
             depositBaseBps: 100,
             depositGrowthBps: 50,
             depositCapBps: 1000,
-            fulcrumAlpha: 10_000,
+            fulcrumAlphaBps: 10_000,
             kernelSpread: 4e18,
-            withdrawalBaseBps: 200,
-            withdrawalGrowthBps: 50,
-            withdrawalCapBps: 1000,
-            withdrawalToFulcrumTiersBps: 0,
+            redeemBaseBps: 200,
+            redeemGrowthBps: 50,
+            redeemCapBps: 1000,
+            redeemToFulcrumTiersBps: 0,
             depositToPriorTierBps: 0,
             minEligibleTierStake: 0
         });
@@ -148,10 +148,10 @@ contract CurveDepositNeutralityTest is Test {
 
     /// @dev A deposit priced the way MultiVault prices it: quote the fee on the base, stake the rest,
     ///      forward the fee. Keeps the harness honest about the quote/forward equality.
-    function _deposit(address account, uint256 base) internal returns (uint256 fee, uint256 netStake) {
+    function _deposit(address account, uint256 base) internal returns (uint256 fee, uint256 shares) {
         fee = curve.quoteDepositFee(T1, base);
-        netStake = base - fee;
-        curve.recordDeposit{ value: fee }(T1, account, netStake);
+        shares = base - fee;
+        curve.recordDeposit{ value: fee }(T1, account, shares);
     }
 
     /// @dev A redeem priced the way MultiVault prices it: quote at the account's own tier, forward it.
@@ -218,7 +218,7 @@ contract CurveDepositNeutralityTest is Test {
     ///      the contract uses, so the comparison isolates the REPLAY from the fee quote.
     function _depositBandByBand(address account, uint256 base) internal {
         uint256 fee = curve.quoteDepositFee(T1, base);
-        uint256 netStake = base - fee;
+        uint256 shares = base - fee;
         uint256 topTier = curve.getConfig().tierCount - 1;
 
         // Pass 1: the bands, and the weight each carries.
@@ -228,7 +228,7 @@ contract CurveDepositNeutralityTest is Test {
         {
             uint256 cursor = curve.vaultStake(T1);
             uint256 tier = curve.tierOf(cursor);
-            uint256 remaining = netStake;
+            uint256 remaining = shares;
             while (remaining > 0) {
                 uint256 chunk = remaining;
                 if (tier < topTier) {
@@ -628,23 +628,23 @@ contract CurveDepositNeutralityTest is Test {
 
         _deposit(alice, seed);
 
-        (, uint256 netStake) = _deposit(bob, amount);
-        uint256 exitFee = curve.quoteRedeemFee(T1, bob, netStake);
-        curve.recordRedeem{ value: exitFee }(T1, bob, netStake);
+        (, uint256 shares) = _deposit(bob, amount);
+        uint256 exitFee = curve.quoteRedeemFee(T1, bob, shares);
+        curve.recordRedeem{ value: exitFee }(T1, bob, shares);
 
-        uint256 returned = (netStake - exitFee) + curve.claimable(bob, T1);
+        uint256 returned = (shares - exitFee) + curve.claimable(bob, T1);
         assertLt(returned, amount, "a wash round trip always loses value");
     }
 
     /// @dev PARTIAL exits are where the redeem-side exclusion actually does work, and the full-exit
     ///      cases above cannot test it: at `residual == 0` the exclusion is arithmetically a no-op.
     ///
-    ///      With `residual > 0` the exiter still holds stake in the very tier their withdrawal fee
+    ///      With `residual > 0` the exiter still holds stake in the very tier their redeem fee
     ///      lands on. The diamond slice is sized against a denominator that deliberately OMITS that
     ///      residual (`tierStake[exitTier] - residual`), so crediting the residual anyway would pay
     ///      out more than the fee collected — a solvency hole, not merely an unfairness. This pins
     ///      both halves: the exiter earns nothing, and the cohort that does earn is paid in full.
-    function test_partialExit_exiterEarnsNothingFromTheirOwnWithdrawalFee() external {
+    function test_partialExit_exiterEarnsNothingFromTheirOwnRedeemFee() external {
         _deposit(alice, 8e18); // bystander in tier 0
         (, uint256 bobStake) = _deposit(bob, 12e18); // bob books bucket 1
         _deposit(carol, 2e18); // carol stays inside tier 1, sharing bob's bucket
@@ -707,14 +707,14 @@ contract CurveDepositNeutralityTest is Test {
 
         uint256 claimableBeforeWash = curve.claimable(alice, T1);
         uint256 washGross = 40e18;
-        (, uint256 netStake) = _deposit(alice, washGross);
+        (, uint256 shares) = _deposit(alice, washGross);
 
-        uint256 exitFee = curve.quoteRedeemFee(T1, alice, netStake);
-        curve.recordRedeem{ value: exitFee }(T1, alice, netStake);
+        uint256 exitFee = curve.quoteRedeemFee(T1, alice, shares);
+        curve.recordRedeem{ value: exitFee }(T1, alice, shares);
 
         // Everything the washed leg returns: the stake that came back, plus only the earnings the
         // wash itself generated. Anything she had already accrued is not proceeds of this round trip.
-        uint256 recovered = (netStake - exitFee) + (curve.claimable(alice, T1) - claimableBeforeWash);
+        uint256 recovered = (shares - exitFee) + (curve.claimable(alice, T1) - claimableBeforeWash);
 
         assertGt(exitFee, 0, "the exit fee is what keeps the round trip costly");
         assertLt(recovered, washGross, "the sole occupant ends behind on the washed leg itself");
@@ -752,7 +752,7 @@ contract CurveDepositNeutralityTest is Test {
 
         uint256 feesPaid;
         {
-            (uint256 depositFee, uint256 netStake) = _deposit(actorA, washGross);
+            (uint256 depositFee, uint256 shares) = _deposit(actorA, washGross);
 
             // Snapshot IMMEDIATELY before the redeem so the exclusion assertion isolates the redeem
             // leg. Bounding actorA's total gain by the DEPOSIT fee instead does not do this: he has
@@ -760,8 +760,8 @@ contract CurveDepositNeutralityTest is Test {
             // an erroneous exit-fee credit through unnoticed.
             uint256 aBeforeRedeem = curve.claimable(actorA, T1);
 
-            uint256 exitFee = curve.quoteRedeemFee(T1, actorA, netStake);
-            curve.recordRedeem{ value: exitFee }(T1, actorA, netStake);
+            uint256 exitFee = curve.quoteRedeemFee(T1, actorA, shares);
+            curve.recordRedeem{ value: exitFee }(T1, actorA, shares);
             feesPaid = depositFee + exitFee;
 
             assertEq(
@@ -772,7 +772,7 @@ contract CurveDepositNeutralityTest is Test {
 
             // The actor is BOTH addresses, so the round-trip P&L must count both.
             uint256 recovered =
-                (netStake - exitFee) + (curve.claimable(actorA, T1) + curve.claimable(actorB, T1) - pairEarnedBefore);
+                (shares - exitFee) + (curve.claimable(actorA, T1) + curve.claimable(actorB, T1) - pairEarnedBefore);
             assertApproxEqAbs(recovered, washGross, MAX_TRUNCATION_DUST_WEI, "a two-address actor round-trips for free");
         }
 
@@ -801,11 +801,11 @@ contract CurveDepositNeutralityTest is Test {
     struct LadderSeed {
         uint96 width0;
         uint8 tierCount;
-        uint16 growthGBps;
+        uint16 tierWidthGrowthBps;
         uint16 depositBaseBps;
         uint16 depositGrowthBps;
         uint16 depositCapBps;
-        uint16 fulcrumAlpha;
+        uint16 fulcrumAlphaBps;
         uint64 kernelSpread;
         uint16 depositToPriorTierBps;
         uint96 minEligibleTierStake;
@@ -826,17 +826,17 @@ contract CurveDepositNeutralityTest is Test {
     ///        lump — real, reachable, and pinned deliberately in
     ///        {test_subTierKernelSpread_collapsesTheSpreadIntoASingleTierLump}. Leaving it in range here
     ///        would silently convert a spread-distribution property into a winner-takes-all one.
-    ///      - the withdrawal fields stay at their defaults: this is the DEPOSIT-neutrality suite, and
+    ///      - the redeem fields stay at their defaults: this is the DEPOSIT-neutrality suite, and
     ///        fuzzing the exit schedule would widen the search space without widening what is proven.
     function _ladderConfig(LadderSeed memory seed) internal pure returns (DynamicFeeConfig memory config) {
         config = _defaultConfig();
         config.width0 = bound(seed.width0, 1e18, 200e18);
         config.tierCount = bound(seed.tierCount, 3, 13);
-        config.growthGBps = bound(seed.growthGBps, 0, 5000);
+        config.tierWidthGrowthBps = bound(seed.tierWidthGrowthBps, 0, 5000);
         config.depositCapBps = bound(seed.depositCapBps, 1, 2000);
         config.depositBaseBps = bound(seed.depositBaseBps, 0, config.depositCapBps);
         config.depositGrowthBps = bound(seed.depositGrowthBps, 0, 300);
-        config.fulcrumAlpha = bound(seed.fulcrumAlpha, 0, BPS);
+        config.fulcrumAlphaBps = bound(seed.fulcrumAlphaBps, 0, BPS);
         config.kernelSpread = bound(seed.kernelSpread, 1e18 + 1, 8e18);
         config.depositToPriorTierBps = bound(seed.depositToPriorTierBps, 0, BPS);
         config.minEligibleTierStake = bound(seed.minEligibleTierStake, 0, 1000e18);
@@ -917,7 +917,7 @@ contract CurveDepositNeutralityTest is Test {
     ///      shipped values is not the claim the mechanism needs to support.
     ///
     ///      This re-runs the band-aligned equivalence against a fresh vault per run, over the validated
-    ///      ranges of `width0`, `tierCount`, `growthGBps`, the deposit-fee schedule, both fulcrum knobs
+    ///      ranges of `width0`, `tierCount`, `tierWidthGrowthBps`, the deposit-fee schedule, both fulcrum knobs
     ///      and the eligibility floor. Equality must stay EXACT everywhere — the replay and the
     ///      band-by-band sequence perform the identical integer operations regardless of the schedule
     ///      they are reading, and any config-dependent divergence is a real defect.
@@ -1488,7 +1488,7 @@ contract CurveDepositNeutralityTest is Test {
     ///      neither a σ-only nor an alpha-keyed bound actually holds — so the sharp edge below is
     ///      REACHABLE by governance and is documented rather than prevented.
     ///
-    ///      With σ ≤ one tier and `fulcrumAlpha = BPS` (the shipped default, fulcrum on the source
+    ///      With σ ≤ one tier and `fulcrumAlphaBps = BPS` (the shipped default, fulcrum on the source
     ///      tier), every prior tier sits a full tier or more away, `_triangularWeight` returns a hard
     ///      zero for all of them, `sumWeights` is zero, and the whole pool falls through
     ///      `_awardNearestOrProtocol` as a single lump. Winner-takes-all silently replaces the
@@ -1524,7 +1524,7 @@ contract CurveDepositNeutralityTest is Test {
         assertEq(collapsedPaid, 1, "a sub-tier sigma pays exactly one tier - the spread has collapsed");
         assertGt(spreadPaid, 1, "the shipped sigma genuinely spreads across several tiers");
         // Nearest-first tie-break: the collapsed lump lands on the tier closest to the source, which at
-        // `fulcrumAlpha = BPS` (dStar = 0) is the highest prior tier.
+        // `fulcrumAlphaBps = BPS` (dStar = 0) is the highest prior tier.
         assertGt(lumpEarnings[2], 0, "the whole pool lands on the prior tier nearest the source");
     }
 

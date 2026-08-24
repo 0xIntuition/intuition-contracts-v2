@@ -27,12 +27,12 @@ contract TrustBondingEpochMock {
 }
 
 contract MultiVaultUtilizationHarness is MultiVault {
-    function addUtilizationForTest(address user, int256 totalValue) external {
-        _addUtilization(user, totalValue);
+    function addUtilizationForTest(address user, int256 assets) external {
+        _addUtilization(user, assets);
     }
 
-    function removeUtilizationForTest(address user, int256 amountToRemove) external {
-        _removeUtilization(user, amountToRemove);
+    function removeUtilizationForTest(address user, int256 assets) external {
+        _removeUtilization(user, assets);
     }
 
     function setTotalUtilizationForTest(uint256 epoch, int256 utilization) external {

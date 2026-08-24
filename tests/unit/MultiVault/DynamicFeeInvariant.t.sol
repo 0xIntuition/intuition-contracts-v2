@@ -81,16 +81,16 @@ contract DynamicFeeInvariantHandler is Test {
         try CURVE.claim(terms) { } catch { }
     }
 
-    function retune(uint256 depositBaseSeed, uint256 withdrawalBaseSeed) external {
+    function retune(uint256 depositBaseSeed, uint256 redeemBaseSeed) external {
         DynamicFeeConfig memory cfg = CURVE.getConfig();
         cfg.depositBaseBps = uint16(bound(depositBaseSeed, 0, cfg.depositCapBps));
-        cfg.withdrawalBaseBps = uint16(bound(withdrawalBaseSeed, 0, cfg.withdrawalCapBps));
+        cfg.redeemBaseBps = uint16(bound(redeemBaseSeed, 0, cfg.redeemCapBps));
         vm.prank(OWNER);
         try CURVE.setConfig(cfg) { } catch { }
     }
 
     /// @dev Retune the LADDER SHAPE, not just the fee rates — the riskier half of the admin surface.
-    ///      Changing `width0`, `growthGBps` or `tierCount` moves where every FUTURE tier decision lands
+    ///      Changing `width0`, `tierWidthGrowthBps` or `tierCount` moves where every FUTURE tier decision lands
     ///      while live positions keep the buckets they were recorded with, so the accounting has to
     ///      survive a ladder that no longer matches the one those buckets were assigned under. That is
     ///      the stated model of this admin surface ("a retune is an economic action") and it was
@@ -102,7 +102,7 @@ contract DynamicFeeInvariantHandler is Test {
     function retuneLadder(uint256 widthSeed, uint256 growthSeed, uint256 tierSeed, uint256 floorSeed) external {
         DynamicFeeConfig memory cfg = CURVE.getConfig();
         cfg.width0 = bound(widthSeed, 1e17, 500e18);
-        cfg.growthGBps = bound(growthSeed, 0, 8000);
+        cfg.tierWidthGrowthBps = bound(growthSeed, 0, 8000);
         // Grow-only, so never propose a shrink: `_setConfig` rejects it outright and every call would
         // silently bounce. Growing by at most two at a time keeps the ladder reachable by test-scale
         // deposits instead of jumping straight to the 64-tier ceiling.
@@ -115,7 +115,7 @@ contract DynamicFeeInvariantHandler is Test {
         } catch { }
     }
 
-    /// @dev The kernel knobs. `fulcrumAlpha` slides the most-earning band along the ladder and
+    /// @dev The kernel knobs. `fulcrumAlphaBps` slides the most-earning band along the ladder and
     ///      `kernelSpread` sets how wide the earning window is. Neither changes how much fee is
     ///      CHARGED — only who receives it — which makes them the levers most likely to surface an
     ///      asymmetry between what is collected and what is credited. Includes the sub-tier spreads
@@ -123,7 +123,7 @@ contract DynamicFeeInvariantHandler is Test {
     ///      governance and the accounting must hold there too.
     function retuneKernel(uint256 alphaSeed, uint256 spreadSeed) external {
         DynamicFeeConfig memory cfg = CURVE.getConfig();
-        cfg.fulcrumAlpha = bound(alphaSeed, 0, 10_000);
+        cfg.fulcrumAlphaBps = bound(alphaSeed, 0, 10_000);
         cfg.kernelSpread = bound(spreadSeed, 1, CURVE.MAX_KERNEL_SPREAD());
         vm.prank(OWNER);
         try CURVE.setConfig(cfg) {

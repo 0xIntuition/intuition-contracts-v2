@@ -218,8 +218,8 @@ interface IFeeProxy {
 
     /// @notice Emitted when the registration fee is forwarded to treasury.
     /// @param treasury The treasury destination that received the fee.
-    /// @param amount The TRUST amount forwarded.
-    event RegistrationFeeForwarded(address indexed treasury, uint256 amount);
+    /// @param registrationFee The TRUST registration fee forwarded.
+    event RegistrationFeeForwarded(address indexed treasury, uint256 registrationFee);
 
     /// @notice Emitted when admin updates the protocol-level bps cap.
     /// @param previous The prior {maxFeeBps} value.
@@ -243,7 +243,7 @@ interface IFeeProxy {
     /// @param affiliate The affiliate mediating the call.
     /// @param termId The MultiVault term ID deposited into.
     /// @param grossAssets Assets supplied by the user, pre-fee.
-    /// @param fee Affiliate fee deducted before forwarding.
+    /// @param affiliateFee Affiliate fee deducted before forwarding.
     /// @param forwardedAssets Assets actually forwarded to MultiVault.
     /// @param shares Shares minted by MultiVault to `receiver`.
     event DepositedVia(
@@ -251,7 +251,7 @@ interface IFeeProxy {
         address indexed affiliate,
         bytes32 indexed termId,
         uint256 grossAssets,
-        uint256 fee,
+        uint256 affiliateFee,
         uint256 forwardedAssets,
         uint256 shares
     );
@@ -263,13 +263,15 @@ interface IFeeProxy {
     /// @param affiliate The affiliate mediating the batch.
     /// @param totalGrossAssets Sum of pre-fee assets supplied across the
     ///        batch.
-    /// @param totalFee Sum of affiliate fees deducted across the batch.
+    /// @param affiliateFee The affiliate fee deducted, computed once on the
+    ///        aggregate gross (one bps cut plus one fixed fee per call, not
+    ///        per leg).
     /// @param totalForwardedAssets Sum of assets forwarded to MultiVault.
     event DepositedBatchVia(
         address indexed user,
         address indexed affiliate,
         uint256 totalGrossAssets,
-        uint256 totalFee,
+        uint256 affiliateFee,
         uint256 totalForwardedAssets
     );
 
@@ -280,14 +282,16 @@ interface IFeeProxy {
     /// @param user The end-user credited as atom creator on MultiVault.
     /// @param affiliate The affiliate mediating the call.
     /// @param totalGrossAssets Sum of pre-fee creation assets.
-    /// @param totalFee Sum of affiliate creation fees deducted.
+    /// @param affiliateFee The affiliate creation fee deducted, computed once
+    ///        on the aggregate gross (one bps cut plus one fixed fee per call,
+    ///        not per atom).
     /// @param totalForwardedAssets Sum of assets forwarded to MultiVault.
     /// @param atomCount Number of atoms created in this call.
     event CreatedAtomsVia(
         address indexed user,
         address indexed affiliate,
         uint256 totalGrossAssets,
-        uint256 totalFee,
+        uint256 affiliateFee,
         uint256 totalForwardedAssets,
         uint256 atomCount
     );
@@ -298,14 +302,16 @@ interface IFeeProxy {
     /// @param user The end-user credited as triple creator on MultiVault.
     /// @param affiliate The affiliate mediating the call.
     /// @param totalGrossAssets Sum of pre-fee creation assets.
-    /// @param totalFee Sum of affiliate creation fees deducted.
+    /// @param affiliateFee The affiliate creation fee deducted, computed once
+    ///        on the aggregate gross (one bps cut plus one fixed fee per call,
+    ///        not per triple).
     /// @param totalForwardedAssets Sum of assets forwarded to MultiVault.
     /// @param tripleCount Number of triples created in this call.
     event CreatedTriplesVia(
         address indexed user,
         address indexed affiliate,
         uint256 totalGrossAssets,
-        uint256 totalFee,
+        uint256 affiliateFee,
         uint256 totalForwardedAssets,
         uint256 tripleCount
     );
@@ -313,11 +319,11 @@ interface IFeeProxy {
     /// @notice Emitted after a fee has been transferred to an affiliate's
     ///         `feeRecipient`. The transfer is a push at fee time, so there
     ///         is no claimable balance behind this event. Also emitted with
-    ///         `amount == 0` on a fee-free route, where no transfer occurs.
+    ///         `affiliateFee == 0` on a fee-free route, where no transfer occurs.
     /// @param affiliate The affiliate the fee belongs to.
     /// @param user The end-user that paid the fee.
-    /// @param amount The fee amount paid.
-    event AffiliateFeePaid(address indexed affiliate, address indexed user, uint256 amount);
+    /// @param affiliateFee The fee amount paid.
+    event AffiliateFeePaid(address indexed affiliate, address indexed user, uint256 affiliateFee);
 
     /// @notice Emitted when a refund cannot be pushed to the user and is
     ///         instead credited to the pull-fallback ledger.
@@ -337,9 +343,9 @@ interface IFeeProxy {
 
     /// @notice Thrown when {registerAffiliate} is called with a `msg.value`
     ///         that does not exactly match {registrationFee}.
-    /// @param sent The `msg.value` supplied by the caller.
+    /// @param supplied The `msg.value` supplied by the caller.
     /// @param required The required {registrationFee} at call time.
-    error FeeProxy_RegistrationFeeMismatch(uint256 sent, uint256 required);
+    error FeeProxy_RegistrationFeeMismatch(uint256 supplied, uint256 required);
 
     /// @notice Thrown when {registerAffiliate} is called by an address that
     ///         already has a registered row in the affiliate registry.
@@ -416,7 +422,7 @@ interface IFeeProxy {
 
     /// @notice Thrown when an asset amount that must be non-zero is
     ///         supplied as `0`.
-    error FeeProxy_ZeroValue();
+    error FeeProxy_ZeroAssets();
 
     /// @notice Thrown when matched-length arrays have mismatched lengths.
     error FeeProxy_LengthMismatch();
@@ -430,8 +436,8 @@ interface IFeeProxy {
     /// @notice Thrown when the computed affiliate fee is greater than or equal
     ///         to the gross assets, leaving nothing to forward to MultiVault.
     /// @param fee The computed affiliate fee.
-    /// @param gross The gross assets the fee was computed against.
-    error FeeProxy_FeeExceedsGross(uint256 fee, uint256 gross);
+    /// @param grossAssets The gross assets the fee was computed against.
+    error FeeProxy_FeeExceedsGross(uint256 fee, uint256 grossAssets);
 
     /// @notice Thrown when admin attempts to set {maxFeeBps} to a value
     ///         greater than 10_000 (100%).
@@ -533,8 +539,8 @@ interface IFeeProxy {
     ///         the row is per-affiliate paused and while the contract is
     ///         globally paused. Emits {AffiliateFeeRecipientUpdated} with
     ///         both the previous and the current recipient.
-    /// @param  recipient The new fee recipient for `msg.sender`.
-    function updateFeeRecipient(address recipient) external;
+    /// @param  feeRecipient The new fee recipient for `msg.sender`.
+    function updateFeeRecipient(address feeRecipient) external;
 
     /// @notice Globally pauses the routing and registration entry points.
     ///         Restricted to the pauser role.
@@ -602,7 +608,7 @@ interface IFeeProxy {
     ///         post-fee leg to {MultiVault.depositBatch} (or equivalent
     ///         routing) and refunds any excess `msg.value`.
     /// @dev    Reverts with {FeeProxy_LengthMismatch} if any of `termIds`,
-    ///         `curveIds`, `assets`, `minShares` are of unequal length.
+    ///         `curveIds`, `grossAssets`, `minShares` are of unequal length.
     ///         Reverts with {FeeProxy_ProxyNotApprovedForDeposit} when `receiver` has
     ///         not approved this proxy for MultiVault DEPOSIT routing.
     ///         Reverts with {FeeProxy_ReceiverNotApproved} when a delegated
@@ -613,16 +619,16 @@ interface IFeeProxy {
     ///                  must also approve `msg.sender`.
     /// @param  termIds The MultiVault terms to deposit into.
     /// @param  curveIds The bonding curves to use per leg.
-    /// @param  assets The pre-fee gross assets per leg.
+    /// @param  grossAssets The pre-fee gross assets per leg.
     /// @param  minShares Per-leg minimum acceptable shares, post-fee.
-    /// @param  feeGuard Per-call front-run guard, applied to every leg.
+    /// @param  feeGuard Per-call front-run guard on the fee computed once for the whole call.
     /// @return shares Per-leg shares minted by MultiVault.
     function depositBatchVia(
         address affiliate,
         address receiver,
         bytes32[] calldata termIds,
         uint256[] calldata curveIds,
-        uint256[] calldata assets,
+        uint256[] calldata grossAssets,
         uint256[] calldata minShares,
         FeeGuard calldata feeGuard
     ) external payable returns (uint256[] memory shares);
@@ -636,13 +642,13 @@ interface IFeeProxy {
     ///         {FeeProxy_ProxyNotApprovedForCreation}.
     /// @param  affiliate The affiliate mediating the creation.
     /// @param  atomDatas Per-atom data payloads.
-    /// @param  assets Per-atom gross creation assets (pre-fee).
-    /// @param  feeGuard Per-call front-run guard, applied to every atom.
+    /// @param  grossAssets Per-atom gross creation assets (pre-fee).
+    /// @param  feeGuard Per-call front-run guard on the fee computed once for the whole call.
     /// @return termIds The IDs of the newly created atoms.
     function createAtomsVia(
         address affiliate,
         bytes[] calldata atomDatas,
-        uint256[] calldata assets,
+        uint256[] calldata grossAssets,
         FeeGuard calldata feeGuard
     ) external payable returns (bytes32[] memory termIds);
 
@@ -653,17 +659,17 @@ interface IFeeProxy {
     ///         `msg.sender` as both atom creator and context registrant. Uses
     ///         the same CREATION approval, fee, and refund rules as
     ///         {createAtomsVia}. Reverts with {FeeProxy_LengthMismatch} when
-    ///         `atomDatas`, `assets`, and `uris` are not aligned.
+    ///         `atomDatas`, `grossAssets`, and `uris` are not aligned.
     /// @param  affiliate The affiliate mediating the creation.
     /// @param  atomDatas Per-atom data payloads.
-    /// @param  assets Per-atom gross creation assets (pre-fee).
+    /// @param  grossAssets Per-atom gross creation assets (pre-fee).
     /// @param  uris Per-atom lists of creation-time context pointers.
-    /// @param  feeGuard Per-call front-run guard, applied to every atom.
+    /// @param  feeGuard Per-call front-run guard on the fee computed once for the whole call.
     /// @return termIds The IDs of the newly created atoms.
     function createAtomsWithUrisVia(
         address affiliate,
         bytes[] calldata atomDatas,
-        uint256[] calldata assets,
+        uint256[] calldata grossAssets,
         bytes[][] calldata uris,
         FeeGuard calldata feeGuard
     ) external payable returns (bytes32[] memory termIds);
@@ -674,21 +680,21 @@ interface IFeeProxy {
     ///         the triple creator, and refunds any excess `msg.value`.
     /// @dev    Same approval requirements as {createAtomsVia}. Reverts
     ///         with {FeeProxy_LengthMismatch} if `subjectIds`,
-    ///         `predicateIds`, `objectIds`, `assets` are of unequal
+    ///         `predicateIds`, `objectIds`, `grossAssets` are of unequal
     ///         length.
     /// @param  affiliate The affiliate mediating the creation.
     /// @param  subjectIds Per-triple subject atom IDs.
     /// @param  predicateIds Per-triple predicate atom IDs.
     /// @param  objectIds Per-triple object atom IDs.
-    /// @param  assets Per-triple gross creation assets (pre-fee).
-    /// @param  feeGuard Per-call front-run guard, applied to every triple.
+    /// @param  grossAssets Per-triple gross creation assets (pre-fee).
+    /// @param  feeGuard Per-call front-run guard on the fee computed once for the whole call.
     /// @return termIds The IDs of the newly created triples.
     function createTriplesVia(
         address affiliate,
         bytes32[] calldata subjectIds,
         bytes32[] calldata predicateIds,
         bytes32[] calldata objectIds,
-        uint256[] calldata assets,
+        uint256[] calldata grossAssets,
         FeeGuard calldata feeGuard
     ) external payable returns (bytes32[] memory termIds);
 
@@ -771,23 +777,23 @@ interface IFeeProxy {
     ///         applied to `grossAssets`.
     /// @param  affiliate The affiliate whose fee config is consulted.
     /// @param  grossAssets The pre-fee gross asset amount.
-    /// @return fee The total affiliate fee that would be deducted.
-    /// @return forwarded The amount that would be forwarded to MultiVault.
+    /// @return affiliateFee The total affiliate fee that would be deducted.
+    /// @return forwardedAssets The amount that would be forwarded to MultiVault.
     function previewDepositFee(address affiliate, uint256 grossAssets)
         external
         view
-        returns (uint256 fee, uint256 forwarded);
+        returns (uint256 affiliateFee, uint256 forwardedAssets);
 
     /// @notice Returns the effective creation-side fee math for
     ///         `affiliate` applied to `grossAssets`.
     /// @param  affiliate The affiliate whose fee config is consulted.
     /// @param  grossAssets The pre-fee gross asset amount.
-    /// @return fee The total affiliate fee that would be deducted.
-    /// @return forwarded The amount that would be forwarded to MultiVault.
+    /// @return affiliateFee The total affiliate fee that would be deducted.
+    /// @return forwardedAssets The amount that would be forwarded to MultiVault.
     function previewCreationFee(address affiliate, uint256 grossAssets)
         external
         view
-        returns (uint256 fee, uint256 forwarded);
+        returns (uint256 affiliateFee, uint256 forwardedAssets);
 
     /// @notice Returns aggregate on-chain analytics for `affiliate`.
     /// @param  affiliate The affiliate whose counters should be returned.

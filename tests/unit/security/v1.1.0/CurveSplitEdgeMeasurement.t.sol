@@ -58,16 +58,16 @@ contract CurveSplitEdgeMeasurementTest is Test {
         DynamicFeeConfig memory config = DynamicFeeConfig({
             width0: 10e18,
             tierCount: 5,
-            growthGBps: 2000,
+            tierWidthGrowthBps: 2000,
             depositBaseBps: 100,
             depositGrowthBps: 50,
             depositCapBps: 1000,
-            fulcrumAlpha: 10_000,
+            fulcrumAlphaBps: 10_000,
             kernelSpread: 4e18,
-            withdrawalBaseBps: 200,
-            withdrawalGrowthBps: 50,
-            withdrawalCapBps: 1000,
-            withdrawalToFulcrumTiersBps: 0,
+            redeemBaseBps: 200,
+            redeemGrowthBps: 50,
+            redeemCapBps: 1000,
+            redeemToFulcrumTiersBps: 0,
             depositToPriorTierBps: 0,
             minEligibleTierStake: 0
         });
@@ -203,12 +203,12 @@ contract CurveSplitEdgeMeasurementTest is Test {
     ///      awarded to a single tier. A split arrangement has a wallet sitting in that tier and a lump
     ///      does not, so winner-takes-all is the best case for the splitter, not the worst.
     ///
-    ///      Lowering `fulcrumAlpha` raises it too, for the mirror reason: it moves the peak from the
+    ///      Lowering `fulcrumAlphaBps` raises it too, for the mirror reason: it moves the peak from the
     ///      tiers nearest the source down onto the earliest tiers. A single averaged bucket sits near
     ///      the middle of what the deposit traversed; a split arrangement has a wallet at the bottom of
     ///      it. Moving the peak to an extreme rewards whoever can occupy extremes.
     ///
-    ///      The shipped `(fulcrumAlpha = BPS, sigma = 4e18)` is therefore already in a reasonable part
+    ///      The shipped `(fulcrumAlphaBps = BPS, sigma = 4e18)` is therefore already in a reasonable part
     ///      of the space. Asserted loosely — these are small-sample maxima and the point is the
     ///      DIRECTION, not the values.
     function test_measure_theObviousConfigLeversDoNotReduceTheResidual() external {
@@ -270,16 +270,16 @@ contract CurveSplitEdgeMeasurementTest is Test {
         DynamicFeeConfig memory config = DynamicFeeConfig({
             width0: 10e18,
             tierCount: 5,
-            growthGBps: 2000,
+            tierWidthGrowthBps: 2000,
             depositBaseBps: 100,
             depositGrowthBps: 50,
             depositCapBps: 1000,
-            fulcrumAlpha: alpha,
+            fulcrumAlphaBps: alpha,
             kernelSpread: sigma,
-            withdrawalBaseBps: 200,
-            withdrawalGrowthBps: 50,
-            withdrawalCapBps: 1000,
-            withdrawalToFulcrumTiersBps: 0,
+            redeemBaseBps: 200,
+            redeemGrowthBps: 50,
+            redeemCapBps: 1000,
+            redeemToFulcrumTiersBps: 0,
             depositToPriorTierBps: 0,
             minEligibleTierStake: 0
         });

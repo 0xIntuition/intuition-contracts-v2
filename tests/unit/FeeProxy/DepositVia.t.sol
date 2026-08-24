@@ -164,7 +164,7 @@ contract DepositViaTest is FeeProxyBaseTest {
         bytes32 atomId = _createAtomDirect("deposit-via-zero-gross", users.alice);
 
         vm.startPrank(users.alice);
-        vm.expectRevert(IFeeProxy.FeeProxy_ZeroValue.selector);
+        vm.expectRevert(IFeeProxy.FeeProxy_ZeroAssets.selector);
         feeProxy.depositVia{ value: 0 }(affiliate, users.alice, atomId, CURVE_ID, 0, 0, _looseFeeGuard());
         vm.stopPrank();
     }
