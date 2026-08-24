@@ -34,11 +34,11 @@ contract DynamicFeeSymbolicTest is Test {
         DynamicFeeConfig memory config = DynamicFeeConfig({
             width0: 10e18,
             tierCount: 3,
-            growthGBps: 2000,
+            tierWidthGrowthBps: 2000,
             depositBaseBps: 100,
             depositGrowthBps: 50,
             depositCapBps: DEPOSIT_CAP_BPS,
-            fulcrumAlpha: 10_000,
+            fulcrumAlphaBps: 10_000,
             kernelSpread: 4e18,
             withdrawalBaseBps: 200,
             withdrawalGrowthBps: 50,

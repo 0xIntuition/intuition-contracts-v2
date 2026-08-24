@@ -57,7 +57,7 @@ contract DynamicFeeThirteenTierExampleTest is Test {
     /* =================================================== */
 
     /// @notice The 13-tier default schedule.
-    /// @dev    `width0 = 1000 TRUST`, `growthG = 0.5` (growthGBps = 5000) compounds each band to 1.5x
+    /// @dev    `width0 = 1000 TRUST`, `growthG = 0.5` (tierWidthGrowthBps = 5000) compounds each band to 1.5x
     ///         the one below it — widths 1000, 1500, 2250, 3375, ... — giving the cumulative edges
     ///         asserted in {test_thirteenTierConfig_tierEdges}. Deposit fee 1% + 0.5%/tier, withdrawal fee
     ///         2% + 0.5%/tier, both capped at 10% (the cap never binds inside 13 tiers — the
@@ -68,11 +68,11 @@ contract DynamicFeeThirteenTierExampleTest is Test {
         config = DynamicFeeConfig({
             width0: 1000e18,
             tierCount: TIER_COUNT,
-            growthGBps: 5000,
+            tierWidthGrowthBps: 5000,
             depositBaseBps: 100,
             depositGrowthBps: 50,
             depositCapBps: 1000,
-            fulcrumAlpha: 10_000,
+            fulcrumAlphaBps: 10_000,
             kernelSpread: 4e18,
             withdrawalBaseBps: 200,
             withdrawalGrowthBps: 50,

@@ -22,7 +22,7 @@ Tiers are contiguous bands of _cumulative net vault assets_. The cumulative uppe
 geometric series
 
 ```text
-edge(k) = width0 · ((1 + g)^(k+1) − 1) / g          g = growthGBps / 10 000
+edge(k) = width0 · ((1 + g)^(k+1) − 1) / g          g = tierWidthGrowthBps / 10 000
 width(k) = edge(k) − edge(k−1)                      edge(−1) = 0
 ```
 
@@ -35,7 +35,7 @@ Two schedules appear in this repository. Both are 13 tiers; only the width numbe
 |                   | reference ladder                                        | deploy seed                                               |
 | ----------------- | ------------------------------------------------------- | --------------------------------------------------------- |
 | `width0`          | 1 000 TRUST                                             | 5 000 TRUST                                               |
-| `growthGBps`      | 5 000 (`g = 0.5`, each band 1.5× the one below)         | 2 000 (`g = 0.2`, each band 1.2× the one below)           |
+| `tierWidthGrowthBps`      | 5 000 (`g = 0.5`, each band 1.5× the one below)         | 2 000 (`g = 0.2`, each band 1.2× the one below)           |
 | top of the ladder | tier-11 edge ≈ 257 493 TRUST                            | tier-11 edge ≈ 197 903 TRUST                              |
 | where it lives    | the executable worked-example fixture in the test suite | `_defaultConfig()` in the dynamic-fee-curve deploy script |
 
@@ -253,7 +253,7 @@ Three ideas, in order:
    deposit (tier 3 in our example), so the candidate recipients are tiers `[0, 3)`. Per-band targeting across the
    traversed bands is a candidate refinement, not current behaviour.
 3. **A sliding fulcrum picks the most-earning band.** Each prior tier at integer distance `d` below the source earns a
-   triangular weight `max(0, 1 − |d − d*| / σ)`, peaking at a fulcrum `d* = (1 − fulcrumAlpha/BPS) · span`. Because `d*`
+   triangular weight `max(0, 1 − |d − d*| / σ)`, peaking at a fulcrum `d* = (1 − fulcrumAlphaBps/BPS) · span`. Because `d*`
    is a _fraction of the span_, the most-earning band slides up the ladder as the vault grows.
 
 ```mermaid
@@ -278,7 +278,7 @@ flowchart TB
   fulcrum -- "span == 0 (first-tier deposit)" --> prot
 ```
 
-The configured kernel — `fulcrumAlpha = BPS`, `kernelSpread = σ = 4` tiers — puts the fulcrum at `d* = 0`, which reduces
+The configured kernel — `fulcrumAlphaBps = BPS`, `kernelSpread = σ = 4` tiers — puts the fulcrum at `d* = 0`, which reduces
 the tent to the nearest-first window `1 − d/4`:
 
 | distance `d` below the source tier | raw weight |
@@ -447,7 +447,7 @@ read-only view. See [`generated/curve-claim.md`](./generated/curve-claim.md).
 
 | lever                        | bound                                                                                                                                                                                    |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `setConfig`                  | `width0 ∈ (0, uint128.max]`, `tierCount ∈ [1, 64]` and **grow-only** once live, `growthGBps ≤ 100·BPS`, `fulcrumAlpha ≤ BPS`, `kernelSpread ∈ (0, 64]`, `base ≤ cap ≤ BPS` on both sides |
+| `setConfig`                  | `width0 ∈ (0, uint128.max]`, `tierCount ∈ [1, 64]` and **grow-only** once live, `tierWidthGrowthBps ≤ 100·BPS`, `fulcrumAlphaBps ≤ BPS`, `kernelSpread ∈ (0, 64]`, `base ≤ cap ≤ BPS` on both sides |
 | a retune with live positions | recorded bucket ids and already-booked / pending earnings are untouched (accumulators are index-keyed); all _future_ tier decisions use the new schedule immediately                     |
 | `setTierFeeOverride`         | must stay within the schedule's declared per-tier caps — an override retunes a rate inside the same envelope, it does not bypass the cap                                                 |
 | `sweepProtocol`              | `protocolAccrued` only                                                                                                                                                                   |

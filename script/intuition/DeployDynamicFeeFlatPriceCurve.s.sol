@@ -125,7 +125,7 @@ contract DeployDynamicFeeFlatPriceCurve is SetupScript {
     ///      withdrawal fees, both capped at 10%. Fee distribution: triangular fulcrum, alpha = BPS,
     ///      sigma = 4e18 (the nearest-first window). Exit fees go to the leaver's own
     ///      tier (the exiting-tier default), falling through to the nearest occupied tier when that tier
-    ///      has no residual holders. `growthG = 0.2` -> `growthGBps = 2000`, i.e. each tier band is
+    ///      has no residual holders. `growthG = 0.2` -> `tierWidthGrowthBps = 2000`, i.e. each tier band is
     ///      1.2x the one below it (compounding): widths run 5,000 -> 44,581 TRUST across the 13 tiers.
     ///      The terminal tier 12 begins at the tier-11 edge, ~197,903 TRUST, and absorbs everything
     ///      above it unbounded; tier 12's own closed-form edge (~242,483 TRUST) is inert (never a
@@ -133,7 +133,7 @@ contract DeployDynamicFeeFlatPriceCurve is SetupScript {
     ///      These are the values the curve DEPLOYS with, not fixed constants: tier widths/edges, per-tier
     ///      fees, and the fulcrum alpha/sigma are all retunable post-deploy via `setConfig`, so treat any
     ///      number below as the starting schedule rather than a permanent one. The 13-tier count and the
-    ///      schedule shape are what stay put. Note `growthGBps` is a COMPOUNDING rate —
+    ///      schedule shape are what stay put. Note `tierWidthGrowthBps` is a COMPOUNDING rate —
     ///      the same numeric value stretches the ladder far more than a linear ramp would.
     ///      `minEligibleTierStake` — the floor a tier must hold to receive redistributed fees — ships at
     ///      0, i.e. DISABLED, reproducing the plain occupancy behaviour, so the mechanism changes nothing
@@ -144,11 +144,11 @@ contract DeployDynamicFeeFlatPriceCurve is SetupScript {
         config = DynamicFeeConfig({
             width0: 5000e18,
             tierCount: 13,
-            growthGBps: 2000,
+            tierWidthGrowthBps: 2000,
             depositBaseBps: 100,
             depositGrowthBps: 50,
             depositCapBps: 1000,
-            fulcrumAlpha: 10_000,
+            fulcrumAlphaBps: 10_000,
             kernelSpread: 4e18,
             withdrawalBaseBps: 200,
             withdrawalGrowthBps: 50,

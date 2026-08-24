@@ -13,19 +13,19 @@ pragma solidity 0.8.29;
 ///         accounting and needs reserved slots or a migration. Fields added once the curve is live
 ///         belong in their own slot after `protocolAccrued`.
 struct DynamicFeeConfig {
-    /// @dev Asset width (TRUST wei) of tier 0; later tiers widen geometrically by `growthGBps`.
+    /// @dev Asset width (TRUST wei) of tier 0; later tiers widen geometrically by `tierWidthGrowthBps`.
     uint256 width0;
     /// @dev Number of tiers before the schedule tops out. `1..MAX_TIER_COUNT`.
     uint256 tierCount;
     /// @dev Per-tier compounding width growth, in bps. The cumulative tier edge is the geometric series
-    ///      `edge(k) = width0 * ((1 + growthGBps/BPS)^(k+1) - 1) / (growthGBps/BPS)`, and a tier's width
+    ///      `edge(k) = width0 * ((1 + tierWidthGrowthBps/BPS)^(k+1) - 1) / (tierWidthGrowthBps/BPS)`, and a tier's width
     ///      is the span between edges, `width(k) = edge(k) - edge(k-1)`. Widths are derived from the
-    ///      edges rather than from an independently rounded `width0 * (1 + growthGBps/BPS)^k`, so the
+    ///      edges rather than from an independently rounded `width0 * (1 + tierWidthGrowthBps/BPS)^k`, so the
     ///      advertised width and the band a deposit is charged on cannot disagree. The target
-    ///      progression is geometric, each band `(1 + growthGBps/BPS)x` the one below, and the edge
+    ///      progression is geometric, each band `(1 + tierWidthGrowthBps/BPS)x` the one below, and the edge
     ///      difference is the exact on-chain width, so fixed-point rounding can leave the realized
     ///      ratio slightly off target. 0 gives a flat ladder of `width0`-wide bands.
-    uint256 growthGBps;
+    uint256 tierWidthGrowthBps;
     /// @dev Deposit fee in tier 0, in bps.
     uint256 depositBaseBps;
     /// @dev Added deposit-fee bps per tier climbed.
@@ -33,14 +33,14 @@ struct DynamicFeeConfig {
     /// @dev Cap on the per-tier deposit fee, in bps.
     uint256 depositCapBps;
     /// @dev Sliding-fulcrum position, in bps `[0, BPS]`. A deposit fee is split across the prior tiers
-    ///      by a triangular weight kernel peaking at `dStar = (1 - fulcrumAlpha/BPS) * span` tiers from
+    ///      by a triangular weight kernel peaking at `dStar = (1 - fulcrumAlphaBps/BPS) * span` tiers from
     ///      the source, where `span` is the number of prior tiers. `BPS` peaks on the nearest tier, `0`
     ///      on the farthest. Because the peak is a fraction of the span, it moves up the ladder as the
     ///      vault grows.
-    uint256 fulcrumAlpha;
+    uint256 fulcrumAlphaBps;
     /// @dev Triangular spread, in `TIER_PRECISION` (1e18) units of tiers. A tier at distance `d` earns
     ///      `max(0, 1 - |d - dStar| / kernelSpread)`, an earning window roughly `2 * kernelSpread` tiers
-    ///      wide with a hard zero beyond it. Must be non-zero. At `4e18` with `fulcrumAlpha = BPS`
+    ///      wide with a hard zero beyond it. Must be non-zero. At `4e18` with `fulcrumAlphaBps = BPS`
     ///      the three nearest tiers earn 50 / 33.3 / 16.7 when all three are eligible; an empty or
     ///      sub-floor tier drops out of the normalization and changes the split.
     uint256 kernelSpread;
@@ -74,7 +74,7 @@ struct DynamicFeeConfig {
     ///      Judged on the stake that will receive the fee: the redeem leg removes the exiter's own
     ///      residual first, the deposit leg judges a tier on its full stake. Applied at distribution
     ///      time from the current config, with no snapshot and no migration on change. Where an excluded
-    ///      tier's share goes differs between the two legs; see the implementation.
+    ///      tier's slice goes differs between the two legs; see the implementation.
     uint256 minEligibleTierStake;
 }
 

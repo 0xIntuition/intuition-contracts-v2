@@ -75,11 +75,11 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         config = DynamicFeeConfig({
             width0: 10e18,
             tierCount: 5,
-            growthGBps: 2000,
+            tierWidthGrowthBps: 2000,
             depositBaseBps: 100,
             depositGrowthBps: 50,
             depositCapBps: 1000,
-            fulcrumAlpha: 10_000,
+            fulcrumAlphaBps: 10_000,
             kernelSpread: 4e18,
             withdrawalBaseBps: 200,
             withdrawalGrowthBps: 50,
@@ -123,14 +123,14 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     ///      never fall below `width0`, let alone reach zero.
     ///
     ///      Asserting the invariant rather than the branch is the useful direction: it keeps the guard
-    ///      honest if a future change ever loosens the `width0` or `growthGBps` bounds that make it dead.
-    function testFuzz_tierUpperEdge_isNeverZeroForAnyValidSchedule(uint96 width0, uint8 tierCount, uint16 growthGBps)
+    ///      honest if a future change ever loosens the `width0` or `tierWidthGrowthBps` bounds that make it dead.
+    function testFuzz_tierUpperEdge_isNeverZeroForAnyValidSchedule(uint96 width0, uint8 tierCount, uint16 tierWidthGrowthBps)
         external
     {
         DynamicFeeConfig memory config = _defaultConfig();
         config.width0 = bound(width0, 1, type(uint96).max);
         config.tierCount = bound(tierCount, 1, 64);
-        config.growthGBps = bound(growthGBps, 0, 5000);
+        config.tierWidthGrowthBps = bound(tierWidthGrowthBps, 0, 5000);
 
         DynamicFeeFlatPriceCurve curve = _deploy(config);
 
@@ -164,14 +164,14 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     ///           edge(k-1)`. The piecewise fee walk charges each band by its edge span, so the public
     ///           width view must agree with it to the wei — a width computed from an independently
     ///           rounded `(1+g)^k` would drift from the real band and misreport what a depositor pays.
-    function testFuzz_tierLadder_invariants(uint256 width0, uint256 growthGBps, uint256 tierCount) external {
+    function testFuzz_tierLadder_invariants(uint256 width0, uint256 tierWidthGrowthBps, uint256 tierCount) external {
         width0 = bound(width0, 1, 1e30);
-        growthGBps = bound(growthGBps, 0, 100 * 10_000);
+        tierWidthGrowthBps = bound(tierWidthGrowthBps, 0, 100 * 10_000);
         tierCount = bound(tierCount, 1, dynamicFeeCurve.MAX_TIER_COUNT());
 
         DynamicFeeConfig memory config = _defaultConfig();
         config.width0 = width0;
-        config.growthGBps = growthGBps;
+        config.tierWidthGrowthBps = tierWidthGrowthBps;
         config.tierCount = tierCount;
 
         // An over-steep schedule is rejected at config time; that is the guarantee under test.
@@ -215,7 +215,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     function test_tierWidthAt_matchesEdgeDelta_onNonExactRatio() external {
         DynamicFeeConfig memory config = _defaultConfig();
         config.width0 = 1e18;
-        config.growthGBps = 1; // g = 0.0001 -> (1+g)^k is irrational in WAD
+        config.tierWidthGrowthBps = 1; // g = 0.0001 -> (1+g)^k is irrational in WAD
         config.tierCount = dynamicFeeCurve.MAX_TIER_COUNT();
         DynamicFeeFlatPriceCurve curve = _deploy(config);
 
@@ -229,7 +229,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         }
     }
 
-    /// @dev The exact deployed 13-tier production schedule (`width0 = 5000 TRUST`, `growthGBps = 2000`):
+    /// @dev The exact deployed 13-tier production schedule (`width0 = 5000 TRUST`, `tierWidthGrowthBps = 2000`):
     ///      pin the edges, the widths as edge deltas, and that the widths sum to the top edge. This is
     ///      the schedule that actually ships, so it gets an explicit fixture rather than only fuzz
     ///      coverage. Terminal tier 12 begins at the tier-11 edge (~197,903 TRUST); tier 12's own
@@ -237,7 +237,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     function test_deployedProductionSchedule_edgesWidthsAndSum() external {
         DynamicFeeConfig memory config = _defaultConfig();
         config.width0 = 5000e18;
-        config.growthGBps = 2000; // g = 0.2
+        config.tierWidthGrowthBps = 2000; // g = 0.2
         config.tierCount = 13;
         DynamicFeeFlatPriceCurve curve = _deploy(config);
 
@@ -327,12 +327,12 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         return _deploy(config);
     }
 
-    /// @dev `growthGBps = 0` degenerates to a flat ladder: every band is exactly `width0` wide and the
+    /// @dev `tierWidthGrowthBps = 0` degenerates to a flat ladder: every band is exactly `width0` wide and the
     ///      edges are plain multiples. The closed form divides by `g`, so this case is handled
     ///      explicitly rather than falling into a division by zero.
     function test_tierMath_zeroGrowthGivesConstantWidths() external {
         DynamicFeeConfig memory config = _defaultConfig();
-        config.growthGBps = 0;
+        config.tierWidthGrowthBps = 0;
         DynamicFeeFlatPriceCurve flatCurve = _deploy(config);
 
         for (uint256 k = 0; k < 5; ++k) {
@@ -350,7 +350,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         DynamicFeeConfig memory config = _defaultConfig();
         config.width0 = type(uint128).max;
         config.tierCount = dynamicFeeCurve.MAX_TIER_COUNT();
-        config.growthGBps = 100 * BPS; // 100x per tier, compounded 64 times
+        config.tierWidthGrowthBps = 100 * BPS; // 100x per tier, compounded 64 times
 
         vm.expectRevert(FixedPointMathLib.RPowOverflow.selector);
         this.deployWithConfig(config);
@@ -595,7 +595,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         returns (uint256 tier0, uint256 tier1, uint256 tier2, uint256 tier3)
     {
         DynamicFeeConfig memory config = _defaultConfig();
-        config.fulcrumAlpha = alpha;
+        config.fulcrumAlphaBps = alpha;
         config.kernelSpread = sigma;
         config.depositToPriorTierBps = shareBps;
         DynamicFeeFlatPriceCurve c = _deploy(config);
@@ -668,7 +668,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     ///      receive and does not perturb the weights.
     function test_fulcrum_degenerateGuard_awardsNearestNotProtocol() external {
         DynamicFeeConfig memory config = _defaultConfig();
-        config.fulcrumAlpha = 3750; // dStar = (1 - 0.375) * 4 = 2.5 tiers from the source
+        config.fulcrumAlphaBps = 3750; // dStar = (1 - 0.375) * 4 = 2.5 tiers from the source
         config.kernelSpread = WAD + 1; // the tightest window `_setConfig` permits: ±1 tier
         DynamicFeeFlatPriceCurve c = _deploy(config);
         address dave = makeAddr("dave-degen");
@@ -706,7 +706,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         pool = bound(pool, 1, 1_000_000e18);
 
         DynamicFeeConfig memory config = _defaultConfig();
-        config.fulcrumAlpha = alpha;
+        config.fulcrumAlphaBps = alpha;
         config.kernelSpread = sigma;
         DynamicFeeFlatPriceCurve c = _deploy(config);
         address dave = makeAddr("dave-fuzz");
@@ -773,7 +773,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     ///      dave could route the same lump to carol simply by paying from a second wallet.
     function test_depositToPriorTier_targetsNearestOccupiedPriorTierEvenWhenItIsTheDepositors() external {
         DynamicFeeConfig memory config = _defaultConfig();
-        config.fulcrumAlpha = BPS;
+        config.fulcrumAlphaBps = BPS;
         config.kernelSpread = 4e18;
         config.depositToPriorTierBps = BPS; // 100% spike -> unambiguous routing target
         DynamicFeeFlatPriceCurve c = _deploy(config);
@@ -844,7 +844,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         pool = bound(pool, 1, 1_000_000e18);
 
         DynamicFeeConfig memory config = _defaultConfig();
-        config.fulcrumAlpha = alpha;
+        config.fulcrumAlphaBps = alpha;
         config.kernelSpread = sigma;
         config.depositToPriorTierBps = shareBps;
         DynamicFeeFlatPriceCurve c = _deploy(config);
@@ -1527,7 +1527,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     /// @dev The fulcrum position is a fraction of the span, so it must lie in `[0, BPS]`.
     function test_setConfig_revertsOnFulcrumAlphaAboveBps() external {
         DynamicFeeConfig memory config = _defaultConfig();
-        config.fulcrumAlpha = BPS + 1;
+        config.fulcrumAlphaBps = BPS + 1;
         vm.expectRevert(DynamicFeeFlatPriceCurve.DynamicFeeFlatPriceCurve_InvalidConfig.selector);
         dynamicFeeCurve.setConfig(config);
     }
@@ -1566,7 +1566,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         dynamicFeeCurve.setConfig(config);
 
         config = _defaultConfig();
-        config.growthGBps = 100 * BPS + 1;
+        config.tierWidthGrowthBps = 100 * BPS + 1;
         vm.expectRevert(DynamicFeeFlatPriceCurve.DynamicFeeFlatPriceCurve_InvalidConfig.selector);
         dynamicFeeCurve.setConfig(config);
     }
