@@ -132,18 +132,18 @@ interface IBaseCurve {
     ///         which are computed first and are never reduced by this fee — it only reduces the
     ///         depositor's net staked amount.
     /// @param termId The term (atom or triple) being deposited into
-    /// @param assets The deposit base the fee is quoted on (post-min-shares cost, pre-MultiVault-fees)
+    /// @param baseAssets The deposit base the fee is quoted on (post-min-shares cost, pre-MultiVault-fees)
     /// @return fee The curve-level deposit fee, in assets
-    function quoteDepositFee(bytes32 termId, uint256 assets) external view returns (uint256 fee);
+    function quoteDepositFee(bytes32 termId, uint256 baseAssets) external view returns (uint256 fee);
 
     /// @notice Quote the curve-level fee for a redemption. Layered on top of the MultiVault's own
     ///         fees, which are computed alongside and are never reduced by this fee — it only
     ///         reduces the redeemer's net payout.
     /// @param termId The term (atom or triple) being redeemed from
     /// @param account The redeeming account (address(0) on account-less preview paths)
-    /// @param assets The gross asset value of the redeemed shares the fee is quoted on
+    /// @param grossAssets The gross asset value of the redeemed shares the fee is quoted on
     /// @return fee The curve-level redeem fee, in assets
-    function quoteRedeemFee(bytes32 termId, address account, uint256 assets) external view returns (uint256 fee);
+    function quoteRedeemFee(bytes32 termId, address account, uint256 grossAssets) external view returns (uint256 fee);
 
     /// @notice Record a deposit on the curve's own ledger and receive the quoted deposit fee as
     ///         `msg.value`. Called by the MultiVault after all of its vault-state writes, and only

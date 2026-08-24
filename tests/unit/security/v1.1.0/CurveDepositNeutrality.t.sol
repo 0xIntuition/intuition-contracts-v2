@@ -148,10 +148,10 @@ contract CurveDepositNeutralityTest is Test {
 
     /// @dev A deposit priced the way MultiVault prices it: quote the fee on the base, stake the rest,
     ///      forward the fee. Keeps the harness honest about the quote/forward equality.
-    function _deposit(address account, uint256 base) internal returns (uint256 fee, uint256 netStake) {
+    function _deposit(address account, uint256 base) internal returns (uint256 fee, uint256 shares) {
         fee = curve.quoteDepositFee(T1, base);
-        netStake = base - fee;
-        curve.recordDeposit{ value: fee }(T1, account, netStake);
+        shares = base - fee;
+        curve.recordDeposit{ value: fee }(T1, account, shares);
     }
 
     /// @dev A redeem priced the way MultiVault prices it: quote at the account's own tier, forward it.
@@ -218,7 +218,7 @@ contract CurveDepositNeutralityTest is Test {
     ///      the contract uses, so the comparison isolates the REPLAY from the fee quote.
     function _depositBandByBand(address account, uint256 base) internal {
         uint256 fee = curve.quoteDepositFee(T1, base);
-        uint256 netStake = base - fee;
+        uint256 shares = base - fee;
         uint256 topTier = curve.getConfig().tierCount - 1;
 
         // Pass 1: the bands, and the weight each carries.
@@ -228,7 +228,7 @@ contract CurveDepositNeutralityTest is Test {
         {
             uint256 cursor = curve.vaultStake(T1);
             uint256 tier = curve.tierOf(cursor);
-            uint256 remaining = netStake;
+            uint256 remaining = shares;
             while (remaining > 0) {
                 uint256 chunk = remaining;
                 if (tier < topTier) {
@@ -628,11 +628,11 @@ contract CurveDepositNeutralityTest is Test {
 
         _deposit(alice, seed);
 
-        (, uint256 netStake) = _deposit(bob, amount);
-        uint256 exitFee = curve.quoteRedeemFee(T1, bob, netStake);
-        curve.recordRedeem{ value: exitFee }(T1, bob, netStake);
+        (, uint256 shares) = _deposit(bob, amount);
+        uint256 exitFee = curve.quoteRedeemFee(T1, bob, shares);
+        curve.recordRedeem{ value: exitFee }(T1, bob, shares);
 
-        uint256 returned = (netStake - exitFee) + curve.claimable(bob, T1);
+        uint256 returned = (shares - exitFee) + curve.claimable(bob, T1);
         assertLt(returned, amount, "a wash round trip always loses value");
     }
 
@@ -707,14 +707,14 @@ contract CurveDepositNeutralityTest is Test {
 
         uint256 claimableBeforeWash = curve.claimable(alice, T1);
         uint256 washGross = 40e18;
-        (, uint256 netStake) = _deposit(alice, washGross);
+        (, uint256 shares) = _deposit(alice, washGross);
 
-        uint256 exitFee = curve.quoteRedeemFee(T1, alice, netStake);
-        curve.recordRedeem{ value: exitFee }(T1, alice, netStake);
+        uint256 exitFee = curve.quoteRedeemFee(T1, alice, shares);
+        curve.recordRedeem{ value: exitFee }(T1, alice, shares);
 
         // Everything the washed leg returns: the stake that came back, plus only the earnings the
         // wash itself generated. Anything she had already accrued is not proceeds of this round trip.
-        uint256 recovered = (netStake - exitFee) + (curve.claimable(alice, T1) - claimableBeforeWash);
+        uint256 recovered = (shares - exitFee) + (curve.claimable(alice, T1) - claimableBeforeWash);
 
         assertGt(exitFee, 0, "the exit fee is what keeps the round trip costly");
         assertLt(recovered, washGross, "the sole occupant ends behind on the washed leg itself");
@@ -752,7 +752,7 @@ contract CurveDepositNeutralityTest is Test {
 
         uint256 feesPaid;
         {
-            (uint256 depositFee, uint256 netStake) = _deposit(actorA, washGross);
+            (uint256 depositFee, uint256 shares) = _deposit(actorA, washGross);
 
             // Snapshot IMMEDIATELY before the redeem so the exclusion assertion isolates the redeem
             // leg. Bounding actorA's total gain by the DEPOSIT fee instead does not do this: he has
@@ -760,8 +760,8 @@ contract CurveDepositNeutralityTest is Test {
             // an erroneous exit-fee credit through unnoticed.
             uint256 aBeforeRedeem = curve.claimable(actorA, T1);
 
-            uint256 exitFee = curve.quoteRedeemFee(T1, actorA, netStake);
-            curve.recordRedeem{ value: exitFee }(T1, actorA, netStake);
+            uint256 exitFee = curve.quoteRedeemFee(T1, actorA, shares);
+            curve.recordRedeem{ value: exitFee }(T1, actorA, shares);
             feesPaid = depositFee + exitFee;
 
             assertEq(
@@ -772,7 +772,7 @@ contract CurveDepositNeutralityTest is Test {
 
             // The actor is BOTH addresses, so the round-trip P&L must count both.
             uint256 recovered =
-                (netStake - exitFee) + (curve.claimable(actorA, T1) + curve.claimable(actorB, T1) - pairEarnedBefore);
+                (shares - exitFee) + (curve.claimable(actorA, T1) + curve.claimable(actorB, T1) - pairEarnedBefore);
             assertApproxEqAbs(recovered, washGross, MAX_TRUNCATION_DUST_WEI, "a two-address actor round-trips for free");
         }
 

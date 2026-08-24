@@ -919,20 +919,18 @@ library MultiVaultLib {
     ///      lockstep with the vault. `hook` carries the decision and quote resolved during
     ///      {_calculateDeposit}, so the forwarded value equals the withheld fee by dataflow — the
     ///      hook is never re-resolved or re-quoted after the vault-state writes.
-    function _recordCurveDeposit(bytes32 termId, address receiver, CurveHook memory hook, uint256 sharesForReceiver)
-        private
-    {
+    function _recordCurveDeposit(bytes32 termId, address account, CurveHook memory hook, uint256 shares) private {
         if (hook.curve == address(0)) return;
-        IBaseCurve(hook.curve).recordDeposit{ value: hook.fee }(termId, receiver, sharesForReceiver);
+        IBaseCurve(hook.curve).recordDeposit{ value: hook.fee }(termId, account, shares);
     }
 
     /// @dev Forward the curve-level withdrawal fee (native) to the vault's curve and book the exit;
     ///      a no-op for any curve without the redeem hook. Always invoked on a hook curve so the
     ///      curve's per-user share ledger stays in lockstep with the vault. `hook` carries the
     ///      decision and quote resolved during {_calculateRedeem} — never re-resolved here.
-    function _recordCurveRedeem(bytes32 termId, address receiver, CurveHook memory hook, uint256 shares) private {
+    function _recordCurveRedeem(bytes32 termId, address account, CurveHook memory hook, uint256 shares) private {
         if (hook.curve == address(0)) return;
-        IBaseCurve(hook.curve).recordRedeem{ value: hook.fee }(termId, receiver, shares);
+        IBaseCurve(hook.curve).recordRedeem{ value: hook.fee }(termId, account, shares);
     }
 
     /* =================================================== */

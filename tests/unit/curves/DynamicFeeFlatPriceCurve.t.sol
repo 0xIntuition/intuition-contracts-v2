@@ -90,12 +90,12 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         });
     }
 
-    function _recordDeposit(bytes32 termId, address account, uint256 netStake, uint256 fee) internal {
-        dynamicFeeCurve.recordDeposit{ value: fee }(termId, account, netStake);
+    function _recordDeposit(bytes32 termId, address account, uint256 shares, uint256 fee) internal {
+        dynamicFeeCurve.recordDeposit{ value: fee }(termId, account, shares);
     }
 
-    function _recordRedeem(bytes32 termId, address account, uint256 withdrawnStake, uint256 fee) internal {
-        dynamicFeeCurve.recordRedeem{ value: fee }(termId, account, withdrawnStake);
+    function _recordRedeem(bytes32 termId, address account, uint256 shares, uint256 fee) internal {
+        dynamicFeeCurve.recordRedeem{ value: fee }(termId, account, shares);
     }
 
     /* =================================================== */
@@ -521,10 +521,10 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     ///      how the old five-field `DepositRecorded` declaration in this file went stale unnoticed.
     function test_recordDeposit_emitsPerBandAndSummaryEvents() external {
         uint256 fee = dynamicFeeCurve.quoteDepositFee(T1, 15e18);
-        uint256 netStake = 15e18 - fee;
+        uint256 shares = 15e18 - fee;
 
         vm.recordLogs();
-        _recordDeposit(T1, alice, netStake, fee);
+        _recordDeposit(T1, alice, shares, fee);
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
         uint256 bandCount;
@@ -552,7 +552,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
                     uint256 accountTier,
                     uint256 accountAvgTier
                 ) = abi.decode(logs[i].data, (uint256, uint256, uint256, uint256, uint256));
-                assertEq(emittedStake, netStake, "summary carries the net stake");
+                assertEq(emittedStake, shares, "summary carries the net stake");
                 assertEq(emittedFee, fee, "summary carries the forwarded fee");
                 assertEq(sourceTier, 0, "the vault started in tier 0");
                 assertEq(accountTier, dynamicFeeCurve.userTier(T1, alice), "summary tier matches the stored bucket");
@@ -565,7 +565,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
 
         assertEq(bandCount, 2, "15e18 into an empty vault crosses tier 0 and tier 1");
         assertEq(summaryCount, 1, "exactly one summary event per deposit");
-        assertEq(bandStakeSum, netStake, "the band stakes reconstruct the deposit");
+        assertEq(bandStakeSum, shares, "the band stakes reconstruct the deposit");
         assertEq(bandFeeSum, fee, "the band fees reconstruct the forwarded fee exactly");
     }
 
