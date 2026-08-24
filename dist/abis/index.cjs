@@ -388,7 +388,7 @@ var MultiVaultAbi = [
     "name": "claimAtomWalletDepositFees",
     "inputs": [
       {
-        "name": "termId",
+        "name": "atomId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -478,7 +478,7 @@ var MultiVaultAbi = [
     "name": "createAtoms",
     "inputs": [
       {
-        "name": "data",
+        "name": "atomDatas",
         "type": "bytes[]",
         "internalType": "bytes[]"
       },
@@ -507,7 +507,7 @@ var MultiVaultAbi = [
         "internalType": "address"
       },
       {
-        "name": "data",
+        "name": "atomDatas",
         "type": "bytes[]",
         "internalType": "bytes[]"
       },
@@ -536,7 +536,7 @@ var MultiVaultAbi = [
         "internalType": "address"
       },
       {
-        "name": "data",
+        "name": "atomDatas",
         "type": "bytes[]",
         "internalType": "bytes[]"
       },
@@ -891,7 +891,7 @@ var MultiVaultAbi = [
     "name": "getAtomCreatedAt",
     "inputs": [
       {
-        "name": "termId",
+        "name": "atomId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -910,7 +910,7 @@ var MultiVaultAbi = [
     "name": "getAtomCreator",
     "inputs": [
       {
-        "name": "termId",
+        "name": "atomId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -1212,7 +1212,7 @@ var MultiVaultAbi = [
     "name": "getTripleIdFromCounterId",
     "inputs": [
       {
-        "name": "counterId",
+        "name": "counterTripleId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -1699,7 +1699,7 @@ var MultiVaultAbi = [
     "name": "isAtom",
     "inputs": [
       {
-        "name": "atomId",
+        "name": "termId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -1737,7 +1737,7 @@ var MultiVaultAbi = [
     "name": "isTermCreated",
     "inputs": [
       {
-        "name": "id",
+        "name": "termId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -1788,7 +1788,7 @@ var MultiVaultAbi = [
     "name": "maxRedeem",
     "inputs": [
       {
-        "name": "sender",
+        "name": "account",
         "type": "address",
         "internalType": "address"
       },
@@ -1902,7 +1902,7 @@ var MultiVaultAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "assetsAfterFixedFees",
+        "name": "feeBaseAssets",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -2004,7 +2004,7 @@ var MultiVaultAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "assetsAfterFixedFees",
+        "name": "feeBaseAssets",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -2730,7 +2730,7 @@ var MultiVaultAbi = [
         "internalType": "address"
       },
       {
-        "name": "amount",
+        "name": "feeAmount",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -2829,7 +2829,7 @@ var MultiVaultAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "totalShares",
+        "name": "receiverSharesAfter",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -3003,7 +3003,7 @@ var MultiVaultAbi = [
         "internalType": "address"
       },
       {
-        "name": "amount",
+        "name": "feeAmount",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -3028,7 +3028,7 @@ var MultiVaultAbi = [
         "internalType": "address"
       },
       {
-        "name": "amount",
+        "name": "feeAmount",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -3047,7 +3047,7 @@ var MultiVaultAbi = [
         "internalType": "address"
       },
       {
-        "name": "receiver",
+        "name": "account",
         "type": "address",
         "indexed": true,
         "internalType": "address"
@@ -3071,19 +3071,19 @@ var MultiVaultAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "totalShares",
+        "name": "accountSharesAfter",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
       },
       {
-        "name": "assets",
+        "name": "assetsAfterFees",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
       },
       {
-        "name": "fees",
+        "name": "totalFees",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -3465,7 +3465,7 @@ var MultiVaultAbi = [
     "name": "MultiVaultCore_AtomDoesNotExist",
     "inputs": [
       {
-        "name": "termId",
+        "name": "atomId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -3492,7 +3492,7 @@ var MultiVaultAbi = [
     "name": "MultiVaultCore_TripleDoesNotExist",
     "inputs": [
       {
-        "name": "termId",
+        "name": "tripleId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -3712,7 +3712,7 @@ var MultiVaultAbi = [
     "name": "MultiVault_TripleExists",
     "inputs": [
       {
-        "name": "termId",
+        "name": "tripleId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
@@ -4221,7 +4221,7 @@ var MultiVaultMigrationModeAbi = [
     "name": "claimAtomWalletDepositFees",
     "inputs": [
       {
-        "name": "termId",
+        "name": "atomId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -4311,7 +4311,7 @@ var MultiVaultMigrationModeAbi = [
     "name": "createAtoms",
     "inputs": [
       {
-        "name": "data",
+        "name": "atomDatas",
         "type": "bytes[]",
         "internalType": "bytes[]"
       },
@@ -4340,7 +4340,7 @@ var MultiVaultMigrationModeAbi = [
         "internalType": "address"
       },
       {
-        "name": "data",
+        "name": "atomDatas",
         "type": "bytes[]",
         "internalType": "bytes[]"
       },
@@ -4369,7 +4369,7 @@ var MultiVaultMigrationModeAbi = [
         "internalType": "address"
       },
       {
-        "name": "data",
+        "name": "atomDatas",
         "type": "bytes[]",
         "internalType": "bytes[]"
       },
@@ -4724,7 +4724,7 @@ var MultiVaultMigrationModeAbi = [
     "name": "getAtomCreatedAt",
     "inputs": [
       {
-        "name": "termId",
+        "name": "atomId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -4743,7 +4743,7 @@ var MultiVaultMigrationModeAbi = [
     "name": "getAtomCreator",
     "inputs": [
       {
-        "name": "termId",
+        "name": "atomId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -5045,7 +5045,7 @@ var MultiVaultMigrationModeAbi = [
     "name": "getTripleIdFromCounterId",
     "inputs": [
       {
-        "name": "counterId",
+        "name": "counterTripleId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -5532,7 +5532,7 @@ var MultiVaultMigrationModeAbi = [
     "name": "isAtom",
     "inputs": [
       {
-        "name": "atomId",
+        "name": "termId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -5570,7 +5570,7 @@ var MultiVaultMigrationModeAbi = [
     "name": "isTermCreated",
     "inputs": [
       {
-        "name": "id",
+        "name": "termId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -5621,7 +5621,7 @@ var MultiVaultMigrationModeAbi = [
     "name": "maxRedeem",
     "inputs": [
       {
-        "name": "sender",
+        "name": "account",
         "type": "address",
         "internalType": "address"
       },
@@ -5735,7 +5735,7 @@ var MultiVaultMigrationModeAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "assetsAfterFixedFees",
+        "name": "feeBaseAssets",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -5837,7 +5837,7 @@ var MultiVaultMigrationModeAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "assetsAfterFixedFees",
+        "name": "feeBaseAssets",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -6576,7 +6576,7 @@ var MultiVaultMigrationModeAbi = [
         "internalType": "address"
       },
       {
-        "name": "amount",
+        "name": "feeAmount",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -6675,7 +6675,7 @@ var MultiVaultMigrationModeAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "totalShares",
+        "name": "receiverSharesAfter",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -6849,7 +6849,7 @@ var MultiVaultMigrationModeAbi = [
         "internalType": "address"
       },
       {
-        "name": "amount",
+        "name": "feeAmount",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -6874,7 +6874,7 @@ var MultiVaultMigrationModeAbi = [
         "internalType": "address"
       },
       {
-        "name": "amount",
+        "name": "feeAmount",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -6893,7 +6893,7 @@ var MultiVaultMigrationModeAbi = [
         "internalType": "address"
       },
       {
-        "name": "receiver",
+        "name": "account",
         "type": "address",
         "indexed": true,
         "internalType": "address"
@@ -6917,19 +6917,19 @@ var MultiVaultMigrationModeAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "totalShares",
+        "name": "accountSharesAfter",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
       },
       {
-        "name": "assets",
+        "name": "assetsAfterFees",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
       },
       {
-        "name": "fees",
+        "name": "totalFees",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -7311,7 +7311,7 @@ var MultiVaultMigrationModeAbi = [
     "name": "MultiVaultCore_AtomDoesNotExist",
     "inputs": [
       {
-        "name": "termId",
+        "name": "atomId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -7338,7 +7338,7 @@ var MultiVaultMigrationModeAbi = [
     "name": "MultiVaultCore_TripleDoesNotExist",
     "inputs": [
       {
-        "name": "termId",
+        "name": "tripleId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -7563,7 +7563,7 @@ var MultiVaultMigrationModeAbi = [
     "name": "MultiVault_TripleExists",
     "inputs": [
       {
-        "name": "termId",
+        "name": "tripleId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
@@ -7938,7 +7938,7 @@ var FeeProxyAbi = [
         "internalType": "bytes[]"
       },
       {
-        "name": "assets",
+        "name": "grossAssets",
         "type": "uint256[]",
         "internalType": "uint256[]"
       },
@@ -7984,7 +7984,7 @@ var FeeProxyAbi = [
         "internalType": "bytes[]"
       },
       {
-        "name": "assets",
+        "name": "grossAssets",
         "type": "uint256[]",
         "internalType": "uint256[]"
       },
@@ -8045,7 +8045,7 @@ var FeeProxyAbi = [
         "internalType": "bytes32[]"
       },
       {
-        "name": "assets",
+        "name": "grossAssets",
         "type": "uint256[]",
         "internalType": "uint256[]"
       },
@@ -8101,7 +8101,7 @@ var FeeProxyAbi = [
         "internalType": "uint256[]"
       },
       {
-        "name": "assets",
+        "name": "grossAssets",
         "type": "uint256[]",
         "internalType": "uint256[]"
       },
@@ -8443,12 +8443,12 @@ var FeeProxyAbi = [
     ],
     "outputs": [
       {
-        "name": "fee",
+        "name": "affiliateFee",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "forwarded",
+        "name": "forwardedAssets",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -8472,12 +8472,12 @@ var FeeProxyAbi = [
     ],
     "outputs": [
       {
-        "name": "fee",
+        "name": "affiliateFee",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "forwarded",
+        "name": "forwardedAssets",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -8710,7 +8710,7 @@ var FeeProxyAbi = [
     "name": "updateFeeRecipient",
     "inputs": [
       {
-        "name": "recipient",
+        "name": "feeRecipient",
         "type": "address",
         "internalType": "address"
       }
@@ -8735,7 +8735,7 @@ var FeeProxyAbi = [
         "internalType": "address"
       },
       {
-        "name": "amount",
+        "name": "affiliateFee",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -8939,7 +8939,7 @@ var FeeProxyAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "totalFee",
+        "name": "affiliateFee",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -8982,7 +8982,7 @@ var FeeProxyAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "totalFee",
+        "name": "affiliateFee",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -9025,7 +9025,7 @@ var FeeProxyAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "totalFee",
+        "name": "affiliateFee",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -9068,7 +9068,7 @@ var FeeProxyAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "fee",
+        "name": "affiliateFee",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -9201,7 +9201,7 @@ var FeeProxyAbi = [
         "internalType": "address"
       },
       {
-        "name": "amount",
+        "name": "registrationFee",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -9449,7 +9449,7 @@ var FeeProxyAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "gross",
+        "name": "grossAssets",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -9582,7 +9582,7 @@ var FeeProxyAbi = [
     "name": "FeeProxy_RegistrationFeeMismatch",
     "inputs": [
       {
-        "name": "sent",
+        "name": "supplied",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -9611,7 +9611,7 @@ var FeeProxyAbi = [
   },
   {
     "type": "error",
-    "name": "FeeProxy_ZeroValue",
+    "name": "FeeProxy_ZeroAssets",
     "inputs": []
   },
   {
@@ -15494,6 +15494,19 @@ var DynamicFeeFlatPriceCurveAbi = [
   },
   {
     "type": "function",
+    "name": "MAX_REDEEM_CAP_BPS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_SHARES",
     "inputs": [],
     "outputs": [
@@ -15508,19 +15521,6 @@ var DynamicFeeFlatPriceCurveAbi = [
   {
     "type": "function",
     "name": "MAX_TIER_COUNT",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "MAX_WITHDRAWAL_CAP_BPS",
     "inputs": [],
     "outputs": [
       {
@@ -15790,25 +15790,6 @@ var DynamicFeeFlatPriceCurveAbi = [
   },
   {
     "type": "function",
-    "name": "earned",
-    "inputs": [
-      {
-        "name": "user",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "amount",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "getConfig",
     "inputs": [],
     "outputs": [
@@ -15828,7 +15809,7 @@ var DynamicFeeFlatPriceCurveAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "growthGBps",
+            "name": "tierWidthGrowthBps",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -15848,7 +15829,7 @@ var DynamicFeeFlatPriceCurveAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "fulcrumAlpha",
+            "name": "fulcrumAlphaBps",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -15858,22 +15839,22 @@ var DynamicFeeFlatPriceCurveAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "withdrawalBaseBps",
+            "name": "redeemBaseBps",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "withdrawalGrowthBps",
+            "name": "redeemGrowthBps",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "withdrawalCapBps",
+            "name": "redeemCapBps",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "withdrawalToFulcrumTiersBps",
+            "name": "redeemToFulcrumTiersBps",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -15953,7 +15934,7 @@ var DynamicFeeFlatPriceCurveAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "growthGBps",
+            "name": "tierWidthGrowthBps",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -15973,7 +15954,7 @@ var DynamicFeeFlatPriceCurveAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "fulcrumAlpha",
+            "name": "fulcrumAlphaBps",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -15983,22 +15964,22 @@ var DynamicFeeFlatPriceCurveAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "withdrawalBaseBps",
+            "name": "redeemBaseBps",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "withdrawalGrowthBps",
+            "name": "redeemGrowthBps",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "withdrawalCapBps",
+            "name": "redeemCapBps",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "withdrawalToFulcrumTiersBps",
+            "name": "redeemToFulcrumTiersBps",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -16364,7 +16345,7 @@ var DynamicFeeFlatPriceCurveAbi = [
         "internalType": "address"
       },
       {
-        "name": "netStake",
+        "name": "shares",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -16387,13 +16368,32 @@ var DynamicFeeFlatPriceCurveAbi = [
         "internalType": "address"
       },
       {
-        "name": "withdrawnStake",
+        "name": "shares",
         "type": "uint256",
         "internalType": "uint256"
       }
     ],
     "outputs": [],
     "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "redeemFeeBps",
+    "inputs": [
+      {
+        "name": "tier",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -16412,7 +16412,7 @@ var DynamicFeeFlatPriceCurveAbi = [
         "internalType": "bytes32"
       },
       {
-        "name": "user",
+        "name": "account",
         "type": "address",
         "internalType": "address"
       }
@@ -16446,7 +16446,7 @@ var DynamicFeeFlatPriceCurveAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "growthGBps",
+            "name": "tierWidthGrowthBps",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -16466,7 +16466,7 @@ var DynamicFeeFlatPriceCurveAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "fulcrumAlpha",
+            "name": "fulcrumAlphaBps",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -16476,22 +16476,22 @@ var DynamicFeeFlatPriceCurveAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "withdrawalBaseBps",
+            "name": "redeemBaseBps",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "withdrawalGrowthBps",
+            "name": "redeemGrowthBps",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "withdrawalCapBps",
+            "name": "redeemCapBps",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "withdrawalToFulcrumTiersBps",
+            "name": "redeemToFulcrumTiersBps",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -16526,7 +16526,7 @@ var DynamicFeeFlatPriceCurveAbi = [
         "internalType": "uint16"
       },
       {
-        "name": "newWithdrawalFeeBps",
+        "name": "newRedeemFeeBps",
         "type": "uint16",
         "internalType": "uint16"
       }
@@ -16575,7 +16575,7 @@ var DynamicFeeFlatPriceCurveAbi = [
         "internalType": "uint16"
       },
       {
-        "name": "withdrawalFeeBps",
+        "name": "redeemFeeBps",
         "type": "uint16",
         "internalType": "uint16"
       }
@@ -16630,7 +16630,7 @@ var DynamicFeeFlatPriceCurveAbi = [
     "name": "tierUpperEdge",
     "inputs": [
       {
-        "name": "k",
+        "name": "tier",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -16649,7 +16649,7 @@ var DynamicFeeFlatPriceCurveAbi = [
     "name": "tierWidthAt",
     "inputs": [
       {
-        "name": "k",
+        "name": "tier",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -16686,7 +16686,7 @@ var DynamicFeeFlatPriceCurveAbi = [
         "internalType": "bytes32"
       },
       {
-        "name": "user",
+        "name": "account",
         "type": "address",
         "internalType": "address"
       }
@@ -16710,7 +16710,7 @@ var DynamicFeeFlatPriceCurveAbi = [
         "internalType": "bytes32"
       },
       {
-        "name": "user",
+        "name": "account",
         "type": "address",
         "internalType": "address"
       }
@@ -16734,7 +16734,7 @@ var DynamicFeeFlatPriceCurveAbi = [
         "internalType": "bytes32"
       },
       {
-        "name": "user",
+        "name": "account",
         "type": "address",
         "internalType": "address"
       }
@@ -16761,25 +16761,6 @@ var DynamicFeeFlatPriceCurveAbi = [
     "outputs": [
       {
         "name": "stake",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "withdrawalFeeBps",
-    "inputs": [
-      {
-        "name": "tier",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -16822,13 +16803,13 @@ var DynamicFeeFlatPriceCurveAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "growthGBps",
+        "name": "tierWidthGrowthBps",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
       },
       {
-        "name": "fulcrumAlpha",
+        "name": "fulcrumAlphaBps",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -16909,7 +16890,7 @@ var DynamicFeeFlatPriceCurveAbi = [
         "internalType": "address"
       },
       {
-        "name": "netStake",
+        "name": "shares",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -17045,6 +17026,37 @@ var DynamicFeeFlatPriceCurveAbi = [
   },
   {
     "type": "event",
+    "name": "RedeemFeeRerouted",
+    "inputs": [
+      {
+        "name": "termId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "exitTier",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "recipientTier",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "RedeemRecorded",
     "inputs": [
       {
@@ -17060,7 +17072,7 @@ var DynamicFeeFlatPriceCurveAbi = [
         "internalType": "address"
       },
       {
-        "name": "withdrawnStake",
+        "name": "shares",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -17110,41 +17122,10 @@ var DynamicFeeFlatPriceCurveAbi = [
         "internalType": "uint16"
       },
       {
-        "name": "withdrawalFeeBps",
+        "name": "redeemFeeBps",
         "type": "uint16",
         "indexed": false,
         "internalType": "uint16"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "WithdrawalFeeRerouted",
-    "inputs": [
-      {
-        "name": "termId",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "exitTier",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "recipientTier",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "amount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
       }
     ],
     "anonymous": false
@@ -20919,7 +20900,7 @@ var MultiVaultLibAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "assetsAfterFixedFees",
+        "name": "feeBaseAssets",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -20963,7 +20944,7 @@ var MultiVaultLibAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "assetsAfterMinSharesCost",
+        "name": "feeBaseAssets",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -21031,7 +21012,7 @@ var MultiVaultLibAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "assetsAfterFixedFees",
+        "name": "feeBaseAssets",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -21277,7 +21258,7 @@ var MultiVaultLibAbi = [
     "name": "maxRedeem",
     "inputs": [
       {
-        "name": "sender",
+        "name": "account",
         "type": "address",
         "internalType": "address"
       },
@@ -21407,7 +21388,7 @@ var MultiVaultLibAbi = [
         "internalType": "address"
       },
       {
-        "name": "amount",
+        "name": "feeAmount",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -21462,7 +21443,7 @@ var MultiVaultLibAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "totalShares",
+        "name": "receiverSharesAfter",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -21555,7 +21536,7 @@ var MultiVaultLibAbi = [
         "internalType": "address"
       },
       {
-        "name": "amount",
+        "name": "feeAmount",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -21574,7 +21555,7 @@ var MultiVaultLibAbi = [
         "internalType": "address"
       },
       {
-        "name": "receiver",
+        "name": "account",
         "type": "address",
         "indexed": true,
         "internalType": "address"
@@ -21598,19 +21579,19 @@ var MultiVaultLibAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "totalShares",
+        "name": "accountSharesAfter",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
       },
       {
-        "name": "assets",
+        "name": "assetsAfterFees",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
       },
       {
-        "name": "fees",
+        "name": "totalFees",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -21791,7 +21772,7 @@ var MultiVaultLibAbi = [
     "name": "MultiVaultCore_TripleDoesNotExist",
     "inputs": [
       {
-        "name": "termId",
+        "name": "tripleId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -21970,7 +21951,7 @@ var MultiVaultLibAbi = [
     "name": "MultiVault_TripleExists",
     "inputs": [
       {
-        "name": "termId",
+        "name": "tripleId",
         "type": "bytes32",
         "internalType": "bytes32"
       },

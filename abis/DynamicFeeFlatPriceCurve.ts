@@ -84,6 +84,19 @@ export const DynamicFeeFlatPriceCurveAbi = [
   },
   {
     "type": "function",
+    "name": "MAX_REDEEM_CAP_BPS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_SHARES",
     "inputs": [],
     "outputs": [
@@ -98,19 +111,6 @@ export const DynamicFeeFlatPriceCurveAbi = [
   {
     "type": "function",
     "name": "MAX_TIER_COUNT",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "MAX_WITHDRAWAL_CAP_BPS",
     "inputs": [],
     "outputs": [
       {
@@ -380,25 +380,6 @@ export const DynamicFeeFlatPriceCurveAbi = [
   },
   {
     "type": "function",
-    "name": "earned",
-    "inputs": [
-      {
-        "name": "user",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "amount",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "getConfig",
     "inputs": [],
     "outputs": [
@@ -418,7 +399,7 @@ export const DynamicFeeFlatPriceCurveAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "growthGBps",
+            "name": "tierWidthGrowthBps",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -438,7 +419,7 @@ export const DynamicFeeFlatPriceCurveAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "fulcrumAlpha",
+            "name": "fulcrumAlphaBps",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -448,22 +429,22 @@ export const DynamicFeeFlatPriceCurveAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "withdrawalBaseBps",
+            "name": "redeemBaseBps",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "withdrawalGrowthBps",
+            "name": "redeemGrowthBps",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "withdrawalCapBps",
+            "name": "redeemCapBps",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "withdrawalToFulcrumTiersBps",
+            "name": "redeemToFulcrumTiersBps",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -543,7 +524,7 @@ export const DynamicFeeFlatPriceCurveAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "growthGBps",
+            "name": "tierWidthGrowthBps",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -563,7 +544,7 @@ export const DynamicFeeFlatPriceCurveAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "fulcrumAlpha",
+            "name": "fulcrumAlphaBps",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -573,22 +554,22 @@ export const DynamicFeeFlatPriceCurveAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "withdrawalBaseBps",
+            "name": "redeemBaseBps",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "withdrawalGrowthBps",
+            "name": "redeemGrowthBps",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "withdrawalCapBps",
+            "name": "redeemCapBps",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "withdrawalToFulcrumTiersBps",
+            "name": "redeemToFulcrumTiersBps",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -954,7 +935,7 @@ export const DynamicFeeFlatPriceCurveAbi = [
         "internalType": "address"
       },
       {
-        "name": "netStake",
+        "name": "shares",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -977,13 +958,32 @@ export const DynamicFeeFlatPriceCurveAbi = [
         "internalType": "address"
       },
       {
-        "name": "withdrawnStake",
+        "name": "shares",
         "type": "uint256",
         "internalType": "uint256"
       }
     ],
     "outputs": [],
     "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "redeemFeeBps",
+    "inputs": [
+      {
+        "name": "tier",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -1002,7 +1002,7 @@ export const DynamicFeeFlatPriceCurveAbi = [
         "internalType": "bytes32"
       },
       {
-        "name": "user",
+        "name": "account",
         "type": "address",
         "internalType": "address"
       }
@@ -1036,7 +1036,7 @@ export const DynamicFeeFlatPriceCurveAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "growthGBps",
+            "name": "tierWidthGrowthBps",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -1056,7 +1056,7 @@ export const DynamicFeeFlatPriceCurveAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "fulcrumAlpha",
+            "name": "fulcrumAlphaBps",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -1066,22 +1066,22 @@ export const DynamicFeeFlatPriceCurveAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "withdrawalBaseBps",
+            "name": "redeemBaseBps",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "withdrawalGrowthBps",
+            "name": "redeemGrowthBps",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "withdrawalCapBps",
+            "name": "redeemCapBps",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "withdrawalToFulcrumTiersBps",
+            "name": "redeemToFulcrumTiersBps",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -1116,7 +1116,7 @@ export const DynamicFeeFlatPriceCurveAbi = [
         "internalType": "uint16"
       },
       {
-        "name": "newWithdrawalFeeBps",
+        "name": "newRedeemFeeBps",
         "type": "uint16",
         "internalType": "uint16"
       }
@@ -1165,7 +1165,7 @@ export const DynamicFeeFlatPriceCurveAbi = [
         "internalType": "uint16"
       },
       {
-        "name": "withdrawalFeeBps",
+        "name": "redeemFeeBps",
         "type": "uint16",
         "internalType": "uint16"
       }
@@ -1220,7 +1220,7 @@ export const DynamicFeeFlatPriceCurveAbi = [
     "name": "tierUpperEdge",
     "inputs": [
       {
-        "name": "k",
+        "name": "tier",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -1239,7 +1239,7 @@ export const DynamicFeeFlatPriceCurveAbi = [
     "name": "tierWidthAt",
     "inputs": [
       {
-        "name": "k",
+        "name": "tier",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -1276,7 +1276,7 @@ export const DynamicFeeFlatPriceCurveAbi = [
         "internalType": "bytes32"
       },
       {
-        "name": "user",
+        "name": "account",
         "type": "address",
         "internalType": "address"
       }
@@ -1300,7 +1300,7 @@ export const DynamicFeeFlatPriceCurveAbi = [
         "internalType": "bytes32"
       },
       {
-        "name": "user",
+        "name": "account",
         "type": "address",
         "internalType": "address"
       }
@@ -1324,7 +1324,7 @@ export const DynamicFeeFlatPriceCurveAbi = [
         "internalType": "bytes32"
       },
       {
-        "name": "user",
+        "name": "account",
         "type": "address",
         "internalType": "address"
       }
@@ -1351,25 +1351,6 @@ export const DynamicFeeFlatPriceCurveAbi = [
     "outputs": [
       {
         "name": "stake",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "withdrawalFeeBps",
-    "inputs": [
-      {
-        "name": "tier",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -1412,13 +1393,13 @@ export const DynamicFeeFlatPriceCurveAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "growthGBps",
+        "name": "tierWidthGrowthBps",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
       },
       {
-        "name": "fulcrumAlpha",
+        "name": "fulcrumAlphaBps",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -1499,7 +1480,7 @@ export const DynamicFeeFlatPriceCurveAbi = [
         "internalType": "address"
       },
       {
-        "name": "netStake",
+        "name": "shares",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -1635,6 +1616,37 @@ export const DynamicFeeFlatPriceCurveAbi = [
   },
   {
     "type": "event",
+    "name": "RedeemFeeRerouted",
+    "inputs": [
+      {
+        "name": "termId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "exitTier",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "recipientTier",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "RedeemRecorded",
     "inputs": [
       {
@@ -1650,7 +1662,7 @@ export const DynamicFeeFlatPriceCurveAbi = [
         "internalType": "address"
       },
       {
-        "name": "withdrawnStake",
+        "name": "shares",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -1700,41 +1712,10 @@ export const DynamicFeeFlatPriceCurveAbi = [
         "internalType": "uint16"
       },
       {
-        "name": "withdrawalFeeBps",
+        "name": "redeemFeeBps",
         "type": "uint16",
         "indexed": false,
         "internalType": "uint16"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "WithdrawalFeeRerouted",
-    "inputs": [
-      {
-        "name": "termId",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "exitTier",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "recipientTier",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "amount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
       }
     ],
     "anonymous": false

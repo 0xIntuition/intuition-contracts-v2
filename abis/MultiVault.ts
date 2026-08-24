@@ -345,7 +345,7 @@ export const MultiVaultAbi = [
     "name": "claimAtomWalletDepositFees",
     "inputs": [
       {
-        "name": "termId",
+        "name": "atomId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -435,7 +435,7 @@ export const MultiVaultAbi = [
     "name": "createAtoms",
     "inputs": [
       {
-        "name": "data",
+        "name": "atomDatas",
         "type": "bytes[]",
         "internalType": "bytes[]"
       },
@@ -464,7 +464,7 @@ export const MultiVaultAbi = [
         "internalType": "address"
       },
       {
-        "name": "data",
+        "name": "atomDatas",
         "type": "bytes[]",
         "internalType": "bytes[]"
       },
@@ -493,7 +493,7 @@ export const MultiVaultAbi = [
         "internalType": "address"
       },
       {
-        "name": "data",
+        "name": "atomDatas",
         "type": "bytes[]",
         "internalType": "bytes[]"
       },
@@ -848,7 +848,7 @@ export const MultiVaultAbi = [
     "name": "getAtomCreatedAt",
     "inputs": [
       {
-        "name": "termId",
+        "name": "atomId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -867,7 +867,7 @@ export const MultiVaultAbi = [
     "name": "getAtomCreator",
     "inputs": [
       {
-        "name": "termId",
+        "name": "atomId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -1169,7 +1169,7 @@ export const MultiVaultAbi = [
     "name": "getTripleIdFromCounterId",
     "inputs": [
       {
-        "name": "counterId",
+        "name": "counterTripleId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -1656,7 +1656,7 @@ export const MultiVaultAbi = [
     "name": "isAtom",
     "inputs": [
       {
-        "name": "atomId",
+        "name": "termId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -1694,7 +1694,7 @@ export const MultiVaultAbi = [
     "name": "isTermCreated",
     "inputs": [
       {
-        "name": "id",
+        "name": "termId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -1745,7 +1745,7 @@ export const MultiVaultAbi = [
     "name": "maxRedeem",
     "inputs": [
       {
-        "name": "sender",
+        "name": "account",
         "type": "address",
         "internalType": "address"
       },
@@ -1859,7 +1859,7 @@ export const MultiVaultAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "assetsAfterFixedFees",
+        "name": "feeBaseAssets",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -1961,7 +1961,7 @@ export const MultiVaultAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "assetsAfterFixedFees",
+        "name": "feeBaseAssets",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -2687,7 +2687,7 @@ export const MultiVaultAbi = [
         "internalType": "address"
       },
       {
-        "name": "amount",
+        "name": "feeAmount",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -2786,7 +2786,7 @@ export const MultiVaultAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "totalShares",
+        "name": "receiverSharesAfter",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -2960,7 +2960,7 @@ export const MultiVaultAbi = [
         "internalType": "address"
       },
       {
-        "name": "amount",
+        "name": "feeAmount",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -2985,7 +2985,7 @@ export const MultiVaultAbi = [
         "internalType": "address"
       },
       {
-        "name": "amount",
+        "name": "feeAmount",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -3004,7 +3004,7 @@ export const MultiVaultAbi = [
         "internalType": "address"
       },
       {
-        "name": "receiver",
+        "name": "account",
         "type": "address",
         "indexed": true,
         "internalType": "address"
@@ -3028,19 +3028,19 @@ export const MultiVaultAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "totalShares",
+        "name": "accountSharesAfter",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
       },
       {
-        "name": "assets",
+        "name": "assetsAfterFees",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
       },
       {
-        "name": "fees",
+        "name": "totalFees",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -3422,7 +3422,7 @@ export const MultiVaultAbi = [
     "name": "MultiVaultCore_AtomDoesNotExist",
     "inputs": [
       {
-        "name": "termId",
+        "name": "atomId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -3449,7 +3449,7 @@ export const MultiVaultAbi = [
     "name": "MultiVaultCore_TripleDoesNotExist",
     "inputs": [
       {
-        "name": "termId",
+        "name": "tripleId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -3669,7 +3669,7 @@ export const MultiVaultAbi = [
     "name": "MultiVault_TripleExists",
     "inputs": [
       {
-        "name": "termId",
+        "name": "tripleId",
         "type": "bytes32",
         "internalType": "bytes32"
       },

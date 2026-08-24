@@ -21,7 +21,7 @@ export const MultiVaultLibAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "assetsAfterFixedFees",
+        "name": "feeBaseAssets",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -65,7 +65,7 @@ export const MultiVaultLibAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "assetsAfterMinSharesCost",
+        "name": "feeBaseAssets",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -133,7 +133,7 @@ export const MultiVaultLibAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "assetsAfterFixedFees",
+        "name": "feeBaseAssets",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -379,7 +379,7 @@ export const MultiVaultLibAbi = [
     "name": "maxRedeem",
     "inputs": [
       {
-        "name": "sender",
+        "name": "account",
         "type": "address",
         "internalType": "address"
       },
@@ -509,7 +509,7 @@ export const MultiVaultLibAbi = [
         "internalType": "address"
       },
       {
-        "name": "amount",
+        "name": "feeAmount",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -564,7 +564,7 @@ export const MultiVaultLibAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "totalShares",
+        "name": "receiverSharesAfter",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -657,7 +657,7 @@ export const MultiVaultLibAbi = [
         "internalType": "address"
       },
       {
-        "name": "amount",
+        "name": "feeAmount",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -676,7 +676,7 @@ export const MultiVaultLibAbi = [
         "internalType": "address"
       },
       {
-        "name": "receiver",
+        "name": "account",
         "type": "address",
         "indexed": true,
         "internalType": "address"
@@ -700,19 +700,19 @@ export const MultiVaultLibAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "totalShares",
+        "name": "accountSharesAfter",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
       },
       {
-        "name": "assets",
+        "name": "assetsAfterFees",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
       },
       {
-        "name": "fees",
+        "name": "totalFees",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -893,7 +893,7 @@ export const MultiVaultLibAbi = [
     "name": "MultiVaultCore_TripleDoesNotExist",
     "inputs": [
       {
-        "name": "termId",
+        "name": "tripleId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -1072,7 +1072,7 @@ export const MultiVaultLibAbi = [
     "name": "MultiVault_TripleExists",
     "inputs": [
       {
-        "name": "termId",
+        "name": "tripleId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
