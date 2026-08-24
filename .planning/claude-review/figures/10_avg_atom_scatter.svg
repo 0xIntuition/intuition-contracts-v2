@@ -1,0 +1,78 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 860 420' width='860' height='420' font-family='ui-sans-serif,system-ui,-apple-system,Segoe UI,Helvetica,Arial' >
+<rect width='860' height='420' fill='#ffffff'/>
+<text x='70' y='26' font-size='16' font-weight='600' fill='#111827'>One T3-stalled atom, deploy seed: what each user earned vs. when they entered</text>
+<text x='70' y='44' font-size='12' fill='#6b7280'>49 users; vertical line = the atom reached its stall level; colour = bucket. Earnings are front-loaded and lumpy; late entrants earn little.</text>
+<line x1='70' x2='830' y1='360.0' y2='360.0' stroke='#e5e7eb'/>
+<text x='62' y='364.0' font-size='11' text-anchor='end' fill='#6b7280'>0</text>
+<line x1='70' x2='830' y1='304.1' y2='304.1' stroke='#e5e7eb'/>
+<text x='62' y='308.1' font-size='11' text-anchor='end' fill='#6b7280'>200</text>
+<line x1='70' x2='830' y1='248.1' y2='248.1' stroke='#e5e7eb'/>
+<text x='62' y='252.1' font-size='11' text-anchor='end' fill='#6b7280'>400</text>
+<line x1='70' x2='830' y1='192.2' y2='192.2' stroke='#e5e7eb'/>
+<text x='62' y='196.2' font-size='11' text-anchor='end' fill='#6b7280'>600</text>
+<line x1='70' x2='830' y1='136.2' y2='136.2' stroke='#e5e7eb'/>
+<text x='62' y='140.2' font-size='11' text-anchor='end' fill='#6b7280'>800</text>
+<line x1='70' x2='830' y1='80.3' y2='80.3' stroke='#e5e7eb'/>
+<text x='62' y='84.3' font-size='11' text-anchor='end' fill='#6b7280'>1,000</text>
+<text x='70.0' y='376' font-size='11' text-anchor='middle' fill='#6b7280'>0</text>
+<text x='225.1' y='376' font-size='11' text-anchor='middle' fill='#6b7280'>10</text>
+<text x='380.2' y='376' font-size='11' text-anchor='middle' fill='#6b7280'>20</text>
+<text x='535.3' y='376' font-size='11' text-anchor='middle' fill='#6b7280'>30</text>
+<text x='690.4' y='376' font-size='11' text-anchor='middle' fill='#6b7280'>40</text>
+<line x1='70' x2='830' y1='360' y2='360' stroke='#9ca3af'/>
+<line x1='70' x2='70' y1='71' y2='360' stroke='#9ca3af'/>
+<text x='450.0' y='406' font-size='12' text-anchor='middle' fill='#374151'>entry order</text>
+<text transform='translate(16,215.5) rotate(-90)' font-size='12' text-anchor='middle' fill='#374151'>lifetime curve earnings (TRUST)</text>
+<line x1='225.1' x2='225.1' y1='71' y2='360' stroke='#9ca3af' stroke-dasharray='4 3'/>
+<text x='228.1' y='83.0' font-size='10' fill='#9ca3af' text-anchor='start' font-weight='400'>stall level reached</text>
+<circle cx='85.5' cy='304.8' r='4' fill='#2563eb' opacity='0.85'/>
+<circle cx='101.0' cy='329.5' r='4' fill='#2563eb' opacity='0.85'/>
+<line x1='78.0' x2='96.0' y1='56' y2='56' stroke='#2563eb' stroke-width='3'/>
+<text x='100.0' y='60' font-size='11' fill='#374151'>bucket T0</text>
+<circle cx='116.5' cy='215.5' r='4' fill='#dc2626' opacity='0.85'/>
+<circle cx='132.0' cy='306.2' r='4' fill='#dc2626' opacity='0.85'/>
+<circle cx='147.6' cy='332.4' r='4' fill='#dc2626' opacity='0.85'/>
+<line x1='268.0' x2='286.0' y1='56' y2='56' stroke='#dc2626' stroke-width='3'/>
+<text x='290.0' y='60' font-size='11' fill='#374151'>bucket T1</text>
+<circle cx='163.1' cy='316.0' r='4' fill='#16a34a' opacity='0.85'/>
+<circle cx='178.6' cy='270.5' r='4' fill='#16a34a' opacity='0.85'/>
+<line x1='458.0' x2='476.0' y1='56' y2='56' stroke='#16a34a' stroke-width='3'/>
+<text x='480.0' y='60' font-size='11' fill='#374151'>bucket T2</text>
+<circle cx='194.1' cy='97.3' r='4' fill='#d97706' opacity='0.85'/>
+<circle cx='209.6' cy='360.0' r='4' fill='#d97706' opacity='0.85'/>
+<circle cx='225.1' cy='355.5' r='4' fill='#d97706' opacity='0.85'/>
+<circle cx='240.6' cy='351.0' r='4' fill='#d97706' opacity='0.85'/>
+<circle cx='256.1' cy='292.3' r='4' fill='#d97706' opacity='0.85'/>
+<circle cx='271.6' cy='309.0' r='4' fill='#d97706' opacity='0.85'/>
+<circle cx='380.2' cy='360.0' r='4' fill='#d97706' opacity='0.85'/>
+<circle cx='395.7' cy='350.1' r='4' fill='#d97706' opacity='0.85'/>
+<circle cx='411.2' cy='308.0' r='4' fill='#d97706' opacity='0.85'/>
+<circle cx='426.7' cy='155.1' r='4' fill='#d97706' opacity='0.85'/>
+<circle cx='814.5' cy='360.0' r='4' fill='#d97706' opacity='0.85'/>
+<circle cx='830.0' cy='360.0' r='4' fill='#d97706' opacity='0.85'/>
+<line x1='648.0' x2='666.0' y1='56' y2='56' stroke='#d97706' stroke-width='3'/>
+<text x='670.0' y='60' font-size='11' fill='#374151'>bucket T3</text>
+<circle cx='287.1' cy='203.3' r='4' fill='#7c3aed' opacity='0.85'/>
+<circle cx='302.7' cy='348.1' r='4' fill='#7c3aed' opacity='0.85'/>
+<circle cx='318.2' cy='342.6' r='4' fill='#7c3aed' opacity='0.85'/>
+<circle cx='333.7' cy='285.5' r='4' fill='#7c3aed' opacity='0.85'/>
+<circle cx='349.2' cy='359.7' r='4' fill='#7c3aed' opacity='0.85'/>
+<circle cx='364.7' cy='335.4' r='4' fill='#7c3aed' opacity='0.85'/>
+<circle cx='442.2' cy='302.2' r='4' fill='#7c3aed' opacity='0.85'/>
+<circle cx='457.8' cy='291.2' r='4' fill='#7c3aed' opacity='0.85'/>
+<circle cx='473.3' cy='317.7' r='4' fill='#7c3aed' opacity='0.85'/>
+<circle cx='488.8' cy='279.1' r='4' fill='#7c3aed' opacity='0.85'/>
+<circle cx='643.9' cy='360.0' r='4' fill='#7c3aed' opacity='0.85'/>
+<circle cx='659.4' cy='357.6' r='4' fill='#7c3aed' opacity='0.85'/>
+<circle cx='674.9' cy='341.0' r='4' fill='#7c3aed' opacity='0.85'/>
+<circle cx='690.4' cy='351.2' r='4' fill='#7c3aed' opacity='0.85'/>
+<circle cx='705.9' cy='339.5' r='4' fill='#7c3aed' opacity='0.85'/>
+<circle cx='721.4' cy='339.5' r='4' fill='#7c3aed' opacity='0.85'/>
+<circle cx='736.9' cy='326.7' r='4' fill='#7c3aed' opacity='0.85'/>
+<circle cx='752.4' cy='360.0' r='4' fill='#7c3aed' opacity='0.85'/>
+<circle cx='768.0' cy='347.8' r='4' fill='#7c3aed' opacity='0.85'/>
+<circle cx='783.5' cy='354.4' r='4' fill='#7c3aed' opacity='0.85'/>
+<circle cx='799.0' cy='316.9' r='4' fill='#7c3aed' opacity='0.85'/>
+<line x1='78.0' x2='96.0' y1='71' y2='71' stroke='#7c3aed' stroke-width='3'/>
+<text x='100.0' y='75' font-size='11' fill='#374151'>bucket T4</text>
+</svg>

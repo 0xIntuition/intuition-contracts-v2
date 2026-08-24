@@ -1,0 +1,60 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 860 420' width='860' height='420' font-family='ui-sans-serif,system-ui,-apple-system,Segoe UI,Helvetica,Arial' >
+<rect width='860' height='420' fill='#ffffff'/>
+<text x='70' y='26' font-size='16' font-weight='600' fill='#111827'>S1 — Linear climb: what each cohort paid vs. what it earned by the time the vault reached T12</text>
+<text x='70' y='44' font-size='12' fill='#6b7280'>deploy seed, one cohort per band; earnings are the deposit fees of LATER cohorts flowing down through the kernel</text>
+<line x1='70' x2='830' y1='360.0' y2='360.0' stroke='#e5e7eb'/>
+<text x='62' y='364.0' font-size='11' text-anchor='end' fill='#6b7280'>0.00</text>
+<line x1='70' x2='830' y1='286.5' y2='286.5' stroke='#e5e7eb'/>
+<text x='62' y='290.5' font-size='11' text-anchor='end' fill='#6b7280'>1.0k</text>
+<line x1='70' x2='830' y1='213.0' y2='213.0' stroke='#e5e7eb'/>
+<text x='62' y='217.0' font-size='11' text-anchor='end' fill='#6b7280'>2.0k</text>
+<line x1='70' x2='830' y1='139.5' y2='139.5' stroke='#e5e7eb'/>
+<text x='62' y='143.5' font-size='11' text-anchor='end' fill='#6b7280'>3.0k</text>
+<text x='99.2' y='376' font-size='11' text-anchor='middle' fill='#6b7280'>C0</text>
+<text x='157.7' y='376' font-size='11' text-anchor='middle' fill='#6b7280'>C1</text>
+<text x='216.2' y='376' font-size='11' text-anchor='middle' fill='#6b7280'>C2</text>
+<text x='274.6' y='376' font-size='11' text-anchor='middle' fill='#6b7280'>C3</text>
+<text x='333.1' y='376' font-size='11' text-anchor='middle' fill='#6b7280'>C4</text>
+<text x='391.5' y='376' font-size='11' text-anchor='middle' fill='#6b7280'>C5</text>
+<text x='450.0' y='376' font-size='11' text-anchor='middle' fill='#6b7280'>C6</text>
+<text x='508.5' y='376' font-size='11' text-anchor='middle' fill='#6b7280'>C7</text>
+<text x='566.9' y='376' font-size='11' text-anchor='middle' fill='#6b7280'>C8</text>
+<text x='625.4' y='376' font-size='11' text-anchor='middle' fill='#6b7280'>C9</text>
+<text x='683.8' y='376' font-size='11' text-anchor='middle' fill='#6b7280'>C10</text>
+<text x='742.3' y='376' font-size='11' text-anchor='middle' fill='#6b7280'>C11</text>
+<text x='800.8' y='376' font-size='11' text-anchor='middle' fill='#6b7280'>C12</text>
+<line x1='70' x2='830' y1='360' y2='360' stroke='#9ca3af'/>
+<line x1='70' x2='70' y1='71' y2='360' stroke='#9ca3af'/>
+<text x='450.0' y='406' font-size='12' text-anchor='middle' fill='#374151'>cohort / entry tier</text>
+<text transform='translate(16,215.5) rotate(-90)' font-size='12' text-anchor='middle' fill='#374151'>TRUST</text>
+<rect x='78.8' y='356.2' width='20.5' height='3.8' fill='#9ca3af' opacity='0.9'/>
+<rect x='137.2' y='353.1' width='20.5' height='6.9' fill='#9ca3af' opacity='0.9'/>
+<rect x='195.7' y='349.0' width='20.5' height='11.0' fill='#9ca3af' opacity='0.9'/>
+<rect x='254.2' y='343.4' width='20.5' height='16.6' fill='#9ca3af' opacity='0.9'/>
+<rect x='312.6' y='335.9' width='20.5' height='24.1' fill='#9ca3af' opacity='0.9'/>
+<rect x='371.1' y='326.1' width='20.5' height='33.9' fill='#9ca3af' opacity='0.9'/>
+<rect x='429.5' y='313.3' width='20.5' height='46.7' fill='#9ca3af' opacity='0.9'/>
+<rect x='488.0' y='296.7' width='20.5' height='63.3' fill='#9ca3af' opacity='0.9'/>
+<rect x='546.5' y='275.1' width='20.5' height='84.9' fill='#9ca3af' opacity='0.9'/>
+<rect x='604.9' y='247.4' width='20.5' height='112.6' fill='#9ca3af' opacity='0.9'/>
+<rect x='663.4' y='211.8' width='20.5' height='148.2' fill='#9ca3af' opacity='0.9'/>
+<rect x='721.8' y='166.3' width='20.5' height='193.7' fill='#9ca3af' opacity='0.9'/>
+<rect x='780.3' y='108.7' width='20.5' height='251.3' fill='#9ca3af' opacity='0.9'/>
+<line x1='78.0' x2='96.0' y1='56' y2='56' stroke='#9ca3af' stroke-width='3'/>
+<text x='100.0' y='60' font-size='11' fill='#374151'>curve deposit fee paid</text>
+<rect x='99.2' y='345.9' width='20.5' height='14.1' fill='#2563eb' opacity='0.9'/>
+<rect x='157.7' y='343.8' width='20.5' height='16.2' fill='#2563eb' opacity='0.9'/>
+<rect x='216.2' y='338.0' width='20.5' height='22.0' fill='#2563eb' opacity='0.9'/>
+<rect x='274.6' y='328.9' width='20.5' height='31.1' fill='#2563eb' opacity='0.9'/>
+<rect x='333.1' y='317.0' width='20.5' height='43.0' fill='#2563eb' opacity='0.9'/>
+<rect x='391.5' y='301.4' width='20.5' height='58.6' fill='#2563eb' opacity='0.9'/>
+<rect x='450.0' y='281.3' width='20.5' height='78.7' fill='#2563eb' opacity='0.9'/>
+<rect x='508.5' y='255.3' width='20.5' height='104.7' fill='#2563eb' opacity='0.9'/>
+<rect x='566.9' y='222.0' width='20.5' height='138.0' fill='#2563eb' opacity='0.9'/>
+<rect x='625.4' y='179.4' width='20.5' height='180.6' fill='#2563eb' opacity='0.9'/>
+<rect x='683.8' y='179.4' width='20.5' height='180.6' fill='#2563eb' opacity='0.9'/>
+<rect x='742.3' y='234.3' width='20.5' height='125.7' fill='#2563eb' opacity='0.9'/>
+<rect x='800.8' y='360.0' width='20.5' height='0.0' fill='#2563eb' opacity='0.9'/>
+<line x1='268.0' x2='286.0' y1='56' y2='56' stroke='#2563eb' stroke-width='3'/>
+<text x='290.0' y='60' font-size='11' fill='#374151'>earned (claimable)</text>
+</svg>
