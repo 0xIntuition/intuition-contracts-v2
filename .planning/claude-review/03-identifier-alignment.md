@@ -367,3 +367,59 @@ Deviations from the proposal, both deliberate:
 - Skipped as proposed: §2.6 style items (`_depositShares` fn name, underscore-local convention, unnamed getter returns), P13–P15 conscious-keeps, L2/L4 optionals.
 
 Validation: full suite green after every phase; final run 2134 passed / 0 failed / 7 skipped (identical to the pre-change baseline). `forge fmt` applied; only pre-existing warnings remain (TrustBonding shadowing, WrappedTrust SPDX).
+
+---
+
+## 8. Post-change review — equivalence proof
+
+The `/code-review` multi-agent pass died on API credits, so the diff was verified directly by **compiled-artifact equivalence** against the base branch (`330980a`), which is stronger evidence for a rename-only change than a reading pass. `foundry.toml` sets `bytecode_hash = "none"`, so deployed bytecode is directly comparable.
+
+### 8.1 Deployed-bytecode comparison
+
+| Contract | Result |
+|---|---|
+| `MultiVault` | **byte-identical** to base |
+| `MultiVaultCore` | byte-identical |
+| `MultiVaultMigrationMode` | byte-identical |
+| `BaseCurve`, `LinearCurve` | byte-identical |
+| `MultiVaultLib` | −61 B — fully explained, see 8.2 |
+| `DynamicFeeFlatPriceCurve` | −47 B — fully explained, see 8.2 |
+| `FeeProxy` | same size, 2 bytes differ — fully explained, see 8.2 |
+
+### 8.2 Every byte of difference accounted for
+
+Each delta was proven by reverting *only* the non-rename change in a scratch worktree and recompiling:
+
+- **`MultiVaultLib`** — reverting only the named-return refactor of `_calculateRedeem` / `_calculateTripleCreate` (keeping all ~180 renames) yields bytecode **byte-for-byte identical to base**. Proof that every identifier rename in the file is codegen-inert and the whole delta is the named-return change, which only removes stack copies.
+- **`DynamicFeeFlatPriceCurve`** — reverting only the four intentional ABI changes plus the `bandTier` cursor copy yields bytecode **byte-for-byte identical to base**.
+- **`FeeProxy`** — substituting the old error selector for the new one in base's bytecode (`FeeProxy_ZeroValue()` `0x74a14a8b` → `FeeProxy_ZeroAssets()` `0x086379d1`, 2 occurrences) yields **exactly** head's bytecode. Nothing else changed.
+
+### 8.3 Storage layout
+
+Identical slot/offset/type for all five upgradeable contracts (`MultiVault` 25 vars, `DynamicFeeFlatPriceCurve` 13, `FeeProxy` 10, `MultiVaultCore` 11, `MultiVaultMigrationMode` 25). The single label change is `earned` → `settledEarnings` at the same slot. **No migration risk.**
+
+### 8.4 ABI surface changes — the consumer-facing list
+
+Everything else in the pass is parameter-name-only. These are the changes an SDK, indexer or subgraph must follow:
+
+**`DynamicFeeFlatPriceCurve`** *(fresh deploy under a new curve id — no live-contract cost)*
+- `withdrawalFeeBps(uint256)` → `redeemFeeBps(uint256)` — selector change
+- `MAX_WITHDRAWAL_CAP_BPS()` → `MAX_REDEEM_CAP_BPS()` — selector change
+- `WithdrawalFeeRerouted` → `RedeemFeeRerouted` — **topic hash change**
+- `earned(address)` — **getter removed**; `bankedEarnings(address)` is the read
+
+**`FeeProxy`** *(new periphery contract)*
+- `FeeProxy_ZeroValue()` → `FeeProxy_ZeroAssets()` — **error selector change**
+
+**`MultiVault`** *(upgraded proxy)*
+- **No signature, selector or topic-hash changes at all.** Event *parameter* names changed in the ABI JSON only (`Deposited.totalShares` → `receiverSharesAfter`, `Redeemed.totalShares` → `accountSharesAfter`, `Redeemed.assets/fees` → `assetsAfterFees/totalFees`, fee events' `amount` → `feeAmount`). Consumers decoding **by position are unaffected**; consumers decoding **by name must update**.
+
+**`DynamicFeeConfig`** — field renames do not change the tuple encoding, so `initialize` / `setConfig` selectors are unchanged; only named-argument call sites and ABI-JSON field names are affected.
+
+### 8.5 Other checks
+
+- Published artifacts `abis/`, `bytecodes/`, `dist/` are tracked and were carrying the old names; regenerated (`bun run extract`, `bun run build:ts`). Zero stale references remain.
+- Repo-wide grep for every retired identifier: clean.
+- `multicall(bytes[] data, ...)` deliberately untouched by the `data` → `atomDatas` rename.
+- `forge fmt` clean; only pre-existing warnings remain (TrustBonding `epochLength` shadowing, WrappedTrust SPDX).
+- Full suite: **2134 passed / 0 failed / 7 skipped**, identical to the pre-change baseline.
