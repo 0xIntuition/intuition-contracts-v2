@@ -78,9 +78,9 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
 
     error MultiVaultCore_InvalidAdmin();
 
-    error MultiVaultCore_AtomDoesNotExist(bytes32 termId);
+    error MultiVaultCore_AtomDoesNotExist(bytes32 atomId);
 
-    error MultiVaultCore_TripleDoesNotExist(bytes32 termId);
+    error MultiVaultCore_TripleDoesNotExist(bytes32 tripleId);
 
     error MultiVaultCore_TermDoesNotExist(bytes32 termId);
 
@@ -172,8 +172,8 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
     }
 
     /// @inheritdoc IMultiVaultCore
-    function isAtom(bytes32 atomId) external view returns (bool) {
-        return _isAtom(atomId);
+    function isAtom(bytes32 termId) external view returns (bool) {
+        return _isAtom(termId);
     }
 
     /* =================================================== */
@@ -206,8 +206,8 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
     }
 
     /// @inheritdoc IMultiVaultCore
-    function getTripleIdFromCounterId(bytes32 counterId) external view returns (bytes32) {
-        return _tripleIdFromCounterId[counterId];
+    function getTripleIdFromCounterId(bytes32 counterTripleId) external view returns (bytes32) {
+        return _tripleIdFromCounterId[counterTripleId];
     }
 
     /// @inheritdoc IMultiVaultCore
@@ -259,10 +259,10 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
         generalConfig = _generalConfig;
     }
 
-    /// @dev Internal function to check if an atom exists
-    /// @param atomId atom id to check
-    function _isAtom(bytes32 atomId) internal view returns (bool) {
-        return _atoms[atomId].length != 0;
+    /// @dev Internal function to check whether `termId` is an existing atom
+    /// @param termId term id to check
+    function _isAtom(bytes32 termId) internal view returns (bool) {
+        return _atoms[termId].length != 0;
     }
 
     /// @dev Internal function to calculate the atom id from the atom data
@@ -291,9 +291,9 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
         return bytes32(keccak256(abi.encodePacked(COUNTER_SALT, tripleId)));
     }
 
-    /// @dev Internal function to get the triple id from the given counter id
-    /// @param termId term id of the counter triple
-    /// @return tripleId the triple vault id from the given counter id
+    /// @dev Internal function to check whether `termId` is a counter-triple id
+    /// @param termId term id to check
+    /// @return Whether a positive triple is recorded for this id as its counterpart
     function _isCounterTriple(bytes32 termId) internal view returns (bool) {
         return _tripleIdFromCounterId[termId] != bytes32(0);
     }

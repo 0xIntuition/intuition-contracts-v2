@@ -103,7 +103,7 @@ contract MultiVault is
     /// @notice Mapping of the TRUST token amount utilization for each user in each epoch
     /// @dev User -> Epoch -> TRUST moved through the protocol by that user during that epoch.
     ///      Utilization is credited on deposit with the full amount sent in (`msg.value`) and debited on redeem
-    ///      with the asset value that leaves the vault for the redeemed shares (`rawAssetsBeforeFees`). Those two
+    ///      with the asset value that leaves the vault for the redeemed shares (`assetsBeforeFees`). Those two
     ///      bases differ by the fees charged on the way in, so a deposit followed by a full redeem does not net
     ///      to zero: it leaves a residue equal to the fees the user paid and the protocol retained.
     ///
@@ -235,7 +235,7 @@ contract MultiVault is
 
     error MultiVault_SlippageExceeded();
 
-    error MultiVault_TripleExists(bytes32 termId, bytes32 subjectId, bytes32 predicateId, bytes32 objectId);
+    error MultiVault_TripleExists(bytes32 tripleId, bytes32 subjectId, bytes32 predicateId, bytes32 objectId);
 
     error MultiVault_TermNotTriple();
 
@@ -338,8 +338,8 @@ contract MultiVault is
     /* =================================================== */
 
     /// @inheritdoc IMultiVault
-    function isTermCreated(bytes32 id) external view returns (bool) {
-        return MultiVaultLib.isTermCreated(id);
+    function isTermCreated(bytes32 termId) external view returns (bool) {
+        return MultiVaultLib.isTermCreated(termId);
     }
 
     /// @inheritdoc IMultiVaultCore
@@ -395,13 +395,13 @@ contract MultiVault is
     }
 
     /// @inheritdoc IMultiVault
-    function getAtomCreator(bytes32 termId) external view override(IMultiVault, IMultiVaultCore) returns (address) {
-        return atomCreators[termId];
+    function getAtomCreator(bytes32 atomId) external view override(IMultiVault, IMultiVaultCore) returns (address) {
+        return atomCreators[atomId];
     }
 
     /// @inheritdoc IMultiVault
-    function getAtomCreatedAt(bytes32 termId) external view override(IMultiVault, IMultiVaultCore) returns (uint48) {
-        return atomCreatedAt[termId];
+    function getAtomCreatedAt(bytes32 atomId) external view override(IMultiVault, IMultiVaultCore) returns (uint48) {
+        return atomCreatedAt[atomId];
     }
 
     /// @inheritdoc IMultiVault
@@ -421,8 +421,8 @@ contract MultiVault is
     }
 
     /// @inheritdoc IMultiVault
-    function maxRedeem(address sender, bytes32 termId, uint256 curveId) external view returns (uint256) {
-        return MultiVaultLib.maxRedeem(sender, termId, curveId);
+    function maxRedeem(address account, bytes32 termId, uint256 curveId) external view returns (uint256) {
+        return MultiVaultLib.maxRedeem(account, termId, curveId);
     }
 
     /// @inheritdoc IMultiVault
@@ -454,7 +454,7 @@ contract MultiVault is
     function previewAtomCreate(bytes32 termId, uint256 assets)
         external
         view
-        returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees)
+        returns (uint256 shares, uint256 feeBaseAssets, uint256 assetsAfterFees)
     {
         return MultiVaultLib.calculateAtomCreate(termId, assets);
     }
@@ -463,7 +463,7 @@ contract MultiVault is
     function previewTripleCreate(bytes32 termId, uint256 assets)
         external
         view
-        returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees)
+        returns (uint256 shares, uint256 feeBaseAssets, uint256 assetsAfterFees)
     {
         return MultiVaultLib.calculateTripleCreate(termId, assets);
     }
@@ -617,24 +617,24 @@ contract MultiVault is
        execute on this contract before the forward — they need slots on this contract's storage. */
 
     /// @inheritdoc IMultiVault
-    function createAtoms(bytes[] calldata data, uint256[] calldata assets)
+    function createAtoms(bytes[] calldata atomDatas, uint256[] calldata assets)
         external
         payable
         whenNotPaused
         nonReentrant
         returns (bytes32[] memory)
     {
-        return MultiVaultLib.createAtoms(data, assets, _effectiveMsgValue());
+        return MultiVaultLib.createAtoms(atomDatas, assets, _effectiveMsgValue());
     }
 
     /// @inheritdoc IMultiVault
     function createAtomsWithUris(
         address creator,
-        bytes[] calldata data,
+        bytes[] calldata atomDatas,
         uint256[] calldata assets,
         bytes[][] calldata uris
     ) external payable whenNotPaused nonReentrant returns (bytes32[] memory) {
-        return MultiVaultLib.createAtomsWithUris(creator, data, assets, uris, _effectiveMsgValue());
+        return MultiVaultLib.createAtomsWithUris(creator, atomDatas, assets, uris, _effectiveMsgValue());
     }
 
     /// @inheritdoc IMultiVault
@@ -648,14 +648,14 @@ contract MultiVault is
     }
 
     /// @inheritdoc IMultiVault
-    function createAtomsFor(address creator, bytes[] calldata data, uint256[] calldata assets)
+    function createAtomsFor(address creator, bytes[] calldata atomDatas, uint256[] calldata assets)
         external
         payable
         whenNotPaused
         nonReentrant
         returns (bytes32[] memory)
     {
-        return MultiVaultLib.createAtomsFor(creator, data, assets, _effectiveMsgValue());
+        return MultiVaultLib.createAtomsFor(creator, atomDatas, assets, _effectiveMsgValue());
     }
 
     /// @inheritdoc IMultiVault
@@ -721,8 +721,8 @@ contract MultiVault is
     /* =================================================== */
 
     /// @inheritdoc IMultiVault
-    function claimAtomWalletDepositFees(bytes32 termId) external nonReentrant {
-        address atomWalletAddress = _computeAtomWalletAddr(termId);
+    function claimAtomWalletDepositFees(bytes32 atomId) external nonReentrant {
+        address atomWalletAddress = _computeAtomWalletAddr(atomId);
 
         // Restrict access to the associated atom wallet
         if (msg.sender != atomWalletAddress) {
@@ -738,7 +738,7 @@ contract MultiVault is
 
             Address.sendValue(payable(atomWalletOwner), accumulatedFeesForAtomWallet);
 
-            emit AtomWalletDepositFeesClaimed(termId, atomWalletOwner, accumulatedFeesForAtomWallet);
+            emit AtomWalletDepositFeesClaimed(atomId, atomWalletOwner, accumulatedFeesForAtomWallet);
         }
     }
 
@@ -856,10 +856,11 @@ contract MultiVault is
     /// @dev calculates the fee on a raw amount provided as input. Kept inline on the contract so the
     ///      four single-line fee-amount external view getters above (`protocolFeeAmount` &c.) don't
     ///      pay a DELEGATECALL per query — they're hot off-chain reads.
-    /// @param amount the raw amount to calculate the fee on
-    /// @param feeBps the fee bps (numerator)
-    function _feeOnRaw(uint256 amount, uint256 feeBps) internal view returns (uint256) {
-        return amount.mulDivUp(feeBps, generalConfig.feeDenominator);
+    /// @param assets the raw asset amount to calculate the fee on
+    /// @param feeRate the fee rate: a numerator over `generalConfig.feeDenominator` (which is
+    ///        configurable, so this is not necessarily basis points)
+    function _feeOnRaw(uint256 assets, uint256 feeRate) internal view returns (uint256) {
+        return assets.mulDivUp(feeRate, generalConfig.feeDenominator);
     }
 
     /// @dev Initialize the triple-state mappings. Wrapped here so {MultiVaultMigrationMode} resolves
@@ -876,8 +877,8 @@ contract MultiVault is
 
     /// @dev Burn vault shares. Wrapped here so `MultiVaultHarness.burnForTest` resolves through
     ///      inheritance with no test edit.
-    function _burn(address from, bytes32 termId, uint256 curveId, uint256 amount) internal returns (uint256) {
-        return MultiVaultLib.burn(from, termId, curveId, amount);
+    function _burn(address from, bytes32 termId, uint256 curveId, uint256 shares) internal returns (uint256) {
+        return MultiVaultLib.burn(from, termId, curveId, shares);
     }
 
     /// @dev Validate a redeem operation. Wrapped here so `MultiVaultHarness.validateRedeemForTest`
@@ -903,14 +904,14 @@ contract MultiVault is
 
     /// @dev Add user utilization. Wrapped here so `MultiVaultUtilizationHarness.addUtilizationForTest`
     ///      resolves through inheritance with no test edit.
-    function _addUtilization(address user, int256 totalValue) internal {
-        MultiVaultLib.addUtilization(user, totalValue);
+    function _addUtilization(address user, int256 assets) internal {
+        MultiVaultLib.addUtilization(user, assets);
     }
 
     /// @dev Remove user utilization. Wrapped here so
     ///      `MultiVaultUtilizationHarness.removeUtilizationForTest` resolves through inheritance.
-    function _removeUtilization(address user, int256 amountToRemove) internal {
-        MultiVaultLib.removeUtilization(user, amountToRemove);
+    function _removeUtilization(address user, int256 assets) internal {
+        MultiVaultLib.removeUtilization(user, assets);
     }
 
     /// @dev Shared implementation for the `onlyTimelock` entry-point guard.

@@ -18,7 +18,8 @@ struct DynamicFeeConfig {
     /// @dev Number of tiers before the schedule tops out. `1..MAX_TIER_COUNT`.
     uint256 tierCount;
     /// @dev Per-tier compounding width growth, in bps. The cumulative tier edge is the geometric series
-    ///      `edge(k) = width0 * ((1 + tierWidthGrowthBps/BPS)^(k+1) - 1) / (tierWidthGrowthBps/BPS)`, and a tier's width
+    ///      `edge(k) = width0 * ((1 + tierWidthGrowthBps/BPS)^(k+1) - 1) / (tierWidthGrowthBps/BPS)`, and a tier's
+    /// width
     ///      is the span between edges, `width(k) = edge(k) - edge(k-1)`. Widths are derived from the
     ///      edges rather than from an independently rounded `width0 * (1 + tierWidthGrowthBps/BPS)^k`, so the
     ///      advertised width and the band a deposit is charged on cannot disagree. The target

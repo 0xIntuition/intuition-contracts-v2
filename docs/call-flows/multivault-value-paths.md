@@ -77,7 +77,7 @@ sequenceDiagram
     LIB->>REG: curveAddresses(curveId)
     LIB->>C: hasDepositFeeHook()
     alt curve exposes the hook
-      LIB->>C: quoteDepositFee(termId, assetsAfterMinSharesCost)
+      LIB->>C: quoteDepositFee(termId, feeBaseAssets)
       C-->>LIB: fee
       Note right of LIB: fee is withheld from assetsAfterFees<br/>and carried in `hook` — quoted exactly once
     end
@@ -96,7 +96,7 @@ sequenceDiagram
 
   rect rgb(255,244,238)
     Note over LIB,C: INTERACTION — after every state write
-    LIB->>C: recordDeposit{value: hook.fee}(termId, receiver, sharesForReceiver)
+    LIB->>C: recordDeposit{value: hook.fee}(termId, account, sharesForReceiver)
     Note right of C: same `hook.fee` from the calculate phase,<br/>forwarded as native TRUST
   end
   LIB-->>MV: sharesForReceiver
@@ -160,7 +160,7 @@ sequenceDiagram
 
   rect rgb(255,244,238)
     Note over LIB,C: INTERACTION — ordering is load-bearing
-    LIB->>C: recordRedeem{value: hook.fee}(termId, receiver, shares)
+    LIB->>C: recordRedeem{value: hook.fee}(termId, account, shares)
     LIB->>U: Address.sendValue(receiver, assetsAfterFees)
   end
   MV-->>U: Redeemed event

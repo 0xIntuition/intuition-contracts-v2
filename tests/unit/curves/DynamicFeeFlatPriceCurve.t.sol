@@ -124,9 +124,11 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     ///
     ///      Asserting the invariant rather than the branch is the useful direction: it keeps the guard
     ///      honest if a future change ever loosens the `width0` or `tierWidthGrowthBps` bounds that make it dead.
-    function testFuzz_tierUpperEdge_isNeverZeroForAnyValidSchedule(uint96 width0, uint8 tierCount, uint16 tierWidthGrowthBps)
-        external
-    {
+    function testFuzz_tierUpperEdge_isNeverZeroForAnyValidSchedule(
+        uint96 width0,
+        uint8 tierCount,
+        uint16 tierWidthGrowthBps
+    ) external {
         DynamicFeeConfig memory config = _defaultConfig();
         config.width0 = bound(width0, 1, type(uint96).max);
         config.tierCount = bound(tierCount, 1, 64);
@@ -1328,9 +1330,7 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         for (uint256 tier = 0; tier < tierCount; ++tier) {
             if (tier == 2) continue;
             assertEq(dynamicFeeCurve.depositFeeBps(tier), 100 + tier * 50, "untouched tier keeps formulaic deposit");
-            assertEq(
-                dynamicFeeCurve.redeemFeeBps(tier), 200 + tier * 50, "untouched tier keeps formulaic redeem"
-            );
+            assertEq(dynamicFeeCurve.redeemFeeBps(tier), 200 + tier * 50, "untouched tier keeps formulaic redeem");
             (bool isSet,,) = dynamicFeeCurve.tierFeeOverride(tier);
             assertFalse(isSet, "untouched tier carries no override");
         }

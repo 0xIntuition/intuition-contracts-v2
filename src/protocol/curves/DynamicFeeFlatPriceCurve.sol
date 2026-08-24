@@ -825,13 +825,9 @@ contract DynamicFeeFlatPriceCurve is
     ///      total weight. The whole fee then falls to the last band as its remainder and is
     ///      distributed from there, which is why the `totalWeight > 0` guard sits on the proportional
     ///      branch only and never on the remainder.
-    function _replayDepositBands(
-        bytes32 termId,
-        address account,
-        uint256 startAssets,
-        uint256 stake,
-        uint256 feeAmount
-    ) private {
+    function _replayDepositBands(bytes32 termId, address account, uint256 startAssets, uint256 stake, uint256 feeAmount)
+        private
+    {
         uint256 sourceTier = _tierOf(startAssets);
         uint256 topTier = config.tierCount - 1;
 
@@ -1277,7 +1273,7 @@ contract DynamicFeeFlatPriceCurve is
     ///
     ///      The residual gap this does not close is MultiVault's own protocol / entry / atom-wallet
     ///      fees, which shrink the net further and are invisible from here — the curve is
-    ///      quoted on `assetsAfterMinSharesCost` and never learns what MultiVault withheld. That
+    ///      quoted on `feeBaseAssets` and never learns what MultiVault withheld. That
     ///      leftover is bounded by the rate spread across the traversed bands times those fees, i.e.
     ///      fee-on-fee, and closing it would mean changing what {IBaseCurve.quoteDepositFee} is
     ///      quoted on for every hook curve.

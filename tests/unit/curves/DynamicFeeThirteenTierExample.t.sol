@@ -173,11 +173,7 @@ contract DynamicFeeThirteenTierExampleTest is Test {
         _applyThirteenTierOverrides(dynamicFeeCurve);
 
         assertEq(dynamicFeeCurve.depositFeeBps(TOP_TIER), OVERRIDDEN_DEPOSIT_BPS, "top tier deposit overridden to 10%");
-        assertEq(
-            dynamicFeeCurve.redeemFeeBps(TOP_TIER),
-            OVERRIDDEN_WITHDRAWAL_BPS,
-            "top tier redeem overridden to 10%"
-        );
+        assertEq(dynamicFeeCurve.redeemFeeBps(TOP_TIER), OVERRIDDEN_WITHDRAWAL_BPS, "top tier redeem overridden to 10%");
     }
 
     /// @dev The sparsity guarantee at full 13-tier width: the override touches tier 12 and NOTHING

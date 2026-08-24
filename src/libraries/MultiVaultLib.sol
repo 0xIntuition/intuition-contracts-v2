@@ -177,19 +177,19 @@ library MultiVaultLib {
     /// @dev Mirror of {MultiVault.createAtoms}. {MultiVault}'s external function forwards to this
     ///      one via `DELEGATECALL`; the library handles the full call graph (payment validation,
     ///      per-atom creation loop, fee accumulation, utilization tracking) internally.
-    function createAtoms(bytes[] calldata data, uint256[] calldata assets, uint256 payment)
+    function createAtoms(bytes[] calldata atomDatas, uint256[] calldata assets, uint256 payment)
         public
         returns (bytes32[] memory)
     {
-        uint256 _amount = _validatePayment(assets, payment);
-        return _createAtoms(msg.sender, data, assets, _amount);
+        uint256 _assetsSum = _validatePayment(assets, payment);
+        return _createAtoms(msg.sender, atomDatas, assets, _assetsSum);
     }
 
     /// @dev Mirror of {MultiVault.createAtomsWithUris}. URI bytes are emitted as creation-time context but are
     ///      excluded from atom ID calculation and contract storage.
     function createAtomsWithUris(
         address creator,
-        bytes[] calldata data,
+        bytes[] calldata atomDatas,
         uint256[] calldata assets,
         bytes[][] calldata uris,
         uint256 payment
@@ -198,14 +198,14 @@ library MultiVaultLib {
             revert MultiVault.MultiVault_CreatorNotApproved();
         }
 
-        uint256 length = data.length;
+        uint256 length = atomDatas.length;
         if (length != uris.length) {
             revert MultiVault.MultiVault_ArraysNotSameLength();
         }
         _validateAtomUris(uris);
 
-        uint256 _amount = _validatePayment(assets, payment);
-        bytes32[] memory ids = _createAtoms(creator, data, assets, _amount);
+        uint256 _assetsSum = _validatePayment(assets, payment);
+        bytes32[] memory ids = _createAtoms(creator, atomDatas, assets, _assetsSum);
         _emitAtomContexts(ids, creator, uris);
         return ids;
     }
@@ -218,8 +218,8 @@ library MultiVaultLib {
         uint256[] calldata assets,
         uint256 payment
     ) public returns (bytes32[] memory) {
-        uint256 _amount = _validatePayment(assets, payment);
-        return _createTriples(msg.sender, subjectIds, predicateIds, objectIds, assets, _amount);
+        uint256 _assetsSum = _validatePayment(assets, payment);
+        return _createTriples(msg.sender, subjectIds, predicateIds, objectIds, assets, _assetsSum);
     }
 
     /// @dev Mirror of {MultiVault.createAtomsFor}. On-behalf-of variant that
@@ -227,15 +227,15 @@ library MultiVaultLib {
     ///      to `creator` instead of `msg.sender`. Requires `creator` to have
     ///      granted `msg.sender` an approval whose CREATION bit is set, unless
     ///      `creator == msg.sender` (self-creation short-circuit).
-    function createAtomsFor(address creator, bytes[] calldata data, uint256[] calldata assets, uint256 payment)
+    function createAtomsFor(address creator, bytes[] calldata atomDatas, uint256[] calldata assets, uint256 payment)
         public
         returns (bytes32[] memory)
     {
         if (!_isApprovedToCreate(msg.sender, creator)) {
             revert MultiVault.MultiVault_CreatorNotApproved();
         }
-        uint256 _amount = _validatePayment(assets, payment);
-        return _createAtoms(creator, data, assets, _amount);
+        uint256 _assetsSum = _validatePayment(assets, payment);
+        return _createAtoms(creator, atomDatas, assets, _assetsSum);
     }
 
     /// @dev Mirror of {MultiVault.createTriplesFor}. On-behalf-of variant that
@@ -252,8 +252,8 @@ library MultiVaultLib {
         if (!_isApprovedToCreate(msg.sender, creator)) {
             revert MultiVault.MultiVault_CreatorNotApproved();
         }
-        uint256 _amount = _validatePayment(assets, payment);
-        return _createTriples(creator, subjectIds, predicateIds, objectIds, assets, _amount);
+        uint256 _assetsSum = _validatePayment(assets, payment);
+        return _createTriples(creator, subjectIds, predicateIds, objectIds, assets, _assetsSum);
     }
 
     /// @dev Mirror of {MultiVault.deposit}.
@@ -318,9 +318,9 @@ library MultiVaultLib {
             revert MultiVault.MultiVault_RedeemerNotApproved();
         }
 
-        (uint256 rawAssetsBeforeFees, uint256 assetsAfterFees) =
+        (uint256 assetsBeforeFees, uint256 assetsAfterFees) =
             _processRedeem(msg.sender, receiver, termId, curveId, shares, minAssets);
-        _removeUtilization(receiver, int256(rawAssetsBeforeFees));
+        _removeUtilization(receiver, int256(assetsBeforeFees));
 
         return assetsAfterFees;
     }
@@ -332,12 +332,12 @@ library MultiVaultLib {
         uint256[] calldata curveIds,
         uint256[] calldata shares,
         uint256[] calldata minAssets
-    ) public returns (uint256[] memory received) {
+    ) public returns (uint256[] memory assets) {
         if (termIds.length == 0 || termIds.length > MAX_BATCH_SIZE) {
             revert MultiVault.MultiVault_InvalidArrayLength();
         }
 
-        received = new uint256[](termIds.length);
+        assets = new uint256[](termIds.length);
 
         if (termIds.length != curveIds.length || termIds.length != shares.length || termIds.length != minAssets.length)
         {
@@ -348,20 +348,20 @@ library MultiVaultLib {
             revert MultiVault.MultiVault_RedeemerNotApproved();
         }
 
-        uint256 _totalAssetsBeforeFees;
+        uint256 totalAssetsBeforeFees;
         for (uint256 i = 0; i < termIds.length;) {
             (uint256 assetsBeforeFees, uint256 assetsAfterFees) =
                 _processRedeem(msg.sender, receiver, termIds[i], curveIds[i], shares[i], minAssets[i]);
-            _totalAssetsBeforeFees += assetsBeforeFees;
-            received[i] = assetsAfterFees;
+            totalAssetsBeforeFees += assetsBeforeFees;
+            assets[i] = assetsAfterFees;
             unchecked {
                 ++i;
             }
         }
 
-        _removeUtilization(receiver, int256(_totalAssetsBeforeFees));
+        _removeUtilization(receiver, int256(totalAssetsBeforeFees));
 
-        return received;
+        return assets;
     }
 
     /* =================================================== */
@@ -400,8 +400,8 @@ library MultiVaultLib {
     }
 
     /// @dev Mirror of {MultiVault._burn}.
-    function burn(address from, bytes32 termId, uint256 curveId, uint256 amount) public returns (uint256) {
-        return _burn(from, termId, curveId, amount);
+    function burn(address from, bytes32 termId, uint256 curveId, uint256 shares) public returns (uint256) {
+        return _burn(from, termId, curveId, shares);
     }
 
     /// @dev Mirror of {MultiVault._validateRedeem}.
@@ -413,13 +413,13 @@ library MultiVaultLib {
     }
 
     /// @dev Mirror of {MultiVault._addUtilization}.
-    function addUtilization(address user, int256 totalValue) public {
-        _addUtilization(user, totalValue);
+    function addUtilization(address user, int256 assets) public {
+        _addUtilization(user, assets);
     }
 
     /// @dev Mirror of {MultiVault._removeUtilization}.
-    function removeUtilization(address user, int256 amountToRemove) public {
-        _removeUtilization(user, amountToRemove);
+    function removeUtilization(address user, int256 assets) public {
+        _removeUtilization(user, assets);
     }
 
     /* =================================================== */
@@ -433,7 +433,7 @@ library MultiVaultLib {
     function calculateAtomCreate(bytes32 termId, uint256 assets)
         public
         view
-        returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees)
+        returns (uint256 shares, uint256 feeBaseAssets, uint256 assetsAfterFees)
     {
         return _calculateAtomCreate(termId, assets);
     }
@@ -442,7 +442,7 @@ library MultiVaultLib {
     function calculateTripleCreate(bytes32 termId, uint256 assets)
         public
         view
-        returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees)
+        returns (uint256 shares, uint256 feeBaseAssets, uint256 assetsAfterFees)
     {
         return _calculateTripleCreate(termId, assets);
     }
@@ -452,9 +452,9 @@ library MultiVaultLib {
     function calculateDeposit(bytes32 termId, uint256 curveId, uint256 assets, bool isAtomVault)
         public
         view
-        returns (uint256 shares, uint256 assetsAfterMinSharesCost, uint256 assetsAfterFees)
+        returns (uint256 shares, uint256 feeBaseAssets, uint256 assetsAfterFees)
     {
-        (shares, assetsAfterMinSharesCost, assetsAfterFees,) = _calculateDeposit(termId, curveId, assets, isAtomVault);
+        (shares, feeBaseAssets, assetsAfterFees,) = _calculateDeposit(termId, curveId, assets, isAtomVault);
     }
 
     /// @dev Mirror of {MultiVault._calculateRedeem}. Account-less preview path: passes `address(0)`
@@ -473,8 +473,8 @@ library MultiVaultLib {
     }
 
     /// @dev Returns the user's redeemable share balance for a vault. Used by {MultiVault.maxRedeem}.
-    function maxRedeem(address sender, bytes32 termId, uint256 curveId) public view returns (uint256) {
-        return _s().vaults[termId][curveId].balanceOf[sender];
+    function maxRedeem(address account, bytes32 termId, uint256 curveId) public view returns (uint256) {
+        return _s().vaults[termId][curveId].balanceOf[account];
     }
 
     /// @dev Mirror of {MultiVault._currentEpoch}.
@@ -538,11 +538,11 @@ library MultiVaultLib {
     /*                  ATOM / TRIPLE CREATION             */
     /* =================================================== */
 
-    function _createAtoms(address creator, bytes[] calldata data, uint256[] calldata assets, uint256 payment)
+    function _createAtoms(address creator, bytes[] calldata atomDatas, uint256[] calldata assets, uint256 payment)
         private
         returns (bytes32[] memory)
     {
-        uint256 length = data.length;
+        uint256 length = atomDatas.length;
         if (length == 0) {
             revert MultiVault.MultiVault_NoAtomDataProvided();
         }
@@ -554,7 +554,7 @@ library MultiVaultLib {
         bytes32[] memory ids = new bytes32[](length);
 
         for (uint256 i = 0; i < length;) {
-            ids[i] = _createAtom(creator, data[i], assets[i]);
+            ids[i] = _createAtom(creator, atomDatas[i], assets[i]);
             unchecked {
                 ++i;
             }
@@ -565,8 +565,8 @@ library MultiVaultLib {
         return ids;
     }
 
-    function _finalizeAtomBatch(address creator, uint256 length, uint256 payment) private {
-        uint256 atomCreationProtocolFees = _s().atomConfig.atomCreationProtocolFee * length;
+    function _finalizeAtomBatch(address creator, uint256 atomCount, uint256 payment) private {
+        uint256 atomCreationProtocolFees = _s().atomConfig.atomCreationProtocolFee * atomCount;
         _accumulateStaticProtocolFees(atomCreationProtocolFees);
 
         _addUtilization(creator, int256(payment));
@@ -607,8 +607,8 @@ library MultiVaultLib {
         }
     }
 
-    function _createAtom(address creator, bytes calldata data, uint256 assets) private returns (bytes32 atomId) {
-        uint256 length = data.length;
+    function _createAtom(address creator, bytes calldata atomData, uint256 assets) private returns (bytes32 atomId) {
+        uint256 length = atomData.length;
 
         if (length == 0) {
             revert MultiVault.MultiVault_NoAtomDataProvided();
@@ -620,26 +620,26 @@ library MultiVaultLib {
             revert MultiVault.MultiVault_AtomDataTooLong();
         }
 
-        atomId = _calculateAtomId(data);
+        atomId = _calculateAtomId(atomData);
         if (s.atoms[atomId].length != 0) {
-            revert MultiVault.MultiVault_AtomExists(data);
+            revert MultiVault.MultiVault_AtomExists(atomData);
         }
 
-        s.atoms[atomId] = data;
+        s.atoms[atomId] = atomData;
         s.atomCreators[atomId] = creator;
         s.atomCreatedAt[atomId] = uint48(block.timestamp);
         uint256 curveId = s.bondingCurveConfig.defaultCurveId;
 
-        (uint256 sharesForReceiver, uint256 assetsAfterFixedFees, uint256 assetsAfterFees) =
+        (uint256 sharesForReceiver, uint256 feeBaseAssets, uint256 assetsAfterFees) =
             _calculateAtomCreate(atomId, assets);
 
-        _accumulateVaultProtocolFees(assetsAfterFixedFees);
-        address atomWallet = _accumulateAtomWalletFees(atomId, assetsAfterFixedFees);
+        _accumulateVaultProtocolFees(feeBaseAssets);
+        address atomWallet = _accumulateAtomWalletFees(atomId, feeBaseAssets);
 
-        uint256 userSharesAfter =
+        uint256 receiverSharesAfter =
             _updateVaultOnCreation(creator, atomId, curveId, assetsAfterFees, sharesForReceiver, VaultType.ATOM);
 
-        emit IMultiVault.AtomCreated(creator, atomId, data, atomWallet);
+        emit IMultiVault.AtomCreated(creator, atomId, atomData, atomWallet);
 
         emit IMultiVault.Deposited(
             creator,
@@ -649,7 +649,7 @@ library MultiVaultLib {
             assets,
             assetsAfterFees,
             sharesForReceiver,
-            userSharesAfter,
+            receiverSharesAfter,
             VaultType.ATOM
         );
 
@@ -664,7 +664,7 @@ library MultiVaultLib {
         bytes32[] calldata predicateIds,
         bytes32[] calldata objectIds,
         uint256[] calldata assets,
-        uint256 amount
+        uint256 payment
     ) private returns (bytes32[] memory) {
         uint256 length = subjectIds.length;
         uint256 minCost = _getTripleCost() * assets.length;
@@ -677,7 +677,7 @@ library MultiVaultLib {
             revert MultiVault.MultiVault_ArraysNotSameLength();
         }
 
-        if (amount < minCost) {
+        if (payment < minCost) {
             revert MultiVault.MultiVault_InsufficientBalance();
         }
 
@@ -692,7 +692,7 @@ library MultiVaultLib {
         uint256 tripleCreationProtocolFees = _s().tripleConfig.tripleCreationProtocolFee * length;
         _accumulateStaticProtocolFees(tripleCreationProtocolFees);
 
-        _addUtilization(creator, int256(amount));
+        _addUtilization(creator, int256(payment));
 
         return ids;
     }
@@ -716,17 +716,17 @@ library MultiVaultLib {
         Storage storage s = _s();
         uint256 curveId = s.bondingCurveConfig.defaultCurveId;
 
-        (uint256 sharesForReceiver, uint256 assetsAfterFixedFees, uint256 assetsAfterFees) =
+        (uint256 sharesForReceiver, uint256 feeBaseAssets, uint256 assetsAfterFees) =
             _calculateTripleCreate(tripleId, assets);
 
-        _accumulateVaultProtocolFees(assetsAfterFixedFees);
+        _accumulateVaultProtocolFees(feeBaseAssets);
 
-        uint256 userSharesAfter =
+        uint256 receiverSharesAfter =
             _updateVaultOnCreation(creator, tripleId, curveId, assetsAfterFees, sharesForReceiver, VaultType.TRIPLE);
 
         if (_shouldChargeAtomDepositFraction(tripleId)) {
             _increaseProRataVaultsAssets(
-                tripleId, _feeOnRaw(assetsAfterFixedFees, s.tripleConfig.atomDepositFractionForTriple)
+                tripleId, _feeOnRaw(feeBaseAssets, s.tripleConfig.atomDepositFractionForTriple)
             );
         }
 
@@ -742,7 +742,7 @@ library MultiVaultLib {
             assets,
             assetsAfterFees,
             sharesForReceiver,
-            userSharesAfter,
+            receiverSharesAfter,
             VaultType.TRIPLE
         );
 
@@ -797,41 +797,37 @@ library MultiVaultLib {
             isNewNonDefault = isNew && !isDefault;
         }
 
-        (uint256 sharesForReceiver, uint256 assetsAfterMinSharesCost, uint256 assetsAfterFees, CurveHook memory hook) =
+        (uint256 sharesForReceiver, uint256 feeBaseAssets, uint256 assetsAfterFees, CurveHook memory hook) =
             _calculateDeposit(termId, curveId, assets, _vaultType == VaultType.ATOM);
 
-        _validateMinShares(
-            termId, curveId, assets, sharesForReceiver, assetsAfterMinSharesCost, assetsAfterFees, minShares
-        );
+        _validateMinShares(termId, curveId, assets, sharesForReceiver, feeBaseAssets, assetsAfterFees, minShares);
 
-        _accumulateVaultProtocolFees(assetsAfterMinSharesCost);
+        _accumulateVaultProtocolFees(feeBaseAssets);
 
         if (_shouldChargeFees(termId)) {
-            _increaseProRataVaultAssets(
-                termId, _feeOnRaw(assetsAfterMinSharesCost, _s().vaultFees.entryFee), _vaultType
-            );
+            _increaseProRataVaultAssets(termId, _feeOnRaw(feeBaseAssets, _s().vaultFees.entryFee), _vaultType);
         }
 
         if (_vaultType == VaultType.ATOM) {
-            _accumulateAtomWalletFees(termId, assetsAfterMinSharesCost);
+            _accumulateAtomWalletFees(termId, feeBaseAssets);
         } else {
             if (_shouldChargeAtomDepositFraction(termId)) {
                 _increaseProRataVaultsAssets(
-                    termId, _feeOnRaw(assetsAfterMinSharesCost, _s().tripleConfig.atomDepositFractionForTriple)
+                    termId, _feeOnRaw(feeBaseAssets, _s().tripleConfig.atomDepositFractionForTriple)
                 );
             }
         }
 
-        uint256 userBalanceAfter;
+        uint256 receiverSharesAfter;
         if (isNewNonDefault) {
-            userBalanceAfter =
+            receiverSharesAfter =
                 _updateVaultOnCreation(receiver, termId, curveId, assetsAfterFees, sharesForReceiver, _vaultType);
 
             if (_vaultType != VaultType.ATOM) {
                 _initializeOppositeTripleVault(termId, curveId);
             }
         } else {
-            userBalanceAfter =
+            receiverSharesAfter =
                 _updateVaultOnDeposit(receiver, termId, curveId, assetsAfterFees, sharesForReceiver, _vaultType);
         }
 
@@ -842,7 +838,15 @@ library MultiVaultLib {
         _recordCurveDeposit(termId, receiver, hook, sharesForReceiver);
 
         emit IMultiVault.Deposited(
-            sender, receiver, termId, curveId, assets, assetsAfterFees, sharesForReceiver, userBalanceAfter, _vaultType
+            sender,
+            receiver,
+            termId,
+            curveId,
+            assets,
+            assetsAfterFees,
+            sharesForReceiver,
+            receiverSharesAfter,
+            _vaultType
         );
 
         return sharesForReceiver;
@@ -850,7 +854,7 @@ library MultiVaultLib {
 
     function _processRedeem(
         address sender,
-        address receiver,
+        address account,
         bytes32 termId,
         uint256 curveId,
         uint256 shares,
@@ -858,41 +862,41 @@ library MultiVaultLib {
     ) private returns (uint256, uint256) {
         VaultType _vaultType = _getVaultType(termId);
 
-        _validateRedeem(termId, curveId, receiver, shares, minAssets);
+        _validateRedeem(termId, curveId, account, shares, minAssets);
 
-        uint256 rawAssetsBeforeFees = _convertToAssets(termId, curveId, shares);
+        uint256 assetsBeforeFees = _convertToAssets(termId, curveId, shares);
 
-        (uint256 assetsAfterFees,, CurveHook memory hook) = _calculateRedeem(termId, curveId, shares, receiver);
+        (uint256 assetsAfterFees,, CurveHook memory hook) = _calculateRedeem(termId, curveId, shares, account);
 
-        _accumulateVaultProtocolFees(rawAssetsBeforeFees);
+        _accumulateVaultProtocolFees(assetsBeforeFees);
 
         if (_shouldChargeExitFees(termId, curveId, shares)) {
-            _increaseProRataVaultAssets(termId, _feeOnRaw(rawAssetsBeforeFees, _s().vaultFees.exitFee), _vaultType);
+            _increaseProRataVaultAssets(termId, _feeOnRaw(assetsBeforeFees, _s().vaultFees.exitFee), _vaultType);
         }
 
-        uint256 userSharesAfter =
-            _updateVaultOnRedeem(receiver, termId, curveId, rawAssetsBeforeFees, shares, _vaultType);
+        uint256 accountSharesAfter =
+            _updateVaultOnRedeem(account, termId, curveId, assetsBeforeFees, shares, _vaultType);
 
         // Curve redeem hook: forward the fee withheld during calculation (carried in `hook`, never
         // re-quoted) to the vault's curve and book the exit. Runs after the shares are burned and
-        // totals lowered, and before the receiver payout (CEI). A no-op for hookless curves.
-        _recordCurveRedeem(termId, receiver, hook, shares);
+        // totals lowered, and before the account payout (CEI). A no-op for hookless curves.
+        _recordCurveRedeem(termId, account, hook, shares);
 
-        Address.sendValue(payable(receiver), assetsAfterFees);
+        Address.sendValue(payable(account), assetsAfterFees);
 
         emit IMultiVault.Redeemed(
             sender,
-            receiver,
+            account,
             termId,
             curveId,
             shares,
-            userSharesAfter,
+            accountSharesAfter,
             assetsAfterFees,
-            rawAssetsBeforeFees - assetsAfterFees,
+            assetsBeforeFees - assetsAfterFees,
             _vaultType
         );
 
-        return (rawAssetsBeforeFees, assetsAfterFees);
+        return (assetsBeforeFees, assetsAfterFees);
     }
 
     /// @dev Resolve `curveId` through the registry and return the curve address iff it exposes the
@@ -937,12 +941,12 @@ library MultiVaultLib {
     /*                    ACCUMULATORS                     */
     /* =================================================== */
 
-    function _accumulateVaultProtocolFees(uint256 assets) private {
+    function _accumulateVaultProtocolFees(uint256 feeBaseAssets) private {
         Storage storage s = _s();
-        uint256 fees = _feeOnRaw(assets, s.vaultFees.protocolFee);
+        uint256 protocolFeeAmount = _feeOnRaw(feeBaseAssets, s.vaultFees.protocolFee);
         uint256 epoch = currentEpoch();
-        s.accumulatedProtocolFees[epoch] += fees;
-        emit IMultiVault.ProtocolFeeAccrued(epoch, msg.sender, fees);
+        s.accumulatedProtocolFees[epoch] += protocolFeeAmount;
+        emit IMultiVault.ProtocolFeeAccrued(epoch, msg.sender, protocolFeeAmount);
     }
 
     function _accumulateStaticProtocolFees(uint256 protocolFeeAmount) private {
@@ -951,12 +955,12 @@ library MultiVaultLib {
         emit IMultiVault.ProtocolFeeAccrued(epoch, msg.sender, protocolFeeAmount);
     }
 
-    function _accumulateAtomWalletFees(bytes32 termId, uint256 assets) private returns (address) {
+    function _accumulateAtomWalletFees(bytes32 termId, uint256 feeBaseAssets) private returns (address) {
         Storage storage s = _s();
         address atomWalletAddress = IAtomWalletFactory(s.walletConfig.atomWalletFactory).computeAtomWalletAddr(termId);
-        uint256 atomWalletDepositFee = _feeOnRaw(assets, s.atomConfig.atomWalletDepositFee);
-        s.accumulatedAtomWalletDepositFees[atomWalletAddress] += atomWalletDepositFee;
-        emit IMultiVault.AtomWalletDepositFeeCollected(termId, msg.sender, atomWalletDepositFee);
+        uint256 atomWalletDepositFeeAmount = _feeOnRaw(feeBaseAssets, s.atomConfig.atomWalletDepositFee);
+        s.accumulatedAtomWalletDepositFees[atomWalletAddress] += atomWalletDepositFeeAmount;
+        emit IMultiVault.AtomWalletDepositFeeCollected(termId, msg.sender, atomWalletDepositFeeAmount);
         return atomWalletAddress;
     }
 
@@ -967,7 +971,7 @@ library MultiVaultLib {
     function _calculateDeposit(bytes32 termId, uint256 curveId, uint256 assets, bool isAtomVault)
         private
         view
-        returns (uint256 shares, uint256 assetsAfterMinSharesCost, uint256 assetsAfterFees, CurveHook memory hook)
+        returns (uint256 shares, uint256 feeBaseAssets, uint256 assetsAfterFees, CurveHook memory hook)
     {
         if (isAtomVault) {
             return _calculateAtomDeposit(termId, curveId, assets);
@@ -979,7 +983,7 @@ library MultiVaultLib {
     function _calculateAtomCreate(bytes32 termId, uint256 assets)
         private
         view
-        returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees)
+        returns (uint256 shares, uint256 feeBaseAssets, uint256 assetsAfterFees)
     {
         Storage storage s = _s();
         uint256 curveId = s.bondingCurveConfig.defaultCurveId;
@@ -989,37 +993,36 @@ library MultiVaultLib {
             revert MultiVault.MultiVault_InsufficientAssets();
         }
 
-        assetsAfterFixedFees = assets - atomCost;
+        feeBaseAssets = assets - atomCost;
 
-        uint256 protocolFee = _feeOnRaw(assetsAfterFixedFees, s.vaultFees.protocolFee);
-        uint256 atomWalletDepositFee = _feeOnRaw(assetsAfterFixedFees, s.atomConfig.atomWalletDepositFee);
+        uint256 protocolFeeAmount = _feeOnRaw(feeBaseAssets, s.vaultFees.protocolFee);
+        uint256 atomWalletDepositFeeAmount = _feeOnRaw(feeBaseAssets, s.atomConfig.atomWalletDepositFee);
 
-        assetsAfterFees = assetsAfterFixedFees - protocolFee - atomWalletDepositFee;
+        assetsAfterFees = feeBaseAssets - protocolFeeAmount - atomWalletDepositFeeAmount;
         shares = _convertToShares(termId, curveId, assetsAfterFees);
 
-        return (shares, assetsAfterFixedFees, assetsAfterFees);
+        return (shares, feeBaseAssets, assetsAfterFees);
     }
 
     function _calculateAtomDeposit(bytes32 termId, uint256 curveId, uint256 assets)
         private
         view
-        returns (uint256 shares, uint256 assetsAfterMinSharesCost, uint256 assetsAfterFees, CurveHook memory hook)
+        returns (uint256 shares, uint256 feeBaseAssets, uint256 assetsAfterFees, CurveHook memory hook)
     {
-        assetsAfterMinSharesCost = assets;
+        feeBaseAssets = assets;
 
         if (_isNewVault(termId, curveId)) {
             uint256 minShareCost = _minShareCostFor(VaultType.ATOM, curveId);
             if (assets <= minShareCost) revert MultiVault.MultiVault_DepositTooSmallToCoverMinShares();
-            assetsAfterMinSharesCost -= minShareCost;
+            feeBaseAssets -= minShareCost;
         }
 
         // Scope blocks free fee locals before the share-calc branch loads its own.
         {
-            uint256 protocolFee = _feeOnRaw(assetsAfterMinSharesCost, _s().vaultFees.protocolFee);
-            uint256 entryFee =
-                _shouldChargeFees(termId) ? _feeOnRaw(assetsAfterMinSharesCost, _s().vaultFees.entryFee) : 0;
-            uint256 atomWalletDepositFee = _feeOnRaw(assetsAfterMinSharesCost, _s().atomConfig.atomWalletDepositFee);
-            assetsAfterFees = assetsAfterMinSharesCost - protocolFee - entryFee - atomWalletDepositFee;
+            uint256 protocolFeeAmount = _feeOnRaw(feeBaseAssets, _s().vaultFees.protocolFee);
+            uint256 entryFeeAmount = _shouldChargeFees(termId) ? _feeOnRaw(feeBaseAssets, _s().vaultFees.entryFee) : 0;
+            uint256 atomWalletDepositFeeAmount = _feeOnRaw(feeBaseAssets, _s().atomConfig.atomWalletDepositFee);
+            assetsAfterFees = feeBaseAssets - protocolFeeAmount - entryFeeAmount - atomWalletDepositFeeAmount;
         }
 
         // Layer the curve's own deposit fee on top of MultiVault's fees (0 for any hookless curve);
@@ -1027,14 +1030,18 @@ library MultiVaultLib {
         // `_processDeposit` via the carried `hook` — quoted exactly once.
         hook.curve = _depositFeeHookCurve(curveId);
         if (hook.curve != address(0)) {
-            hook.fee = IBaseCurve(hook.curve).quoteDepositFee(termId, assetsAfterMinSharesCost);
+            hook.fee = IBaseCurve(hook.curve).quoteDepositFee(termId, feeBaseAssets);
             assetsAfterFees -= hook.fee;
         }
 
         shares = _depositShares(termId, curveId, assetsAfterFees);
     }
 
-    function _calculateTripleCreate(bytes32 termId, uint256 assets) private view returns (uint256, uint256, uint256) {
+    function _calculateTripleCreate(bytes32 termId, uint256 assets)
+        private
+        view
+        returns (uint256 shares, uint256 feeBaseAssets, uint256 assetsAfterFees)
+    {
         Storage storage s = _s();
         uint256 curveId = s.bondingCurveConfig.defaultCurveId;
         uint256 tripleCost = _getTripleCost();
@@ -1043,25 +1050,25 @@ library MultiVaultLib {
             revert MultiVault.MultiVault_InsufficientAssets();
         }
 
-        uint256 assetsAfterFixedFees = assets - tripleCost;
+        feeBaseAssets = assets - tripleCost;
 
-        uint256 protocolFee = _feeOnRaw(assetsAfterFixedFees, s.vaultFees.protocolFee);
+        uint256 protocolFeeAmount = _feeOnRaw(feeBaseAssets, s.vaultFees.protocolFee);
         uint256 atomDepositFractionAmount = _shouldChargeAtomDepositFraction(termId)
-            ? _feeOnRaw(assetsAfterFixedFees, s.tripleConfig.atomDepositFractionForTriple)
+            ? _feeOnRaw(feeBaseAssets, s.tripleConfig.atomDepositFractionForTriple)
             : 0;
 
-        uint256 assetsAfterFees = assetsAfterFixedFees - protocolFee - atomDepositFractionAmount;
-        uint256 shares = _convertToShares(termId, curveId, assetsAfterFees);
+        assetsAfterFees = feeBaseAssets - protocolFeeAmount - atomDepositFractionAmount;
+        shares = _convertToShares(termId, curveId, assetsAfterFees);
 
-        return (shares, assetsAfterFixedFees, assetsAfterFees);
+        return (shares, feeBaseAssets, assetsAfterFees);
     }
 
     function _calculateTripleDeposit(bytes32 termId, uint256 curveId, uint256 assets)
         private
         view
-        returns (uint256 shares, uint256 assetsAfterMinSharesCost, uint256 assetsAfterFees, CurveHook memory hook)
+        returns (uint256 shares, uint256 feeBaseAssets, uint256 assetsAfterFees, CurveHook memory hook)
     {
-        assetsAfterMinSharesCost = assets;
+        feeBaseAssets = assets;
 
         if (_isDirectCounterTripleTermInit(termId, curveId)) {
             revert MultiVault.MultiVault_CannotDirectlyInitializeCounterTriple();
@@ -1070,18 +1077,17 @@ library MultiVaultLib {
         if (_isNewVault(termId, curveId)) {
             uint256 minShareCost = _minShareCostFor(VaultType.TRIPLE, curveId);
             if (assets <= minShareCost) revert MultiVault.MultiVault_DepositTooSmallToCoverMinShares();
-            assetsAfterMinSharesCost -= minShareCost;
+            feeBaseAssets -= minShareCost;
         }
 
         // Scope blocks free fee locals before the share-calc branch loads its own.
         {
-            uint256 protocolFee = _feeOnRaw(assetsAfterMinSharesCost, _s().vaultFees.protocolFee);
-            uint256 entryFee =
-                _shouldChargeFees(termId) ? _feeOnRaw(assetsAfterMinSharesCost, _s().vaultFees.entryFee) : 0;
+            uint256 protocolFeeAmount = _feeOnRaw(feeBaseAssets, _s().vaultFees.protocolFee);
+            uint256 entryFeeAmount = _shouldChargeFees(termId) ? _feeOnRaw(feeBaseAssets, _s().vaultFees.entryFee) : 0;
             uint256 atomDepositFractionAmount = _shouldChargeAtomDepositFraction(termId)
-                ? _feeOnRaw(assetsAfterMinSharesCost, _s().tripleConfig.atomDepositFractionForTriple)
+                ? _feeOnRaw(feeBaseAssets, _s().tripleConfig.atomDepositFractionForTriple)
                 : 0;
-            assetsAfterFees = assetsAfterMinSharesCost - protocolFee - entryFee - atomDepositFractionAmount;
+            assetsAfterFees = feeBaseAssets - protocolFeeAmount - entryFeeAmount - atomDepositFractionAmount;
         }
 
         // Layer the curve's own deposit fee on top of MultiVault's fees (0 for any hookless curve);
@@ -1089,7 +1095,7 @@ library MultiVaultLib {
         // `_processDeposit` via the carried `hook` — quoted exactly once.
         hook.curve = _depositFeeHookCurve(curveId);
         if (hook.curve != address(0)) {
-            hook.fee = IBaseCurve(hook.curve).quoteDepositFee(termId, assetsAfterMinSharesCost);
+            hook.fee = IBaseCurve(hook.curve).quoteDepositFee(termId, feeBaseAssets);
             assetsAfterFees -= hook.fee;
         }
 
@@ -1116,13 +1122,14 @@ library MultiVaultLib {
     function _calculateRedeem(bytes32 termId, uint256 curveId, uint256 shares, address account)
         private
         view
-        returns (uint256, uint256, CurveHook memory hook)
+        returns (uint256 assetsAfterFees, uint256 sharesUsed, CurveHook memory hook)
     {
         Storage storage s = _s();
-        uint256 assets = _convertToAssets(termId, curveId, shares);
+        uint256 assetsBeforeFees = _convertToAssets(termId, curveId, shares);
 
-        uint256 protocolFee = _feeOnRaw(assets, s.vaultFees.protocolFee);
-        uint256 exitFee = _shouldChargeExitFees(termId, curveId, shares) ? _feeOnRaw(assets, s.vaultFees.exitFee) : 0;
+        uint256 protocolFeeAmount = _feeOnRaw(assetsBeforeFees, s.vaultFees.protocolFee);
+        uint256 exitFeeAmount =
+            _shouldChargeExitFees(termId, curveId, shares) ? _feeOnRaw(assetsBeforeFees, s.vaultFees.exitFee) : 0;
 
         // Layer the curve's own redeem fee on top of MultiVault's fees (0 for any hookless
         // curve); the same quote is forwarded to the curve in `_processRedeem` via the carried
@@ -1130,7 +1137,7 @@ library MultiVaultLib {
         // curve decides its own fallback semantics for it.
         hook.curve = _redeemFeeHookCurve(curveId);
         if (hook.curve != address(0)) {
-            hook.fee = IBaseCurve(hook.curve).quoteRedeemFee(termId, account, assets);
+            hook.fee = IBaseCurve(hook.curve).quoteRedeemFee(termId, account, assetsBeforeFees);
         }
 
         // Defense in depth: reject a redemption that would return nothing, independently of the
@@ -1139,35 +1146,36 @@ library MultiVaultLib {
         // account-less preview reports the same zero, so a front end deriving `minAssets` from it
         // derives no protection either. The curve's own immutable cap ceilings are the primary
         // guard; this floor holds regardless of which curve is attached.
-        uint256 totalFees = protocolFee + exitFee + hook.fee;
-        if (totalFees >= assets) {
+        uint256 totalFees = protocolFeeAmount + exitFeeAmount + hook.fee;
+        if (totalFees >= assetsBeforeFees) {
             revert MultiVault.MultiVault_RedeemYieldsNoAssets();
         }
 
-        uint256 assetsAfterFees = assets - totalFees;
+        assetsAfterFees = assetsBeforeFees - totalFees;
+        sharesUsed = shares;
 
-        return (assetsAfterFees, shares, hook);
+        return (assetsAfterFees, sharesUsed, hook);
     }
 
     /* =================================================== */
     /*                      PRO-RATA                       */
     /* =================================================== */
 
-    function _increaseProRataVaultsAssets(bytes32 tripleId, uint256 amount) private {
+    function _increaseProRataVaultsAssets(bytes32 tripleId, uint256 assets) private {
         (bytes32 subjectId, bytes32 predicateId, bytes32 objectId) = _getTriple(tripleId);
 
-        uint256 amountPerTerm = amount / 3;
+        uint256 assetsPerTerm = assets / 3;
 
-        _increaseProRataVaultAssets(subjectId, amountPerTerm, _getVaultType(subjectId));
-        _increaseProRataVaultAssets(predicateId, amountPerTerm, _getVaultType(predicateId));
-        _increaseProRataVaultAssets(objectId, amountPerTerm, _getVaultType(objectId));
+        _increaseProRataVaultAssets(subjectId, assetsPerTerm, _getVaultType(subjectId));
+        _increaseProRataVaultAssets(predicateId, assetsPerTerm, _getVaultType(predicateId));
+        _increaseProRataVaultAssets(objectId, assetsPerTerm, _getVaultType(objectId));
     }
 
-    function _increaseProRataVaultAssets(bytes32 termId, uint256 amount, VaultType vaultType) private {
+    function _increaseProRataVaultAssets(bytes32 termId, uint256 assets, VaultType vaultType) private {
         Storage storage s = _s();
         uint256 curveId = s.bondingCurveConfig.defaultCurveId;
         VaultState storage vaultState = s.vaults[termId][curveId];
-        _setVaultTotals(termId, curveId, vaultState.totalAssets + amount, vaultState.totalShares, vaultType);
+        _setVaultTotals(termId, curveId, vaultState.totalAssets + assets, vaultState.totalShares, vaultType);
     }
 
     /* =================================================== */
@@ -1178,7 +1186,7 @@ library MultiVaultLib {
     ///      last active epoch forward first, so the current slot starts from their standing value rather than
     ///      from zero. See the `personalUtilization` NatSpec on {MultiVault} for the full semantics — the
     ///      gross-in/net-out residue, the absence of time-weighting, and why a closed epoch's slot is final.
-    function _addUtilization(address user, int256 totalValue) private {
+    function _addUtilization(address user, int256 assets) private {
         _rollover(user);
 
         Storage storage s = _s();
@@ -1193,11 +1201,11 @@ library MultiVaultLib {
             userEpoch[0] = epoch;
         }
 
-        s.totalUtilization[epoch] += totalValue;
-        emit IMultiVault.TotalUtilizationAdded(epoch, totalValue, s.totalUtilization[epoch]);
+        s.totalUtilization[epoch] += assets;
+        emit IMultiVault.TotalUtilizationAdded(epoch, assets, s.totalUtilization[epoch]);
 
-        s.personalUtilization[user][epoch] += totalValue;
-        emit IMultiVault.PersonalUtilizationAdded(user, epoch, totalValue, s.personalUtilization[user][epoch]);
+        s.personalUtilization[user][epoch] += assets;
+        emit IMultiVault.PersonalUtilizationAdded(user, epoch, assets, s.personalUtilization[user][epoch]);
     }
 
     /// @dev Debit utilization for `user` in the current epoch with the asset value leaving the vault. The
@@ -1205,7 +1213,7 @@ library MultiVaultLib {
     ///      credited to — because the rollover carries the prior value forward and the subtraction is applied
     ///      here. A boundary round-trip is therefore deferred, not forgiven: it drives the following epoch's
     ///      delta negative and floors that epoch's ratio. See {MultiVault.personalUtilization}.
-    function _removeUtilization(address user, int256 amountToRemove) private {
+    function _removeUtilization(address user, int256 assets) private {
         _rollover(user);
 
         Storage storage s = _s();
@@ -1219,11 +1227,11 @@ library MultiVaultLib {
             userEpoch[0] = epoch;
         }
 
-        s.totalUtilization[epoch] -= amountToRemove;
-        emit IMultiVault.TotalUtilizationRemoved(epoch, amountToRemove, s.totalUtilization[epoch]);
+        s.totalUtilization[epoch] -= assets;
+        emit IMultiVault.TotalUtilizationRemoved(epoch, assets, s.totalUtilization[epoch]);
 
-        s.personalUtilization[user][epoch] -= amountToRemove;
-        emit IMultiVault.PersonalUtilizationRemoved(user, epoch, amountToRemove, s.personalUtilization[user][epoch]);
+        s.personalUtilization[user][epoch] -= assets;
+        emit IMultiVault.PersonalUtilizationRemoved(user, epoch, assets, s.personalUtilization[user][epoch]);
     }
 
     function _rollover(address user) private {
@@ -1264,7 +1272,7 @@ library MultiVaultLib {
         address receiver,
         bytes32 termId,
         uint256 curveId,
-        uint256 assets,
+        uint256 assetsAfterFees,
         uint256 shares,
         VaultType vaultType
     ) private returns (uint256) {
@@ -1275,7 +1283,7 @@ library MultiVaultLib {
         _setVaultTotals(
             termId,
             curveId,
-            vaultState.totalAssets + assets + _minAssetsForCurve(curveId, minShare),
+            vaultState.totalAssets + assetsAfterFees + _minAssetsForCurve(curveId, minShare),
             vaultState.totalShares + shares + minShare,
             vaultType
         );
@@ -1291,17 +1299,17 @@ library MultiVaultLib {
         address receiver,
         bytes32 termId,
         uint256 curveId,
-        uint256 assets,
+        uint256 assetsAfterFees,
         uint256 shares,
-        VaultType _vaultType
+        VaultType vaultType
     ) private returns (uint256) {
         Storage storage s = _s();
         _setVaultTotals(
             termId,
             curveId,
-            s.vaults[termId][curveId].totalAssets + assets,
+            s.vaults[termId][curveId].totalAssets + assetsAfterFees,
             s.vaults[termId][curveId].totalShares + shares,
-            _vaultType
+            vaultType
         );
 
         return _mint(receiver, termId, curveId, shares);
@@ -1311,13 +1319,15 @@ library MultiVaultLib {
         address account,
         bytes32 termId,
         uint256 curveId,
-        uint256 assets,
+        uint256 assetsBeforeFees,
         uint256 shares,
         VaultType vaultType
     ) private returns (uint256) {
         VaultState storage vaultState = _s().vaults[termId][curveId];
 
-        _setVaultTotals(termId, curveId, vaultState.totalAssets - assets, vaultState.totalShares - shares, vaultType);
+        _setVaultTotals(
+            termId, curveId, vaultState.totalAssets - assetsBeforeFees, vaultState.totalShares - shares, vaultType
+        );
 
         return _burn(account, termId, curveId, shares);
     }
@@ -1370,25 +1380,25 @@ library MultiVaultLib {
         emit IMultiVault.SharePriceChanged(termId, curveId, price, totalAssets, totalShares, vaultType);
     }
 
-    function _mint(address to, bytes32 termId, uint256 curveId, uint256 amount) private returns (uint256) {
+    function _mint(address to, bytes32 termId, uint256 curveId, uint256 shares) private returns (uint256) {
         Storage storage s = _s();
-        s.vaults[termId][curveId].balanceOf[to] += amount;
+        s.vaults[termId][curveId].balanceOf[to] += shares;
         return s.vaults[termId][curveId].balanceOf[to];
     }
 
-    function _burn(address from, bytes32 termId, uint256 curveId, uint256 amount) private returns (uint256) {
+    function _burn(address from, bytes32 termId, uint256 curveId, uint256 shares) private returns (uint256) {
         if (from == address(0)) revert MultiVault.MultiVault_BurnFromZeroAddress();
 
         mapping(address => uint256) storage balances = _s().vaults[termId][curveId].balanceOf;
         uint256 fromBalance = balances[from];
 
-        if (fromBalance < amount) {
+        if (fromBalance < shares) {
             revert MultiVault.MultiVault_BurnInsufficientBalance();
         }
 
         uint256 newBalance;
         unchecked {
-            newBalance = fromBalance - amount;
+            newBalance = fromBalance - shares;
             balances[from] = newBalance;
         }
 
@@ -1430,19 +1440,19 @@ library MultiVaultLib {
         uint256 curveId,
         uint256 assets,
         uint256 sharesForReceiver,
-        uint256 assetsAfterMinSharesCost,
+        uint256 feeBaseAssets,
         uint256 assetsAfterFees,
-        uint256 minSharesForReceiver
+        uint256 minShares
     ) private view {
         if (sharesForReceiver == 0) revert MultiVault.MultiVault_DepositOrRedeemZeroShares();
-        if (sharesForReceiver < minSharesForReceiver) revert MultiVault.MultiVault_SlippageExceeded();
+        if (sharesForReceiver < minShares) revert MultiVault.MultiVault_SlippageExceeded();
 
         // Scope blocks release locals before the next check so the legacy codegen pipeline doesn't
         // blow its 16-slot stack ceiling.
         address registry = _s().bondingCurveConfig.registry;
         {
             uint256 projectedAssets =
-                _s().vaults[termId][curveId].totalAssets + assetsAfterFees + (assets - assetsAfterMinSharesCost);
+                _s().vaults[termId][curveId].totalAssets + assetsAfterFees + (assets - feeBaseAssets);
             if (projectedAssets > IBondingCurveRegistry(registry).getCurveMaxAssets(curveId)) {
                 revert MultiVault.MultiVault_ActionExceedsMaxAssets();
             }
@@ -1474,9 +1484,9 @@ library MultiVaultLib {
             revert MultiVault.MultiVault_InsufficientRemainingSharesInVault(remainingShares);
         }
 
-        (uint256 expectedAssets,,) = _calculateRedeem(termId, curveId, shares, account);
+        (uint256 assetsAfterFees,,) = _calculateRedeem(termId, curveId, shares, account);
 
-        if (expectedAssets < minAssets) {
+        if (assetsAfterFees < minAssets) {
             revert MultiVault.MultiVault_SlippageExceeded();
         }
     }
@@ -1563,7 +1573,7 @@ library MultiVaultLib {
     /// @dev Counter-stake is scoped per curve: it only blocks holding both sides of a triple on the
     ///      same curve. Holding opposing sides on different curves is allowed and is not a bypass — each
     ///      curve prices its own vault independently, so the two positions carry genuine opposing exposure.
-    function _hasCounterStake(bytes32 tripleId, uint256 curveId, address receiver) private view returns (bool) {
+    function _hasCounterStake(bytes32 tripleId, uint256 curveId, address account) private view returns (bool) {
         Storage storage s = _s();
         if (!s.isTriple[tripleId]) {
             revert MultiVault.MultiVault_TermNotTriple();
@@ -1571,7 +1581,7 @@ library MultiVaultLib {
 
         bytes32 oppositeId = _getInverseTripleId(tripleId);
 
-        return s.vaults[oppositeId][curveId].balanceOf[receiver] > 0;
+        return s.vaults[oppositeId][curveId].balanceOf[account] > 0;
     }
 
     function _convertToShares(bytes32 termId, uint256 curveId, uint256 assets) private view returns (uint256) {
@@ -1590,8 +1600,8 @@ library MultiVaultLib {
         );
     }
 
-    function _feeOnRaw(uint256 amount, uint256 feeBps) private view returns (uint256) {
-        return amount.mulDivUp(feeBps, _s().generalConfig.feeDenominator);
+    function _feeOnRaw(uint256 assets, uint256 feeRate) private view returns (uint256) {
+        return assets.mulDivUp(feeRate, _s().generalConfig.feeDenominator);
     }
 
     function _isTermCreated(bytes32 termId) private view returns (bool) {
@@ -1619,8 +1629,8 @@ library MultiVaultLib {
        same storage slots. Logic-identical to the parent contract; {MultiVaultCore} stays
        untouched and remains the public-getter source of truth. */
 
-    function _calculateAtomId(bytes memory data) private pure returns (bytes32) {
-        return keccak256(abi.encodePacked(ATOM_SALT, keccak256(data)));
+    function _calculateAtomId(bytes memory atomData) private pure returns (bytes32) {
+        return keccak256(abi.encodePacked(ATOM_SALT, keccak256(atomData)));
     }
 
     function _calculateTripleId(bytes32 subjectId, bytes32 predicateId, bytes32 objectId)
