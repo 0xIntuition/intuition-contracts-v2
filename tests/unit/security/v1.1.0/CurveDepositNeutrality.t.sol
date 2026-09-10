@@ -19,7 +19,7 @@ import { DynamicFeeConfig } from "src/interfaces/IDynamicFeeFlatPriceCurve.sol";
 ///
 ///         The ladder: `width0 = 10 TRUST`, 5 tiers, `g = 0.2`. Widths compound 1.2x — 10, 12, 14.4,
 ///         17.28, 20.736 — so the cumulative edges are 10, 22, 36.4, 53.68, 74.416 (x1e18). With
-///         `fulcrumAlphaBps = BPS` the fulcrum sits on the source (`dStar = 0`) and `sigma = 4e18` gives
+///         `depositFulcrumAlphaBps = BPS` the fulcrum sits on the source (`dStar = 0`) and `sigma = 4e18` gives
 ///         the nearest-first window: weights 0.75 / 0.5 / 0.25 / 0 at d = 1 / 2 / 3 / 4.
 ///
 ///         WHAT IS DELIBERATELY NOT CLAIMED. Exact `lump >= split` for EVERY decomposition does not
@@ -135,8 +135,10 @@ contract CurveDepositNeutralityTest is Test {
             depositBaseBps: 100,
             depositGrowthBps: 50,
             depositCapBps: 1000,
-            fulcrumAlphaBps: 10_000,
-            kernelSpread: 4e18,
+            depositFulcrumAlphaBps: 10_000,
+            depositKernelSpread: 4e18,
+            redeemFulcrumAlphaBps: 10_000,
+            redeemKernelSpread: 4e18,
             redeemBaseBps: 200,
             redeemGrowthBps: 50,
             redeemCapBps: 1000,
@@ -805,8 +807,8 @@ contract CurveDepositNeutralityTest is Test {
         uint16 depositBaseBps;
         uint16 depositGrowthBps;
         uint16 depositCapBps;
-        uint16 fulcrumAlphaBps;
-        uint64 kernelSpread;
+        uint16 depositFulcrumAlphaBps;
+        uint64 depositKernelSpread;
         uint16 depositToPriorTierBps;
         uint96 minEligibleTierStake;
     }
@@ -821,7 +823,7 @@ contract CurveDepositNeutralityTest is Test {
     ///      - `width0` is kept in a range the suite's deposit sizes can actually traverse. A ladder
     ///        whose first band dwarfs every deposit never crosses a band, and a test that never crosses
     ///        a band proves nothing about per-band replay.
-    ///      - `kernelSpread` is floored ABOVE one whole tier. At `sigma <= WAD` every integer distance
+    ///      - `depositKernelSpread` is floored ABOVE one whole tier. At `sigma <= WAD` every integer distance
     ///        gets a hard zero from the triangular kernel and the spread collapses into a single-tier
     ///        lump — real, reachable, and pinned deliberately in
     ///        {test_subTierKernelSpread_collapsesTheSpreadIntoASingleTierLump}. Leaving it in range here
@@ -836,8 +838,8 @@ contract CurveDepositNeutralityTest is Test {
         config.depositCapBps = bound(seed.depositCapBps, 1, 2000);
         config.depositBaseBps = bound(seed.depositBaseBps, 0, config.depositCapBps);
         config.depositGrowthBps = bound(seed.depositGrowthBps, 0, 300);
-        config.fulcrumAlphaBps = bound(seed.fulcrumAlphaBps, 0, BPS);
-        config.kernelSpread = bound(seed.kernelSpread, 1e18 + 1, 8e18);
+        config.depositFulcrumAlphaBps = bound(seed.depositFulcrumAlphaBps, 0, BPS);
+        config.depositKernelSpread = bound(seed.depositKernelSpread, 1e18 + 1, 8e18);
         config.depositToPriorTierBps = bound(seed.depositToPriorTierBps, 0, BPS);
         config.minEligibleTierStake = bound(seed.minEligibleTierStake, 0, 1000e18);
     }
@@ -1483,12 +1485,12 @@ contract CurveDepositNeutralityTest is Test {
     /*        LIVE CONFIG HAZARD: SUB-TIER KERNEL SPREAD   */
     /* =================================================== */
 
-    /// @dev `kernelSpread` (σ) is validated only as `!= 0` and `<= MAX_KERNEL_SPREAD`. A lower bound of
+    /// @dev `depositKernelSpread` (σ) is validated only as `!= 0` and `<= MAX_KERNEL_SPREAD`. A lower bound of
     ///      one whole tier was tried on this work and withdrawn — see the note on `_setConfig` for why
     ///      neither a σ-only nor an alpha-keyed bound actually holds — so the sharp edge below is
     ///      REACHABLE by governance and is documented rather than prevented.
     ///
-    ///      With σ ≤ one tier and `fulcrumAlphaBps = BPS` (the shipped default, fulcrum on the source
+    ///      With σ ≤ one tier and `depositFulcrumAlphaBps = BPS` (the shipped default, fulcrum on the source
     ///      tier), every prior tier sits a full tier or more away, `_triangularWeight` returns a hard
     ///      zero for all of them, `sumWeights` is zero, and the whole pool falls through
     ///      `_awardNearestOrProtocol` as a single lump. Winner-takes-all silently replaces the
@@ -1506,12 +1508,12 @@ contract CurveDepositNeutralityTest is Test {
 
         // σ = one whole tier: the hard zero at `dist == sigma` catches every integer distance.
         DynamicFeeConfig memory collapsed = _defaultConfig();
-        collapsed.kernelSpread = 1e18;
+        collapsed.depositKernelSpread = 1e18;
         uint256[3] memory lumpEarnings = _earningsAcrossThreeTiers(collapsed, seated);
 
         // σ = 4 tiers, the shipped default. Same ladder, same occupancy, same deposit.
         DynamicFeeConfig memory spread = _defaultConfig();
-        spread.kernelSpread = 4e18;
+        spread.depositKernelSpread = 4e18;
         uint256[3] memory spreadEarnings = _earningsAcrossThreeTiers(spread, seated);
 
         uint256 collapsedPaid;
@@ -1524,7 +1526,7 @@ contract CurveDepositNeutralityTest is Test {
         assertEq(collapsedPaid, 1, "a sub-tier sigma pays exactly one tier - the spread has collapsed");
         assertGt(spreadPaid, 1, "the shipped sigma genuinely spreads across several tiers");
         // Nearest-first tie-break: the collapsed lump lands on the tier closest to the source, which at
-        // `fulcrumAlphaBps = BPS` (dStar = 0) is the highest prior tier.
+        // `depositFulcrumAlphaBps = BPS` (dStar = 0) is the highest prior tier.
         assertGt(lumpEarnings[2], 0, "the whole pool lands on the prior tier nearest the source");
     }
 

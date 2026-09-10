@@ -115,16 +115,18 @@ contract DynamicFeeInvariantHandler is Test {
         } catch { }
     }
 
-    /// @dev The kernel knobs. `fulcrumAlphaBps` slides the most-earning band along the ladder and
-    ///      `kernelSpread` sets how wide the earning window is. Neither changes how much fee is
+    /// @dev The kernel knobs. `depositFulcrumAlphaBps` slides the most-earning band along the ladder and
+    ///      `depositKernelSpread` sets how wide the earning window is. Neither changes how much fee is
     ///      CHARGED — only who receives it — which makes them the levers most likely to surface an
     ///      asymmetry between what is collected and what is credited. Includes the sub-tier spreads
     ///      that collapse the distribution into a single-tier lump, since that is reachable by
     ///      governance and the accounting must hold there too.
     function retuneKernel(uint256 alphaSeed, uint256 spreadSeed) external {
         DynamicFeeConfig memory cfg = CURVE.getConfig();
-        cfg.fulcrumAlphaBps = bound(alphaSeed, 0, 10_000);
-        cfg.kernelSpread = bound(spreadSeed, 1, CURVE.MAX_KERNEL_SPREAD());
+        cfg.depositFulcrumAlphaBps = bound(alphaSeed, 0, 10_000);
+        cfg.depositKernelSpread = bound(spreadSeed, 1, CURVE.MAX_KERNEL_SPREAD());
+        cfg.redeemFulcrumAlphaBps = bound(spreadSeed, 0, 10_000);
+        cfg.redeemKernelSpread = bound(alphaSeed, 1, CURVE.MAX_KERNEL_SPREAD());
         vm.prank(OWNER);
         try CURVE.setConfig(cfg) {
             ++kernelRetunesLanded;

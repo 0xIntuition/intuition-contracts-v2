@@ -33,18 +33,23 @@ struct DynamicFeeConfig {
     uint256 depositGrowthBps;
     /// @dev Cap on the per-tier deposit fee, in bps.
     uint256 depositCapBps;
-    /// @dev Sliding-fulcrum position, in bps `[0, BPS]`. A deposit fee is split across the prior tiers
-    ///      by a triangular weight kernel peaking at `dStar = (1 - fulcrumAlphaBps/BPS) * span` tiers from
-    ///      the source, where `span` is the number of prior tiers. `BPS` peaks on the nearest tier, `0`
-    ///      on the farthest. Because the peak is a fraction of the span, it moves up the ladder as the
-    ///      vault grows.
-    uint256 fulcrumAlphaBps;
-    /// @dev Triangular spread, in `TIER_PRECISION` (1e18) units of tiers. A tier at distance `d` earns
-    ///      `max(0, 1 - |d - dStar| / kernelSpread)`, an earning window roughly `2 * kernelSpread` tiers
-    ///      wide with a hard zero beyond it. Must be non-zero. At `4e18` with `fulcrumAlphaBps = BPS`
-    ///      the three nearest tiers earn 50 / 33.3 / 16.7 when all three are eligible; an empty or
-    ///      sub-floor tier drops out of the normalization and changes the split.
-    uint256 kernelSpread;
+    /// @dev Sliding-fulcrum position for the deposit leg, in bps `[0, BPS]`. A deposit fee is split
+    ///      across the prior tiers by a triangular weight kernel peaking at
+    ///      `dStar = (1 - alpha/BPS) * span` tiers from the source, where `span` is the number of prior
+    ///      tiers. `BPS` peaks on the nearest tier, `0` on the farthest. Because the peak is a fraction
+    ///      of the span, it moves up the ladder as the vault grows.
+    uint256 depositFulcrumAlphaBps;
+    /// @dev Triangular spread for the deposit leg, in `TIER_PRECISION` (1e18) units of tiers. A tier at
+    ///      distance `d` earns `max(0, 1 - |d - dStar| / sigma)`, an earning window roughly `2 * sigma`
+    ///      tiers wide with a hard zero beyond it. Must be non-zero. At `4e18` with alpha `BPS` the three
+    ///      nearest tiers earn 50 / 33.3 / 16.7 when all three are eligible; an empty or sub-floor tier
+    ///      drops out of the normalization and changes the split.
+    uint256 depositKernelSpread;
+    /// @dev Sliding-fulcrum position for the redeem leg, in bps `[0, BPS]`. Same kernel, applied to the
+    ///      fulcrum slice of each redeem fee.
+    uint256 redeemFulcrumAlphaBps;
+    /// @dev Triangular spread for the redeem leg, in `TIER_PRECISION` units of tiers. Must be non-zero.
+    uint256 redeemKernelSpread;
     /// @dev Redeem fee in tier 0, in bps.
     uint256 redeemBaseBps;
     /// @dev Added redeem-fee bps per tier climbed.

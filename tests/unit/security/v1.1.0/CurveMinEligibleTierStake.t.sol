@@ -17,7 +17,7 @@ import { DynamicFeeConfig } from "src/interfaces/IDynamicFeeFlatPriceCurve.sol";
 ///
 ///         The ladder used throughout: `width0 = 10 TRUST`, 5 tiers, `g = 0.2`. Widths compound 1.2x —
 ///         10, 12, 14.4, 17.28, 20.736 — so the cumulative edges are 10, 22, 36.4, 53.68, 74.416 (x1e18).
-///         With `fulcrumAlphaBps = BPS` the fulcrum sits on the source (`dStar = 0`) and `sigma = 4e18`
+///         With `depositFulcrumAlphaBps = BPS` the fulcrum sits on the source (`dStar = 0`) and `sigma = 4e18`
 ///         gives the nearest-first triangular window: weights 0.75 / 0.5 / 0.25 / 0 at distances
 ///         d = 1 / 2 / 3 / 4.
 ///
@@ -75,8 +75,10 @@ contract CurveMinEligibleTierStakeTest is Test {
             depositBaseBps: 100,
             depositGrowthBps: 50,
             depositCapBps: 1000,
-            fulcrumAlphaBps: 10_000,
-            kernelSpread: 4e18,
+            depositFulcrumAlphaBps: 10_000,
+            depositKernelSpread: 4e18,
+            redeemFulcrumAlphaBps: 10_000,
+            redeemKernelSpread: 4e18,
             redeemBaseBps: 200,
             redeemGrowthBps: 50,
             redeemCapBps: 1000,
@@ -201,8 +203,8 @@ contract CurveMinEligibleTierStakeTest is Test {
     ///      nearest tier that actually qualifies.
     function test_subFloorTier_isAlsoExcludedFromTheDegenerateWholePoolFallback() external {
         DynamicFeeConfig memory config = _defaultConfig();
-        config.fulcrumAlphaBps = 3750; // dStar = (1 - 0.375) * 4 = 2.5 tiers from the source
-        config.kernelSpread = 1e18 + 1; // tightest legal window; only dave clears the floor, and he is out of it
+        config.depositFulcrumAlphaBps = 3750; // dStar = (1 - 0.375) * 4 = 2.5 tiers from the source
+        config.depositKernelSpread = 1e18 + 1; // tightest legal window; only dave clears the floor, and he is out of it
         DynamicFeeFlatPriceCurve c = _deploy(config);
         _seatFourTiers(c);
         _setFloor(c, 15e18);

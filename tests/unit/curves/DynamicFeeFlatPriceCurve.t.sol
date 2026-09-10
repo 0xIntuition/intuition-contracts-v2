@@ -79,8 +79,10 @@ contract DynamicFeeFlatPriceCurveTest is Test {
             depositBaseBps: 100,
             depositGrowthBps: 50,
             depositCapBps: 1000,
-            fulcrumAlphaBps: 10_000,
-            kernelSpread: 4e18,
+            depositFulcrumAlphaBps: 10_000,
+            depositKernelSpread: 4e18,
+            redeemFulcrumAlphaBps: 10_000,
+            redeemKernelSpread: 4e18,
             redeemBaseBps: 200,
             redeemGrowthBps: 50,
             redeemCapBps: 1000,
@@ -597,8 +599,8 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         returns (uint256 tier0, uint256 tier1, uint256 tier2, uint256 tier3)
     {
         DynamicFeeConfig memory config = _defaultConfig();
-        config.fulcrumAlphaBps = alpha;
-        config.kernelSpread = sigma;
+        config.depositFulcrumAlphaBps = alpha;
+        config.depositKernelSpread = sigma;
         config.depositToPriorTierBps = shareBps;
         DynamicFeeFlatPriceCurve c = _deploy(config);
         address dave = makeAddr("dave");
@@ -638,6 +640,33 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         assertGt(t0, t3, "farthest earns more than nearest");
     }
 
+    /// @dev Each leg reads its own kernel pair: with the deposit pair nearest-first and the redeem
+    ///      pair farthest-first, a deposit fee lands on the nearest tiers and a redeem fee on the
+    ///      farthest, from the same vault state.
+    function test_fulcrum_redeemLegUsesRedeemKernel() external {
+        DynamicFeeConfig memory config = _defaultConfig();
+        config.depositFulcrumAlphaBps = BPS;
+        config.redeemFulcrumAlphaBps = 0;
+        config.redeemToFulcrumTiersBps = BPS;
+        DynamicFeeFlatPriceCurve c = _deploy(config);
+        address dave = makeAddr("dave");
+        address eve = makeAddr("eve");
+
+        c.recordDeposit{ value: 0 }(T1, alice, 10e18);
+        c.recordDeposit{ value: 0 }(T1, bob, 12e18);
+        c.recordDeposit{ value: 0 }(T1, carol, 14.4e18);
+        c.recordDeposit{ value: 0 }(T1, dave, 17.28e18);
+        c.recordDeposit{ value: 6e18 }(T1, eve, 20.736e18);
+
+        assertApproxEqAbs(c.claimable(dave, T1), 3e18, 1e4, "deposit leg: nearest tier earns 50%");
+        assertEq(c.claimable(alice, T1), 0, "deposit leg: farthest tier earns nothing");
+
+        c.recordRedeem{ value: 10e18 }(T1, eve, 20.736e18);
+
+        assertApproxEqAbs(c.claimable(alice, T1), 4e18, 1e4, "redeem leg: farthest tier earns 40%");
+        assertApproxEqAbs(c.claimable(dave, T1), 4e18, 1e4, "redeem leg: nearest tier earns 10% on top");
+    }
+
     /// @dev alpha = 0.5 (BPS/2) puts the fulcrum mid-span (dStar = 2 tiers): the peak sits on the
     ///      middle tier (d = 2), symmetric falloff either side.
     function test_fulcrum_alphaHalf_peaksMid() external {
@@ -670,8 +699,8 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     ///      receive and does not perturb the weights.
     function test_fulcrum_degenerateGuard_awardsNearestNotProtocol() external {
         DynamicFeeConfig memory config = _defaultConfig();
-        config.fulcrumAlphaBps = 3750; // dStar = (1 - 0.375) * 4 = 2.5 tiers from the source
-        config.kernelSpread = WAD + 1; // the tightest window `_setConfig` permits: ±1 tier
+        config.depositFulcrumAlphaBps = 3750; // dStar = (1 - 0.375) * 4 = 2.5 tiers from the source
+        config.depositKernelSpread = WAD + 1; // the tightest window `_setConfig` permits: ±1 tier
         DynamicFeeFlatPriceCurve c = _deploy(config);
         address dave = makeAddr("dave-degen");
         address eve = makeAddr("eve-degen");
@@ -708,8 +737,8 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         pool = bound(pool, 1, 1_000_000e18);
 
         DynamicFeeConfig memory config = _defaultConfig();
-        config.fulcrumAlphaBps = alpha;
-        config.kernelSpread = sigma;
+        config.depositFulcrumAlphaBps = alpha;
+        config.depositKernelSpread = sigma;
         DynamicFeeFlatPriceCurve c = _deploy(config);
         address dave = makeAddr("dave-fuzz");
         address eve = makeAddr("eve-fuzz");
@@ -775,8 +804,8 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     ///      dave could route the same lump to carol simply by paying from a second wallet.
     function test_depositToPriorTier_targetsNearestOccupiedPriorTierEvenWhenItIsTheDepositors() external {
         DynamicFeeConfig memory config = _defaultConfig();
-        config.fulcrumAlphaBps = BPS;
-        config.kernelSpread = 4e18;
+        config.depositFulcrumAlphaBps = BPS;
+        config.depositKernelSpread = 4e18;
         config.depositToPriorTierBps = BPS; // 100% spike -> unambiguous routing target
         DynamicFeeFlatPriceCurve c = _deploy(config);
         address dave = makeAddr("dave-skip");
@@ -846,8 +875,8 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         pool = bound(pool, 1, 1_000_000e18);
 
         DynamicFeeConfig memory config = _defaultConfig();
-        config.fulcrumAlphaBps = alpha;
-        config.kernelSpread = sigma;
+        config.depositFulcrumAlphaBps = alpha;
+        config.depositKernelSpread = sigma;
         config.depositToPriorTierBps = shareBps;
         DynamicFeeFlatPriceCurve c = _deploy(config);
         address dave = makeAddr("dave-spike-fuzz");
@@ -1527,20 +1556,38 @@ contract DynamicFeeFlatPriceCurveTest is Test {
     /// @dev The fulcrum position is a fraction of the span, so it must lie in `[0, BPS]`.
     function test_setConfig_revertsOnFulcrumAlphaAboveBps() external {
         DynamicFeeConfig memory config = _defaultConfig();
-        config.fulcrumAlphaBps = BPS + 1;
+        config.depositFulcrumAlphaBps = BPS + 1;
         vm.expectRevert(DynamicFeeFlatPriceCurve.DynamicFeeFlatPriceCurve_InvalidConfig.selector);
         dynamicFeeCurve.setConfig(config);
     }
 
-    /// @dev `kernelSpread` (σ) divides the triangular weight, so a zero spread is rejected, and it is
+    /// @dev `depositKernelSpread` (σ) divides the triangular weight, so a zero spread is rejected, and it is
     ///      bounded above so the weight math stays clear of overflow.
     function test_setConfig_revertsOnInvalidKernelSpread() external {
         DynamicFeeConfig memory config = _defaultConfig();
-        config.kernelSpread = 0;
+        config.depositKernelSpread = 0;
         vm.expectRevert(DynamicFeeFlatPriceCurve.DynamicFeeFlatPriceCurve_InvalidConfig.selector);
         dynamicFeeCurve.setConfig(config);
 
-        config.kernelSpread = dynamicFeeCurve.MAX_KERNEL_SPREAD() + 1;
+        config.depositKernelSpread = dynamicFeeCurve.MAX_KERNEL_SPREAD() + 1;
+        vm.expectRevert(DynamicFeeFlatPriceCurve.DynamicFeeFlatPriceCurve_InvalidConfig.selector);
+        dynamicFeeCurve.setConfig(config);
+    }
+
+    function test_setConfig_revertsOnRedeemFulcrumAlphaAboveBps() external {
+        DynamicFeeConfig memory config = _defaultConfig();
+        config.redeemFulcrumAlphaBps = BPS + 1;
+        vm.expectRevert(DynamicFeeFlatPriceCurve.DynamicFeeFlatPriceCurve_InvalidConfig.selector);
+        dynamicFeeCurve.setConfig(config);
+    }
+
+    function test_setConfig_revertsOnInvalidRedeemKernelSpread() external {
+        DynamicFeeConfig memory config = _defaultConfig();
+        config.redeemKernelSpread = 0;
+        vm.expectRevert(DynamicFeeFlatPriceCurve.DynamicFeeFlatPriceCurve_InvalidConfig.selector);
+        dynamicFeeCurve.setConfig(config);
+
+        config.redeemKernelSpread = dynamicFeeCurve.MAX_KERNEL_SPREAD() + 1;
         vm.expectRevert(DynamicFeeFlatPriceCurve.DynamicFeeFlatPriceCurve_InvalidConfig.selector);
         dynamicFeeCurve.setConfig(config);
     }

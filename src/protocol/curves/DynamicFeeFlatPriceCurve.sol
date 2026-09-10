@@ -215,7 +215,13 @@ contract DynamicFeeFlatPriceCurve is
     /* =================================================== */
 
     event ConfigUpdated(
-        uint256 width0, uint256 tierCount, uint256 tierWidthGrowthBps, uint256 fulcrumAlphaBps, uint256 kernelSpread
+        uint256 width0,
+        uint256 tierCount,
+        uint256 tierWidthGrowthBps,
+        uint256 depositFulcrumAlphaBps,
+        uint256 depositKernelSpread,
+        uint256 redeemFulcrumAlphaBps,
+        uint256 redeemKernelSpread
     );
     /// @notice One deposit, summarized. `sourceTier` is the vault's tier before the deposit (the
     ///         first band the stake traversed); `accountTier` / `accountAvgTier` are the account's
@@ -553,7 +559,15 @@ contract DynamicFeeFlatPriceCurve is
         }
 
         // (2) Fulcrum slice (+ any undistributable exiting-tier slice) -> the eligible prior tiers.
-        _payFulcrumTiers(termId, toFulcrum + undistributed, currentTier, exitTier, residual);
+        _payFulcrumTiers(
+            termId,
+            toFulcrum + undistributed,
+            currentTier,
+            exitTier,
+            residual,
+            config.redeemFulcrumAlphaBps,
+            config.redeemKernelSpread
+        );
 
         // Re-base against the post-distribution accumulator: excludes the exiter from their own fee.
         rewardDebt[termId][account] = residual.fullMulDiv(accFeePerShare[termId][exitTier], ACC_PRECISION);
@@ -958,7 +972,7 @@ contract DynamicFeeFlatPriceCurve is
         }
 
         // Fulcrum slice (+ any un-spikable remainder) -> the prior tiers by the triangular kernel.
-        _payFulcrumTiers(termId, toFulcrum, sourceTier, 0, 0);
+        _payFulcrumTiers(termId, toFulcrum, sourceTier, 0, 0, config.depositFulcrumAlphaBps, config.depositKernelSpread);
     }
 
     /// @dev Whether `stake` may receive redistributed fees — the single predicate behind every
@@ -992,7 +1006,7 @@ contract DynamicFeeFlatPriceCurve is
     }
 
     /// @dev Distribute `fulcrumFeePool` across the prior tiers `[0, tier)` by the triangular fulcrum kernel.
-    ///      The peak sits at `dStar = (1 - fulcrumAlphaBps/BPS) * span` tiers from the source (fraction of
+    ///      The peak sits at `dStar = (1 - alphaBps/BPS) * span` tiers from the source (fraction of
     ///      the span, so it slides up the ladder as the vault grows); each eligible prior tier earns
     ///      `max(0, 1 - |d - dStar|/sigma)`, normalized over eligible tiers and split pro-rata by stake,
     ///      with `excludeStake` removed from the recipient denominator at `excludeTier`. A tier below
@@ -1003,13 +1017,16 @@ contract DynamicFeeFlatPriceCurve is
     ///      eligible tier nearest the fulcrum (nearest-first tie-break) rather than leaking to the
     ///      protocol; only when no prior tier qualifies, and any rounding remainder, accrue to
     ///      `protocolAccrued`. The pass-1 weighting and the degenerate-award scan are extracted to keep
-    ///      this write path within the 16-slot stack ceiling.
+    ///      this write path within the 16-slot stack ceiling. `alphaBps` and `sigma` are the kernel
+    ///      pair for the calling leg.
     function _payFulcrumTiers(
         bytes32 termId,
         uint256 fulcrumFeePool,
         uint256 sourceTier,
         uint256 excludeTier,
-        uint256 excludeStake
+        uint256 excludeStake,
+        uint256 alphaBps,
+        uint256 sigma
     ) private {
         if (fulcrumFeePool == 0) return;
 
@@ -1024,10 +1041,10 @@ contract DynamicFeeFlatPriceCurve is
         // `weights`/`stakes` are indexed by `d - 1` (d = 1 is the nearest prior tier `sourceTier - 1`;
         // d = span is the farthest, tier 0). `weights[i] > 0` implies the tier is eligible: once
         // `config.minEligibleTierStake` is live, occupancy alone is not sufficient.
-        uint256 dStar = ((BPS - config.fulcrumAlphaBps) * span).mulDiv(TIER_PRECISION, BPS);
+        uint256 dStar = ((BPS - alphaBps) * span).mulDiv(TIER_PRECISION, BPS);
         uint256[] memory weights = new uint256[](span);
         uint256[] memory stakes = new uint256[](span);
-        uint256 sumWeights = _weighPriorTiers(termId, span, dStar, excludeTier, excludeStake, weights, stakes);
+        uint256 sumWeights = _weighPriorTiers(termId, span, dStar, sigma, excludeTier, excludeStake, weights, stakes);
 
         // Degenerate: the window missed every eligible tier, or there is none. Award to the eligible
         // tier nearest the fulcrum, else to the protocol, rather than forfeiting the pool.
@@ -1076,12 +1093,12 @@ contract DynamicFeeFlatPriceCurve is
         bytes32 termId,
         uint256 span,
         uint256 dStar,
+        uint256 sigma,
         uint256 excludeTier,
         uint256 excludeStake,
         uint256[] memory weights,
         uint256[] memory stakes
     ) private view returns (uint256 sumWeights) {
-        uint256 sigma = config.kernelSpread;
         for (uint256 d = 1; d <= span;) {
             uint256 recipientTier = span - d; // == sourceTier - d
             uint256 recipientStake = tierStake[termId][recipientTier];
@@ -1349,19 +1366,24 @@ contract DynamicFeeFlatPriceCurve is
         if (config.tierCount != 0 && _config.tierCount < config.tierCount) {
             revert DynamicFeeFlatPriceCurve_TierCountCannotShrink();
         }
-        // Fulcrum position is a fraction of the span; `kernelSpread` (σ) must be non-zero (it divides
-        // the weight) and is bounded above so the triangular math stays clear of overflow.
+        // Same bounds for both legs' kernel pairs. The fulcrum position is a fraction of the span; the
+        // spread (σ) must be non-zero (it divides the weight) and is bounded above so the triangular
+        // math stays clear of overflow.
         //
-        // A `kernelSpread` small enough that no eligible prior tier falls inside the window collapses
-        // the spread into a single-tier award. The fee still reaches a real cohort and no wei is
+        // A spread small enough that no eligible prior tier falls inside the window collapses the
+        // spread into a single-tier award. The fee still reaches a real cohort and no wei is
         // forfeited, but the configured schedule and the observable behaviour stop matching. No static
         // bound prevents this: keyed on the spread alone it rejects legitimate schedules, since at
-        // `fulcrumAlphaBps = 0` the farthest tier sits at distance zero and carries full weight at any
-        // spread; keyed on `fulcrumAlphaBps == BPS` it does not prevent the collapse, since one tier
-        // inside the window is still winner-takes-all. Whether a given pair spreads depends on live
-        // occupancy at distribution time, which `setConfig` cannot observe.
-        if (_config.fulcrumAlphaBps > BPS) revert DynamicFeeFlatPriceCurve_InvalidConfig();
-        if (_config.kernelSpread == 0 || _config.kernelSpread > MAX_KERNEL_SPREAD) {
+        // alpha 0 the farthest tier sits at distance zero and carries full weight at any spread; keyed
+        // on alpha `BPS` it does not prevent the collapse, since one tier inside the window is still
+        // winner-takes-all. Whether a given pair spreads depends on live occupancy at distribution
+        // time, which `setConfig` cannot observe.
+        if (_config.depositFulcrumAlphaBps > BPS) revert DynamicFeeFlatPriceCurve_InvalidConfig();
+        if (_config.depositKernelSpread == 0 || _config.depositKernelSpread > MAX_KERNEL_SPREAD) {
+            revert DynamicFeeFlatPriceCurve_InvalidConfig();
+        }
+        if (_config.redeemFulcrumAlphaBps > BPS) revert DynamicFeeFlatPriceCurve_InvalidConfig();
+        if (_config.redeemKernelSpread == 0 || _config.redeemKernelSpread > MAX_KERNEL_SPREAD) {
             revert DynamicFeeFlatPriceCurve_InvalidConfig();
         }
         // Caps are bounded by the immutable ceilings, not by `BPS`. See {MAX_DEPOSIT_CAP_BPS} and
@@ -1396,7 +1418,13 @@ contract DynamicFeeFlatPriceCurve is
         if (_tierUpperEdge(_config.tierCount - 1) == 0) revert DynamicFeeFlatPriceCurve_InvalidConfig();
 
         emit ConfigUpdated(
-            _config.width0, _config.tierCount, _config.tierWidthGrowthBps, _config.fulcrumAlphaBps, _config.kernelSpread
+            _config.width0,
+            _config.tierCount,
+            _config.tierWidthGrowthBps,
+            _config.depositFulcrumAlphaBps,
+            _config.depositKernelSpread,
+            _config.redeemFulcrumAlphaBps,
+            _config.redeemKernelSpread
         );
         if (_config.minEligibleTierStake != previousMinEligibleTierStake) {
             emit MinEligibleTierStakeUpdated(previousMinEligibleTierStake, _config.minEligibleTierStake);

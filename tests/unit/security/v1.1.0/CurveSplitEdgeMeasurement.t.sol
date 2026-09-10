@@ -62,8 +62,10 @@ contract CurveSplitEdgeMeasurementTest is Test {
             depositBaseBps: 100,
             depositGrowthBps: 50,
             depositCapBps: 1000,
-            fulcrumAlphaBps: 10_000,
-            kernelSpread: 4e18,
+            depositFulcrumAlphaBps: 10_000,
+            depositKernelSpread: 4e18,
+            redeemFulcrumAlphaBps: 10_000,
+            redeemKernelSpread: 4e18,
             redeemBaseBps: 200,
             redeemGrowthBps: 50,
             redeemCapBps: 1000,
@@ -203,12 +205,12 @@ contract CurveSplitEdgeMeasurementTest is Test {
     ///      awarded to a single tier. A split arrangement has a wallet sitting in that tier and a lump
     ///      does not, so winner-takes-all is the best case for the splitter, not the worst.
     ///
-    ///      Lowering `fulcrumAlphaBps` raises it too, for the mirror reason: it moves the peak from the
+    ///      Lowering `depositFulcrumAlphaBps` raises it too, for the mirror reason: it moves the peak from the
     ///      tiers nearest the source down onto the earliest tiers. A single averaged bucket sits near
     ///      the middle of what the deposit traversed; a split arrangement has a wallet at the bottom of
     ///      it. Moving the peak to an extreme rewards whoever can occupy extremes.
     ///
-    ///      The shipped `(fulcrumAlphaBps = BPS, sigma = 4e18)` is therefore already in a reasonable part
+    ///      The shipped `(depositFulcrumAlphaBps = BPS, sigma = 4e18)` is therefore already in a reasonable part
     ///      of the space. Asserted loosely — these are small-sample maxima and the point is the
     ///      DIRECTION, not the values.
     function test_measure_theObviousConfigLeversDoNotReduceTheResidual() external {
@@ -274,8 +276,10 @@ contract CurveSplitEdgeMeasurementTest is Test {
             depositBaseBps: 100,
             depositGrowthBps: 50,
             depositCapBps: 1000,
-            fulcrumAlphaBps: alpha,
-            kernelSpread: sigma,
+            depositFulcrumAlphaBps: alpha,
+            depositKernelSpread: sigma,
+            redeemFulcrumAlphaBps: alpha,
+            redeemKernelSpread: sigma,
             redeemBaseBps: 200,
             redeemGrowthBps: 50,
             redeemCapBps: 1000,
