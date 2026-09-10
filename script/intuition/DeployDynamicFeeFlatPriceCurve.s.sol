@@ -140,23 +140,30 @@ contract DeployDynamicFeeFlatPriceCurve is SetupScript {
     ///      until governance turns it on. Raising it is a `setConfig` action by the parameters timelock
     ///      like any other parameter, bounded by the curve's immutable `MAX_MIN_ELIGIBLE_TIER_STAKE`, and
     ///      it emits `MinEligibleTierStakeUpdated` with the before/after values so a raise is monitorable.
+    /// @dev The currently chosen launch-optimized configuration, deployed on the Intuition
+    ///      Sepolia QA stack as "The Launch Optimized Config v3".
+    ///
+    ///      All fields are owner-settable post-deploy through `setConfig`. The ladder geometry —
+    ///      `width0`, `tierWidthGrowthBps` and `tierCount` — shouldn't be changed after positions
+    ///      exist, since it defines the tier edges those positions sit under (and `tierCount` can
+    ///      only grow).
     function _defaultConfig() internal pure returns (DynamicFeeConfig memory config) {
         config = DynamicFeeConfig({
-            width0: 5000e18,
-            tierCount: 13,
-            tierWidthGrowthBps: 2000,
+            width0: 2000e18,
+            tierCount: 16,
+            tierWidthGrowthBps: 3500,
             depositBaseBps: 100,
-            depositGrowthBps: 50,
-            depositCapBps: 1000,
-            depositFulcrumAlphaBps: 10_000,
-            depositKernelSpread: 4e18,
-            redeemFulcrumAlphaBps: 10_000,
-            redeemKernelSpread: 4e18,
-            redeemBaseBps: 200,
-            redeemGrowthBps: 50,
-            redeemCapBps: 1000,
-            redeemToFulcrumTiersBps: 0,
-            depositToPriorTierBps: 0,
+            depositGrowthBps: 45,
+            depositCapBps: 550,
+            depositFulcrumAlphaBps: 5000,
+            depositKernelSpread: 6e18,
+            redeemFulcrumAlphaBps: 5000,
+            redeemKernelSpread: 6e18,
+            redeemBaseBps: 150,
+            redeemGrowthBps: 35,
+            redeemCapBps: 450,
+            redeemToFulcrumTiersBps: 7500,
+            depositToPriorTierBps: 1000,
             minEligibleTierStake: 0
         });
     }

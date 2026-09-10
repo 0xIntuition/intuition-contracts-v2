@@ -12157,11 +12157,19 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "fulcrumAlphaBps";
+            readonly name: "depositFulcrumAlphaBps";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "kernelSpread";
+            readonly name: "depositKernelSpread";
+            readonly type: "uint256";
+            readonly internalType: "uint256";
+        }, {
+            readonly name: "redeemFulcrumAlphaBps";
+            readonly type: "uint256";
+            readonly internalType: "uint256";
+        }, {
+            readonly name: "redeemKernelSpread";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
@@ -12255,11 +12263,19 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "fulcrumAlphaBps";
+            readonly name: "depositFulcrumAlphaBps";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "kernelSpread";
+            readonly name: "depositKernelSpread";
+            readonly type: "uint256";
+            readonly internalType: "uint256";
+        }, {
+            readonly name: "redeemFulcrumAlphaBps";
+            readonly type: "uint256";
+            readonly internalType: "uint256";
+        }, {
+            readonly name: "redeemKernelSpread";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
@@ -12648,11 +12664,19 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "fulcrumAlphaBps";
+            readonly name: "depositFulcrumAlphaBps";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "kernelSpread";
+            readonly name: "depositKernelSpread";
+            readonly type: "uint256";
+            readonly internalType: "uint256";
+        }, {
+            readonly name: "redeemFulcrumAlphaBps";
+            readonly type: "uint256";
+            readonly internalType: "uint256";
+        }, {
+            readonly name: "redeemKernelSpread";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
@@ -12909,12 +12933,22 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
         readonly indexed: false;
         readonly internalType: "uint256";
     }, {
-        readonly name: "fulcrumAlphaBps";
+        readonly name: "depositFulcrumAlphaBps";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
     }, {
-        readonly name: "kernelSpread";
+        readonly name: "depositKernelSpread";
+        readonly type: "uint256";
+        readonly indexed: false;
+        readonly internalType: "uint256";
+    }, {
+        readonly name: "redeemFulcrumAlphaBps";
+        readonly type: "uint256";
+        readonly indexed: false;
+        readonly internalType: "uint256";
+    }, {
+        readonly name: "redeemKernelSpread";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";

@@ -419,12 +419,22 @@ export const DynamicFeeFlatPriceCurveAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "fulcrumAlphaBps",
+            "name": "depositFulcrumAlphaBps",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "kernelSpread",
+            "name": "depositKernelSpread",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "redeemFulcrumAlphaBps",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "redeemKernelSpread",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -544,12 +554,22 @@ export const DynamicFeeFlatPriceCurveAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "fulcrumAlphaBps",
+            "name": "depositFulcrumAlphaBps",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "kernelSpread",
+            "name": "depositKernelSpread",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "redeemFulcrumAlphaBps",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "redeemKernelSpread",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -1056,12 +1076,22 @@ export const DynamicFeeFlatPriceCurveAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "fulcrumAlphaBps",
+            "name": "depositFulcrumAlphaBps",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "kernelSpread",
+            "name": "depositKernelSpread",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "redeemFulcrumAlphaBps",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "redeemKernelSpread",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -1399,13 +1429,25 @@ export const DynamicFeeFlatPriceCurveAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "fulcrumAlphaBps",
+        "name": "depositFulcrumAlphaBps",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
       },
       {
-        "name": "kernelSpread",
+        "name": "depositKernelSpread",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "redeemFulcrumAlphaBps",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "redeemKernelSpread",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
