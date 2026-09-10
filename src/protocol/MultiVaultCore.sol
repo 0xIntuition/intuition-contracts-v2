@@ -3,7 +3,7 @@ pragma solidity 0.8.29;
 
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
-import { IMultiVault, VaultType } from "../interfaces/IMultiVault.sol";
+import { IMultiVault, VaultType } from "src/interfaces/IMultiVault.sol";
 import {
     IMultiVaultCore,
     GeneralConfig,
@@ -12,7 +12,8 @@ import {
     WalletConfig,
     VaultFees,
     BondingCurveConfig
-} from "../interfaces/IMultiVaultCore.sol";
+} from "src/interfaces/IMultiVaultCore.sol";
+import { MultiVaultLib } from "src/libraries/MultiVaultLib.sol";
 
 /**
  * @title  MultiVaultCore
@@ -25,13 +26,20 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
     /* =================================================== */
 
     /// @notice Salt for atoms
-    bytes32 public constant ATOM_SALT = keccak256("ATOM_SALT");
+    /// @dev    Source of truth lives in {MultiVaultLib} so library-side ID derivation
+    ///         (`_calculateAtomId`) and this contract's reads stay in sync; this re-export
+    ///         preserves the `ATOM_SALT()` public-getter selector.
+    bytes32 public constant ATOM_SALT = MultiVaultLib.ATOM_SALT;
 
     /// @notice Salt used for positive triples
-    bytes32 public constant TRIPLE_SALT = keccak256("TRIPLE_SALT");
+    /// @dev    Source of truth lives in {MultiVaultLib}; re-export preserves the `TRIPLE_SALT()`
+    ///         public-getter selector.
+    bytes32 public constant TRIPLE_SALT = MultiVaultLib.TRIPLE_SALT;
 
     /// @notice Salt used for counter triples
-    bytes32 public constant COUNTER_SALT = keccak256("COUNTER_SALT");
+    /// @dev    Source of truth lives in {MultiVaultLib}; re-export preserves the `COUNTER_SALT()`
+    ///         public-getter selector.
+    bytes32 public constant COUNTER_SALT = MultiVaultLib.COUNTER_SALT;
 
     /* =================================================== */
     /*                  STATE VARIABLES                    */
@@ -70,9 +78,9 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
 
     error MultiVaultCore_InvalidAdmin();
 
-    error MultiVaultCore_AtomDoesNotExist(bytes32 termId);
+    error MultiVaultCore_AtomDoesNotExist(bytes32 atomId);
 
-    error MultiVaultCore_TripleDoesNotExist(bytes32 termId);
+    error MultiVaultCore_TripleDoesNotExist(bytes32 tripleId);
 
     error MultiVaultCore_TermDoesNotExist(bytes32 termId);
 
@@ -96,10 +104,7 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
         WalletConfig memory _walletConfig,
         VaultFees memory _vaultFees,
         BondingCurveConfig memory _bondingCurveConfig
-    )
-        internal
-        onlyInitializing
-    {
+    ) internal onlyInitializing {
         _setGeneralConfig(_generalConfig);
         atomConfig = _atomConfig;
         tripleConfig = _tripleConfig;
@@ -167,8 +172,8 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
     }
 
     /// @inheritdoc IMultiVaultCore
-    function isAtom(bytes32 atomId) external view returns (bool) {
-        return _isAtom(atomId);
+    function isAtom(bytes32 termId) external view returns (bool) {
+        return _isAtom(termId);
     }
 
     /* =================================================== */
@@ -201,16 +206,12 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
     }
 
     /// @inheritdoc IMultiVaultCore
-    function getTripleIdFromCounterId(bytes32 counterId) external view returns (bytes32) {
-        return _tripleIdFromCounterId[counterId];
+    function getTripleIdFromCounterId(bytes32 counterTripleId) external view returns (bytes32) {
+        return _tripleIdFromCounterId[counterTripleId];
     }
 
     /// @inheritdoc IMultiVaultCore
-    function calculateTripleId(
-        bytes32 subjectId,
-        bytes32 predicateId,
-        bytes32 objectId
-    )
+    function calculateTripleId(bytes32 subjectId, bytes32 predicateId, bytes32 objectId)
         external
         pure
         returns (bytes32)
@@ -219,11 +220,7 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
     }
 
     /// @inheritdoc IMultiVaultCore
-    function calculateCounterTripleId(
-        bytes32 subjectId,
-        bytes32 predicateId,
-        bytes32 objectId
-    )
+    function calculateCounterTripleId(bytes32 subjectId, bytes32 predicateId, bytes32 objectId)
         external
         pure
         returns (bytes32)
@@ -262,10 +259,10 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
         generalConfig = _generalConfig;
     }
 
-    /// @dev Internal function to check if an atom exists
-    /// @param atomId atom id to check
-    function _isAtom(bytes32 atomId) internal view returns (bool) {
-        return _atoms[atomId].length != 0;
+    /// @dev Internal function to check whether `termId` is an existing atom
+    /// @param termId term id to check
+    function _isAtom(bytes32 termId) internal view returns (bool) {
+        return _atoms[termId].length != 0;
     }
 
     /// @dev Internal function to calculate the atom id from the atom data
@@ -279,11 +276,7 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
     /// @param predicateId The atom id of the predicate
     /// @param objectId The atom id of the object
     /// @return id The calculated triple id
-    function _calculateTripleId(
-        bytes32 subjectId,
-        bytes32 predicateId,
-        bytes32 objectId
-    )
+    function _calculateTripleId(bytes32 subjectId, bytes32 predicateId, bytes32 objectId)
         internal
         pure
         returns (bytes32)
@@ -298,9 +291,9 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
         return bytes32(keccak256(abi.encodePacked(COUNTER_SALT, tripleId)));
     }
 
-    /// @dev Internal function to get the triple id from the given counter id
-    /// @param termId term id of the counter triple
-    /// @return tripleId the triple vault id from the given counter id
+    /// @dev Internal function to check whether `termId` is a counter-triple id
+    /// @param termId term id to check
+    /// @return Whether a positive triple is recorded for this id as its counterpart
     function _isCounterTriple(bytes32 termId) internal view returns (bool) {
         return _tripleIdFromCounterId[termId] != bytes32(0);
     }
@@ -315,18 +308,6 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
             revert MultiVaultCore_AtomDoesNotExist(atomId);
         }
         return _data;
-    }
-
-    /// @dev Internal function to get the underlying atom ids for a given triple id
-    /// @dev If the triple does not exist, this function reverts
-    /// @param tripleId term id of the triple
-    /// @return The underlying atom ids of the triple
-    function _getTriple(bytes32 tripleId) internal view returns (bytes32, bytes32, bytes32) {
-        bytes32[3] memory atomIds = _triples[tripleId];
-        if (atomIds[0] == bytes32(0) && atomIds[1] == bytes32(0) && atomIds[2] == bytes32(0)) {
-            revert MultiVaultCore_TripleDoesNotExist(tripleId);
-        }
-        return (atomIds[0], atomIds[1], atomIds[2]);
     }
 
     /// @dev Internal function to get the inverse triple id (counter or positive) for a given triple id
@@ -356,12 +337,22 @@ abstract contract MultiVaultCore is IMultiVaultCore, Initializable {
     }
 
     /// @dev Internal function to get the static costs that go into creating an atom
+    /// @dev Assumes a 1:1 default curve. `generalConfig.minShare` is a share quantity, added here to
+    ///      an asset quantity, while the create path funds the ghost-share seed with
+    ///      `_minAssetsForCurve(defaultCurveId, minShare)` assets. The advertised cost and the funded
+    ///      credit are equal only for a curve that mints 1:1 from an empty domain. This holds by
+    ///      construction for the deployed configuration (`defaultCurveId == 1`, `LinearCurve`,
+    ///      flat 1:1). Repointing `defaultCurveId` at a non-1:1 curve would
+    ///      silently under-collateralise or strand value here, with no revert and no event.
+    ///      Changing `defaultCurveId` requires re-deriving this.
     /// @return atomCost the static costs of creating an atom
     function _getAtomCost() internal view returns (uint256) {
         return atomConfig.atomCreationProtocolFee + generalConfig.minShare;
     }
 
     /// @dev Internal function to get the static costs that go into creating a triple
+    /// @dev Same 1:1 default-curve assumption as {_getAtomCost}, doubled for the two ghost-share
+    ///      seeds a triple creates.
     /// @return tripleCost the static costs of creating a triple
     function _getTripleCost() internal view returns (uint256) {
         return tripleConfig.tripleCreationProtocolFee + generalConfig.minShare * 2;

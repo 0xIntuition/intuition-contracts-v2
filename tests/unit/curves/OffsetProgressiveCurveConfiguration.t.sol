@@ -722,9 +722,7 @@ contract OffsetProgressiveCurveConfigurationTest is Test {
         uint256 offset,
         uint256 shares,
         uint256 totalShares
-    )
-        public
-    {
+    ) public {
         // Bound inputs to reasonable ranges
         slope = bound(slope, 2, 1e18);
         if (slope % 2 != 0) slope += 1; // Ensure even
@@ -1063,7 +1061,7 @@ contract OffsetProgressiveCurveConfigurationTest is Test {
             uint256 avgCost1 = m.costToMint1e18Shares / 1e18;
             uint256 avgCost100 = m.costToMint100e18Shares / 100e18;
             uint256 gentlenessVariance = avgCost100 > avgCost1
-                ? ((avgCost100 - avgCost1) * 1e18) / avgCost1 // Percentage variance
+                ? ((avgCost100 - avgCost1) * 1e18) / avgCost1  // Percentage variance
                 : 0;
 
             // Steepness: growth from 500e18 to 2500e18 (higher is better)
@@ -1161,11 +1159,7 @@ contract OffsetProgressiveCurveConfigurationTest is Test {
     /* =================================================== */
 
     /// @dev Helper to deploy a curve for testing with specific parameters
-    function _deployCurveForTest(
-        string memory name,
-        uint256 slope,
-        uint256 offset
-    )
+    function _deployCurveForTest(string memory name, uint256 slope, uint256 offset)
         internal
         returns (OffsetProgressiveCurve)
     {

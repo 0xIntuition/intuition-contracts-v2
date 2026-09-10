@@ -2,541 +2,2118 @@
 pragma solidity 0.8.29;
 
 import { Test } from "forge-std/src/Test.sol";
+import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
+import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
 import { AtomWarden } from "src/protocol/wallet/AtomWarden.sol";
 import { IAtomWarden } from "src/interfaces/IAtomWarden.sol";
-import { IAtomWallet } from "src/interfaces/IAtomWallet.sol";
-import { IMultiVault } from "src/interfaces/IMultiVault.sol";
-import { IMultiVaultCore } from "src/interfaces/IMultiVaultCore.sol";
-import { BaseTest } from "tests/BaseTest.t.sol";
+import { GeneralConfig } from "src/interfaces/IMultiVaultCore.sol";
 
 contract MockAtomWallet {
     address public owner;
+    bool public isClaimed;
+    uint256 public claimCount;
 
-    function transferOwnership(address newOwner) external {
+    constructor(address initialOwner) {
+        owner = initialOwner;
+    }
+
+    function completeClaim(address newOwner) external {
         owner = newOwner;
+        isClaimed = true;
+        unchecked {
+            ++claimCount;
+        }
     }
 }
 
-contract AtomWardenTest is BaseTest {
-    AtomWarden public atomWarden;
-    address public atomWardenImplementation;
-    TransparentUpgradeableProxy public atomWardenProxy;
+contract MockMultiVault {
+    bytes32 internal constant ATOM_SALT = keccak256("ATOM_SALT");
 
-    address public constant UNAUTHORIZED_USER = address(0x9999);
-    address public constant NEW_OWNER = address(0x1111);
-    address public constant MOCK_MULTIVAULT = address(0x2222);
-    address public constant INVALID_ADDRESS = address(0);
+    address public configAdmin;
 
-    bytes32 public constant TEST_ATOM_ID = keccak256(abi.encodePacked("test_atom"));
-    bytes32 public constant INVALID_ATOM_ID = keccak256(abi.encodePacked("invalid_atom"));
-    bytes public constant TEST_ATOM_DATA = bytes("0x1234567890abcdef1234567890abcdef12345678");
+    mapping(bytes32 atomId => bool exists) public isAtom;
+    mapping(bytes32 atomId => bytes atomData) internal _atoms;
+    mapping(bytes32 atomId => address atomWallet) public atomWallets;
+    mapping(bytes32 atomId => address creator) public atomCreators;
+    mapping(bytes32 atomId => uint48 createdAt) public atomCreatedAt;
+    mapping(address atomWallet => uint256 accumulatedFees) public accumulatedAtomWalletDepositFees;
 
-    function setUp() public override {
-        super.setUp();
+    function atom(bytes32 atomId) external view returns (bytes memory) {
+        return _atoms[atomId];
+    }
 
-        atomWardenImplementation = address(new AtomWarden());
-        atomWardenProxy = new TransparentUpgradeableProxy(atomWardenImplementation, users.admin, "");
+    function calculateAtomId(bytes memory data) external pure returns (bytes32) {
+        return keccak256(abi.encodePacked(ATOM_SALT, keccak256(data)));
+    }
+
+    function computeAtomWalletAddr(bytes32 atomId) external view returns (address) {
+        return atomWallets[atomId];
+    }
+
+    function getAtomCreator(bytes32 atomId) external view returns (address) {
+        return atomCreators[atomId];
+    }
+
+    function getAtomCreatedAt(bytes32 atomId) external view returns (uint48) {
+        return atomCreatedAt[atomId];
+    }
+
+    function setAtom(bytes32 atomId, bytes memory data, address wallet, address creator, uint48 createdTimestamp)
+        external
+    {
+        isAtom[atomId] = true;
+        _atoms[atomId] = data;
+        atomWallets[atomId] = wallet;
+        atomCreators[atomId] = creator;
+        atomCreatedAt[atomId] = createdTimestamp;
+    }
+
+    function setAccumulatedFees(address wallet, uint256 amount) external {
+        accumulatedAtomWalletDepositFees[wallet] = amount;
+    }
+
+    function setConfigAdmin(address _admin) external {
+        configAdmin = _admin;
+    }
+
+    function getGeneralConfig() external view returns (GeneralConfig memory) {
+        return GeneralConfig({
+            admin: configAdmin,
+            protocolMultisig: address(0),
+            feeDenominator: 10_000,
+            trustBonding: address(0),
+            minDeposit: 0,
+            minShare: 0,
+            atomDataMaxLength: 0,
+            feeThreshold: 0
+        });
+    }
+}
+
+contract AtomWardenTest is Test {
+    bytes32 internal constant CLAIM_AUTHORIZATION_TYPEHASH = keccak256(
+        "ClaimAuthorization(address claimant,bytes32 atomId,uint8 claimType,uint256 nonce,uint48 validAfter,uint48 validUntil)"
+    );
+    bytes32 internal constant EIP712_DOMAIN_TYPEHASH =
+        keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+
+    AtomWarden internal atomWarden;
+    TransparentUpgradeableProxy internal atomWardenProxy;
+    MockMultiVault internal multiVault;
+
+    address internal admin;
+    address internal operator;
+    address internal claimant;
+    address internal creator;
+    uint256 internal signerPrivateKey;
+    address internal signer;
+
+    uint256 internal constant DEFAULT_CLAIM_WINDOW = 7 days;
+    uint256 internal constant DEFAULT_MIN_FEE_THRESHOLD = 0.25 ether;
+    uint256 internal constant DEFAULT_SIGNATURE_THRESHOLD = 1;
+    /// @dev Permissive enough that existing auth-building tests (`validAfter = now - 1`,
+    ///      `validUntil = now + 1 days`) pass; targeted cap tests override via setters.
+    uint48 internal constant DEFAULT_MAX_VALID_AFTER = uint48(1 hours);
+    uint48 internal constant DEFAULT_MAX_VALID_UNTIL = uint48(7 days);
+    /// @dev Armed by default so the whole suite exercises cap accounting; high enough
+    ///      that only the targeted cap tests can exhaust it.
+    uint256 internal constant DEFAULT_MAX_CLAIMS_PER_WINDOW = 100;
+    uint256 internal constant DEFAULT_CLAIM_CAP_WINDOW = 1 days;
+
+    function setUp() external {
+        admin = makeAddr("admin");
+        operator = makeAddr("operator");
+        claimant = makeAddr("claimant");
+        creator = makeAddr("creator");
+        signerPrivateKey = 0xBEEF;
+        signer = vm.addr(signerPrivateKey);
+
+        multiVault = new MockMultiVault();
+        multiVault.setConfigAdmin(admin);
+
+        AtomWarden atomWardenImplementation = new AtomWarden();
+        atomWardenProxy = new TransparentUpgradeableProxy(address(atomWardenImplementation), admin, "");
         atomWarden = AtomWarden(address(atomWardenProxy));
+        atomWarden.initialize(
+            admin,
+            address(multiVault),
+            DEFAULT_CLAIM_WINDOW,
+            DEFAULT_MIN_FEE_THRESHOLD,
+            DEFAULT_SIGNATURE_THRESHOLD,
+            DEFAULT_MAX_VALID_AFTER,
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            DEFAULT_CLAIM_CAP_WINDOW
+        );
 
-        atomWarden.initialize(users.admin, address(protocol.multiVault));
-
-        vm.stopPrank();
+        bytes32 operatorRole = atomWarden.OPERATOR_ROLE();
+        bytes32 signerRole = atomWarden.SIGNER_ROLE();
+        vm.prank(admin);
+        atomWarden.grantRole(operatorRole, operator);
+        vm.prank(admin);
+        atomWarden.grantRole(signerRole, signer);
     }
 
     /*//////////////////////////////////////////////////////////////
-                            INITIALIZATION TESTS
+                            INITIALIZATION
     //////////////////////////////////////////////////////////////*/
 
-    function test_initialize_successful() external {
-        AtomWarden freshWarden = new AtomWarden();
-        TransparentUpgradeableProxy freshProxy = new TransparentUpgradeableProxy(address(freshWarden), users.admin, "");
-        freshWarden = AtomWarden(address(freshProxy));
-
-        vm.expectEmit(true, true, true, true);
-        emit IAtomWarden.MultiVaultSet(address(protocol.multiVault));
-
-        freshWarden.initialize(users.alice, address(protocol.multiVault));
-
-        assertEq(freshWarden.owner(), users.alice);
-        assertEq(address(freshWarden.multiVault()), address(protocol.multiVault));
+    function test_initialize_setsRolesAndConfig() external view {
+        assertEq(atomWarden.multiVault(), address(multiVault));
+        assertEq(atomWarden.claimWindow(), DEFAULT_CLAIM_WINDOW);
+        assertEq(atomWarden.minFeeThreshold(), DEFAULT_MIN_FEE_THRESHOLD);
+        assertTrue(atomWarden.hasRole(atomWarden.DEFAULT_ADMIN_ROLE(), admin));
+        assertTrue(atomWarden.hasRole(atomWarden.OPERATOR_ROLE(), admin));
+        assertTrue(atomWarden.hasRole(atomWarden.OPERATOR_ROLE(), operator));
+        assertTrue(atomWarden.hasRole(atomWarden.SIGNER_ROLE(), signer));
     }
 
     function test_initialize_revertsOnZeroAdmin() external {
-        AtomWarden freshWarden = new AtomWarden();
-        TransparentUpgradeableProxy freshProxy = new TransparentUpgradeableProxy(address(freshWarden), users.admin, "");
-        freshWarden = AtomWarden(address(freshProxy));
+        AtomWarden implementation = new AtomWarden();
+        TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(address(implementation), admin, "");
+        AtomWarden freshWarden = AtomWarden(address(proxy));
 
-        vm.expectRevert();
-        freshWarden.initialize(INVALID_ADDRESS, address(protocol.multiVault));
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_InvalidAddress.selector));
+        freshWarden.initialize(
+            address(0),
+            address(multiVault),
+            DEFAULT_CLAIM_WINDOW,
+            DEFAULT_MIN_FEE_THRESHOLD,
+            DEFAULT_SIGNATURE_THRESHOLD,
+            DEFAULT_MAX_VALID_AFTER,
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            DEFAULT_CLAIM_CAP_WINDOW
+        );
     }
 
     function test_initialize_revertsOnZeroMultiVault() external {
-        AtomWarden freshWarden = new AtomWarden();
-        TransparentUpgradeableProxy freshProxy = new TransparentUpgradeableProxy(address(freshWarden), users.admin, "");
-        freshWarden = AtomWarden(address(freshProxy));
+        AtomWarden implementation = new AtomWarden();
+        TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(address(implementation), admin, "");
+        AtomWarden freshWarden = AtomWarden(address(proxy));
 
         vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_InvalidAddress.selector));
-        freshWarden.initialize(users.alice, INVALID_ADDRESS);
+        freshWarden.initialize(
+            admin,
+            address(0),
+            DEFAULT_CLAIM_WINDOW,
+            DEFAULT_MIN_FEE_THRESHOLD,
+            DEFAULT_SIGNATURE_THRESHOLD,
+            DEFAULT_MAX_VALID_AFTER,
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            DEFAULT_CLAIM_CAP_WINDOW
+        );
     }
 
-    function test_initialize_revertsOnDoubleInitialization() external {
-        vm.expectRevert();
-        atomWarden.initialize(users.alice, address(protocol.multiVault));
+    function test_initialize_revertsOnZeroSignatureThreshold() external {
+        AtomWarden implementation = new AtomWarden();
+        TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(address(implementation), admin, "");
+        AtomWarden freshWarden = AtomWarden(address(proxy));
+
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_InvalidThreshold.selector));
+        freshWarden.initialize(
+            admin,
+            address(multiVault),
+            DEFAULT_CLAIM_WINDOW,
+            DEFAULT_MIN_FEE_THRESHOLD,
+            0,
+            DEFAULT_MAX_VALID_AFTER,
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            DEFAULT_CLAIM_CAP_WINDOW
+        );
+    }
+
+    function test_initialize_setsCustomSignatureThreshold() external {
+        AtomWarden implementation = new AtomWarden();
+        TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(address(implementation), admin, "");
+        AtomWarden freshWarden = AtomWarden(address(proxy));
+
+        freshWarden.initialize(
+            admin,
+            address(multiVault),
+            DEFAULT_CLAIM_WINDOW,
+            DEFAULT_MIN_FEE_THRESHOLD,
+            5,
+            DEFAULT_MAX_VALID_AFTER,
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            DEFAULT_CLAIM_CAP_WINDOW
+        );
+        assertEq(freshWarden.signatureThreshold(), 5);
+        // signerCount stays 0 until SIGNER_ROLE grants land; claims revert until then.
+        assertEq(freshWarden.signerCount(), 0);
     }
 
     /*//////////////////////////////////////////////////////////////
-                        CLAIM OWNERSHIP OVER ADDRESS ATOM TESTS
+                            REINITIALIZE
     //////////////////////////////////////////////////////////////*/
 
-    function test_claimOwnershipOverAddressAtom_successful() external {
-        bytes32 atomId = _createAddressAtom(users.alice);
-        address atomWalletAddress = _deployMockAtomWallet(atomId);
+    function test_reinitialize_setsConfigAtomicallyAndBootstrapsRoles() external {
+        // Deploy a fresh proxy at initializer version 1 (simulating the pre-upgrade state)
+        MockMultiVault freshMultiVault = new MockMultiVault();
+        freshMultiVault.setConfigAdmin(admin);
 
-        vm.mockCall(
-            address(protocol.multiVault),
-            abi.encodeWithSelector(IMultiVault.computeAtomWalletAddr.selector, atomId),
-            abi.encode(atomWalletAddress)
+        AtomWarden freshImpl = new AtomWarden();
+        TransparentUpgradeableProxy freshProxy =
+            new TransparentUpgradeableProxy(address(freshImpl), makeAddr("proxy-admin"), "");
+        AtomWarden freshWarden = AtomWarden(address(freshProxy));
+
+        freshWarden.initialize(
+            admin,
+            address(freshMultiVault),
+            DEFAULT_CLAIM_WINDOW,
+            DEFAULT_MIN_FEE_THRESHOLD,
+            DEFAULT_SIGNATURE_THRESHOLD,
+            DEFAULT_MAX_VALID_AFTER,
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            DEFAULT_CLAIM_CAP_WINDOW
         );
 
-        vm.expectEmit(true, true, true, true);
-        emit IAtomWarden.AtomWalletOwnershipClaimed(atomId, users.alice);
+        uint256 newClaimWindow = 21 days;
+        uint256 newMinFeeThreshold = 1.5 ether;
+        uint256 newSignatureThreshold = 3;
+        uint48 newMaxValidAfter = uint48(30 minutes);
+        uint48 newMaxValidUntil = uint48(3 days);
+        uint256 newMaxClaimsPerWindow = 42;
+        uint256 newClaimCapWindow = 12 hours;
 
-        vm.prank(users.alice);
+        vm.prank(admin);
+        freshWarden.reinitialize(
+            newClaimWindow,
+            newMinFeeThreshold,
+            newSignatureThreshold,
+            newMaxValidAfter,
+            newMaxValidUntil,
+            newMaxClaimsPerWindow,
+            newClaimCapWindow
+        );
+
+        assertTrue(freshWarden.hasRole(freshWarden.DEFAULT_ADMIN_ROLE(), admin));
+        assertTrue(freshWarden.hasRole(freshWarden.OPERATOR_ROLE(), admin));
+        assertEq(freshWarden.claimWindow(), newClaimWindow);
+        assertEq(freshWarden.minFeeThreshold(), newMinFeeThreshold);
+        assertEq(freshWarden.signatureThreshold(), newSignatureThreshold);
+        assertEq(freshWarden.maxValidAfter(), newMaxValidAfter);
+        assertEq(freshWarden.maxValidUntil(), newMaxValidUntil);
+        assertEq(freshWarden.maxClaimsPerWindow(), newMaxClaimsPerWindow);
+        assertEq(freshWarden.claimCapWindow(), newClaimCapWindow);
+        assertFalse(freshWarden.paused());
+    }
+
+    function test_reinitialize_revertsForNonAdmin() external {
+        AtomWarden freshWarden = _freshUnreinitializedWarden();
+
+        vm.prank(makeAddr("arbitrary-caller"));
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_UnauthorizedReinitializer.selector));
+        freshWarden.reinitialize(
+            DEFAULT_CLAIM_WINDOW,
+            DEFAULT_MIN_FEE_THRESHOLD,
+            DEFAULT_SIGNATURE_THRESHOLD,
+            DEFAULT_MAX_VALID_AFTER,
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            DEFAULT_CLAIM_CAP_WINDOW
+        );
+    }
+
+    function test_reinitialize_revertsOnZeroSignatureThreshold() external {
+        AtomWarden freshWarden = _freshUnreinitializedWarden();
+
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_InvalidThreshold.selector));
+        freshWarden.reinitialize(
+            DEFAULT_CLAIM_WINDOW,
+            DEFAULT_MIN_FEE_THRESHOLD,
+            0,
+            DEFAULT_MAX_VALID_AFTER,
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            DEFAULT_CLAIM_CAP_WINDOW
+        );
+    }
+
+    function test_reinitialize_revertsWhenCalledTwice() external {
+        AtomWarden freshWarden = _freshUnreinitializedWarden();
+
+        vm.prank(admin);
+        freshWarden.reinitialize(
+            DEFAULT_CLAIM_WINDOW,
+            DEFAULT_MIN_FEE_THRESHOLD,
+            DEFAULT_SIGNATURE_THRESHOLD,
+            DEFAULT_MAX_VALID_AFTER,
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            DEFAULT_CLAIM_CAP_WINDOW
+        );
+
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(Initializable.InvalidInitialization.selector));
+        freshWarden.reinitialize(
+            DEFAULT_CLAIM_WINDOW,
+            DEFAULT_MIN_FEE_THRESHOLD,
+            DEFAULT_SIGNATURE_THRESHOLD,
+            DEFAULT_MAX_VALID_AFTER,
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            DEFAULT_CLAIM_CAP_WINDOW
+        );
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            ADDRESS SELF-CLAIM
+    //////////////////////////////////////////////////////////////*/
+
+    function test_claimOwnershipOverLowercaseAddressAtom_successful() external {
+        bytes32 atomId = _setAddressAtom(claimant, false, false);
+
+        vm.prank(claimant);
         atomWarden.claimOwnershipOverAddressAtom(atomId);
 
-        assertEq(MockAtomWallet(atomWalletAddress).owner(), users.alice);
+        MockAtomWallet wallet = MockAtomWallet(multiVault.atomWallets(atomId));
+        assertEq(wallet.owner(), claimant);
+        assertTrue(wallet.isClaimed());
     }
 
-    function test_claimOwnershipOverAddressAtom_revertsOnNonExistentAtom() external {
-        vm.mockCall(
-            address(protocol.multiVault),
-            abi.encodeWithSelector(IMultiVaultCore.isAtom.selector, INVALID_ATOM_ID),
-            abi.encode(false)
-        );
+    function test_claimOwnershipOverChecksumAddressAtom_successful() external {
+        bytes32 atomId = _setAddressAtom(claimant, false, true);
 
-        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_AtomIdDoesNotExist.selector));
+        vm.prank(claimant);
+        atomWarden.claimOwnershipOverAddressAtom(atomId);
 
-        vm.prank(users.alice);
-        atomWarden.claimOwnershipOverAddressAtom(INVALID_ATOM_ID);
+        MockAtomWallet wallet = MockAtomWallet(multiVault.atomWallets(atomId));
+        assertEq(wallet.owner(), claimant);
+        assertTrue(wallet.isClaimed());
     }
 
-    function test_claimOwnershipOverAddressAtom_revertsOnMismatchedAddress() external {
-        bytes32 atomId = _createAddressAtom(users.bob);
+    function test_claimOwnershipOverAddressAtom_revertsOnMismatchedAtomId() external {
+        bytes32 atomId = _setAtom("not-the-caller-address", claimant, false, address(0), 0);
 
+        vm.prank(claimant);
         vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_ClaimOwnershipFailed.selector));
-
-        vm.prank(users.alice);
         atomWarden.claimOwnershipOverAddressAtom(atomId);
     }
 
-    function test_claimOwnershipOverAddressAtom_revertsOnUndeployedWallet() external {
-        bytes32 atomId = _createAddressAtom(users.alice);
-        address nonExistentWallet = address(0x1234);
+    function test_claimOwnershipOverAddressAtom_revertsOnAlreadyClaimed() external {
+        bytes32 atomId = _setAddressAtom(claimant, true, false);
 
-        vm.mockCall(
-            address(protocol.multiVault),
-            abi.encodeWithSelector(IMultiVault.computeAtomWalletAddr.selector, atomId),
-            abi.encode(nonExistentWallet)
-        );
-
-        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_AtomWalletNotDeployed.selector));
-
-        vm.prank(users.alice);
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_AlreadyClaimed.selector));
         atomWarden.claimOwnershipOverAddressAtom(atomId);
     }
 
     /*//////////////////////////////////////////////////////////////
-                            ADMIN CLAIM OWNERSHIP TESTS
+                            SIGNED CLAIMS
     //////////////////////////////////////////////////////////////*/
 
-    function test_claimOwnership_successful() external {
-        bytes32 atomId = _createValidAtom();
-        address atomWalletAddress = _deployMockAtomWallet(atomId);
+    function test_claimWithAuthorization_successful() external {
+        bytes32 atomId = _setAtom("signed-claim", claimant, false, address(0), 0);
+        IAtomWarden.ClaimAuthorization memory authorization = IAtomWarden.ClaimAuthorization({
+            claimant: claimant,
+            atomId: atomId,
+            claimType: 1,
+            nonce: 0,
+            validAfter: uint48(block.timestamp - 1),
+            validUntil: uint48(block.timestamp + 1 days)
+        });
 
-        vm.mockCall(
-            address(protocol.multiVault),
-            abi.encodeWithSelector(IMultiVault.computeAtomWalletAddr.selector, atomId),
-            abi.encode(atomWalletAddress)
-        );
+        bytes memory signature = _signAuthorization(authorization, signerPrivateKey);
 
-        vm.expectEmit(true, true, true, true);
-        emit IAtomWarden.AtomWalletOwnershipClaimed(atomId, NEW_OWNER);
+        vm.prank(claimant);
+        atomWarden.claimWithAuthorization(authorization, signature);
 
-        vm.prank(users.admin);
-        atomWarden.claimOwnership(atomId, NEW_OWNER);
-
-        assertEq(MockAtomWallet(atomWalletAddress).owner(), NEW_OWNER);
+        MockAtomWallet wallet = MockAtomWallet(multiVault.atomWallets(atomId));
+        assertEq(wallet.owner(), claimant);
+        assertEq(atomWarden.claimNonces(claimant), 1);
     }
 
-    function test_claimOwnership_revertsOnZeroNewOwner() external {
-        bytes32 atomId = _createValidAtom();
+    function test_claimWithAuthorization_revertsOnUnauthorizedClaimant() external {
+        bytes32 atomId = _setAtom("signed-claim", claimant, false, address(0), 0);
+        IAtomWarden.ClaimAuthorization memory authorization = IAtomWarden.ClaimAuthorization({
+            claimant: claimant,
+            atomId: atomId,
+            claimType: 1,
+            nonce: 0,
+            validAfter: uint48(block.timestamp - 1),
+            validUntil: uint48(block.timestamp + 1 days)
+        });
 
+        bytes memory signature = _signAuthorization(authorization, signerPrivateKey);
+
+        vm.prank(makeAddr("wrong-claimant"));
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_UnauthorizedClaimant.selector));
+        atomWarden.claimWithAuthorization(authorization, signature);
+    }
+
+    function test_claimWithAuthorization_revertsOnInvalidNonce() external {
+        bytes32 atomId = _setAtom("signed-claim", claimant, false, address(0), 0);
+        IAtomWarden.ClaimAuthorization memory authorization = IAtomWarden.ClaimAuthorization({
+            claimant: claimant,
+            atomId: atomId,
+            claimType: 1,
+            nonce: 1,
+            validAfter: uint48(block.timestamp - 1),
+            validUntil: uint48(block.timestamp + 1 days)
+        });
+
+        bytes memory signature = _signAuthorization(authorization, signerPrivateKey);
+
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_InvalidNonce.selector));
+        atomWarden.claimWithAuthorization(authorization, signature);
+    }
+
+    function test_claimWithAuthorization_revertsOnExpiredAuthorization() external {
+        vm.warp(3 days);
+        bytes32 atomId = _setAtom("signed-claim", claimant, false, address(0), 0);
+        IAtomWarden.ClaimAuthorization memory authorization = IAtomWarden.ClaimAuthorization({
+            claimant: claimant,
+            atomId: atomId,
+            claimType: 1,
+            nonce: 0,
+            validAfter: uint48(block.timestamp - 2 days),
+            validUntil: uint48(block.timestamp - 1 days)
+        });
+
+        bytes memory signature = _signAuthorization(authorization, signerPrivateKey);
+
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_InvalidTimeWindow.selector));
+        atomWarden.claimWithAuthorization(authorization, signature);
+    }
+
+    function test_claimWithAuthorization_revertsOnInvalidSignature() external {
+        bytes32 atomId = _setAtom("signed-claim", claimant, false, address(0), 0);
+        IAtomWarden.ClaimAuthorization memory authorization = IAtomWarden.ClaimAuthorization({
+            claimant: claimant,
+            atomId: atomId,
+            claimType: 1,
+            nonce: 0,
+            validAfter: uint48(block.timestamp - 1),
+            validUntil: uint48(block.timestamp + 1 days)
+        });
+
+        bytes memory signature = _signAuthorization(authorization, 0xCAFE);
+
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_InvalidSignature.selector));
+        atomWarden.claimWithAuthorization(authorization, signature);
+    }
+
+    function test_claimWithAuthorization_revertsOnReplay() external {
+        bytes32 atomId = _setAtom("replay-claim", claimant, false, address(0), 0);
+        IAtomWarden.ClaimAuthorization memory authorization = IAtomWarden.ClaimAuthorization({
+            claimant: claimant,
+            atomId: atomId,
+            claimType: 1,
+            nonce: 0,
+            validAfter: uint48(block.timestamp - 1),
+            validUntil: uint48(block.timestamp + 1 days)
+        });
+
+        bytes memory signature = _signAuthorization(authorization, signerPrivateKey);
+
+        // First claim succeeds
+        vm.prank(claimant);
+        atomWarden.claimWithAuthorization(authorization, signature);
+        assertEq(atomWarden.claimNonces(claimant), 1);
+
+        // Replay with same authorization reverts (wallet already claimed)
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_AlreadyClaimed.selector));
+        atomWarden.claimWithAuthorization(authorization, signature);
+
+        // Replay against a different unclaimed wallet with stale nonce also reverts
+        bytes32 atomId2 = _setAtom("replay-claim-2", claimant, false, address(0), 0);
+        IAtomWarden.ClaimAuthorization memory staleAuthorization = IAtomWarden.ClaimAuthorization({
+            claimant: claimant,
+            atomId: atomId2,
+            claimType: 1,
+            nonce: 0,
+            validAfter: uint48(block.timestamp - 1),
+            validUntil: uint48(block.timestamp + 1 days)
+        });
+
+        bytes memory staleSignature = _signAuthorization(staleAuthorization, signerPrivateKey);
+
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_InvalidNonce.selector));
+        atomWarden.claimWithAuthorization(staleAuthorization, staleSignature);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                                GRANTS
+    //////////////////////////////////////////////////////////////*/
+
+    function test_grantAtomWalletOwnership_successful() external {
+        bytes32 atomId = _setAtom("grant", claimant, false, address(0), 0);
+
+        vm.prank(operator);
+        atomWarden.grantAtomWalletOwnership(atomId, claimant);
+
+        MockAtomWallet wallet = MockAtomWallet(multiVault.atomWallets(atomId));
+        assertEq(wallet.owner(), claimant);
+        assertTrue(wallet.isClaimed());
+    }
+
+    function test_grantAtomWalletOwnership_revertsOnClaimedWallet() external {
+        bytes32 atomId = _setAtom("grant-claimed", claimant, true, address(0), 0);
+
+        vm.prank(operator);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_AlreadyClaimed.selector));
+        atomWarden.grantAtomWalletOwnership(atomId, creator);
+    }
+
+    function test_batchGrantAtomWalletOwnership_revertsOnLengthMismatch() external {
+        bytes32[] memory atomIds = new bytes32[](1);
+        atomIds[0] = _setAtom("grant", claimant, false, address(0), 0);
+        address[] memory owners = new address[](0);
+
+        vm.prank(operator);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_ArrayLengthMismatch.selector));
+        atomWarden.batchGrantAtomWalletOwnership(atomIds, owners);
+    }
+
+    function test_batchGrantAtomWalletOwnership_revertsOnBatchTooLarge() external {
+        bytes32[] memory atomIds = new bytes32[](151);
+        address[] memory owners = new address[](151);
+
+        vm.prank(operator);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_BatchTooLarge.selector));
+        atomWarden.batchGrantAtomWalletOwnership(atomIds, owners);
+    }
+
+    function test_batchGrantAtomWalletOwnership_successful() external {
+        bytes32[] memory atomIds = new bytes32[](2);
+        atomIds[0] = _setAtom("batch-grant-a", claimant, false, address(0), 0);
+        atomIds[1] = _setAtom("batch-grant-b", claimant, false, address(0), 0);
+
+        address[] memory owners = new address[](2);
+        owners[0] = makeAddr("batch-owner-a");
+        owners[1] = makeAddr("batch-owner-b");
+
+        vm.prank(operator);
+        atomWarden.batchGrantAtomWalletOwnership(atomIds, owners);
+
+        assertEq(MockAtomWallet(multiVault.atomWallets(atomIds[0])).owner(), owners[0]);
+        assertEq(MockAtomWallet(multiVault.atomWallets(atomIds[1])).owner(), owners[1]);
+    }
+
+    function test_grantAtomWalletOwnership_revertsOnZeroAddressOwner() external {
+        bytes32 atomId = _setAtom("grant-zero", claimant, false, address(0), 0);
+
+        vm.prank(operator);
         vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_InvalidNewOwnerAddress.selector));
-
-        vm.prank(users.admin);
-        atomWarden.claimOwnership(atomId, INVALID_ADDRESS);
-    }
-
-    function test_claimOwnership_revertsOnNonExistentAtom() external {
-        vm.mockCall(
-            address(protocol.multiVault),
-            abi.encodeWithSelector(IMultiVaultCore.isAtom.selector, INVALID_ATOM_ID),
-            abi.encode(false)
-        );
-
-        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_AtomIdDoesNotExist.selector));
-
-        vm.prank(users.admin);
-        atomWarden.claimOwnership(INVALID_ATOM_ID, NEW_OWNER);
-    }
-
-    function test_claimOwnership_revertsOnUndeployedWallet() external {
-        bytes32 atomId = _createValidAtom();
-        address nonExistentWallet = address(0x1234);
-
-        vm.mockCall(
-            address(protocol.multiVault),
-            abi.encodeWithSelector(IMultiVault.computeAtomWalletAddr.selector, atomId),
-            abi.encode(nonExistentWallet)
-        );
-
-        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_AtomWalletNotDeployed.selector));
-
-        vm.prank(users.admin);
-        atomWarden.claimOwnership(atomId, NEW_OWNER);
-    }
-
-    function test_claimOwnership_revertsOnUnauthorizedUser() external {
-        bytes32 atomId = _createValidAtom();
-
-        vm.expectRevert();
-
-        vm.prank(UNAUTHORIZED_USER);
-        atomWarden.claimOwnership(atomId, NEW_OWNER);
+        atomWarden.grantAtomWalletOwnership(atomId, address(0));
     }
 
     /*//////////////////////////////////////////////////////////////
-                            SET MULTIVAULT TESTS
+                            CREATOR FALLBACK
     //////////////////////////////////////////////////////////////*/
 
-    function test_setMultiVault_successful() external {
+    function test_claimAsCreatorAfterExpiry_successful() external {
+        vm.warp(DEFAULT_CLAIM_WINDOW + 1 days);
+        bytes32 atomId = _setAtom("creator-fallback", claimant, false, creator, uint48(block.timestamp - 8 days));
+        multiVault.setAccumulatedFees(multiVault.atomWallets(atomId), DEFAULT_MIN_FEE_THRESHOLD);
+
+        vm.prank(creator);
+        atomWarden.claimAsCreatorAfterExpiry(atomId);
+
+        MockAtomWallet wallet = MockAtomWallet(multiVault.atomWallets(atomId));
+        assertEq(wallet.owner(), creator);
+    }
+
+    function test_claimAsCreatorAfterExpiry_revertsOnThresholdNotMet() external {
+        vm.warp(DEFAULT_CLAIM_WINDOW + 1 days);
+        bytes32 atomId = _setAtom("creator-fallback", claimant, false, creator, uint48(block.timestamp - 8 days));
+        multiVault.setAccumulatedFees(multiVault.atomWallets(atomId), DEFAULT_MIN_FEE_THRESHOLD - 1);
+
+        vm.prank(creator);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_MinFeeThresholdNotMet.selector));
+        atomWarden.claimAsCreatorAfterExpiry(atomId);
+    }
+
+    function test_claimAsCreatorAfterExpiry_revertsWhenWindowNotElapsed() external {
+        bytes32 atomId = _setAtom("creator-fallback", claimant, false, creator, uint48(block.timestamp));
+        multiVault.setAccumulatedFees(multiVault.atomWallets(atomId), DEFAULT_MIN_FEE_THRESHOLD);
+
+        vm.prank(creator);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_ClaimWindowNotElapsed.selector));
+        atomWarden.claimAsCreatorAfterExpiry(atomId);
+    }
+
+    function test_claimAsCreatorAfterExpiry_revertsOnUnknownCreator() external {
+        bytes32 atomId = _setAtom("creator-fallback", claimant, false, address(0), 0);
+
+        vm.prank(creator);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_CreatorUnknown.selector));
+        atomWarden.claimAsCreatorAfterExpiry(atomId);
+    }
+
+    function test_claimAsCreatorAfterExpiry_revertsOnWrongCreator() external {
+        bytes32 atomId = _setAtom("creator-fallback", claimant, false, creator, uint48(block.timestamp));
+
+        vm.prank(makeAddr("not-the-creator"));
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_NotAtomCreator.selector));
+        atomWarden.claimAsCreatorAfterExpiry(atomId);
+    }
+
+    function test_claimAsCreatorAfterExpiry_revertsWhenClaimWindowZero() external {
+        vm.prank(admin);
+        atomWarden.setClaimWindow(0);
+
+        bytes32 atomId = _setAtom("creator-fallback", claimant, false, creator, uint48(block.timestamp));
+
+        vm.prank(creator);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_CreatorClaimDisabled.selector));
+        atomWarden.claimAsCreatorAfterExpiry(atomId);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            QUORUM CLAIMS
+    //////////////////////////////////////////////////////////////*/
+
+    function test_initialize_bootstrapsSignatureThreshold() external view {
+        assertEq(atomWarden.signatureThreshold(), DEFAULT_SIGNATURE_THRESHOLD);
+        // signerCount tracks SIGNER_ROLE grants; setUp grants exactly one signer.
+        assertEq(atomWarden.signerCount(), 1);
+    }
+
+    function test_reinitialize_setsSignatureThresholdFromParam() external {
+        AtomWarden freshWarden = _freshUnreinitializedWarden();
+
+        vm.prank(admin);
+        freshWarden.reinitialize(
+            DEFAULT_CLAIM_WINDOW,
+            DEFAULT_MIN_FEE_THRESHOLD,
+            4,
+            DEFAULT_MAX_VALID_AFTER,
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            DEFAULT_CLAIM_CAP_WINDOW
+        );
+
+        assertEq(freshWarden.signatureThreshold(), 4);
+    }
+
+    function test_reinitialize_leavesSignerCountAtZero() external {
+        // No SIGNER_ROLE was granted on a v1 proxy prior to reinitialize, so the
+        // consolidated v2 bootstrap must leave signerCount at 0. Admin grants
+        // signers post-upgrade and the role-hook overrides drive cardinality.
+        AtomWarden freshWarden = _freshUnreinitializedWarden();
+
+        vm.prank(admin);
+        freshWarden.reinitialize(
+            DEFAULT_CLAIM_WINDOW,
+            DEFAULT_MIN_FEE_THRESHOLD,
+            DEFAULT_SIGNATURE_THRESHOLD,
+            DEFAULT_MAX_VALID_AFTER,
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            DEFAULT_CLAIM_CAP_WINDOW
+        );
+
+        assertEq(freshWarden.signerCount(), 0);
+    }
+
+    function test_claimWithAuthorization_quorumSuccess_twoOfTwo() external {
+        uint256[] memory keys = new uint256[](2);
+        keys[0] = 0xA11CE;
+        keys[1] = 0xB0B;
+        _grantSignerKeys(keys);
+        _setSignatureThreshold(2);
+
+        bytes32 atomId = _setAtom("quorum-2of2", claimant, false, address(0), 0);
+        IAtomWarden.ClaimAuthorization memory authorization = _defaultAuthorization(atomId, 0);
+
+        bytes memory bundle = _buildSortedSignatures(authorization, keys);
+
+        vm.prank(claimant);
+        atomWarden.claimWithAuthorization(authorization, bundle);
+
+        assertTrue(MockAtomWallet(multiVault.atomWallets(atomId)).isClaimed());
+        assertEq(atomWarden.claimNonces(claimant), 1);
+    }
+
+    function test_claimWithAuthorization_quorumSuccess_twoOfThree() external {
+        uint256[] memory grantedKeys = new uint256[](3);
+        grantedKeys[0] = 0xA11CE;
+        grantedKeys[1] = 0xB0B;
+        grantedKeys[2] = 0xC4FE;
+        _grantSignerKeys(grantedKeys);
+        _setSignatureThreshold(2);
+
+        // Sign with only 2 of the 3 granted signers.
+        uint256[] memory signingKeys = new uint256[](2);
+        signingKeys[0] = grantedKeys[0];
+        signingKeys[1] = grantedKeys[2];
+
+        bytes32 atomId = _setAtom("quorum-2of3", claimant, false, address(0), 0);
+        IAtomWarden.ClaimAuthorization memory authorization = _defaultAuthorization(atomId, 0);
+        bytes memory bundle = _buildSortedSignatures(authorization, signingKeys);
+
+        vm.prank(claimant);
+        atomWarden.claimWithAuthorization(authorization, bundle);
+
+        assertTrue(MockAtomWallet(multiVault.atomWallets(atomId)).isClaimed());
+    }
+
+    function test_claimWithAuthorization_revertsWhenBelowThreshold() external {
+        uint256[] memory keys = new uint256[](2);
+        keys[0] = 0xA11CE;
+        keys[1] = 0xB0B;
+        _grantSignerKeys(keys);
+        _setSignatureThreshold(2);
+
+        // Submit only 1 signature against threshold 2.
+        uint256[] memory only = new uint256[](1);
+        only[0] = keys[0];
+
+        bytes32 atomId = _setAtom("below-threshold", claimant, false, address(0), 0);
+        IAtomWarden.ClaimAuthorization memory authorization = _defaultAuthorization(atomId, 0);
+        bytes memory bundle = _buildSortedSignatures(authorization, only);
+
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_InsufficientSigners.selector));
+        atomWarden.claimWithAuthorization(authorization, bundle);
+    }
+
+    function test_claimWithAuthorization_revertsOnNonCanonicalOrder() external {
+        uint256[] memory keys = new uint256[](2);
+        keys[0] = 0xA11CE;
+        keys[1] = 0xB0B;
+        _grantSignerKeys(keys);
+        _setSignatureThreshold(2);
+
+        bytes32 atomId = _setAtom("non-canonical", claimant, false, address(0), 0);
+        IAtomWarden.ClaimAuthorization memory authorization = _defaultAuthorization(atomId, 0);
+
+        // Build the bundle in DESCENDING address order (reversed canonical).
+        bytes memory bundle = _buildReversedSignatures(authorization, keys);
+
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_NonCanonicalSignerOrder.selector));
+        atomWarden.claimWithAuthorization(authorization, bundle);
+    }
+
+    function test_claimWithAuthorization_revertsOnDuplicateSigner() external {
+        uint256[] memory keys = new uint256[](2);
+        keys[0] = 0xA11CE;
+        keys[1] = 0xB0B;
+        _grantSignerKeys(keys);
+        _setSignatureThreshold(2);
+
+        // Two segments, both signed by the same key — `recovered > previous` fails on
+        // the second iteration since equality is rejected by the strictly-ascending
+        // ordering rule.
+        bytes32 atomId = _setAtom("duplicate", claimant, false, address(0), 0);
+        IAtomWarden.ClaimAuthorization memory authorization = _defaultAuthorization(atomId, 0);
+        bytes memory sig = _signAuthorization(authorization, keys[0]);
+        bytes memory bundle = bytes.concat(sig, sig);
+
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_NonCanonicalSignerOrder.selector));
+        atomWarden.claimWithAuthorization(authorization, bundle);
+    }
+
+    function test_claimWithAuthorization_revertsOnWrongLength() external {
+        bytes32 atomId = _setAtom("wrong-length", claimant, false, address(0), 0);
+        IAtomWarden.ClaimAuthorization memory authorization = _defaultAuthorization(atomId, 0);
+
+        // 64 bytes is non-zero but not a multiple of 65.
+        bytes memory bundle = new bytes(64);
+
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_SignatureLengthInvalid.selector));
+        atomWarden.claimWithAuthorization(authorization, bundle);
+    }
+
+    function test_claimWithAuthorization_revertsOnEmptySignature() external {
+        bytes32 atomId = _setAtom("empty-sig", claimant, false, address(0), 0);
+        IAtomWarden.ClaimAuthorization memory authorization = _defaultAuthorization(atomId, 0);
+
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_SignatureLengthInvalid.selector));
+        atomWarden.claimWithAuthorization(authorization, "");
+    }
+
+    function test_claimWithAuthorization_revertsOnBundleExceedingMaxBatchSize() external {
+        bytes32 atomId = _setAtom("oversized-bundle", claimant, false, address(0), 0);
+        IAtomWarden.ClaimAuthorization memory authorization = _defaultAuthorization(atomId, 0);
+
+        // 151 segments (151 * 65 bytes) is a valid multiple of 65 but exceeds MAX_BATCH_SIZE (150).
+        // The cap is checked before signature recovery, so the segment contents are irrelevant.
+        bytes memory bundle = new bytes((atomWarden.MAX_BATCH_SIZE() + 1) * 65);
+
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_BatchTooLarge.selector));
+        atomWarden.claimWithAuthorization(authorization, bundle);
+    }
+
+    function test_claimWithAuthorization_revertsOnNonSignerRoleRecovered() external {
+        uint256 strangerKey = 0xDECAF;
+        // Stranger has a valid keypair but no SIGNER_ROLE grant.
+
+        bytes32 atomId = _setAtom("non-signer", claimant, false, address(0), 0);
+        IAtomWarden.ClaimAuthorization memory authorization = _defaultAuthorization(atomId, 0);
+        bytes memory bundle = _signAuthorization(authorization, strangerKey);
+
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_InvalidSignature.selector));
+        atomWarden.claimWithAuthorization(authorization, bundle);
+    }
+
+    function test_claimWithAuthorization_revertsOnInvalidECDSA() external {
+        bytes32 atomId = _setAtom("invalid-ecdsa", claimant, false, address(0), 0);
+        IAtomWarden.ClaimAuthorization memory authorization = _defaultAuthorization(atomId, 0);
+
+        // 65-byte all-zero signature: ecrecover returns address(0) and OZ ECDSA
+        // surfaces a non-NoError variant, which `_verifyQuorum` translates into
+        // `AtomWarden_InvalidSignature`.
+        bytes memory bundle = new bytes(65);
+
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_InvalidSignature.selector));
+        atomWarden.claimWithAuthorization(authorization, bundle);
+    }
+
+    function test_claimWithAuthorization_nonceIncrementsOnce() external {
+        uint256[] memory keys = new uint256[](2);
+        keys[0] = 0xA11CE;
+        keys[1] = 0xB0B;
+        _grantSignerKeys(keys);
+        _setSignatureThreshold(2);
+
+        bytes32 atomId = _setAtom("nonce-increments", claimant, false, address(0), 0);
+        IAtomWarden.ClaimAuthorization memory authorization = _defaultAuthorization(atomId, 0);
+        bytes memory bundle = _buildSortedSignatures(authorization, keys);
+
+        uint256 before = atomWarden.claimNonces(claimant);
+        vm.prank(claimant);
+        atomWarden.claimWithAuthorization(authorization, bundle);
+        assertEq(atomWarden.claimNonces(claimant), before + 1);
+    }
+
+    function test_claimWithAuthorization_emitsAugmentedEvent() external {
+        uint256[] memory keys = new uint256[](2);
+        keys[0] = 0xA11CE;
+        keys[1] = 0xB0B;
+        _grantSignerKeys(keys);
+        _setSignatureThreshold(2);
+
+        bytes32 atomId = _setAtom("augmented-event", claimant, false, address(0), 0);
+        IAtomWarden.ClaimAuthorization memory authorization = _defaultAuthorization(atomId, 0);
+
+        // Sort keys by recovered address so we know which is `firstSigner`.
+        uint256[] memory sorted = _sortKeysByAddress(keys);
+        address firstSigner = vm.addr(sorted[0]);
+
+        bytes memory bundle = _buildSortedSignatures(authorization, keys);
+
         vm.expectEmit(true, true, true, true);
-        emit IAtomWarden.MultiVaultSet(MOCK_MULTIVAULT);
+        emit IAtomWarden.AtomWalletOwnershipClaimedByAuthorization(
+            atomId, claimant, firstSigner, authorization.claimType, uint16(2)
+        );
 
-        vm.prank(users.admin);
-        atomWarden.setMultiVault(MOCK_MULTIVAULT);
-
-        assertEq(address(atomWarden.multiVault()), MOCK_MULTIVAULT);
+        vm.prank(claimant);
+        atomWarden.claimWithAuthorization(authorization, bundle);
     }
 
-    function test_setMultiVault_revertsOnZeroAddress() external {
+    /*//////////////////////////////////////////////////////////////
+                          THRESHOLD SETTER
+    //////////////////////////////////////////////////////////////*/
+
+    function test_setSignatureThreshold_revertsOnZero() external {
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_InvalidThreshold.selector));
+        atomWarden.setSignatureThreshold(0);
+    }
+
+    function test_setSignatureThreshold_revertsOnAboveSignerCount() external {
+        // setUp grants exactly 1 signer; threshold > 1 must revert.
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_InvalidThreshold.selector));
+        atomWarden.setSignatureThreshold(2);
+    }
+
+    function test_setSignatureThreshold_revertsOnNonAdmin() external {
+        bytes32 adminRole = atomWarden.DEFAULT_ADMIN_ROLE();
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, operator, adminRole)
+        );
+        vm.prank(operator);
+        atomWarden.setSignatureThreshold(1);
+    }
+
+    function test_setSignatureThreshold_emitsEvent() external {
+        uint256[] memory keys = new uint256[](2);
+        keys[0] = 0xA11CE;
+        keys[1] = 0xB0B;
+        _grantSignerKeys(keys);
+        // signerCount is now 3 (setUp's signer + two new), so threshold ∈ [1,3] is valid.
+
+        vm.expectEmit(true, true, true, true);
+        emit IAtomWarden.SignatureThresholdSet(1, 2);
+
+        vm.prank(admin);
+        atomWarden.setSignatureThreshold(2);
+
+        assertEq(atomWarden.signatureThreshold(), 2);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                          ROLE-HOOK COUNTERS
+    //////////////////////////////////////////////////////////////*/
+
+    function test_grantRole_incrementsSignerCount() external {
+        bytes32 signerRole = atomWarden.SIGNER_ROLE();
+        uint256 before = atomWarden.signerCount();
+        address newSigner = vm.addr(0xA11CE);
+
+        vm.startPrank(admin);
+        atomWarden.grantRole(signerRole, newSigner);
+        vm.stopPrank();
+
+        assertEq(atomWarden.signerCount(), before + 1);
+    }
+
+    function test_grantRole_idempotentForExistingHolder() external {
+        // setUp already granted SIGNER_ROLE to `signer`. Re-granting must be a no-op
+        // for signerCount because the parent's `_grantRole` returns false on re-grant.
+        bytes32 signerRole = atomWarden.SIGNER_ROLE();
+        uint256 before = atomWarden.signerCount();
+
+        vm.startPrank(admin);
+        atomWarden.grantRole(signerRole, signer);
+        vm.stopPrank();
+
+        assertEq(atomWarden.signerCount(), before);
+    }
+
+    function test_grantRole_doesNotCountNonSignerRoles() external {
+        bytes32 operatorRole = atomWarden.OPERATOR_ROLE();
+        uint256 before = atomWarden.signerCount();
+
+        vm.startPrank(admin);
+        atomWarden.grantRole(operatorRole, makeAddr("new-operator"));
+        vm.stopPrank();
+
+        assertEq(atomWarden.signerCount(), before);
+    }
+
+    function test_revokeRole_decrementsSignerCount() external {
+        bytes32 signerRole = atomWarden.SIGNER_ROLE();
+        uint256 before = atomWarden.signerCount();
+
+        vm.startPrank(admin);
+        atomWarden.revokeRole(signerRole, signer);
+        vm.stopPrank();
+
+        assertEq(atomWarden.signerCount(), before - 1);
+    }
+
+    function test_revokeRole_idempotentForNonHolder() external {
+        bytes32 signerRole = atomWarden.SIGNER_ROLE();
+        uint256 before = atomWarden.signerCount();
+        address stranger = makeAddr("stranger");
+
+        vm.startPrank(admin);
+        atomWarden.revokeRole(signerRole, stranger);
+        vm.stopPrank();
+
+        assertEq(atomWarden.signerCount(), before);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                          EIP-712 FROZEN VECTOR
+    //////////////////////////////////////////////////////////////*/
+
+    function test_eip712Digest_isFrozen() external view {
+        // Any drift in the EIP-712 domain (`name`, `version`) or the claim typehash
+        // breaks every previously-signed authorization. These hard-coded reference
+        // values catch a domain change at compile/run time before it ships.
+        bytes32 expectedTypehash = keccak256(
+            "ClaimAuthorization(address claimant,bytes32 atomId,uint8 claimType,uint256 nonce,uint48 validAfter,uint48 validUntil)"
+        );
+        assertEq(atomWarden.CLAIM_AUTHORIZATION_TYPEHASH(), expectedTypehash, "claim typehash drifted");
+
+        bytes32 expectedNameHash = keccak256(bytes("AtomWarden"));
+        bytes32 expectedVersionHash = keccak256(bytes("2"));
+
+        bytes32 expectedDomainSeparator = keccak256(
+            abi.encode(
+                EIP712_DOMAIN_TYPEHASH, expectedNameHash, expectedVersionHash, block.chainid, address(atomWarden)
+            )
+        );
+        assertEq(_domainSeparator(), expectedDomainSeparator, "domain separator drifted");
+
+        // Frozen authorization → frozen digest. If the formula changes, this test
+        // fails immediately (alongside the typehash/domain assertions above).
+        IAtomWarden.ClaimAuthorization memory frozen = IAtomWarden.ClaimAuthorization({
+            claimant: 0x1234567890AbcdEF1234567890aBcdef12345678,
+            atomId: bytes32(uint256(0xCAFEBABE)),
+            claimType: 1,
+            nonce: 7,
+            validAfter: uint48(1_700_000_000),
+            validUntil: uint48(1_800_000_000)
+        });
+        bytes32 expectedStructHash = keccak256(
+            abi.encode(
+                expectedTypehash,
+                frozen.claimant,
+                frozen.atomId,
+                frozen.claimType,
+                frozen.nonce,
+                frozen.validAfter,
+                frozen.validUntil
+            )
+        );
+        bytes32 expectedDigest = keccak256(abi.encodePacked("\x19\x01", expectedDomainSeparator, expectedStructHash));
+
+        // Behavioral cross-check: the contract recovers the signer of `expectedDigest`
+        // for the same authorization. If `_hashTypedDataV4` produces anything else,
+        // the recovered address would not match.
+        bytes memory localBundle;
+        {
+            (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, expectedDigest);
+            localBundle = abi.encodePacked(r, s, v);
+        }
+        assertEq(_recoverFromBundle(expectedDigest, localBundle), signer, "frozen digest does not recover signer");
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                          STORAGE-LAYOUT FREEZE
+    //////////////////////////////////////////////////////////////*/
+
+    function test_storageLayout_appendsOnly() external {
+        // Anchor every slot in AtomWarden's linear storage so a future reorder
+        // (or a parent contract migrating away from ERC-7201) shows up as a value
+        // mismatch when reading by raw slot index. The four inherited parents
+        // (Initializable, AccessControlUpgradeable, EIP712Upgradeable,
+        // PausableUpgradeable) all use ERC-7201 namespaced storage in OZ 5.x, so
+        // slot 0 onwards belongs entirely to this contract.
+        //
+        // Owned layout:
+        //   slot 0: multiVault (address)
+        //   slot 1: claimNonces (mapping base — entries live at keccak hashes)
+        //   slot 2: claimWindow (uint256)
+        //   slot 3: minFeeThreshold (uint256)
+        //   slot 4: signatureThreshold (uint256, v2-appended)
+        //   slot 5: signerCount (uint256, v2-appended)
+        //   slot 6: maxValidAfter (uint48 low) || maxValidUntil (uint48 next), v3-appended
+        //   slot 7: maxClaimsPerWindow (uint256, cap-appended)
+        //   slot 8: claimCapWindow (uint256, cap-appended)
+        //   slot 9: currentClaimWindowId (uint256, cap-appended)
+        //   slot 10: claimsInWindow (uint256, cap-appended)
+        //   slots 11-60: __gap (uint256[50] reserve; shrink on future appends)
+        //   slot 61+: past the declared layout — must remain zero.
+        //
+        // Execute one signed claim FIRST (while the mock MultiVault is still wired) so
+        // `claimsInWindow` carries a nonzero positive anchor into the slot assertions.
+        _executeSignedClaim("layout-claim");
+
+        address newMultiVault = makeAddr("layout-mv");
+        uint48 newMaxValidAfter = uint48(0xAAAAAAAAAAAA); // distinctive 48-bit pattern
+        uint48 newMaxValidUntil = uint48(0xBBBBBBBBBBBB);
+        vm.prank(admin);
+        atomWarden.setMultiVault(newMultiVault);
+        vm.prank(admin);
+        atomWarden.setClaimWindow(123_456);
+        vm.prank(admin);
+        atomWarden.setMinFeeThreshold(789_012);
+        vm.prank(admin);
+        atomWarden.setMaxValidAfter(newMaxValidAfter);
+        vm.prank(admin);
+        atomWarden.setMaxValidUntil(newMaxValidUntil);
+        // The cap slots: distinctive values via the admin setters. setClaimCapWindow
+        // re-anchors currentClaimWindowId under the new divisor while preserving the
+        // in-window count from the claim above.
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(31_337);
+        vm.prank(admin);
+        atomWarden.setClaimCapWindow(4242);
+        // Touch the claimNonces mapping so a reorder that demotes slot 1 to a
+        // non-mapping field surfaces via the mapping-entry assertion below.
+        vm.prank(operator);
+        atomWarden.incrementNonce(claimant);
+
+        // slot 0: multiVault (address)
+        assertEq(
+            address(uint160(uint256(vm.load(address(atomWarden), bytes32(uint256(0)))))),
+            newMultiVault,
+            "slot 0 must be multiVault"
+        );
+        // slot 1: claimNonces (mapping base — always zero; entries are at keccak(key, slot))
+        assertEq(uint256(vm.load(address(atomWarden), bytes32(uint256(1)))), 0, "slot 1 must be mapping base (zero)");
+        // The mapping entry for `claimant` after one signed claim + one operator
+        // increment must equal 2, which doubles as a positive anchor that slot 1 is
+        // genuinely the mapping base.
+        bytes32 mappingEntrySlot = keccak256(abi.encode(claimant, uint256(1)));
+        assertEq(
+            uint256(vm.load(address(atomWarden), mappingEntrySlot)),
+            2,
+            "claimNonces[claimant] must live at keccak(key,1)"
+        );
+        // slot 2: claimWindow
+        assertEq(uint256(vm.load(address(atomWarden), bytes32(uint256(2)))), 123_456, "slot 2 must be claimWindow");
+        // slot 3: minFeeThreshold
+        assertEq(uint256(vm.load(address(atomWarden), bytes32(uint256(3)))), 789_012, "slot 3 must be minFeeThreshold");
+        // slot 4: signatureThreshold (initialized to 1 in setUp)
+        assertEq(uint256(vm.load(address(atomWarden), bytes32(uint256(4)))), 1, "slot 4 must be signatureThreshold");
+        // slot 5: signerCount (setUp granted exactly one signer)
+        assertEq(uint256(vm.load(address(atomWarden), bytes32(uint256(5)))), 1, "slot 5 must be signerCount");
+        // slot 6: maxValidAfter (low 6 bytes) || maxValidUntil (next 6 bytes), packed.
+        // Solidity stores adjacent <=32-byte fields starting at the low end of the
+        // slot in declaration order.
+        uint256 slot6 = uint256(vm.load(address(atomWarden), bytes32(uint256(6))));
+        assertEq(uint48(slot6), newMaxValidAfter, "slot 6 low 48 bits must be maxValidAfter");
+        assertEq(uint48(slot6 >> 48), newMaxValidUntil, "slot 6 next 48 bits must be maxValidUntil");
+        // Upper 160 bits of slot 6 must stay zero — otherwise the uint48 packing
+        // bled, or an unintended field shares the slot.
+        assertEq(slot6 >> 96, 0, "slot 6 upper 160 bits must be zero (packing boundary)");
+        // slot 7: maxClaimsPerWindow
+        assertEq(
+            uint256(vm.load(address(atomWarden), bytes32(uint256(7)))), 31_337, "slot 7 must be maxClaimsPerWindow"
+        );
+        // slot 8: claimCapWindow
+        assertEq(uint256(vm.load(address(atomWarden), bytes32(uint256(8)))), 4242, "slot 8 must be claimCapWindow");
+        // slot 9: currentClaimWindowId — re-anchored by setClaimCapWindow(4242).
+        assertEq(
+            uint256(vm.load(address(atomWarden), bytes32(uint256(9)))),
+            block.timestamp / 4242,
+            "slot 9 must be currentClaimWindowId"
+        );
+        // slot 10: claimsInWindow — the single signed claim above, preserved across the
+        // window-length change by design.
+        assertEq(uint256(vm.load(address(atomWarden), bytes32(uint256(10)))), 1, "slot 10 must be claimsInWindow");
+        // slots 11-60: the __gap reserve must stay untouched; slot 61 is the boundary
+        // check one past the declared layout.
+        for (uint256 slot = 11; slot <= 61; slot++) {
+            assertEq(uint256(vm.load(address(atomWarden), bytes32(slot))), 0, "gap/boundary slot must be zero");
+        }
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                                  FUZZ
+    //////////////////////////////////////////////////////////////*/
+
+    function testFuzz_setSignatureThreshold(uint256 newThreshold) external {
+        // signerCount in setUp is 1; bound the fuzz to the legal [1, signerCount] range.
+        newThreshold = bound(newThreshold, 1, atomWarden.signerCount());
+
+        vm.prank(admin);
+        atomWarden.setSignatureThreshold(newThreshold);
+
+        assertEq(atomWarden.signatureThreshold(), newThreshold);
+    }
+
+    function testFuzz_claimWithAuthorization_variableN(uint256 nSeed, uint256 keySeed) external {
+        // Pick N ∈ [2, 5] signers, all granted SIGNER_ROLE, threshold == N.
+        uint256 n = bound(nSeed, 2, 5);
+        uint256[] memory keys = _deriveDistinctKeys(keySeed, n);
+        _grantSignerKeys(keys);
+        _setSignatureThreshold(n);
+
+        bytes32 atomId = _setAtom("fuzz-variable-n", claimant, false, address(0), 0);
+        IAtomWarden.ClaimAuthorization memory authorization = _defaultAuthorization(atomId, 0);
+        bytes memory bundle = _buildSortedSignatures(authorization, keys);
+
+        vm.prank(claimant);
+        atomWarden.claimWithAuthorization(authorization, bundle);
+
+        assertTrue(MockAtomWallet(multiVault.atomWallets(atomId)).isClaimed());
+    }
+
+    function testFuzz_claimWithAuthorization_permutationEqualsCanonicalOrReverts(uint256 keySeed, uint256 permSeed)
+        external
+    {
+        // For any random permutation of N signers concatenated into the bundle,
+        // the call must EITHER succeed (permutation already matches canonical
+        // ascending order) OR revert with NonCanonicalSignerOrder. No other outcome
+        // is acceptable — this nails down the canonical-ordering contract.
+        uint256 n = 3;
+        uint256[] memory keys = _deriveDistinctKeys(keySeed, n);
+        _grantSignerKeys(keys);
+        _setSignatureThreshold(n);
+
+        bytes32 atomId = _setAtom("fuzz-permutation", claimant, false, address(0), 0);
+        IAtomWarden.ClaimAuthorization memory authorization = _defaultAuthorization(atomId, 0);
+
+        uint256[] memory permuted = _permuteKeys(keys, permSeed);
+        bytes memory bundle = _signInOrder(authorization, permuted);
+        bool isCanonical = _isAscendingByAddress(permuted);
+
+        if (isCanonical) {
+            vm.prank(claimant);
+            atomWarden.claimWithAuthorization(authorization, bundle);
+            assertTrue(MockAtomWallet(multiVault.atomWallets(atomId)).isClaimed());
+        } else {
+            vm.prank(claimant);
+            vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_NonCanonicalSignerOrder.selector));
+            atomWarden.claimWithAuthorization(authorization, bundle);
+        }
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                                ADMIN
+    //////////////////////////////////////////////////////////////*/
+
+    function test_incrementNonce_successful() external {
+        vm.prank(operator);
+        atomWarden.incrementNonce(claimant);
+
+        assertEq(atomWarden.claimNonces(claimant), 1);
+    }
+
+    function test_incrementNonce_revertsOnZeroAddress() external {
+        vm.prank(operator);
         vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_InvalidAddress.selector));
-
-        vm.prank(users.admin);
-        atomWarden.setMultiVault(INVALID_ADDRESS);
+        atomWarden.incrementNonce(address(0));
     }
 
-    function test_setMultiVault_revertsOnUnauthorizedUser() external {
-        vm.expectRevert();
+    function test_claimWithAuthorization_revertsOnNonexistentAtom() external {
+        bytes32 unknownAtomId = keccak256("does-not-exist");
+        IAtomWarden.ClaimAuthorization memory authorization = _defaultAuthorization(unknownAtomId, 0);
+        bytes memory bundle = _signAuthorization(authorization, signerPrivateKey);
 
-        vm.prank(UNAUTHORIZED_USER);
-        atomWarden.setMultiVault(MOCK_MULTIVAULT);
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_AtomIdDoesNotExist.selector));
+        atomWarden.claimWithAuthorization(authorization, bundle);
     }
 
-    /*//////////////////////////////////////////////////////////////
-                            LOWERCASE ADDRESS CONVERSION TESTS
-    //////////////////////////////////////////////////////////////*/
+    function test_claimWithAuthorization_revertsWhenWalletNotDeployed() external {
+        // Atom exists but the wallet placeholder has no bytecode — exercises the
+        // `code.length == 0` guard inside `_getAtomWallet`.
+        bytes32 atomId = multiVault.calculateAtomId(bytes("undeployed-wallet"));
+        multiVault.setAtom(atomId, bytes("undeployed-wallet"), makeAddr("not-a-contract"), address(0), 0);
 
-    function test_toLowerCaseAddress_correctConversion() external {
-        address randomAddress = makeAddr("randomAddress");
-        bytes32 atomId = _createAddressAtom(randomAddress);
-        address atomWalletAddress = _deployMockAtomWallet(atomId);
+        IAtomWarden.ClaimAuthorization memory authorization = _defaultAuthorization(atomId, 0);
+        bytes memory bundle = _signAuthorization(authorization, signerPrivateKey);
 
-        vm.mockCall(
-            address(protocol.multiVault),
-            abi.encodeWithSelector(IMultiVaultCore.atom.selector, atomId),
-            abi.encode(bytes(abi.encodePacked(_toLowerCaseAddress(randomAddress))))
-        );
-
-        vm.mockCall(
-            address(protocol.multiVault),
-            abi.encodeWithSelector(IMultiVault.computeAtomWalletAddr.selector, atomId),
-            abi.encode(atomWalletAddress)
-        );
-
-        vm.prank(randomAddress);
-        atomWarden.claimOwnershipOverAddressAtom(atomId);
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_AtomWalletNotDeployed.selector));
+        atomWarden.claimWithAuthorization(authorization, bundle);
     }
 
-    function test_toLowerCaseAddress_zeroAddress() external {
-        bytes32 atomId = _createAddressAtom(address(0));
-        address atomWalletAddress = _deployMockAtomWallet(atomId);
+    function test_setters_successful() external {
+        address newMultiVault = makeAddr("new-multivault");
 
-        vm.mockCall(
-            address(protocol.multiVault),
-            abi.encodeWithSelector(IMultiVault.computeAtomWalletAddr.selector, atomId),
-            abi.encode(atomWalletAddress)
-        );
+        vm.prank(admin);
+        atomWarden.setMultiVault(newMultiVault);
+        vm.prank(admin);
+        atomWarden.setClaimWindow(30 days);
+        vm.prank(admin);
+        atomWarden.setMinFeeThreshold(1 ether);
 
-        vm.prank(address(0));
-        atomWarden.claimOwnershipOverAddressAtom(atomId);
-    }
-
-    function test_toLowerCaseAddress_maxAddress() external {
-        address maxAddr = address(0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF);
-        bytes32 atomId = _createAddressAtom(maxAddr);
-        address atomWalletAddress = _deployMockAtomWallet(atomId);
-
-        vm.mockCall(
-            address(protocol.multiVault),
-            abi.encodeWithSelector(IMultiVault.computeAtomWalletAddr.selector, atomId),
-            abi.encode(atomWalletAddress)
-        );
-
-        vm.prank(maxAddr);
-        atomWarden.claimOwnershipOverAddressAtom(atomId);
+        assertEq(atomWarden.multiVault(), newMultiVault);
+        assertEq(atomWarden.claimWindow(), 30 days);
+        assertEq(atomWarden.minFeeThreshold(), 1 ether);
     }
 
     /*//////////////////////////////////////////////////////////////
-                            FUZZING TESTS
+                                PAUSABLE
     //////////////////////////////////////////////////////////////*/
 
-    function testFuzz_claimOwnershipOverAddressAtom_validAddress(address addr) external {
-        // exclude the zero address and contracts: calling the atomWarden proxy from its own
-        // ProxyAdmin reverts with ProxyDeniedAdminAccess
-        vm.assume(addr != address(0) && addr.code.length == 0);
+    function test_initialize_isUnpaused() external view {
+        assertFalse(atomWarden.paused());
+    }
 
-        bytes32 atomId = _createAddressAtom(addr);
-        address atomWalletAddress = _deployMockAtomWallet(atomId);
-
-        vm.mockCall(
-            address(protocol.multiVault),
-            abi.encodeWithSelector(IMultiVault.computeAtomWalletAddr.selector, atomId),
-            abi.encode(atomWalletAddress)
+    function test_pause_revertsForNonAdmin() external {
+        address nobody = makeAddr("non-admin");
+        bytes32 adminRole = atomWarden.DEFAULT_ADMIN_ROLE();
+        vm.prank(nobody);
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, nobody, adminRole)
         );
+        atomWarden.pause();
+    }
 
-        vm.prank(addr);
+    function test_unpause_revertsForNonAdmin() external {
+        vm.prank(admin);
+        atomWarden.pause();
+
+        address nobody = makeAddr("non-admin");
+        bytes32 adminRole = atomWarden.DEFAULT_ADMIN_ROLE();
+        vm.prank(nobody);
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, nobody, adminRole)
+        );
+        atomWarden.unpause();
+    }
+
+    function test_pause_blocksClaimOwnershipOverAddressAtom() external {
+        bytes32 atomId = _setAddressAtom(claimant, false, false);
+
+        vm.prank(admin);
+        atomWarden.pause();
+
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(PausableUpgradeable.EnforcedPause.selector));
+        atomWarden.claimOwnershipOverAddressAtom(atomId);
+    }
+
+    function test_pause_blocksClaimWithAuthorization() external {
+        bytes32 atomId = _setAtom("paused-claim", claimant, false, address(0), 0);
+        IAtomWarden.ClaimAuthorization memory authorization = _defaultAuthorization(atomId, 0);
+        bytes memory signature = _signAuthorization(authorization, signerPrivateKey);
+
+        vm.prank(admin);
+        atomWarden.pause();
+
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(PausableUpgradeable.EnforcedPause.selector));
+        atomWarden.claimWithAuthorization(authorization, signature);
+    }
+
+    function test_pause_blocksClaimAsCreatorAfterExpiry() external {
+        vm.warp(DEFAULT_CLAIM_WINDOW + 1 days);
+        bytes32 atomId = _setAtom("paused-creator", claimant, false, creator, uint48(block.timestamp - 8 days));
+        multiVault.setAccumulatedFees(multiVault.atomWallets(atomId), DEFAULT_MIN_FEE_THRESHOLD);
+
+        vm.prank(admin);
+        atomWarden.pause();
+
+        vm.prank(creator);
+        vm.expectRevert(abi.encodeWithSelector(PausableUpgradeable.EnforcedPause.selector));
+        atomWarden.claimAsCreatorAfterExpiry(atomId);
+    }
+
+    function test_pause_doesNotBlockGrantAtomWalletOwnership() external {
+        // Operator path is intentionally NOT gated on pause — admins keep a manual
+        // override during incidents. Lock that user-approved scope into a test.
+        bytes32 atomId = _setAtom("paused-grant", claimant, false, address(0), 0);
+        address newOwner = makeAddr("granted-while-paused");
+
+        vm.prank(admin);
+        atomWarden.pause();
+
+        vm.prank(operator);
+        atomWarden.grantAtomWalletOwnership(atomId, newOwner);
+
+        assertEq(MockAtomWallet(multiVault.atomWallets(atomId)).owner(), newOwner);
+    }
+
+    function test_unpause_restoresClaimSurface() external {
+        vm.prank(admin);
+        atomWarden.pause();
+        vm.prank(admin);
+        atomWarden.unpause();
+
+        bytes32 atomId = _setAddressAtom(claimant, false, false);
+        vm.prank(claimant);
         atomWarden.claimOwnershipOverAddressAtom(atomId);
 
-        assertEq(MockAtomWallet(atomWalletAddress).owner(), addr);
-    }
-
-    function testFuzz_claimOwnership_validParameters(bytes32 atomId, address newOwner) external {
-        vm.assume(newOwner != address(0));
-        vm.assume(atomId != bytes32(0));
-
-        address atomWalletAddress = _deployMockAtomWallet(atomId);
-
-        vm.mockCall(
-            address(protocol.multiVault),
-            abi.encodeWithSelector(IMultiVaultCore.isAtom.selector, atomId),
-            abi.encode(true)
-        );
-
-        vm.mockCall(
-            address(protocol.multiVault),
-            abi.encodeWithSelector(IMultiVault.computeAtomWalletAddr.selector, atomId),
-            abi.encode(atomWalletAddress)
-        );
-
-        vm.prank(users.admin);
-        atomWarden.claimOwnership(atomId, newOwner);
-
-        assertEq(MockAtomWallet(atomWalletAddress).owner(), newOwner);
-    }
-
-    function testFuzz_setMultiVault_validAddress(address multiVaultAddr) external {
-        vm.assume(multiVaultAddr != address(0));
-
-        vm.prank(users.admin);
-        atomWarden.setMultiVault(multiVaultAddr);
-
-        assertEq(address(atomWarden.multiVault()), multiVaultAddr);
+        assertTrue(MockAtomWallet(multiVault.atomWallets(atomId)).isClaimed());
     }
 
     /*//////////////////////////////////////////////////////////////
-                            INTEGRATION TESTS
+                          TIME-WINDOW CAPS
     //////////////////////////////////////////////////////////////*/
 
-    function test_integration_fullOwnershipClaimFlow() external {
-        bytes32 atomId = _createAddressAtom(users.alice);
-        address atomWalletAddress = _deployMockAtomWallet(atomId);
-
-        vm.mockCall(
-            address(protocol.multiVault),
-            abi.encodeWithSelector(IMultiVault.computeAtomWalletAddr.selector, atomId),
-            abi.encode(atomWalletAddress)
-        );
-
-        vm.prank(users.alice);
-        atomWarden.claimOwnershipOverAddressAtom(atomId);
-
-        assertEq(MockAtomWallet(atomWalletAddress).owner(), users.alice);
+    function test_initialize_setsMaxValidAfterAndMaxValidUntil() external view {
+        assertEq(atomWarden.maxValidAfter(), DEFAULT_MAX_VALID_AFTER);
+        assertEq(atomWarden.maxValidUntil(), DEFAULT_MAX_VALID_UNTIL);
     }
 
-    function test_integration_adminClaimAfterFailedUserClaim() external {
-        bytes32 atomId = _createAddressAtom(users.bob);
-        address atomWalletAddress = _deployMockAtomWallet(atomId);
+    function test_setMaxValidAfter_emitsEventAndRotates() external {
+        uint48 newValue = uint48(45 minutes);
 
-        vm.mockCall(
-            address(protocol.multiVault),
-            abi.encodeWithSelector(IMultiVault.computeAtomWalletAddr.selector, atomId),
-            abi.encode(atomWalletAddress)
-        );
+        vm.expectEmit(false, false, false, true, address(atomWarden));
+        emit IAtomWarden.MaxValidAfterSet(DEFAULT_MAX_VALID_AFTER, newValue);
 
-        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_ClaimOwnershipFailed.selector));
-        vm.prank(users.alice);
-        atomWarden.claimOwnershipOverAddressAtom(atomId);
-
-        vm.prank(users.admin);
-        atomWarden.claimOwnership(atomId, users.alice);
-
-        assertEq(MockAtomWallet(atomWalletAddress).owner(), users.alice);
+        vm.prank(admin);
+        atomWarden.setMaxValidAfter(newValue);
+        assertEq(atomWarden.maxValidAfter(), newValue);
     }
 
-    function test_integration_multiVaultUpdateAndClaim() external {
-        vm.prank(users.admin);
-        atomWarden.setMultiVault(MOCK_MULTIVAULT);
+    function test_setMaxValidUntil_emitsEventAndRotates() external {
+        uint48 newValue = uint48(14 days);
 
-        bytes32 atomId = _createAddressAtom(users.alice);
-        address atomWalletAddress = _deployMockAtomWallet(atomId);
+        vm.expectEmit(false, false, false, true, address(atomWarden));
+        emit IAtomWarden.MaxValidUntilSet(DEFAULT_MAX_VALID_UNTIL, newValue);
 
-        vm.mockCall(MOCK_MULTIVAULT, abi.encodeWithSelector(IMultiVaultCore.isAtom.selector, atomId), abi.encode(true));
+        vm.prank(admin);
+        atomWarden.setMaxValidUntil(newValue);
+        assertEq(atomWarden.maxValidUntil(), newValue);
+    }
 
-        vm.mockCall(
-            MOCK_MULTIVAULT,
-            abi.encodeWithSelector(IMultiVaultCore.atom.selector, atomId),
-            abi.encode(_toLowerCaseAddress(users.alice))
+    function test_setMaxValidAfter_revertsForNonAdmin() external {
+        address nobody = makeAddr("not-admin");
+        bytes32 adminRole = atomWarden.DEFAULT_ADMIN_ROLE();
+        vm.prank(nobody);
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, nobody, adminRole)
         );
+        atomWarden.setMaxValidAfter(uint48(1 hours));
+    }
 
-        vm.mockCall(
-            MOCK_MULTIVAULT,
-            abi.encodeWithSelector(IMultiVault.computeAtomWalletAddr.selector, atomId),
-            abi.encode(atomWalletAddress)
+    function test_setMaxValidUntil_revertsForNonAdmin() external {
+        address nobody = makeAddr("not-admin");
+        bytes32 adminRole = atomWarden.DEFAULT_ADMIN_ROLE();
+        vm.prank(nobody);
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, nobody, adminRole)
         );
+        atomWarden.setMaxValidUntil(uint48(1 days));
+    }
 
-        vm.prank(users.alice);
-        atomWarden.claimOwnershipOverAddressAtom(atomId);
+    function test_claimWithAuthorization_revertsWhenValidAfterTooFar() external {
+        // Warp forward so we have headroom to schedule a future validAfter that
+        // overshoots the cap without running into uint48 wrap-around.
+        vm.warp(1_000_000);
+        bytes32 atomId = _setAtom("validafter-cap", claimant, false, address(0), 0);
 
-        assertEq(MockAtomWallet(atomWalletAddress).owner(), users.alice);
+        IAtomWarden.ClaimAuthorization memory authorization = _defaultAuthorization(atomId, 0);
+        // 1 second past `block.timestamp + maxValidAfter` — first cap branch fires.
+        authorization.validAfter = uint48(block.timestamp + DEFAULT_MAX_VALID_AFTER + 1);
+        // Pull validUntil up too so the base ordering check stays valid; the cap
+        // branch we want is the validAfter one.
+        authorization.validUntil = uint48(authorization.validAfter + 1 minutes);
+
+        bytes memory signature = _signAuthorization(authorization, signerPrivateKey);
+
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_ValidityWindowTooLong.selector));
+        atomWarden.claimWithAuthorization(authorization, signature);
+    }
+
+    function test_claimWithAuthorization_revertsWhenValidUntilTooFar() external {
+        vm.warp(1_000_000);
+        bytes32 atomId = _setAtom("validuntil-cap", claimant, false, address(0), 0);
+
+        IAtomWarden.ClaimAuthorization memory authorization = _defaultAuthorization(atomId, 0);
+        // validAfter stays in-window; only validUntil overshoots the cap.
+        authorization.validAfter = uint48(block.timestamp - 1);
+        authorization.validUntil = uint48(block.timestamp + DEFAULT_MAX_VALID_UNTIL + 1);
+
+        bytes memory signature = _signAuthorization(authorization, signerPrivateKey);
+
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_ValidityWindowTooLong.selector));
+        atomWarden.claimWithAuthorization(authorization, signature);
+    }
+
+    function test_claimWithAuthorization_succeedsAtBoundary() external {
+        vm.warp(1_000_000);
+        bytes32 atomId = _setAtom("boundary-cap", claimant, false, address(0), 0);
+
+        IAtomWarden.ClaimAuthorization memory authorization = _defaultAuthorization(atomId, 0);
+        // Pull validAfter into the past so the base ordering check passes against `now`,
+        // then anchor validUntil exactly at `now + maxValidUntil` so the cap branch
+        // sees `validUntil == now + maxValidUntil` (allowed by the `>` check).
+        authorization.validAfter = uint48(block.timestamp - 1);
+        authorization.validUntil = uint48(block.timestamp + DEFAULT_MAX_VALID_UNTIL);
+
+        bytes memory signature = _signAuthorization(authorization, signerPrivateKey);
+
+        vm.prank(claimant);
+        atomWarden.claimWithAuthorization(authorization, signature);
+
+        assertTrue(MockAtomWallet(multiVault.atomWallets(atomId)).isClaimed());
+    }
+
+    function test_setMaxValidUntil_zeroDisablesAllSignedClaims() external {
+        // Setting maxValidUntil = 0 makes any `validUntil > block.timestamp` a violation,
+        // and the basic time-window check requires `validUntil >= block.timestamp`. The
+        // only allowed value left is `validUntil == block.timestamp`, which collapses the
+        // sig validity window to a single block — effectively a finer-grained freeze.
+        vm.prank(admin);
+        atomWarden.setMaxValidUntil(0);
+
+        bytes32 atomId = _setAtom("frozen-claims", claimant, false, address(0), 0);
+        IAtomWarden.ClaimAuthorization memory authorization = _defaultAuthorization(atomId, 0);
+        bytes memory signature = _signAuthorization(authorization, signerPrivateKey);
+
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_ValidityWindowTooLong.selector));
+        atomWarden.claimWithAuthorization(authorization, signature);
     }
 
     /*//////////////////////////////////////////////////////////////
-                            EDGE CASE TESTS
+                         AUTHORIZED-CLAIM CAP
     //////////////////////////////////////////////////////////////*/
 
-    function test_edge_multipleAdminClaims() external {
-        bytes32 atomId = _createValidAtom();
-        address atomWalletAddress = _deployMockAtomWallet(atomId);
-
-        vm.mockCall(
-            address(protocol.multiVault),
-            abi.encodeWithSelector(IMultiVault.computeAtomWalletAddr.selector, atomId),
-            abi.encode(atomWalletAddress)
-        );
-
-        vm.prank(users.admin);
-        atomWarden.claimOwnership(atomId, users.alice);
-
-        assertEq(MockAtomWallet(atomWalletAddress).owner(), users.alice);
-
-        vm.prank(users.admin);
-        atomWarden.claimOwnership(atomId, users.bob);
-
-        assertEq(MockAtomWallet(atomWalletAddress).owner(), users.bob);
+    function test_initialize_setsClaimCapConfig() external view {
+        assertEq(atomWarden.maxClaimsPerWindow(), DEFAULT_MAX_CLAIMS_PER_WINDOW);
+        assertEq(atomWarden.claimCapWindow(), DEFAULT_CLAIM_CAP_WINDOW);
+        assertEq(atomWarden.currentClaimWindowId(), block.timestamp / DEFAULT_CLAIM_CAP_WINDOW);
+        assertEq(atomWarden.claimsInWindow(), 0);
     }
 
-    function test_edge_claimOwnershipWithSameAddressMultipleTimes() external {
-        bytes32 atomId = _createAddressAtom(users.alice);
-        address atomWalletAddress = _deployMockAtomWallet(atomId);
+    function test_initialize_revertsOnZeroClaimCapWindow() external {
+        AtomWarden implementation = new AtomWarden();
+        TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(address(implementation), admin, "");
+        AtomWarden freshWarden = AtomWarden(address(proxy));
 
-        vm.mockCall(
-            address(protocol.multiVault),
-            abi.encodeWithSelector(IMultiVault.computeAtomWalletAddr.selector, atomId),
-            abi.encode(atomWalletAddress)
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_InvalidClaimCapWindow.selector));
+        freshWarden.initialize(
+            admin,
+            address(multiVault),
+            DEFAULT_CLAIM_WINDOW,
+            DEFAULT_MIN_FEE_THRESHOLD,
+            DEFAULT_SIGNATURE_THRESHOLD,
+            DEFAULT_MAX_VALID_AFTER,
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            0
         );
-
-        vm.prank(users.alice);
-        atomWarden.claimOwnershipOverAddressAtom(atomId);
-
-        vm.prank(users.alice);
-        atomWarden.claimOwnershipOverAddressAtom(atomId);
-
-        assertEq(MockAtomWallet(atomWalletAddress).owner(), users.alice);
     }
 
-    function test_edge_multiVaultUpdateMultipleTimes() external {
-        address firstMultiVault = address(0x1111);
-        address secondMultiVault = address(0x2222);
+    function test_reinitialize_revertsOnZeroClaimCapWindow() external {
+        AtomWarden freshWarden = _freshUnreinitializedWarden();
 
-        vm.prank(users.admin);
-        atomWarden.setMultiVault(firstMultiVault);
-        assertEq(address(atomWarden.multiVault()), firstMultiVault);
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_InvalidClaimCapWindow.selector));
+        freshWarden.reinitialize(
+            DEFAULT_CLAIM_WINDOW,
+            DEFAULT_MIN_FEE_THRESHOLD,
+            DEFAULT_SIGNATURE_THRESHOLD,
+            DEFAULT_MAX_VALID_AFTER,
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            0
+        );
+    }
 
-        vm.prank(users.admin);
-        atomWarden.setMultiVault(secondMultiVault);
-        assertEq(address(atomWarden.multiVault()), secondMultiVault);
+    function test_claimWithAuthorization_capBoundary() external {
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(3);
+
+        _executeSignedClaim("cap-boundary-1");
+        _executeSignedClaim("cap-boundary-2");
+        _executeSignedClaim("cap-boundary-3");
+        assertEq(atomWarden.claimsInWindow(), 3);
+
+        (IAtomWarden.ClaimAuthorization memory authorization, bytes memory signature, bytes32 atomId) =
+            _preparedSignedClaim("cap-boundary-4");
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_ClaimCapExceeded.selector));
+        atomWarden.claimWithAuthorization(authorization, signature);
+
+        // The rejected claim consumed nothing: no ownership transfer, no nonce burn.
+        assertFalse(MockAtomWallet(multiVault.atomWallets(atomId)).isClaimed());
+        assertEq(atomWarden.claimNonces(claimant), 3);
+        assertEq(atomWarden.claimsInWindow(), 3);
+    }
+
+    function test_claimWithAuthorization_capWindowRolloverResetsBudget() external {
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(1);
+
+        _executeSignedClaim("rollover-1");
+        assertEq(atomWarden.claimsInWindow(), 1);
+
+        (IAtomWarden.ClaimAuthorization memory blockedAuthorization, bytes memory blockedSignature,) =
+            _preparedSignedClaim("rollover-blocked");
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_ClaimCapExceeded.selector));
+        atomWarden.claimWithAuthorization(blockedAuthorization, blockedSignature);
+
+        // Cross the fixed-window boundary: budget resets and the next claim lands.
+        vm.warp((block.timestamp / DEFAULT_CLAIM_CAP_WINDOW + 1) * DEFAULT_CLAIM_CAP_WINDOW);
+        _executeSignedClaim("rollover-2");
+        assertEq(atomWarden.claimsInWindow(), 1);
+        assertEq(atomWarden.currentClaimWindowId(), block.timestamp / DEFAULT_CLAIM_CAP_WINDOW);
+    }
+
+    function test_claimWithAuthorization_capSkipsIdleWindowsWithoutBanking() external {
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(1);
+
+        _executeSignedClaim("idle-1");
+
+        // Five idle windows must not accumulate budget: exactly one claim fits afterwards.
+        vm.warp(block.timestamp + 5 * DEFAULT_CLAIM_CAP_WINDOW);
+        _executeSignedClaim("idle-2");
+        assertEq(atomWarden.claimsInWindow(), 1);
+
+        (IAtomWarden.ClaimAuthorization memory authorization, bytes memory signature,) =
+            _preparedSignedClaim("idle-blocked");
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_ClaimCapExceeded.selector));
+        atomWarden.claimWithAuthorization(authorization, signature);
+    }
+
+    function test_claimWithAuthorization_capDisabledSkipsAccounting() external {
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(0);
+
+        _executeSignedClaim("uncapped-1");
+        _executeSignedClaim("uncapped-2");
+        _executeSignedClaim("uncapped-3");
+
+        // Disabled cap performs no window accounting at all.
+        assertEq(atomWarden.claimsInWindow(), 0);
+    }
+
+    function test_claimWithAuthorization_failedQuorumDoesNotConsumeBudget() external {
+        uint256[] memory keys = new uint256[](2);
+        keys[0] = 0xA11CE;
+        keys[1] = 0xB0B;
+        _grantSignerKeys(keys);
+        _setSignatureThreshold(2);
+
+        // Submit only 1 signature against threshold 2 — reverts before cap accounting.
+        uint256[] memory only = new uint256[](1);
+        only[0] = keys[0];
+
+        bytes32 atomId = _setAtom("cap-no-burn", claimant, false, address(0), 0);
+        IAtomWarden.ClaimAuthorization memory authorization = _defaultAuthorization(atomId, 0);
+        bytes memory bundle = _buildSortedSignatures(authorization, only);
+
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_InsufficientSigners.selector));
+        atomWarden.claimWithAuthorization(authorization, bundle);
+
+        assertEq(atomWarden.claimsInWindow(), 0);
+    }
+
+    function test_pause_blocksClaimWithAuthorizationEvenWithCapBudget() external {
+        vm.startPrank(admin);
+        atomWarden.setMaxClaimsPerWindow(10);
+        atomWarden.pause();
+        vm.stopPrank();
+
+        (IAtomWarden.ClaimAuthorization memory authorization, bytes memory signature,) =
+            _preparedSignedClaim("paused-with-budget");
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(PausableUpgradeable.EnforcedPause.selector));
+        atomWarden.claimWithAuthorization(authorization, signature);
+
+        assertEq(atomWarden.claimsInWindow(), 0);
+    }
+
+    function test_setMaxClaimsPerWindow_raiseMidWindowUnblocksImmediately() external {
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(1);
+
+        _executeSignedClaim("retune-raise-1");
+
+        (IAtomWarden.ClaimAuthorization memory authorization, bytes memory signature,) =
+            _preparedSignedClaim("retune-raise-blocked");
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_ClaimCapExceeded.selector));
+        atomWarden.claimWithAuthorization(authorization, signature);
+
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(2);
+
+        _executeSignedClaim("retune-raise-2");
+        assertEq(atomWarden.claimsInWindow(), 2);
+    }
+
+    function test_setMaxClaimsPerWindow_lowerBelowInWindowCountBlocksUntilRollover() external {
+        _executeSignedClaim("retune-lower-1");
+        _executeSignedClaim("retune-lower-2");
+        assertEq(atomWarden.claimsInWindow(), 2);
+
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(1);
+
+        (IAtomWarden.ClaimAuthorization memory authorization, bytes memory signature,) =
+            _preparedSignedClaim("retune-lower-blocked");
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_ClaimCapExceeded.selector));
+        atomWarden.claimWithAuthorization(authorization, signature);
+
+        vm.warp((block.timestamp / DEFAULT_CLAIM_CAP_WINDOW + 1) * DEFAULT_CLAIM_CAP_WINDOW);
+        _executeSignedClaim("retune-lower-3");
+        assertEq(atomWarden.claimsInWindow(), 1);
+    }
+
+    function test_setMaxClaimsPerWindow_zeroDisablesMidWindow() external {
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(1);
+
+        _executeSignedClaim("retune-disable-1");
+
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(0);
+
+        _executeSignedClaim("retune-disable-2");
+        // Accounting stops the moment the cap is disabled; the stale count is inert.
+        assertEq(atomWarden.claimsInWindow(), 1);
+    }
+
+    function test_setMaxClaimsPerWindow_emitsEvent() external {
+        vm.expectEmit(false, false, false, true, address(atomWarden));
+        emit IAtomWarden.MaxClaimsPerWindowSet(DEFAULT_MAX_CLAIMS_PER_WINDOW, 7);
+
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(7);
+        assertEq(atomWarden.maxClaimsPerWindow(), 7);
+    }
+
+    function test_setMaxClaimsPerWindow_revertsForNonAdmin() external {
+        address nobody = makeAddr("not-admin");
+        bytes32 adminRole = atomWarden.DEFAULT_ADMIN_ROLE();
+        vm.prank(nobody);
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, nobody, adminRole)
+        );
+        atomWarden.setMaxClaimsPerWindow(7);
+    }
+
+    function test_setMaxClaimsPerWindow_revertsWhenArmingWithZeroWindow() external {
+        // Simulate the upgraded-without-reinitialize state: roles exist from the v1 init
+        // but the appended cap slots are zero. Arming the cap while claimCapWindow == 0
+        // must revert instead of setting up a division-by-zero on the claim path.
+        vm.store(address(atomWarden), bytes32(uint256(8)), bytes32(0)); // claimCapWindow slot
+
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_InvalidClaimCapWindow.selector));
+        atomWarden.setMaxClaimsPerWindow(1);
+    }
+
+    function test_setClaimCapWindow_emitsEventAndReanchors() external {
+        uint256 newWindow = 12 hours;
+
+        vm.expectEmit(false, false, false, true, address(atomWarden));
+        emit IAtomWarden.ClaimCapWindowSet(DEFAULT_CLAIM_CAP_WINDOW, newWindow);
+
+        vm.prank(admin);
+        atomWarden.setClaimCapWindow(newWindow);
+        assertEq(atomWarden.claimCapWindow(), newWindow);
+        assertEq(atomWarden.currentClaimWindowId(), block.timestamp / newWindow);
+    }
+
+    function test_setClaimCapWindow_revertsOnZero() external {
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_InvalidClaimCapWindow.selector));
+        atomWarden.setClaimCapWindow(0);
+    }
+
+    function test_setClaimCapWindow_revertsForNonAdmin() external {
+        address nobody = makeAddr("not-admin");
+        bytes32 adminRole = atomWarden.DEFAULT_ADMIN_ROLE();
+        vm.prank(nobody);
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, nobody, adminRole)
+        );
+        atomWarden.setClaimCapWindow(1 hours);
+    }
+
+    function test_setClaimCapWindow_preservesInWindowCount() external {
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(2);
+
+        _executeSignedClaim("window-switch-1");
+        _executeSignedClaim("window-switch-2");
+
+        // Shrinking the window re-anchors the id but keeps the spent count — a retune
+        // must never mint fresh budget mid-window.
+        vm.prank(admin);
+        atomWarden.setClaimCapWindow(1 hours);
+        assertEq(atomWarden.claimsInWindow(), 2);
+        assertEq(atomWarden.currentClaimWindowId(), block.timestamp / 1 hours);
+
+        (IAtomWarden.ClaimAuthorization memory authorization, bytes memory signature,) =
+            _preparedSignedClaim("window-switch-blocked");
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_ClaimCapExceeded.selector));
+        atomWarden.claimWithAuthorization(authorization, signature);
+
+        // The re-anchored (shorter) window rolls over naturally and frees the budget.
+        vm.warp((block.timestamp / 1 hours + 1) * 1 hours);
+        _executeSignedClaim("window-switch-3");
+        assertEq(atomWarden.claimsInWindow(), 1);
+    }
+
+    function testFuzz_setMaxClaimsPerWindow(uint256 newValue) external {
+        vm.expectEmit(false, false, false, true, address(atomWarden));
+        emit IAtomWarden.MaxClaimsPerWindowSet(DEFAULT_MAX_CLAIMS_PER_WINDOW, newValue);
+
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(newValue);
+        assertEq(atomWarden.maxClaimsPerWindow(), newValue);
+    }
+
+    function testFuzz_setClaimCapWindow(uint256 newWindow) external {
+        newWindow = bound(newWindow, 1, 365 days);
+
+        vm.prank(admin);
+        atomWarden.setClaimCapWindow(newWindow);
+        assertEq(atomWarden.claimCapWindow(), newWindow);
+        assertEq(atomWarden.currentClaimWindowId(), block.timestamp / newWindow);
+    }
+
+    function testFuzz_claimCapBoundary(uint256 cap) external {
+        cap = bound(cap, 1, 5);
+
+        vm.prank(admin);
+        atomWarden.setMaxClaimsPerWindow(cap);
+
+        for (uint256 i = 0; i < cap; i++) {
+            _executeSignedClaim(string.concat("fuzz-cap-", vm.toString(i)));
+        }
+        assertEq(atomWarden.claimsInWindow(), cap);
+
+        (IAtomWarden.ClaimAuthorization memory authorization, bytes memory signature,) =
+            _preparedSignedClaim("fuzz-cap-overflow");
+        vm.prank(claimant);
+        vm.expectRevert(abi.encodeWithSelector(IAtomWarden.AtomWarden_ClaimCapExceeded.selector));
+        atomWarden.claimWithAuthorization(authorization, signature);
     }
 
     /*//////////////////////////////////////////////////////////////
-                            HELPER FUNCTIONS
+                                HELPERS
     //////////////////////////////////////////////////////////////*/
 
-    function _createAddressAtom(address addr) internal returns (bytes32) {
-        bytes memory atomData = abi.encodePacked(_toLowerCaseAddress(addr));
-        bytes32 atomId = keccak256(abi.encodePacked(atomData));
-
-        vm.mockCall(
-            address(protocol.multiVault),
-            abi.encodeWithSelector(IMultiVaultCore.isAtom.selector, atomId),
-            abi.encode(true)
-        );
-
-        vm.mockCall(
-            address(protocol.multiVault),
-            abi.encodeWithSelector(IMultiVaultCore.atom.selector, atomId),
-            abi.encode(atomData)
-        );
-
-        return atomId;
+    /// @dev Creates a fresh unclaimed atom + wallet under `label` and returns a
+    ///      single-signer authorization/signature pair for `claimant` at the live nonce.
+    function _preparedSignedClaim(string memory label)
+        internal
+        returns (IAtomWarden.ClaimAuthorization memory authorization, bytes memory signature, bytes32 atomId)
+    {
+        atomId = _setAtom(label, claimant, false, address(0), 0);
+        authorization = _defaultAuthorization(atomId, atomWarden.claimNonces(claimant));
+        signature = _signAuthorization(authorization, signerPrivateKey);
     }
 
-    function _createValidAtom() internal returns (bytes32) {
-        bytes32 atomId = TEST_ATOM_ID;
-
-        vm.mockCall(
-            address(protocol.multiVault),
-            abi.encodeWithSelector(IMultiVaultCore.isAtom.selector, atomId),
-            abi.encode(true)
-        );
-
-        return atomId;
+    /// @dev Executes a full happy-path signed claim for `claimant` on a fresh atom.
+    function _executeSignedClaim(string memory label) internal {
+        (IAtomWarden.ClaimAuthorization memory authorization, bytes memory signature,) = _preparedSignedClaim(label);
+        vm.prank(claimant);
+        atomWarden.claimWithAuthorization(authorization, signature);
     }
 
-    function _deployMockAtomWallet(bytes32 atomId) internal returns (address) {
-        MockAtomWallet mockWallet = new MockAtomWallet();
-        address walletAddress = address(mockWallet);
-
-        vm.etch(walletAddress, address(mockWallet).code);
-
-        return walletAddress;
+    function _setAddressAtom(address account, bool claimed, bool checksumFormat) internal returns (bytes32) {
+        string memory atomData = checksumFormat ? Strings.toChecksumHexString(account) : Strings.toHexString(account);
+        return _setAtom(atomData, account, claimed, address(0), 0);
     }
 
-    function _toLowerCaseAddress(address _address) internal pure returns (string memory) {
-        bytes memory alphabet = "0123456789abcdef";
-        bytes20 addrBytes = bytes20(_address);
-        bytes memory str = new bytes(42);
-
-        str[0] = "0";
-        str[1] = "x";
-
-        for (uint256 i = 0; i < 20; i++) {
-            str[2 + i * 2] = alphabet[uint8(addrBytes[i] >> 4)];
-            str[3 + i * 2] = alphabet[uint8(addrBytes[i] & 0x0f)];
+    function _setAtom(string memory data, address walletOwner, bool claimed, address atomCreator, uint48 createdAt)
+        internal
+        returns (bytes32 atomId)
+    {
+        atomId = multiVault.calculateAtomId(bytes(data));
+        MockAtomWallet wallet = new MockAtomWallet(walletOwner);
+        if (claimed) {
+            wallet.completeClaim(walletOwner);
         }
 
-        return string(str);
+        multiVault.setAtom(atomId, bytes(data), address(wallet), atomCreator, createdAt);
+    }
+
+    function _signAuthorization(IAtomWarden.ClaimAuthorization memory authorization, uint256 privateKey)
+        internal
+        view
+        returns (bytes memory)
+    {
+        bytes32 structHash = keccak256(
+            abi.encode(
+                CLAIM_AUTHORIZATION_TYPEHASH,
+                authorization.claimant,
+                authorization.atomId,
+                authorization.claimType,
+                authorization.nonce,
+                authorization.validAfter,
+                authorization.validUntil
+            )
+        );
+
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", _domainSeparator(), structHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
+        return abi.encodePacked(r, s, v);
+    }
+
+    function _domainSeparator() internal view returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                EIP712_DOMAIN_TYPEHASH,
+                keccak256(bytes("AtomWarden")),
+                keccak256(bytes("2")),
+                block.chainid,
+                address(atomWarden)
+            )
+        );
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                          QUORUM TEST HELPERS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @dev Builds a fresh AtomWarden proxy initialized at v1 only (no `reinitialize()`
+    ///      call), so quorum-bootstrap tests can observe the v2 reinit transition.
+    function _freshUnreinitializedWarden() internal returns (AtomWarden) {
+        MockMultiVault freshMultiVault = new MockMultiVault();
+        freshMultiVault.setConfigAdmin(admin);
+
+        AtomWarden freshImpl = new AtomWarden();
+        TransparentUpgradeableProxy freshProxy =
+            new TransparentUpgradeableProxy(address(freshImpl), makeAddr("layout-proxy-admin"), "");
+        AtomWarden freshWarden = AtomWarden(address(freshProxy));
+
+        freshWarden.initialize(
+            admin,
+            address(freshMultiVault),
+            DEFAULT_CLAIM_WINDOW,
+            DEFAULT_MIN_FEE_THRESHOLD,
+            DEFAULT_SIGNATURE_THRESHOLD,
+            DEFAULT_MAX_VALID_AFTER,
+            DEFAULT_MAX_VALID_UNTIL,
+            DEFAULT_MAX_CLAIMS_PER_WINDOW,
+            DEFAULT_CLAIM_CAP_WINDOW
+        );
+        return freshWarden;
+    }
+
+    function _defaultAuthorization(bytes32 atomId, uint256 nonce)
+        internal
+        view
+        returns (IAtomWarden.ClaimAuthorization memory)
+    {
+        return IAtomWarden.ClaimAuthorization({
+            claimant: claimant,
+            atomId: atomId,
+            claimType: 1,
+            nonce: nonce,
+            validAfter: uint48(block.timestamp - 1),
+            validUntil: uint48(block.timestamp + 1 days)
+        });
+    }
+
+    function _grantSignerKeys(uint256[] memory keys) internal {
+        bytes32 signerRole = atomWarden.SIGNER_ROLE();
+        vm.startPrank(admin);
+        for (uint256 i = 0; i < keys.length; ++i) {
+            atomWarden.grantRole(signerRole, vm.addr(keys[i]));
+        }
+        vm.stopPrank();
+    }
+
+    function _setSignatureThreshold(uint256 threshold) internal {
+        vm.prank(admin);
+        atomWarden.setSignatureThreshold(threshold);
+    }
+
+    /// @dev Sorts the keys by their `vm.addr` ascending and concatenates ECDSA
+    ///      signatures over the same EIP-712 digest in that order — the canonical
+    ///      Gnosis-Safe-style bundle layout the contract expects.
+    function _buildSortedSignatures(IAtomWarden.ClaimAuthorization memory authorization, uint256[] memory keys)
+        internal
+        view
+        returns (bytes memory bundle)
+    {
+        bundle = _signInOrder(authorization, _sortKeysByAddress(keys));
+    }
+
+    /// @dev Sorts ascending and then reverses, so the resulting order is strictly
+    ///      DESCENDING by recovered address — the canonical "violates ordering" case.
+    function _buildReversedSignatures(IAtomWarden.ClaimAuthorization memory authorization, uint256[] memory keys)
+        internal
+        view
+        returns (bytes memory bundle)
+    {
+        uint256[] memory sorted = _sortKeysByAddress(keys);
+        uint256 n = sorted.length;
+        uint256[] memory reversed = new uint256[](n);
+        for (uint256 i = 0; i < n; ++i) {
+            reversed[i] = sorted[n - 1 - i];
+        }
+        bundle = _signInOrder(authorization, reversed);
+    }
+
+    function _signInOrder(IAtomWarden.ClaimAuthorization memory authorization, uint256[] memory keys)
+        internal
+        view
+        returns (bytes memory bundle)
+    {
+        for (uint256 i = 0; i < keys.length; ++i) {
+            bundle = bytes.concat(bundle, _signAuthorization(authorization, keys[i]));
+        }
+    }
+
+    function _sortKeysByAddress(uint256[] memory keys) internal pure returns (uint256[] memory) {
+        uint256 n = keys.length;
+        uint256[] memory sorted = new uint256[](n);
+        for (uint256 i = 0; i < n; ++i) {
+            sorted[i] = keys[i];
+        }
+        // Insertion sort by recovered address; tiny N, gas/perf irrelevant.
+        for (uint256 i = 1; i < n; ++i) {
+            uint256 currentKey = sorted[i];
+            address currentAddr = vm.addr(currentKey);
+            uint256 j = i;
+            while (j > 0 && vm.addr(sorted[j - 1]) > currentAddr) {
+                sorted[j] = sorted[j - 1];
+                --j;
+            }
+            sorted[j] = currentKey;
+        }
+        return sorted;
+    }
+
+    function _isAscendingByAddress(uint256[] memory keys) internal pure returns (bool) {
+        for (uint256 i = 1; i < keys.length; ++i) {
+            if (vm.addr(keys[i]) <= vm.addr(keys[i - 1])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /// @dev Fisher-Yates shuffle seeded by `seed`. Distinct seeds may produce the same
+    ///      permutation as the canonical order — that case is handled in the fuzz test.
+    function _permuteKeys(uint256[] memory keys, uint256 seed) internal pure returns (uint256[] memory) {
+        uint256 n = keys.length;
+        uint256[] memory permuted = new uint256[](n);
+        for (uint256 i = 0; i < n; ++i) {
+            permuted[i] = keys[i];
+        }
+        for (uint256 i = n - 1; i > 0; --i) {
+            seed = uint256(keccak256(abi.encode(seed, i)));
+            uint256 j = seed % (i + 1);
+            (permuted[i], permuted[j]) = (permuted[j], permuted[i]);
+        }
+        return permuted;
+    }
+
+    /// @dev Returns `n` distinct private keys derived from `seed`. Distinctness is
+    ///      enforced by retrying on collision — secp256k1 makes collisions astronomically
+    ///      unlikely so the loop terminates immediately in practice.
+    function _deriveDistinctKeys(uint256 seed, uint256 n) internal pure returns (uint256[] memory) {
+        uint256[] memory keys = new uint256[](n);
+        uint256 produced;
+        uint256 nonce;
+        while (produced < n) {
+            uint256 candidate = uint256(keccak256(abi.encode(seed, nonce)));
+            ++nonce;
+            // secp256k1 private keys must be in [1, n-1]; clamp away from extremes.
+            candidate = bound(candidate, 1, type(uint128).max);
+            bool unique = true;
+            for (uint256 i = 0; i < produced; ++i) {
+                if (keys[i] == candidate) {
+                    unique = false;
+                    break;
+                }
+            }
+            if (unique) {
+                keys[produced] = candidate;
+                ++produced;
+            }
+        }
+        return keys;
+    }
+
+    /// @dev Independent ECDSA recovery for the EIP-712 frozen vector test.
+    function _recoverFromBundle(bytes32 digest, bytes memory bundle) internal pure returns (address) {
+        require(bundle.length == 65, "expected single signature");
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+        assembly {
+            r := mload(add(bundle, 0x20))
+            s := mload(add(bundle, 0x40))
+            v := byte(0, mload(add(bundle, 0x60)))
+        }
+        return ecrecover(digest, v, r, s);
     }
 }

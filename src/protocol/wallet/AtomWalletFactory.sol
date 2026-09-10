@@ -2,13 +2,13 @@
 pragma solidity 0.8.29;
 
 import { BeaconProxy } from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
-import { IEntryPoint } from "@account-abstraction/contracts/interfaces/IEntryPoint.sol";
+import { IEntryPoint } from "@account-abstraction/interfaces/IEntryPoint.sol";
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
-import { AtomWallet } from "./AtomWallet.sol";
-import { IAtomWalletFactory } from "../../interfaces/IAtomWalletFactory.sol";
-import { IMultiVault } from "../../interfaces/IMultiVault.sol";
-import { IMultiVaultCore } from "../../interfaces/IMultiVaultCore.sol";
+import { AtomWallet } from "src/protocol/wallet/AtomWallet.sol";
+import { IAtomWalletFactory } from "src/interfaces/IAtomWalletFactory.sol";
+import { IMultiVault } from "src/interfaces/IMultiVault.sol";
+import { IMultiVaultCore } from "src/interfaces/IMultiVaultCore.sol";
 
 /**
  * @title AtomWalletFactory
@@ -119,6 +119,18 @@ contract AtomWalletFactory is IAtomWalletFactory, Initializable {
     /**
      * @notice Returns the AtomWallet address for the given atom data
      * @dev The create2 salt is based off of the vault ID
+     * @dev Address stability: the salt is the atom id alone, but the derived address also depends on
+     *      the initcode hash, which embeds three values read from `MultiVaultCore.walletConfig()` and
+     *      this factory: `entryPoint`, `multiVault`, and `atomWalletBeacon` (see `_getDeploymentData`).
+     *      The operationally important distinction:
+     *        - Upgrading the beacon's implementation is safe. The beacon address is unchanged, so every
+     *          wallet address is unchanged. This is the normal upgrade path.
+     *        - Rotating `entryPoint`, or repointing `walletConfig` at a different beacon contract,
+     *          re-derives every not-yet-deployed wallet address. Already-deployed wallets keep their
+     *          addresses and keep working, but counterfactual addresses the protocol and its
+     *          integrators have advertised — and, in the atom-wallet fee model, already routed value to
+     *          — would no longer be the addresses this factory deploys.
+     *      The EntryPoint is not intended to be rotated.
      * @param atomId id of the atom associated to the atom wallet
      * @return atomWallet the address of the atom wallet
      */
@@ -149,8 +161,9 @@ contract AtomWalletFactory is IAtomWalletFactory, Initializable {
         bytes memory code = type(BeaconProxy).creationCode;
 
         // encode the init function of the AtomWallet contract with the correct initialization arguments
-        bytes memory initData =
-            abi.encodeWithSelector(AtomWallet.initialize.selector, IEntryPoint(entryPoint), address(multiVault), atomId);
+        bytes memory initData = abi.encodeWithSelector(
+            AtomWallet.initialize.selector, IEntryPoint(entryPoint), address(multiVault), atomId
+        );
 
         // encode constructor arguments of the BeaconProxy contract (address beacon, bytes memory data)
         bytes memory encodedArgs = abi.encode(atomWalletBeacon, initData);

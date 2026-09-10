@@ -1,7 +1,7 @@
 {
   "name": "@0xintuition/contracts-v2",
   "description": "Intuition Protocol V2 smart contracts, ABIs, and bytecode",
-  "version": "1.0.0-alpha.0",
+  "version": "1.1.0-alpha.0",
   "license": "BUSL-1.1",
   "author": {
     "name": "0xIntuition",
@@ -96,14 +96,15 @@
     "release:alpha": "npm publish --tag alpha",
     "fmt": "forge fmt",
     "fmt:check": "forge fmt --check",
+    "viz:call-flows": "bun script/viz/generate-call-flows.ts",
     "lint": "bun run lint:sol && bun run prettier:check",
     "lint:sol": "forge fmt --check && bun solhint \"{script,src,tests}/**/*.sol\"",
     "prettier:check": "prettier --check \"**/*.{json,md,yml}\"",
     "prettier:write": "prettier --write \"**/*.{json,md,yml}\"",
     "test": "forge test",
-    "coverage": "forge coverage --no-match-coverage '(script|tests|src/external/curve)'",
+    "coverage": "forge coverage --no-match-coverage '(script|tests|src/legacy)'",
     "test:coverage": "forge coverage",
-    "test:coverage:report": "forge coverage --no-match-coverage '(script|tests|src/external/curve)' --report lcov && genhtml lcov.info --branch-coverage --output-dir coverage --ignore-errors inconsistent",
+    "test:coverage:report": "forge coverage --no-match-coverage '(script|tests|src/legacy)' --report lcov && genhtml lcov.info --branch-coverage --output-dir coverage --ignore-errors inconsistent",
     "fetch:roles:summary": "npx tsx script/utils/fetch-roles-summary.ts"
   }
 }

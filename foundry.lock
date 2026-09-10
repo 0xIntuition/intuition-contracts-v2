@@ -6,10 +6,16 @@
     "rev": "a3dca253700f19f15b1837c57c67b9388f5cc3fb"
   },
   "lib/openzeppelin-contracts": {
-    "rev": "efdc7cd2d4bcbd22e032907066d2190e97e34939"
+    "tag": {
+      "name": "v5.4.0",
+      "rev": "c64a1edb67b6e3f4a15cca8909c9482ad33a02b0"
+    }
   },
   "lib/openzeppelin-contracts-upgradeable": {
-    "rev": "5bab08015558f2c8af54335ee4c5d7782823484b"
+    "tag": {
+      "name": "v5.4.0",
+      "rev": "e725abddf1e01cf05ace496e950fc8e243cc7cab"
+    }
   },
   "lib/openzeppelin-foundry-upgrades": {
     "rev": "cfd861bc18ef4737e82eae6ec75304e27af699ef"
@@ -18,6 +24,9 @@
     "rev": "dae52a48422f7464e7eeb4eea824f44dde7dfabe"
   },
   "lib/solady": {
-    "rev": "33b4b98e350bbcba6aa85642957c313e98b5f911"
+    "tag": {
+      "name": "v0.1.26",
+      "rev": "acd959aa4bd04720d640bf4e6a5c71037510cc4b"
+    }
   }
 }

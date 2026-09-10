@@ -2,8 +2,13 @@
 pragma solidity 0.8.29;
 
 import {
-    BondingCurveConfig, GeneralConfig, AtomConfig, TripleConfig, WalletConfig, VaultFees
-} from "./IMultiVaultCore.sol";
+    BondingCurveConfig,
+    GeneralConfig,
+    AtomConfig,
+    TripleConfig,
+    WalletConfig,
+    VaultFees
+} from "src/interfaces/IMultiVaultCore.sol";
 
 /* =================================================== */
 /*                          STRUCTS                    */
@@ -24,12 +29,30 @@ struct VaultState {
 /* =================================================== */
 
 /// @notice Enum for the approval types
-/// @dev NONE = 0b00, DEPOSIT = 0b01, REDEMPTION = 0b10, BOTH = 0b11
+/// @dev Values are bit flags packed into the `uint8` slot of
+///      `approvals[receiver][sender]`. Bit 0 = DEPOSIT, bit 1 = REDEMPTION,
+///      bit 2 = CREATION. Composite values are bitwise unions of the
+///      primitives, so a single setter call covers any combination.
+///      `BOTH` is kept for backward compatibility and means
+///      `DEPOSIT | REDEMPTION` (its historical meaning).
+///
+///      NONE                    = 0 (0b000)
+///      DEPOSIT                 = 1 (0b001)
+///      REDEMPTION              = 2 (0b010)
+///      BOTH                    = 3 (0b011) = DEPOSIT | REDEMPTION
+///      CREATION                = 4 (0b100)
+///      DEPOSIT_AND_CREATION    = 5 (0b101) = DEPOSIT | CREATION
+///      REDEMPTION_AND_CREATION = 6 (0b110) = REDEMPTION | CREATION
+///      ALL                     = 7 (0b111) = DEPOSIT | REDEMPTION | CREATION
 enum ApprovalTypes {
     NONE,
     DEPOSIT,
     REDEMPTION,
-    BOTH
+    BOTH,
+    CREATION,
+    DEPOSIT_AND_CREATION,
+    REDEMPTION_AND_CREATION,
+    ALL
 }
 
 /// @notice Enum for the vault types
@@ -51,7 +74,9 @@ interface IMultiVault {
     ///
     /// @param sender The address of the sender being approved or disapproved
     /// @param receiver The address of the receiver granting or revoking approval
-    /// @param approvalType The type of approval granted (NONE = 0, DEPOSIT = 1, REDEMPTION = 2, BOTH = 3)
+    /// @param approvalType The type of approval granted. Encoded as the
+    ///        bit-flag union of DEPOSIT (0b001), REDEMPTION (0b010), and
+    ///        CREATION (0b100). See {ApprovalTypes} for the full enumeration.
     event ApprovalTypeUpdated(address indexed sender, address indexed receiver, ApprovalTypes approvalType);
 
     /// @notice Emitted when atom wallet deposit fees are claimed
@@ -99,15 +124,18 @@ interface IMultiVault {
 
     /// @notice Emitted when assets are deposited into a vault
     ///
-    /// @param sender The address of the sender
-    /// @param receiver The address of the receiver
+    /// @param sender The operator: `msg.sender` on the deposit paths. On the create paths this slot
+    /// carries the creator (the on-behalf-of principal), which the `*For` variants allow to differ
+    /// from `msg.sender`
+    /// @param receiver The address the shares are minted to
     /// @param termId The ID of the term (atom or triple)
     /// @param curveId The ID of the bonding curve
     /// @param assets The amount of assets deposited (gross assets deposited by the sender, including atomCost or
     /// tripleCost where applicable)
     /// @param assetsAfterFees The amount of assets after all deposit fees are deducted
     /// @param shares The amount of shares minted to the receiver
-    /// @param totalShares The user's share balance in the vault after the deposit
+    /// @param receiverSharesAfter The receiver's share balance in the vault after the deposit (not the
+    /// vault-wide total; see {SharePriceChanged.totalShares} for that)
     /// @param vaultType The type of vault (ATOM, TRIPLE, or COUNTER_TRIPLE)
     event Deposited(
         address indexed sender,
@@ -117,30 +145,31 @@ interface IMultiVault {
         uint256 assets,
         uint256 assetsAfterFees,
         uint256 shares,
-        uint256 totalShares,
+        uint256 receiverSharesAfter,
         VaultType vaultType
     );
 
     /// @notice Emitted when shares are redeemed from a vault
     ///
-    /// @param sender The address of the sender
-    /// @param receiver The address of the receiver
+    /// @param sender The operator: `msg.sender`, which may act under the account's redemption approval
+    /// @param account The account whose shares are burned and which receives the payout
     /// @param termId The ID of the term (atom or triple)
     /// @param curveId The ID of the bonding curve
     /// @param shares The amount of shares redeemed
-    /// @param totalShares The user's share balance in the vault after the redemption
-    /// @param assets The amount of assets withdrawn (net assets received by the receiver)
-    /// @param fees The amount of fees charged
+    /// @param accountSharesAfter The account's share balance in the vault after the redemption (not the
+    /// vault-wide total; see {SharePriceChanged.totalShares} for that)
+    /// @param assetsAfterFees The net assets paid out to the account
+    /// @param totalFees The total fees charged: protocol + exit + the curve-level redeem fee
     /// @param vaultType The type of vault (ATOM, TRIPLE, or COUNTER_TRIPLE)
     event Redeemed(
         address indexed sender,
-        address indexed receiver,
+        address indexed account,
         bytes32 indexed termId,
         uint256 curveId,
         uint256 shares,
-        uint256 totalShares,
-        uint256 assets,
-        uint256 fees,
+        uint256 accountSharesAfter,
+        uint256 assetsAfterFees,
+        uint256 totalFees,
         VaultType vaultType
     );
 
@@ -150,15 +179,19 @@ interface IMultiVault {
     ///
     /// @param termId The ID of the term (atom)
     /// @param sender The address of the sender
-    /// @param amount The amount of atom wallet deposit fee collected
-    event AtomWalletDepositFeeCollected(bytes32 indexed termId, address indexed sender, uint256 amount);
+    /// @param feeAmount The amount of atom wallet deposit fee collected
+    event AtomWalletDepositFeeCollected(bytes32 indexed termId, address indexed sender, uint256 feeAmount);
 
     /// @notice Emitted when a protocol fee is accrued internally
     ///
     /// @param epoch The epoch in which the protocol fee was accrued (current epoch)
     /// @param sender The address of the user who paid the protocol fee
-    /// @param amount The amount of protocol fee accrued
-    event ProtocolFeeAccrued(uint256 indexed epoch, address indexed sender, uint256 amount);
+    /// @param feeAmount The amount of protocol fee accrued
+    event ProtocolFeeAccrued(uint256 indexed epoch, address indexed sender, uint256 feeAmount);
+
+    /// @notice Emitted when the timelock controller address is updated
+    /// @param timelock The new timelock controller address
+    event TimelockSet(address indexed timelock);
 
     /// @notice Emitted when a protocol fee is transferred to the protocol multisig or the TrustBonding contract
     /// @dev The protocol fee is charged when depositing assets and redeeming shares from the vault, except
@@ -166,8 +199,8 @@ interface IMultiVault {
     ///
     /// @param epoch The epoch for which the protocol fee was transferred (previous epoch)
     /// @param destination The address of the destination (protocol multisig or TrustBonding contract)
-    /// @param amount The amount of protocol fee transferred
-    event ProtocolFeeTransferred(uint256 indexed epoch, address indexed destination, uint256 amount);
+    /// @param feeAmount The amount of protocol fee transferred
+    event ProtocolFeeTransferred(uint256 indexed epoch, address indexed destination, uint256 feeAmount);
 
     /// @notice Emitted when the share price changes
     ///
@@ -194,6 +227,13 @@ interface IMultiVault {
     /// @param atomWallet The address of the atom wallet associated with the atom vault
     event AtomCreated(address indexed creator, bytes32 indexed termId, bytes atomData, address atomWallet);
 
+    /// @notice Emitted when optional context pointers are registered alongside a newly created atom
+    /// @dev URI bytes are opaque, are not stored, and do not affect the atom's `termId`.
+    /// @param termId The ID of the atom the context describes
+    /// @param registrant The address that supplied the context
+    /// @param uris Context pointers registered for the atom
+    event AtomContextRegistered(bytes32 indexed termId, address indexed registrant, bytes[] uris);
+
     /// @notice Emitted when a triple vault is created
     ///
     /// @param creator The address of the creator
@@ -217,6 +257,13 @@ interface IMultiVault {
      * @param atomId The ID of the atom to claim fees for
      */
     function claimAtomWalletDepositFees(bytes32 atomId) external;
+
+    /**
+     * @notice Returns the accumulated deposit fees for an atom wallet
+     * @param atomWallet The atom wallet address
+     * @return accumulatedFees The accumulated fees for the atom wallet
+     */
+    function accumulatedAtomWalletDepositFees(address atomWallet) external view returns (uint256 accumulatedFees);
 
     /**
      * @notice Computes the deterministic address of an atom wallet for a given atom ID
@@ -273,6 +320,20 @@ interface IMultiVault {
      */
     function getAtomWarden() external view returns (address);
 
+    /**
+     * @notice Returns the creator recorded for a given atom ID
+     * @param atomId The atom ID
+     * @return creator The recorded creator
+     */
+    function getAtomCreator(bytes32 atomId) external view returns (address creator);
+
+    /**
+     * @notice Returns the creation timestamp recorded for a given atom ID
+     * @param atomId The atom ID
+     * @return createdAt The recorded creation timestamp
+     */
+    function getAtomCreatedAt(bytes32 atomId) external view returns (uint48 createdAt);
+
     /// @notice Returns the number of shares held by an account in a specific vault
     /// @param account The address of the account to query
     /// @param termId The ID of the term (atom or triple)
@@ -303,19 +364,20 @@ interface IMultiVault {
     function getUserLastActiveEpoch(address user) external view returns (uint256);
 
     /**
-     * @notice Returns a user's personal utilization value from their most recent active epoch strictly before
-     *         the specified epoch.
+     * @notice Returns a user's personal utilization value from their most recent tracked active epoch at or
+     *         before the specified epoch (inclusive of `epoch` itself).
      * @dev
      * - This function walks back through the user's last three tracked active epochs and returns the utilization
-     *   value from the most recent one that occurred strictly before the given `epoch`
-     * - Reverts if no such epoch is tracked (i.e., user has no recorded activity before `epoch`)
-     * - Reverts if called with a future epoch or while the system is in epoch 0 (the genesis epoch), since there is
-     *   no prior epoch in which the user could have been active at that time
+     *   value from the most recent one whose epoch is `<= epoch`, so a user active in `epoch` itself returns that
+     *   epoch's value rather than an earlier one
+     * - Reverts with `MultiVault_InvalidEpoch` if `epoch` is in the future (`epoch > currentEpoch()`)
+     * - Reverts with `MultiVault_EpochNotTracked` if none of the tracked epochs is `<= epoch` (i.e. all of the
+     *   user's recorded activity is in epochs after `epoch`)
      * - Utilization values are signed integers and may be positive (net deposits) or negative (net redemptions)
      * @param user The address of the user whose utilization is being queried
-     * @param epoch The epoch number to check utilization before
-     * @return utilization The user's utilization value from their most recent tracked active epoch
-     *         strictly before the specified `epoch`
+     * @param epoch The epoch number up to and including which the most recent tracked utilization is resolved
+     * @return utilization The user's utilization value from their most recent tracked active epoch at or
+     *         before the specified `epoch`
      */
     function getUserUtilizationInEpoch(address user, uint256 epoch) external view returns (int256);
 
@@ -328,10 +390,10 @@ interface IMultiVault {
 
     /**
      * @notice Checks if a term (atom or triple) has been created
-     * @param id The term ID to check
+     * @param termId The term ID to check
      * @return True if the term has been created, false otherwise
      */
-    function isTermCreated(bytes32 id) external view returns (bool);
+    function isTermCreated(bytes32 termId) external view returns (bool);
 
     /// @notice Returns the maximum number of shares a user can redeem from a vault
     /// @param sender The address of the user
@@ -340,21 +402,42 @@ interface IMultiVault {
     /// @return The maximum number of redeemable shares for the user in the vault
     function maxRedeem(address sender, bytes32 termId, uint256 curveId) external view returns (uint256);
 
+    /// @notice Returns whether `sender` can deposit on behalf of `receiver`.
+    /// @dev    Returns true when `sender == receiver` or when `receiver` has
+    ///         granted `sender` an approval type whose DEPOSIT bit is set.
+    /// @param sender The address attempting to deposit.
+    /// @param receiver The address that would receive minted shares.
+    /// @return approved True if `sender` is approved to deposit for `receiver`.
+    function isApprovedToDeposit(address sender, address receiver) external view returns (bool approved);
+
+    /// @notice Returns whether `sender` can redeem on behalf of `receiver`.
+    /// @dev    Returns true when `sender == receiver` or when `receiver` has
+    ///         granted `sender` an approval type whose REDEMPTION bit is set.
+    /// @param sender The address attempting to redeem.
+    /// @param receiver The share owner being redeemed for: their shares are burned and they receive the assets.
+    /// @return approved True if `sender` is approved to redeem for `receiver`.
+    function isApprovedToRedeem(address sender, address receiver) external view returns (bool approved);
+
+    /// @notice Returns whether `sender` can create atoms/triples on behalf of `creator`.
+    /// @dev    Returns true when `sender == creator` or when `creator` has
+    ///         granted `sender` an approval type whose CREATION bit is set.
+    /// @param sender The address attempting to create.
+    /// @param creator The address that would be credited as creator.
+    /// @return approved True if `sender` is approved to create for `creator`.
+    function isApprovedToCreate(address sender, address creator) external view returns (bool approved);
+
     /// @notice Simulates the creation of an atom with an initial deposit
     /// @dev Returns the expected shares to be minted and the net assets credited after fees
     /// @param termId The ID of the atom
     /// @param assets The amount of assets the user would send
     /// @return shares The expected shares to be minted for the user
-    /// @return assetsAfterFixedFees The net assets that will be added to the vault (after fixed fees, before dynamic
-    /// fees)
+    /// @return feeBaseAssets The base the rate fees are computed on: `assets` less the fixed atom cost
+    /// (`atomCreationProtocolFee` + `minShare` seed). Not itself credited to the vault
     /// @return assetsAfterFees The net assets that will be added to the vault (after all fees)
-    function previewAtomCreate(
-        bytes32 termId,
-        uint256 assets
-    )
+    function previewAtomCreate(bytes32 termId, uint256 assets)
         external
         view
-        returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees);
+        returns (uint256 shares, uint256 feeBaseAssets, uint256 assetsAfterFees);
 
     /// @notice Simulates a deposit of assets into a vault
     /// @dev Returns the expected shares to be minted and the net assets credited after fees
@@ -363,27 +446,36 @@ interface IMultiVault {
     /// @param assets The amount of assets the user would send
     /// @return shares The expected shares to be minted for the user
     /// @return assetsAfterFees The net assets that will be added to the vault (after all fees)
-    function previewDeposit(
-        bytes32 termId,
-        uint256 curveId,
-        uint256 assets
-    )
+    function previewDeposit(bytes32 termId, uint256 curveId, uint256 assets)
         external
         view
         returns (uint256 shares, uint256 assetsAfterFees);
 
     /// @notice Simulates a redemption of shares from a vault
     /// @dev Returns the net assets the user would receive after fees and the shares to be burned
+    /// @dev Account-agnostic. This signature carries no account, so a curve fee hook is quoted with
+    ///      `address(0)` and any curve pricing its fee off per-holder state falls back to a
+    ///      vault-level default. On the dynamic-fee curve a holder's rate keys on their recorded tier
+    ///      while the fallback uses the vault's current tier, so this figure can differ from execution
+    ///      in either direction, so it is not a source for a redemption `minAssets` on a hook-bearing
+    ///      curve: over-statement makes the slippage guard reject the redemption. The curve's own
+    ///      account-aware view gives the holder's true curve fee. That view is net of the curve's
+    ///      fee only and is not a drop-in replacement for this figure: to derive a holder-accurate
+    ///      net, take the value returned here, add back the account-less curve fee it was computed
+    ///      with (`quoteRedeemFee(termId, address(0), grossAssets)`), then subtract the account's own
+    ///      curve fee. On hookless curves (including the default curve) this caveat does not apply.
+    /// @dev Can revert. If the accumulated fees would consume the entire redemption, this reverts with
+    ///      `MultiVault_RedeemYieldsNoAssets` rather than returning zero — the same floor the write
+    ///      path enforces, surfaced here so a preview cannot report a payout the execution will not
+    ///      make. In practice this affects only dust redemptions. Callers previewing a set of
+    ///      positions should tolerate a revert on any single one rather than assuming a total.
     /// @param termId The ID of the term (atom or triple)
     /// @param curveId The ID of the bonding curve
     /// @param shares The amount of shares the user would redeem
-    /// @return assetsAfterFees The net assets that would be sent to the user (after protocol and exit fees)
-    /// @return sharesUsed The shares that would be burned (returned for convenience)
-    function previewRedeem(
-        bytes32 termId,
-        uint256 curveId,
-        uint256 shares
-    )
+    /// @return assetsAfterFees The net assets that would be sent to the user (after protocol and exit fees and, on a
+    /// fee-hook curve, the curve-level redeem fee) @return sharesUsed The shares that would be burned (returned for
+    /// convenience)
+    function previewRedeem(bytes32 termId, uint256 curveId, uint256 shares)
         external
         view
         returns (uint256 assetsAfterFees, uint256 sharesUsed);
@@ -393,16 +485,13 @@ interface IMultiVault {
     /// @param termId The ID of the triple
     /// @param assets The amount of assets the user would send
     /// @return shares The expected shares to be minted for the user
-    /// @return assetsAfterFixedFees The net assets that will be added to the vault (after fixed fees like protocol and
-    /// entry fees)
+    /// @return feeBaseAssets The base the rate fees are computed on: `assets` less the fixed triple cost
+    /// (`tripleCreationProtocolFee` + the two `minShare` seeds). Not itself credited to the vault
     /// @return assetsAfterFees The net assets that will be added to the vault (after all fees)
-    function previewTripleCreate(
-        bytes32 termId,
-        uint256 assets
-    )
+    function previewTripleCreate(bytes32 termId, uint256 assets)
         external
         view
-        returns (uint256 shares, uint256 assetsAfterFixedFees, uint256 assetsAfterFees);
+        returns (uint256 shares, uint256 feeBaseAssets, uint256 assetsAfterFees);
 
     /// @notice Returns the amount of assets that would be charged as a protocol fee for a given amount
     /// @param assets The amount of assets to calculate the fee on
@@ -414,9 +503,13 @@ interface IMultiVault {
     /* =================================================== */
 
     /// @notice Sets the approval type for a sender to act on behalf of the receiver
+    /// @dev Declared payable only so it can share a value-bearing multicall with
+    ///      payable legs. Its direct or virtual value allocation must be zero.
     /// @param sender The address to grant or revoke approval for
-    /// @param approvalType The type of approval to grant (NONE = 0, DEPOSIT = 1, REDEMPTION = 2, BOTH = 3)
-    function approve(address sender, ApprovalTypes approvalType) external;
+    /// @param approvalType The type of approval to grant. Encoded as the
+    ///        bit-flag union of DEPOSIT (0b001), REDEMPTION (0b010), and
+    ///        CREATION (0b100). See {ApprovalTypes} for the full enumeration.
+    function approve(address sender, ApprovalTypes approvalType) external payable;
 
     /**
      * @notice Creates multiple atom vaults with initial deposits
@@ -424,13 +517,28 @@ interface IMultiVault {
      * @param assets Array of asset amounts to deposit into each atom vault
      * @return Array of atom IDs (termIds) for the created atoms
      */
-    function createAtoms(
-        bytes[] calldata atomDatas,
-        uint256[] calldata assets
-    )
+    function createAtoms(bytes[] calldata atomDatas, uint256[] calldata assets)
         external
         payable
         returns (bytes32[] memory);
+
+    /**
+     * @notice Creates multiple atom vaults for an approved creator with optional creation-time context pointers
+     * @dev Uses the same CREATION approval rules as {createAtomsFor}; callers creating for themselves require no
+     *      approval. The outer arrays must have equal length. Non-empty `uris[i]` is emitted in
+     *      {AtomContextRegistered} for `atomDatas[i]`, but is excluded from atom ID calculation and storage.
+     * @param creator The address recorded as atom creator and context registrant
+     * @param atomDatas Array of atom data for each atom to be created
+     * @param assets Array of asset amounts to deposit into each atom vault
+     * @param uris Array of URI lists to emit alongside each created atom
+     * @return Array of atom IDs (termIds) for the created atoms
+     */
+    function createAtomsWithUris(
+        address creator,
+        bytes[] calldata atomDatas,
+        uint256[] calldata assets,
+        bytes[][] calldata uris
+    ) external payable returns (bytes32[] memory);
 
     /**
      * @notice Creates multiple triple vaults with initial deposits
@@ -445,10 +553,56 @@ interface IMultiVault {
         bytes32[] calldata predicateIds,
         bytes32[] calldata objectIds,
         uint256[] calldata assets
-    )
+    ) external payable returns (bytes32[] memory);
+
+    /**
+     * @notice On-behalf-of variant of {createAtoms}. Creates multiple atom
+     *         vaults with initial deposits and attributes the resulting
+     *         atoms to `creator` instead of `msg.sender`.
+     * @dev    Requires `creator` to have approved `msg.sender` for creation
+     *         via {approve} with any {ApprovalTypes} value whose CREATION
+     *         bit is set (CREATION, DEPOSIT_AND_CREATION,
+     *         REDEMPTION_AND_CREATION, or ALL). When `creator == msg.sender`
+     *         the check short-circuits and no approval is required.
+     *
+     *         Atom creator (`atomCreators[atomId]`) and creator-utilization
+     *         are credited to `creator`. Native TRUST payment is taken from
+     *         `msg.value` exactly as in {createAtoms}.
+     * @param  creator   The address recorded as the atom creator and credited
+     *                   with the create-payment utilization.
+     * @param  atomDatas Array of atom data (metadata) for each atom to create.
+     * @param  assets    Array of asset amounts to deposit into each atom vault.
+     * @return Array of atom IDs (termIds) for the created atoms.
+     */
+    function createAtomsFor(address creator, bytes[] calldata atomDatas, uint256[] calldata assets)
         external
         payable
         returns (bytes32[] memory);
+
+    /**
+     * @notice On-behalf-of variant of {createTriples}. Creates multiple
+     *         triple vaults with initial deposits and attributes the
+     *         resulting create-payment utilization to `creator` instead of
+     *         `msg.sender`.
+     * @dev    Requires `creator` to have approved `msg.sender` for creation
+     *         via {approve} with any {ApprovalTypes} value whose CREATION
+     *         bit is set (CREATION, DEPOSIT_AND_CREATION,
+     *         REDEMPTION_AND_CREATION, or ALL). When `creator == msg.sender`
+     *         the check short-circuits and no approval is required.
+     * @param  creator      The address credited with the create-payment utilization.
+     * @param  subjectIds   Array of atom IDs to use as subjects.
+     * @param  predicateIds Array of atom IDs to use as predicates.
+     * @param  objectIds    Array of atom IDs to use as objects.
+     * @param  assets       Array of asset amounts to deposit into each triple vault.
+     * @return Array of triple IDs (termIds) for the created triples.
+     */
+    function createTriplesFor(
+        address creator,
+        bytes32[] calldata subjectIds,
+        bytes32[] calldata predicateIds,
+        bytes32[] calldata objectIds,
+        uint256[] calldata assets
+    ) external payable returns (bytes32[] memory);
 
     /**
      * @notice Deposits assets into a vault and mints shares to the receiver
@@ -458,12 +612,7 @@ interface IMultiVault {
      * @param minShares Minimum number of shares expected to be minted
      * @return Number of shares minted to the receiver
      */
-    function deposit(
-        address receiver,
-        bytes32 termId,
-        uint256 curveId,
-        uint256 minShares
-    )
+    function deposit(address receiver, bytes32 termId, uint256 curveId, uint256 minShares)
         external
         payable
         returns (uint256);
@@ -483,33 +632,31 @@ interface IMultiVault {
         uint256[] calldata curveIds,
         uint256[] calldata assets,
         uint256[] calldata minShares
-    )
-        external
-        payable
-        returns (uint256[] memory);
+    ) external payable returns (uint256[] memory);
 
     /**
      * @notice Redeems shares from a vault and returns assets to the receiver
-     * @param receiver Address to receive the redeemed assets
+     * @dev Declared payable only so it can share a value-bearing multicall with
+     *      payable legs. Its direct or virtual value allocation must be zero.
+     * @param receiver The account whose shares are burned and which receives the assets; `msg.sender` must be this
+     * address or hold its REDEMPTION approval
      * @param termId ID of the term (atom or triple) to redeem from
      * @param curveId Bonding curve ID to use for the redemption
      * @param shares Number of shares to redeem
      * @param minAssets Minimum number of assets expected to be returned
      * @return Number of assets returned to the receiver
      */
-    function redeem(
-        address receiver,
-        bytes32 termId,
-        uint256 curveId,
-        uint256 shares,
-        uint256 minAssets
-    )
+    function redeem(address receiver, bytes32 termId, uint256 curveId, uint256 shares, uint256 minAssets)
         external
+        payable
         returns (uint256);
 
     /**
      * @notice Redeems shares from multiple vaults in a single transaction
-     * @param receiver Address to receive the redeemed assets
+     * @dev Declared payable only so it can share a value-bearing multicall with
+     *      payable legs. Its direct or virtual value allocation must be zero.
+     * @param receiver The account whose shares are burned and which receives the assets; `msg.sender` must be this
+     * address or hold its REDEMPTION approval
      * @param termIds Array of term IDs to redeem from
      * @param curveIds Array of bonding curve IDs to use for each redemption
      * @param shares Array of share amounts to redeem from each vault
@@ -522,9 +669,25 @@ interface IMultiVault {
         uint256[] calldata curveIds,
         uint256[] calldata shares,
         uint256[] calldata minAssets
-    )
+    ) external payable returns (uint256[] memory);
+
+    /**
+     * @notice Executes calls on this contract atomically with explicit per-call
+     *         value allocation. The sum of `values` must equal `msg.value`.
+     * @dev    Sub-calls preserve the original `msg.sender` and re-evaluate their
+     *         modifiers. A zero-value batch can call the full entry-point surface.
+     *         In a value-bearing batch, non-payable functions other than the
+     *         guarded `redeem`, `redeemBatch`, and `approve` entry points remain
+     *         subject to Solidity's non-payable dispatcher check. Nested
+     *         multicalls revert, and the first sub-call revert bubbles unchanged.
+     * @param  data The array of ABI-encoded calls to execute against this contract
+     * @param  values The array of per-sub-call value allocations
+     * @return results The array of return data from each sub-call
+     */
+    function multicall(bytes[] calldata data, uint256[] calldata values)
         external
-        returns (uint256[] memory);
+        payable
+        returns (bytes[] memory results);
 
     /**
      * @notice Returns the accumulated protocol fees for a specific epoch
@@ -543,10 +706,15 @@ interface IMultiVault {
     function unpause() external;
 
     /// @notice Sets the general configuration parameters
+    /// @dev Updating `_generalConfig.admin` does not grant or revoke `DEFAULT_ADMIN_ROLE`.
+    /// AccessControl role membership is managed separately via role operations.
     function setGeneralConfig(GeneralConfig memory _generalConfig) external;
 
     /// @notice Sets the atom configuration parameters
     function setAtomConfig(AtomConfig memory _atomConfig) external;
+
+    /// @notice Sets the maximum URI count per atom and maximum byte length per URI
+    function setAtomUriConfig(uint32 maxUriCount, uint32 maxUriLength) external;
 
     /// @notice Sets the triple configuration parameters
     function setTripleConfig(TripleConfig memory _tripleConfig) external;
@@ -559,4 +727,13 @@ interface IMultiVault {
 
     /// @notice Sets the bonding curve configuration parameters
     function setBondingCurveConfig(BondingCurveConfig memory _bondingCurveConfig) external;
+
+    /// @notice Updates the timelock controller address
+    /// @param _timelock The new timelock controller address
+    function setTimelock(address _timelock) external;
+
+    /// @notice Reinitializes the contract after upgrade: bootstraps the timelock address and
+    ///         pre-seeds the system-utilization rollover source
+    /// @param _timelock The timelock controller address
+    function reinitialize(address _timelock) external;
 }

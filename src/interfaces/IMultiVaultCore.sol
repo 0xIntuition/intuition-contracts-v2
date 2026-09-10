@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import { VaultType } from "./IMultiVault.sol";
+import { VaultType } from "src/interfaces/IMultiVault.sol";
 
 /// @notice General configuration struct
 struct GeneralConfig {
@@ -26,15 +26,23 @@ struct GeneralConfig {
 
 /// @notice Atom configuration struct
 struct AtomConfig {
-    /// @dev The fee paid to the protocol when depositing vault shares for atom vault creation
+    /// @dev The flat fee (absolute, in TRUST wei) paid to the protocol on each atom creation
     uint256 atomCreationProtocolFee;
     /// @dev The portion of the deposit amount used to collect assets for the associated atom wallet
     uint256 atomWalletDepositFee;
 }
 
+/// @notice Atom URI context configuration struct
+struct AtomUriConfig {
+    /// @dev Maximum number of context URIs that may be registered for one atom
+    uint32 maxUriCount;
+    /// @dev Maximum byte length of each context URI
+    uint32 maxUriLength;
+}
+
 /// @notice Triple configuration struct
 struct TripleConfig {
-    /// @dev The fee paid to the protocol when depositing vault shares for triple vault creation
+    /// @dev The flat fee (absolute, in TRUST wei) paid to the protocol on each triple creation
     uint256 tripleCreationProtocolFee;
     /// @dev The percentage of the triple deposit amount used to purchase equity in the underlying atoms
     uint256 atomDepositFractionForTriple;
@@ -54,14 +62,17 @@ struct WalletConfig {
 
 /// @notice Vault fees struct
 struct VaultFees {
-    /// @dev Entry fees charged when depositing assets into the vault; they remain in the vault as assets
-    ///      rather than being used to mint shares for the recipient
+    /// @dev Entry fee rate (a numerator over `generalConfig.feeDenominator`, not an amount) charged when
+    ///      depositing assets into the vault; the fee remains in the vault as assets rather than being
+    ///      used to mint shares for the recipient
     uint256 entryFee;
-    /// @dev Exit fees charged when redeeming shares from the vault; they remain in the vault as assets
-    ///      rather than being sent to the receiver
+    /// @dev Exit fee rate (a numerator over `generalConfig.feeDenominator`, not an amount) charged when
+    ///      redeeming shares from the vault; the fee remains in the vault as assets rather than being
+    ///      sent to the receiver
     uint256 exitFee;
-    /// @dev Protocol fees charged when depositing assets and redeeming shares from the vault;
-    ///      they are sent to the protocol multisig address as defined in `generalConfig.protocolMultisig`
+    /// @dev Protocol fee rate (a numerator over `generalConfig.feeDenominator`, not an amount) charged on
+    ///      deposits and redemptions; the fee is sent to the protocol multisig address as defined in
+    ///      `generalConfig.protocolMultisig`
     uint256 protocolFee;
 }
 
@@ -109,6 +120,13 @@ interface IMultiVaultCore {
      * @param atomWalletDepositFee The new atom wallet deposit fee
      */
     event AtomConfigUpdated(uint256 atomCreationProtocolFee, uint256 atomWalletDepositFee);
+
+    /**
+     * @notice Emitted when the atom URI context configuration is updated
+     * @param maxUriCount The maximum number of context URIs allowed per atom
+     * @param maxUriLength The maximum byte length allowed for each context URI
+     */
+    event AtomUriConfigUpdated(uint32 maxUriCount, uint32 maxUriLength);
 
     /**
      * @notice Emitted when the triple configuration is updated
@@ -166,8 +184,7 @@ interface IMultiVaultCore {
         WalletConfig memory _walletConfig,
         VaultFees memory _vaultFees,
         BondingCurveConfig memory _bondingCurveConfig
-    )
-        external;
+    ) external;
 
     /* =================================================== */
     /*                      GETTERS                        */
@@ -189,11 +206,7 @@ interface IMultiVaultCore {
     /// @param predicateId The ID of the predicate atom
     /// @param objectId The ID of the object atom
     /// @return id The calculated counter triple ID
-    function calculateCounterTripleId(
-        bytes32 subjectId,
-        bytes32 predicateId,
-        bytes32 objectId
-    )
+    function calculateCounterTripleId(bytes32 subjectId, bytes32 predicateId, bytes32 objectId)
         external
         pure
         returns (bytes32);
@@ -203,24 +216,37 @@ interface IMultiVaultCore {
     /// @param predicateId The ID of the predicate atom
     /// @param objectId The ID of the object atom
     /// @return id The calculated triple ID
-    function calculateTripleId(
-        bytes32 subjectId,
-        bytes32 predicateId,
-        bytes32 objectId
-    )
-        external
-        pure
-        returns (bytes32);
+    function calculateTripleId(bytes32 subjectId, bytes32 predicateId, bytes32 objectId) external pure returns (bytes32);
 
     /// @notice Returns the atom data for a given atom ID
     /// @dev If the atom does not exist, this function reverts
     function getAtom(bytes32 atomId) external view returns (bytes memory data);
 
     /**
+     * @notice Returns the creator recorded for a given atom ID
+     * @param atomId The ID of the atom
+     * @return creator The recorded creator
+     */
+    function getAtomCreator(bytes32 atomId) external view returns (address creator);
+
+    /**
+     * @notice Returns the creation timestamp recorded for a given atom ID
+     * @param atomId The ID of the atom
+     * @return createdAt The recorded creation timestamp
+     */
+    function getAtomCreatedAt(bytes32 atomId) external view returns (uint48 createdAt);
+
+    /**
      * @notice Returns the atom configuration settings
      * @return AtomConfig struct containing atom creation fees and wallet deposit fee settings
      */
     function getAtomConfig() external view returns (AtomConfig memory);
+
+    /**
+     * @notice Returns the effective atom URI context limits
+     * @dev Uninitialized upgrade storage resolves to the protocol defaults.
+     */
+    function getAtomUriConfig() external view returns (uint32 maxUriCount, uint32 maxUriLength);
 
     /// @notice Returns the static costs required to create an atom
     /// @return atomCost The static costs of creating an atom
@@ -234,7 +260,7 @@ interface IMultiVaultCore {
 
     /// @notice Returns the counter ID from the given triple ID
     /// @param tripleId The ID of the triple
-    /// @return counterId The counter vault ID for the given triple ID
+    /// @return counterTripleId The counter vault ID for the given triple ID
     function getCounterIdFromTripleId(bytes32 tripleId) external pure returns (bytes32);
 
     /**
@@ -264,9 +290,9 @@ interface IMultiVaultCore {
     function getTripleCost() external view returns (uint256);
 
     /// @notice Returns the triple ID from the given counter ID
-    /// @param counterId The ID of the counter triple
+    /// @param counterTripleId The ID of the counter triple
     /// @return tripleId The triple vault ID for the given counter ID
-    function getTripleIdFromCounterId(bytes32 counterId) external view returns (bytes32);
+    function getTripleIdFromCounterId(bytes32 counterTripleId) external view returns (bytes32);
 
     /**
      * @notice Returns the vault fees configuration
@@ -287,10 +313,10 @@ interface IMultiVaultCore {
 
     /**
      * @notice Checks if a term ID corresponds to an atom vault
-     * @param atomId The term ID to check
+     * @param termId The term ID to check
      * @return True if the term ID is an atom, false otherwise
      */
-    function isAtom(bytes32 atomId) external view returns (bool);
+    function isAtom(bytes32 termId) external view returns (bool);
 
     /// @notice Returns whether the supplied vault ID is a counter triple
     /// @param termId The ID of the term (atom or triple) to check
@@ -299,10 +325,10 @@ interface IMultiVaultCore {
 
     /**
      * @notice Checks if a term ID corresponds to a triple vault
-     * @param id The term ID to check
+     * @param termId The term ID to check
      * @return True if the term ID is a triple, false otherwise
      */
-    function isTriple(bytes32 id) external view returns (bool);
+    function isTriple(bytes32 termId) external view returns (bool);
 
     /// @notice Returns the underlying atom IDs for a given triple ID
     /// @dev If the triple does not exist, this function returns (bytes32(0), bytes32(0), bytes32(0)) instead of

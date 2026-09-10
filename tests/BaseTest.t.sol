@@ -28,6 +28,8 @@ import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.s
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
 import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCurve.sol";
 import { ProgressiveCurve } from "src/protocol/curves/ProgressiveCurve.sol";
+import { DynamicFeeFlatPriceCurve } from "src/protocol/curves/DynamicFeeFlatPriceCurve.sol";
+import { DynamicFeeConfig } from "src/interfaces/IDynamicFeeFlatPriceCurve.sol";
 import { ERC20Mock } from "tests/mocks/ERC20Mock.sol";
 import { Users } from "tests/utils/Types.sol";
 import { Trust } from "src/Trust.sol";
@@ -43,12 +45,17 @@ abstract contract BaseTest is Modifiers, Test {
     LinearCurve internal linearCurve;
     OffsetProgressiveCurve internal offsetProgressiveCurve;
     ProgressiveCurve internal progressiveCurve;
+    DynamicFeeFlatPriceCurve internal dynamicFeeCurve;
     BondingCurveRegistry internal bondingCurveRegistryImpl;
 
     TransparentUpgradeableProxy internal linearCurveProxy;
     TransparentUpgradeableProxy internal offsetProgressiveCurveProxy;
     TransparentUpgradeableProxy internal progressiveCurveProxy;
+    TransparentUpgradeableProxy internal dynamicFeeCurveProxy;
     TransparentUpgradeableProxy internal bondingCurveRegistryProxy;
+
+    /// @dev The dynamic-fee curve registers fourth (Linear=1, Offset=2, Progressive=3).
+    uint256 internal constant DYNAMIC_FEE_CURVE_ID = 4;
 
     uint256 internal BASIS_POINTS_DIVISOR = 10_000;
     uint256 internal ONE_SHARE = 1e18;
@@ -278,14 +285,35 @@ abstract contract BaseTest is Modifiers, Test {
         console2.log("OffsetProgressiveCurve address: ", address(offsetProgressiveCurve));
         console2.log("ProgressiveCurve address: ", address(progressiveCurve));
 
+        // The merged flat-price dynamic-fee curve: one contract serving both the flat 1:1 pricing
+        // surface (inherited from LinearCurve) and the tier/fee schedule + per-vault fee accounting.
+        // Registration below is its only wiring — the MultiVault discovers the fee hooks through the
+        // registry + the standardized IBaseCurve getters. The MultiVault proxy address already
+        // exists here, so the curve can be pointed at it before the MultiVault is initialized.
+        DynamicFeeFlatPriceCurve dynamicFeeCurveImpl = new DynamicFeeFlatPriceCurve();
+        dynamicFeeCurveProxy = new TransparentUpgradeableProxy(
+            address(dynamicFeeCurveImpl),
+            users.admin,
+            abi.encodeWithSelector(
+                DynamicFeeFlatPriceCurve.initialize.selector,
+                "Dynamic Fee Flat Price Curve",
+                users.admin,
+                address(protocol.multiVault),
+                _getDefaultDynamicFeeConfig()
+            )
+        );
+        dynamicFeeCurve = DynamicFeeFlatPriceCurve(address(dynamicFeeCurveProxy));
+
         // Add curves to registry
         resetPrank(users.admin);
         protocol.curveRegistry.addBondingCurve(address(linearCurve));
         protocol.curveRegistry.addBondingCurve(address(offsetProgressiveCurve));
         protocol.curveRegistry.addBondingCurve(address(progressiveCurve));
+        protocol.curveRegistry.addBondingCurve(address(dynamicFeeCurve));
         console2.log("Added LinearCurve to registry with ID: 1");
         console2.log("Added OffsetProgressiveCurve to registry with ID: 2");
         console2.log("Added ProgressiveCurve to registry with ID: 3");
+        console2.log("Added Dynamic Fee Flat Price Curve to registry with ID: 4");
 
         // Label contracts for debugging
         vm.label(address(multiVaultImpl), "MultiVaultImpl");
@@ -308,41 +336,42 @@ abstract contract BaseTest is Modifiers, Test {
         MetalayerRouterMock metaERC20Router = new MetalayerRouterMock(address(IIGP));
         MetaERC20HubOrSpokeMock metaERC20HubOrSpoke = new MetaERC20HubOrSpokeMock(address(metaERC20Router));
 
-        protocol.satelliteEmissionsController.initialize(
-            users.admin,
-            address(1), // BaseEmissionsController placeholder
-            MetaERC20DispatchInit({
-                hubOrSpoke: address(metaERC20HubOrSpoke),
-                recipientDomain: 1,
-                gasLimit: 125_000,
-                finalityState: FinalityState.INSTANT
-            }),
-            CoreEmissionsControllerInit({
-                startTimestamp: block.timestamp,
-                emissionsLength: EMISSIONS_CONTROLLER_EPOCH_LENGTH,
-                emissionsPerEpoch: EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH,
-                emissionsReductionCliff: EMISSIONS_CONTROLLER_CLIFF,
-                emissionsReductionBasisPoints: EMISSIONS_CONTROLLER_REDUCTION_BP
-            })
-        );
+        protocol.satelliteEmissionsController
+            .initialize(
+                users.admin,
+                address(1), // BaseEmissionsController placeholder
+                MetaERC20DispatchInit({
+                    hubOrSpoke: address(metaERC20HubOrSpoke),
+                    recipientDomain: 1,
+                    gasLimit: 125_000,
+                    finalityState: FinalityState.INSTANT
+                }),
+                CoreEmissionsControllerInit({
+                    startTimestamp: block.timestamp,
+                    emissionsLength: EMISSIONS_CONTROLLER_EPOCH_LENGTH,
+                    emissionsPerEpoch: EMISSIONS_CONTROLLER_EMISSIONS_PER_EPOCH,
+                    emissionsReductionCliff: EMISSIONS_CONTROLLER_CLIFF,
+                    emissionsReductionBasisPoints: EMISSIONS_CONTROLLER_REDUCTION_BP
+                })
+            );
 
         protocol.satelliteEmissionsController.setTrustBonding(address(protocol.trustBonding));
-        protocol.satelliteEmissionsController.grantRole(
-            protocol.satelliteEmissionsController.CONTROLLER_ROLE(), address((trustBondingProxy))
-        );
+        protocol.satelliteEmissionsController
+            .grantRole(protocol.satelliteEmissionsController.CONTROLLER_ROLE(), address((trustBondingProxy)));
 
         // Initialize AtomWalletFactory
         atomWalletFactory.initialize(address(protocol.multiVault));
 
-        protocol.trustBonding.initialize(
-            users.admin, // owner
-            users.timelock, // timelock
-            address(protocol.wrappedTrust), // trustToken
-            TRUST_BONDING_EPOCH_LENGTH, // epochLength (minimum 2 weeks required)
-            address(protocol.satelliteEmissionsController), // satelliteEmissionsController
-            TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound (50%)
-            TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound (30%)
-        );
+        protocol.trustBonding
+            .initialize(
+                users.admin, // owner
+                users.timelock, // timelock
+                address(protocol.wrappedTrust), // trustToken
+                TRUST_BONDING_EPOCH_LENGTH, // epochLength (minimum 2 weeks required)
+                address(protocol.satelliteEmissionsController), // satelliteEmissionsController
+                TRUST_BONDING_SYSTEM_UTILIZATION_LOWER_BOUND, // systemUtilizationLowerBound (50%)
+                TRUST_BONDING_PERSONAL_UTILIZATION_LOWER_BOUND // personalUtilizationLowerBound (30%)
+            );
 
         // Prepare configuration structs with deployed addresses
         GeneralConfig memory generalConfig = _getDefaultGeneralConfig();
@@ -360,14 +389,24 @@ abstract contract BaseTest is Modifiers, Test {
         bondingCurveConfig.registry = address(protocol.curveRegistry);
 
         // Initialize MultiVault
-        protocol.multiVault.initialize(
-            generalConfig,
-            _getDefaultAtomConfig(),
-            _getDefaultTripleConfig(),
-            walletConfig,
-            _getDefaultVaultFees(),
-            bondingCurveConfig
-        );
+        protocol.multiVault
+            .initialize(
+                generalConfig,
+                _getDefaultAtomConfig(),
+                _getDefaultTripleConfig(),
+                walletConfig,
+                _getDefaultVaultFees(),
+                bondingCurveConfig
+            );
+
+        vm.label(address(dynamicFeeCurve), "DynamicFeeFlatPriceCurve");
+
+        // Bootstrap RBAC: set timelock and pre-seed the utilization rollover source (reinitialize
+        // also grants PAUSER_ROLE to generalConfig.admin). The dynamic-fee curve needs no
+        // MultiVault-side wiring: its fee hooks are discovered through the registry + the
+        // standardized IBaseCurve hook getters on every deposit/redeem.
+        resetPrank(users.admin);
+        protocol.multiVault.reinitialize(users.timelock);
 
         resetPrank(users.timelock);
         protocol.trustBonding.setMultiVault(address(protocol.multiVault));
@@ -408,8 +447,7 @@ abstract contract BaseTest is Modifiers, Test {
 
     function _getDefaultAtomConfig() internal returns (AtomConfig memory) {
         return AtomConfig({
-            atomCreationProtocolFee: ATOM_CREATION_PROTOCOL_FEE,
-            atomWalletDepositFee: ATOM_WALLET_DEPOSIT_FEE
+            atomCreationProtocolFee: ATOM_CREATION_PROTOCOL_FEE, atomWalletDepositFee: ATOM_WALLET_DEPOSIT_FEE
         });
     }
 
@@ -437,11 +475,33 @@ abstract contract BaseTest is Modifiers, Test {
         return BondingCurveConfig({ registry: address(0), defaultCurveId: 1 });
     }
 
-    function createAtomWithDeposit(
-        bytes memory atomData,
-        uint256 depositAmount,
-        address creator
-    )
+    /// @dev Default dynamic-fee schedule for tests: 5 tiers of width 5 TRUST growing 20% per tier
+    ///      (edges 5, 11, 18, 26, 35 e18 — small enough that ordinary test deposits cross tiers),
+    ///      deposit fee 1% +0.5%/tier capped at 10%, triangular fulcrum distribution
+    ///      (alpha = BPS, sigma = 4e18 — nearest-first window), redeem fee
+    ///      2% +0.5%/tier, all routed to the leaver's own tier.
+    function _getDefaultDynamicFeeConfig() internal pure returns (DynamicFeeConfig memory config) {
+        config = DynamicFeeConfig({
+            width0: 5e18,
+            tierCount: 5,
+            tierWidthGrowthBps: 2000,
+            depositBaseBps: 100,
+            depositGrowthBps: 50,
+            depositCapBps: 1000,
+            depositFulcrumAlphaBps: 10_000,
+            depositKernelSpread: 4e18,
+            redeemFulcrumAlphaBps: 10_000,
+            redeemKernelSpread: 4e18,
+            redeemBaseBps: 200,
+            redeemGrowthBps: 50,
+            redeemCapBps: 1000,
+            redeemToFulcrumTiersBps: 0,
+            depositToPriorTierBps: 0,
+            minEligibleTierStake: 0
+        });
+    }
+
+    function createAtomWithDeposit(bytes memory atomData, uint256 depositAmount, address creator)
         internal
         returns (bytes32)
     {
@@ -454,11 +514,7 @@ abstract contract BaseTest is Modifiers, Test {
         return atomIds[0];
     }
 
-    function createSimpleAtom(
-        string memory atomString,
-        uint256 depositAmount,
-        address creator
-    )
+    function createSimpleAtom(string memory atomString, uint256 depositAmount, address creator)
         internal
         returns (bytes32)
     {
@@ -488,11 +544,7 @@ abstract contract BaseTest is Modifiers, Test {
     }
 
     // Helper function to create multiple atoms with uniform costs
-    function createAtomsWithUniformCost(
-        bytes[] memory atomDataArray,
-        uint256 costPerAtom,
-        address creator
-    )
+    function createAtomsWithUniformCost(bytes[] memory atomDataArray, uint256 costPerAtom, address creator)
         internal
         returns (bytes32[] memory)
     {
@@ -514,10 +566,7 @@ abstract contract BaseTest is Modifiers, Test {
         uint256 atomCost,
         uint256 tripleCost,
         address creator
-    )
-        internal
-        returns (bytes32 tripleId, bytes32[] memory atomIds)
-    {
+    ) internal returns (bytes32 tripleId, bytes32[] memory atomIds) {
         resetPrank({ msgSender: creator });
 
         // Create atoms
@@ -552,10 +601,7 @@ abstract contract BaseTest is Modifiers, Test {
         uint256 curveId,
         uint256 amount,
         uint256 minShares
-    )
-        internal
-        returns (uint256 shares)
-    {
+    ) internal returns (uint256 shares) {
         resetPrank({ msgSender: depositor });
         return protocol.multiVault.deposit{ value: amount }(receiver, termId, curveId, minShares);
     }
@@ -568,10 +614,7 @@ abstract contract BaseTest is Modifiers, Test {
         uint256 curveId,
         uint256 shares,
         uint256 minAssets
-    )
-        internal
-        returns (uint256 assets)
-    {
+    ) internal returns (uint256 assets) {
         resetPrank({ msgSender: redeemer });
         return protocol.multiVault.redeem(receiver, termId, curveId, shares, minAssets);
     }
@@ -595,11 +638,7 @@ abstract contract BaseTest is Modifiers, Test {
     }
 
     // Helper function to create multiple atoms and return their IDs
-    function createMultipleAtoms(
-        string[] memory atomStrings,
-        uint256[] memory costs,
-        address creator
-    )
+    function createMultipleAtoms(string[] memory atomStrings, uint256[] memory costs, address creator)
         internal
         returns (bytes32[] memory)
     {
@@ -621,10 +660,7 @@ abstract contract BaseTest is Modifiers, Test {
         uint256[] memory curveIds,
         uint256[] memory amounts,
         uint256[] memory minShares
-    )
-        internal
-        returns (uint256[] memory shares)
-    {
+    ) internal returns (uint256[] memory shares) {
         resetPrank({ msgSender: depositor });
         uint256 totalAmount = calculateTotalCost(amounts);
         return protocol.multiVault.depositBatch{ value: totalAmount }(receiver, termIds, curveIds, amounts, minShares);
@@ -638,10 +674,7 @@ abstract contract BaseTest is Modifiers, Test {
         uint256[] memory curveIds,
         uint256[] memory shares,
         uint256[] memory minAssets
-    )
-        internal
-        returns (uint256[] memory assets)
-    {
+    ) internal returns (uint256[] memory assets) {
         resetPrank({ msgSender: redeemer });
         return protocol.multiVault.redeemBatch(receiver, termIds, curveIds, shares, minAssets);
     }

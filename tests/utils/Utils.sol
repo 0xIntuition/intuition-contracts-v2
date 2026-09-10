@@ -6,18 +6,14 @@ import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
 import { ud21x18, UD21x18 } from "@prb/math/src/UD21x18.sol";
 import { PRBMathUtils } from "@prb/math/test/utils/Utils.sol";
 import { CommonBase } from "forge-std/src/Base.sol";
-import { SafeCastLib } from "solady/src/utils/SafeCastLib.sol";
+import { SafeCastLib } from "solady/utils/SafeCastLib.sol";
 import { Constants } from "tests/utils/Constants.sol";
 
 abstract contract Utils is CommonBase, Constants, PRBMathUtils {
     using SafeCastLib for uint256;
 
     /// @dev Bound deposit amount to avoid overflow.
-    function boundDepositAmount(
-        uint128 amount,
-        uint128 balance,
-        uint8 decimals
-    )
+    function boundDepositAmount(uint128 amount, uint128 balance, uint8 decimals)
         internal
         pure
         returns (uint128 depositAmount)

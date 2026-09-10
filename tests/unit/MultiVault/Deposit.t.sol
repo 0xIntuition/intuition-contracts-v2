@@ -8,6 +8,7 @@ import { BaseTest } from "tests/BaseTest.t.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { MultiVaultCore } from "src/protocol/MultiVaultCore.sol";
 import { IMultiVault, ApprovalTypes } from "src/interfaces/IMultiVault.sol";
+import { IBondingCurveRegistry } from "src/interfaces/IBondingCurveRegistry.sol";
 import { GeneralConfig, BondingCurveConfig, VaultFees } from "src/interfaces/IMultiVaultCore.sol";
 
 contract DepositTest is BaseTest {
@@ -105,26 +106,189 @@ contract DepositTest is BaseTest {
         protocol.multiVault.deposit{ value: depositAmount }(users.alice, atomId, CURVE_ID, unreasonableMinShares);
     }
 
+    function test_deposit_RevertWhen_CurveRoundsToZeroShares() public {
+        bytes32 atomId = createSimpleAtom("Zero shares atom", ATOM_COST[0], users.alice);
+        (address registry,) = protocol.multiVault.bondingCurveConfig();
+        vm.mockCall(registry, abi.encodeWithSelector(IBondingCurveRegistry.previewDeposit.selector), abi.encode(0));
+
+        resetPrank(users.alice);
+        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_DepositOrRedeemZeroShares.selector));
+        protocol.multiVault.deposit{ value: 1 ether }(users.alice, atomId, CURVE_ID, 0);
+        vm.clearMockedCalls();
+    }
+
+    function test_deposit_RevertWhen_ProjectedAssetsExceedCurveMaximum() public {
+        bytes32 atomId = createSimpleAtom("Max assets atom", ATOM_COST[0], users.alice);
+        (address registry,) = protocol.multiVault.bondingCurveConfig();
+        vm.mockCall(
+            registry, abi.encodeWithSelector(IBondingCurveRegistry.previewDeposit.selector), abi.encode(1 ether)
+        );
+        vm.mockCall(registry, abi.encodeWithSelector(IBondingCurveRegistry.getCurveMaxAssets.selector), abi.encode(0));
+
+        resetPrank(users.alice);
+        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_ActionExceedsMaxAssets.selector));
+        protocol.multiVault.deposit{ value: 1 ether }(users.alice, atomId, CURVE_ID, 0);
+        vm.clearMockedCalls();
+    }
+
+    function test_deposit_RevertWhen_ProjectedSharesExceedCurveMaximum() public {
+        bytes32 atomId = createSimpleAtom("Max shares atom", ATOM_COST[0], users.alice);
+        (address registry,) = protocol.multiVault.bondingCurveConfig();
+        vm.mockCall(
+            registry, abi.encodeWithSelector(IBondingCurveRegistry.previewDeposit.selector), abi.encode(1 ether)
+        );
+        vm.mockCall(
+            registry,
+            abi.encodeWithSelector(IBondingCurveRegistry.getCurveMaxAssets.selector),
+            abi.encode(type(uint256).max)
+        );
+        vm.mockCall(registry, abi.encodeWithSelector(IBondingCurveRegistry.getCurveMaxShares.selector), abi.encode(0));
+
+        resetPrank(users.alice);
+        vm.expectRevert(abi.encodeWithSelector(MultiVault.MultiVault_ActionExceedsMaxShares.selector));
+        protocol.multiVault.deposit{ value: 1 ether }(users.alice, atomId, CURVE_ID, 0);
+        vm.clearMockedCalls();
+    }
+
     /*//////////////////////////////////////////////////////////////
-            TRIPLE: cannot directly init counter triple (non-default)
+        TRIPLE: counter-triple deposit on non-default curve (symmetric)
     //////////////////////////////////////////////////////////////*/
 
-    function test_deposit_RevertWhen_CannotInitializeCounterTriple_OnNonDefaultCurve() public {
-        // Create a positive triple on the default curve (counter is auto-initialized only on default)
+    /// @notice First-deposit on a counter-triple's non-default-curve vault must succeed once the
+    ///         counter-triple's default-curve vault has been seeded by triple creation. The opposite
+    ///         (positive) side same-curve vault is bootstrapped with min-shares burned to the
+    ///         BURN_ADDRESS, mirroring the existing positive-first symmetric bootstrap.
+    function test_deposit_CounterTripleNonDefault_BootstrapsOppositeSide() public {
         (bytes32 tripleId,) =
             createTripleWithAtoms("S-ctr", "P-ctr", "O-ctr", ATOM_COST[0], TRIPLE_COST[0], users.alice);
-
-        // Get the counter triple id
         bytes32 counterId = protocol.multiVault.getCounterIdFromTripleId(tripleId);
 
-        // Choose a non-default curve (brand-new vault for counter side)
         (, uint256 defaultCurveId) = protocol.multiVault.bondingCurveConfig();
         uint256 nonDefaultCurve = defaultCurveId == 1 ? 2 : 1;
 
-        // Try to deposit to the counter triple on a non-default curve => forbidden
-        resetPrank(users.alice);
-        vm.expectRevert(MultiVault.MultiVault_CannotDirectlyInitializeCounterTriple.selector);
-        protocol.multiVault.deposit{ value: 1 ether }(users.alice, counterId, nonDefaultCurve, 0);
+        uint256 minShare = protocol.multiVault.getGeneralConfig().minShare;
+        uint256 amount = 5 ether;
+
+        // Counter-first deposit on a non-default curve (previously reverted).
+        uint256 shares = makeDeposit(users.bob, users.bob, counterId, nonDefaultCurve, amount, 0);
+        assertGt(shares, 0, "counter-first deposit should mint shares");
+
+        // Counter vault on the non-default curve holds bob's shares plus the min-share seed for itself.
+        // The min-share seed for the counter side is the same minShare burned to BURN_ADDRESS as the
+        // calc path's _isNewVault branch deducted from feeBaseAssets.
+        (, uint256 counterTotalShares) = protocol.multiVault.getVault(counterId, nonDefaultCurve);
+        assertEq(counterTotalShares, shares + minShare, "counter non-default totalShares == bob + minShare seed");
+        assertEq(
+            protocol.multiVault.getShares(users.bob, counterId, nonDefaultCurve),
+            shares,
+            "bob holds his minted counter shares"
+        );
+
+        // Opposite-side (positive) vault on the same non-default curve was seeded symmetrically.
+        (uint256 posTotalAssets, uint256 posTotalShares) = protocol.multiVault.getVault(tripleId, nonDefaultCurve);
+        assertEq(posTotalShares, minShare, "positive non-default totalShares == minShare seed");
+        assertGt(posTotalAssets, 0, "positive non-default totalAssets seeded with minAssetsForCurve(minShare)");
+        assertEq(
+            protocol.multiVault.getShares(protocol.multiVault.BURN_ADDRESS(), tripleId, nonDefaultCurve),
+            minShare,
+            "BURN_ADDRESS holds the positive-side seed"
+        );
+        assertEq(
+            protocol.multiVault.getShares(users.bob, tripleId, nonDefaultCurve), 0, "bob holds no positive-side shares"
+        );
+    }
+
+    /// @notice Pins the surviving boundary of the counter-triple guard: once the positive-triple
+    ///         create path has seeded the counter-triple's default-curve vault, a follow-up deposit
+    ///         into that same counter-default vault must succeed — the tightened guard recognises
+    ///         the term as already bootstrapped and does not fire. The genuine direct-init attack
+    ///         path (depositing on counter-default when the term has not been created) is
+    ///         unreachable because the term would not be classified as a counter-triple at all.
+    function test_deposit_CounterTripleDefault_AfterBootstrap_Succeeds() public {
+        (bytes32 tripleId,) =
+            createTripleWithAtoms("S-def-ctr", "P-def-ctr", "O-def-ctr", ATOM_COST[0], TRIPLE_COST[0], users.alice);
+        bytes32 counterId = protocol.multiVault.getCounterIdFromTripleId(tripleId);
+
+        uint256 minShare2x = protocol.multiVault.getGeneralConfig().minShare * 2;
+        uint256 amount = minShare2x + 2 ether;
+        uint256 shares = makeDeposit(users.bob, users.bob, counterId, CURVE_ID, amount, 0);
+        assertGt(shares, 0, "counter-default deposit after creation must succeed");
+    }
+
+    /*//////////////////////////////////////////////////////////////
+        FUZZ: counter-triple non-default symmetric bootstrap
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Fuzz over registered non-default curves and asset amounts: counter-first deposit on a
+    ///         non-default curve must succeed and seed the opposite-side vault with min-shares to
+    ///         BURN_ADDRESS, regardless of which non-default curve is used or how much is deposited.
+    function testFuzz_deposit_CounterTripleNonDefault_BootstrapsOpposite(uint256 assets, uint256 curveSeed) public {
+        uint256 nonDefaultCurve = _pickNonDefaultCurveFromSeed(curveSeed);
+        vm.assume(nonDefaultCurve != 0);
+
+        (bytes32 tripleId,) = createTripleWithAtoms("S-fz", "P-fz", "O-fz", ATOM_COST[0], TRIPLE_COST[0], users.alice);
+        bytes32 counterId = protocol.multiVault.getCounterIdFromTripleId(tripleId);
+
+        uint256 minShare = protocol.multiVault.getGeneralConfig().minShare;
+        assets = bound(assets, _minAssetsForBootstrap(minShare), 1e30);
+
+        vm.deal(users.bob, assets);
+        uint256 shares = makeDeposit(users.bob, users.bob, counterId, nonDefaultCurve, assets, 0);
+        assertGt(shares, 0, "fuzz: counter-first deposit must mint shares");
+
+        (, uint256 counterTotalShares) = protocol.multiVault.getVault(counterId, nonDefaultCurve);
+        assertEq(counterTotalShares, shares + minShare, "fuzz: counter totalShares == user + minShare seed");
+
+        (, uint256 posTotalShares) = protocol.multiVault.getVault(tripleId, nonDefaultCurve);
+        assertEq(posTotalShares, minShare, "fuzz: positive totalShares == minShare seed");
+        assertEq(
+            protocol.multiVault.getShares(protocol.multiVault.BURN_ADDRESS(), tripleId, nonDefaultCurve),
+            minShare,
+            "fuzz: BURN_ADDRESS holds positive-side seed"
+        );
+    }
+
+    /// @notice Fuzz: {previewDeposit} must agree with the actual shares minted by {deposit} for the
+    ///         counter-first non-default path. Guards against preview/exec divergence after the
+    ///         symmetric guard tightening across the execution and calc paths.
+    function testFuzz_deposit_CounterTripleNonDefault_PreviewMatchesExecution(uint256 assets, uint256 curveSeed)
+        public
+    {
+        uint256 nonDefaultCurve = _pickNonDefaultCurveFromSeed(curveSeed);
+        vm.assume(nonDefaultCurve != 0);
+
+        (bytes32 tripleId,) = createTripleWithAtoms("S-pf", "P-pf", "O-pf", ATOM_COST[0], TRIPLE_COST[0], users.alice);
+        bytes32 counterId = protocol.multiVault.getCounterIdFromTripleId(tripleId);
+
+        assets = bound(assets, _minAssetsForBootstrap(protocol.multiVault.getGeneralConfig().minShare), 1e30);
+        (uint256 previewShares,) = protocol.multiVault.previewDeposit(counterId, nonDefaultCurve, assets);
+
+        vm.deal(users.bob, assets);
+        uint256 actualShares = makeDeposit(users.bob, users.bob, counterId, nonDefaultCurve, assets, 0);
+        assertEq(actualShares, previewShares, "previewDeposit must match shares minted by deposit");
+    }
+
+    function _pickNonDefaultCurveFromSeed(uint256 curveSeed) internal view returns (uint256) {
+        (address registryAddr, uint256 defaultCurveId) = protocol.multiVault.bondingCurveConfig();
+        IBondingCurveRegistry reg = IBondingCurveRegistry(registryAddr);
+        uint256 count = reg.count();
+        if (count <= 1) return 0;
+        uint256 start = (curveSeed % count) + 1;
+        for (uint256 i = 0; i < count; i++) {
+            uint256 cid = ((start + i - 1) % count) + 1;
+            if (cid != defaultCurveId && reg.curveAddresses(cid) != address(0)) {
+                return cid;
+            }
+        }
+        return 0;
+    }
+
+    /// @dev Floor for fuzz `assets`: must clear both `minDeposit` and the 2*minShare bootstrap cost
+    ///      that the triple calc path deducts from `feeBaseAssets` for a new vault.
+    function _minAssetsForBootstrap(uint256 minShare) internal view returns (uint256) {
+        uint256 minDeposit = protocol.multiVault.getGeneralConfig().minDeposit;
+        uint256 floor = minShare * 2 + 1;
+        return minDeposit > floor ? minDeposit : floor;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -135,6 +299,81 @@ contract DepositTest is BaseTest {
         resetPrank(users.alice);
         vm.expectRevert(MultiVault.MultiVault_CannotApproveOrRevokeSelf.selector);
         protocol.multiVault.approve(users.alice, ApprovalTypes.BOTH);
+    }
+
+    function test_isApprovedToDeposit_MirrorsDepositBitApproval() public {
+        assertTrue(protocol.multiVault.isApprovedToDeposit(users.alice, users.alice), "self is approved");
+        assertFalse(protocol.multiVault.isApprovedToDeposit(users.alice, users.bob), "default false");
+
+        setupApproval(users.bob, users.alice, ApprovalTypes.CREATION);
+        assertFalse(protocol.multiVault.isApprovedToDeposit(users.alice, users.bob), "creation only false");
+
+        setupApproval(users.bob, users.alice, ApprovalTypes.REDEMPTION);
+        assertFalse(protocol.multiVault.isApprovedToDeposit(users.alice, users.bob), "redemption only false");
+
+        setupApproval(users.bob, users.alice, ApprovalTypes.BOTH);
+        assertTrue(protocol.multiVault.isApprovedToDeposit(users.alice, users.bob), "both true");
+
+        setupApproval(users.bob, users.alice, ApprovalTypes.DEPOSIT_AND_CREATION);
+        assertTrue(protocol.multiVault.isApprovedToDeposit(users.alice, users.bob), "deposit and creation true");
+
+        setupApproval(users.bob, users.alice, ApprovalTypes.ALL);
+        assertTrue(protocol.multiVault.isApprovedToDeposit(users.alice, users.bob), "all true");
+
+        setupApproval(users.bob, users.alice, ApprovalTypes.NONE);
+        assertFalse(protocol.multiVault.isApprovedToDeposit(users.alice, users.bob), "none deletes approval");
+    }
+
+    function test_isApprovedToRedeem_MirrorsRedemptionBitApproval() public {
+        assertTrue(protocol.multiVault.isApprovedToRedeem(users.alice, users.alice), "self is approved");
+        assertFalse(protocol.multiVault.isApprovedToRedeem(users.alice, users.bob), "default false");
+
+        setupApproval(users.bob, users.alice, ApprovalTypes.DEPOSIT);
+        assertFalse(protocol.multiVault.isApprovedToRedeem(users.alice, users.bob), "deposit only false");
+
+        setupApproval(users.bob, users.alice, ApprovalTypes.CREATION);
+        assertFalse(protocol.multiVault.isApprovedToRedeem(users.alice, users.bob), "creation only false");
+
+        setupApproval(users.bob, users.alice, ApprovalTypes.BOTH);
+        assertTrue(protocol.multiVault.isApprovedToRedeem(users.alice, users.bob), "both true");
+
+        setupApproval(users.bob, users.alice, ApprovalTypes.REDEMPTION_AND_CREATION);
+        assertTrue(protocol.multiVault.isApprovedToRedeem(users.alice, users.bob), "redemption and creation true");
+
+        setupApproval(users.bob, users.alice, ApprovalTypes.ALL);
+        assertTrue(protocol.multiVault.isApprovedToRedeem(users.alice, users.bob), "all true");
+
+        setupApproval(users.bob, users.alice, ApprovalTypes.NONE);
+        assertFalse(protocol.multiVault.isApprovedToRedeem(users.alice, users.bob), "none deletes approval");
+    }
+
+    function test_isApprovedToCreate_MirrorsCreationBitApproval() public {
+        assertTrue(protocol.multiVault.isApprovedToCreate(users.alice, users.alice), "self is approved");
+        assertFalse(protocol.multiVault.isApprovedToCreate(users.alice, users.bob), "default false");
+
+        setupApproval(users.bob, users.alice, ApprovalTypes.DEPOSIT);
+        assertFalse(protocol.multiVault.isApprovedToCreate(users.alice, users.bob), "deposit only false");
+
+        setupApproval(users.bob, users.alice, ApprovalTypes.REDEMPTION);
+        assertFalse(protocol.multiVault.isApprovedToCreate(users.alice, users.bob), "redemption only false");
+
+        setupApproval(users.bob, users.alice, ApprovalTypes.BOTH);
+        assertFalse(protocol.multiVault.isApprovedToCreate(users.alice, users.bob), "both false");
+
+        setupApproval(users.bob, users.alice, ApprovalTypes.CREATION);
+        assertTrue(protocol.multiVault.isApprovedToCreate(users.alice, users.bob), "creation true");
+
+        setupApproval(users.bob, users.alice, ApprovalTypes.DEPOSIT_AND_CREATION);
+        assertTrue(protocol.multiVault.isApprovedToCreate(users.alice, users.bob), "deposit and creation true");
+
+        setupApproval(users.bob, users.alice, ApprovalTypes.REDEMPTION_AND_CREATION);
+        assertTrue(protocol.multiVault.isApprovedToCreate(users.alice, users.bob), "redemption and creation true");
+
+        setupApproval(users.bob, users.alice, ApprovalTypes.ALL);
+        assertTrue(protocol.multiVault.isApprovedToCreate(users.alice, users.bob), "all true");
+
+        setupApproval(users.bob, users.alice, ApprovalTypes.NONE);
+        assertFalse(protocol.multiVault.isApprovedToCreate(users.alice, users.bob), "none deletes approval");
     }
 
     function test_approve_DeleteApproval_RemovesAccess() public {
@@ -174,6 +413,52 @@ contract DepositTest is BaseTest {
     }
 
     /*//////////////////////////////////////////////////////////////
+                  NEW ApprovalTypes VALUE COVERAGE
+    //////////////////////////////////////////////////////////////*/
+
+    function test_deposit_AllowedWith_DepositAndCreationApproval() public {
+        // DEPOSIT_AND_CREATION = 0b101 must satisfy the DEPOSIT bit check.
+        bytes32 atomId = createSimpleAtom("deposit-and-creation-allows-deposit", ATOM_COST[0], users.alice);
+
+        setupApproval(users.alice, users.bob, ApprovalTypes.DEPOSIT_AND_CREATION);
+
+        uint256 shares = makeDeposit(users.bob, users.alice, atomId, CURVE_ID, 1 ether, 0);
+        assertGt(shares, 0, "DEPOSIT_AND_CREATION must grant deposit");
+    }
+
+    function test_deposit_AllowedWith_AllApproval() public {
+        // ALL = 0b111 must satisfy DEPOSIT.
+        bytes32 atomId = createSimpleAtom("all-approval-allows-deposit", ATOM_COST[0], users.alice);
+
+        setupApproval(users.alice, users.bob, ApprovalTypes.ALL);
+
+        uint256 shares = makeDeposit(users.bob, users.alice, atomId, CURVE_ID, 1 ether, 0);
+        assertGt(shares, 0, "ALL must grant deposit");
+    }
+
+    function test_deposit_RevertWhen_OnlyCreationApproval() public {
+        // CREATION = 0b100 must NOT satisfy the DEPOSIT bit check.
+        bytes32 atomId = createSimpleAtom("creation-only-blocks-deposit", ATOM_COST[0], users.alice);
+
+        setupApproval(users.alice, users.bob, ApprovalTypes.CREATION);
+
+        resetPrank(users.bob);
+        vm.expectRevert(MultiVault.MultiVault_SenderNotApproved.selector);
+        protocol.multiVault.deposit{ value: 1 ether }(users.alice, atomId, CURVE_ID, 0);
+    }
+
+    function test_deposit_RevertWhen_OnlyRedemptionAndCreationApproval() public {
+        // REDEMPTION_AND_CREATION = 0b110 has no DEPOSIT bit.
+        bytes32 atomId = createSimpleAtom("rc-blocks-deposit", ATOM_COST[0], users.alice);
+
+        setupApproval(users.alice, users.bob, ApprovalTypes.REDEMPTION_AND_CREATION);
+
+        resetPrank(users.bob);
+        vm.expectRevert(MultiVault.MultiVault_SenderNotApproved.selector);
+        protocol.multiVault.deposit{ value: 1 ether }(users.alice, atomId, CURVE_ID, 0);
+    }
+
+    /*//////////////////////////////////////////////////////////////
                        DEPOSIT BATCH INVALID LENGTH
     //////////////////////////////////////////////////////////////*/
 
@@ -204,10 +489,9 @@ contract DepositTest is BaseTest {
         (address registry, uint256 oldDefault) = protocol.multiVault.bondingCurveConfig();
         uint256 newDefault = oldDefault == 1 ? 2 : 1;
 
-        resetPrank(users.admin);
-        protocol.multiVault.setBondingCurveConfig(
-            BondingCurveConfig({ registry: registry, defaultCurveId: newDefault })
-        );
+        resetPrank(users.timelock);
+        protocol.multiVault
+            .setBondingCurveConfig(BondingCurveConfig({ registry: registry, defaultCurveId: newDefault }));
 
         // Now try to deposit into the *new* default curve for this atom
         // That new default curve vault is brand-new (no shares), so this should revert
@@ -216,10 +500,9 @@ contract DepositTest is BaseTest {
         protocol.multiVault.deposit{ value: 1 ether }(users.alice, atomId, newDefault, 0);
 
         // Restore default to keep other tests deterministic (optional)
-        resetPrank(users.admin);
-        protocol.multiVault.setBondingCurveConfig(
-            BondingCurveConfig({ registry: registry, defaultCurveId: oldDefault })
-        );
+        resetPrank(users.timelock);
+        protocol.multiVault
+            .setBondingCurveConfig(BondingCurveConfig({ registry: registry, defaultCurveId: oldDefault }));
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -237,7 +520,7 @@ contract DepositTest is BaseTest {
         // For atom, minShareCost = minShare
         uint256 minShare = protocol.multiVault.getGeneralConfig().minShare;
 
-        resetPrank(users.admin);
+        resetPrank(users.timelock);
         // Set minDeposit to very small value to isolate the test case
         protocol.multiVault.setGeneralConfig(_getGeneralConfigWithVerySmallMinDeposit());
 
@@ -273,7 +556,7 @@ contract DepositTest is BaseTest {
         // For triple (or counter), minShareCost = 2 * minShare
         uint256 minShare2x = protocol.multiVault.getGeneralConfig().minShare * 2;
 
-        resetPrank(users.admin);
+        resetPrank(users.timelock);
         // Set minDeposit to very small value to isolate the test case
         protocol.multiVault.setGeneralConfig(_getGeneralConfigWithVerySmallMinDeposit());
 
@@ -550,7 +833,7 @@ contract DefaultCurveEntryFeeImpactTest is BaseTest {
     function _setFeeThreshold(uint256 newThreshold) internal {
         GeneralConfig memory gc = _gc();
         gc.feeThreshold = newThreshold;
-        vm.prank(gc.admin);
+        vm.prank(users.timelock);
         protocol.multiVault.setGeneralConfig(gc);
     }
 }

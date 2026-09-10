@@ -1,0 +1,479 @@
+# Intuition v1.1.0 Core Upgrade — Internal AI Pseudo-Audit — Round 0
+
+## Original Vanilla Opus 4.8 Review (single-report precursor to Round 1)
+
+> **How this report was produced:** the **original vanilla Opus 4.8** pre-audit pass — a single consolidated review (a
+> per-contract review + a permissionless adversarial vulnerability hunt + a compositional seam hunt) run **before** the
+> process expanded into the multi-model / multi-skill Round 1. Kept as **Round 0** for provenance. It reviews an
+> **earlier commit** (`9594d75`, 2026-06-09) than Round 1 (`b52557b`) and predates the audit-skill and multi-agent
+> rounds; its conclusions were re-derived and superseded by Round 1 and its
+> [`MASTER-consolidated-report.md`](../round-1/MASTER-consolidated-report.md). Provenance ID prefix: `OG-`. **Pre-audit
+> artifact — not a formal audit, certification, warranty, or guarantee of safety.**
+
+---
+
+## Internal Audit Report: v1.1.0 Core Upgrade (as originally written)
+
+> Internal pre-audit / release-candidate review. This is a pre-audit artifact, not a formal audit, certification,
+> warranty, or guarantee of safety. It consolidates a per-contract review, a permissionless adversarial vulnerability
+> hunt, and a compositional hunt into one release-level view, backed by the test suites and tool runs recorded below.
+
+## Summary
+
+- Review date: 2026-06-09
+- Reviewer(s): Vanilla Opus 4.8 — internal pre-audit consolidation pass (no audit skill; the original Round 0 review)
+- Commit / branch / PRs reviewed: `intuition-contracts-v2`, branch `feat/v1.1.0-core-upgrade` at commit `9594d75`
+  (includes the FeeProxy affiliate-router follow-up), release PR #153
+- Deployment candidate: v1.1.0 core upgrade (MultiVault family + AtomWarden/AtomWallet + TrustBonding) and the FeeProxy
+  periphery router
+- Network(s): Intuition mainnet upgrade candidate (FeeProxy currently deployed on Intuition Sepolia)
+- Overall status: **Green**
+- Go / no-go recommendation: **Go**, with the defense-in-depth follow-up below tracked as non-blocking
+
+This release adds no permissionless high/critical exposure that this review could find. Two independent
+hypothesis-driven adversarial passes — a six-track permissionless hunt across the highest-value surfaces, and a
+four-track compositional hunt at the seams between contracts — both produced **no permissionless high/critical
+finding**; every targeted invariant held with a concrete defending mechanism. There are **zero open findings**: the
+single Informational defense-in-depth item (F-001) has been fixed in this change, and a previously-flagged Low item was
+remediated earlier. The recurring "privileged setter/initializer accepts an unvalidated dependency endpoint or economic
+parameter" pattern is captured as an accepted trusted-admin assumption: every such setter is gated by a 4-of-8 multisig
+acting through an OpenZeppelin `TimelockController` with an enforced delay.
+
+## Scope
+
+### In scope
+
+| Component                | Type                                     | Why included                                                                                                                                 |
+| ------------------------ | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MultiVault`             | Core                                     | Main TRUST value, vault-share, fee, approval, generalized multicall, and admin/timelock configuration surface.                               |
+| `MultiVaultCore`         | Core base                                | Shared config storage, term helpers, and `_setGeneralConfig` validation.                                                                     |
+| `MultiVaultLib`          | Library                                  | Delegatecall-linked library for create/deposit/redeem/preview/fee/utilization logic; its storage mirror must stay aligned with `MultiVault`. |
+| `IMultiVault`            | Interface                                | External behavior, events, and NatSpec comparison.                                                                                           |
+| `FeeProxy`               | Periphery (TUP-upgradeable value router) | Routes affiliate deposits/creations into MultiVault, applies affiliate fees, records analytics, manages refund fallback.                     |
+| `IFeeProxy`              | Interface                                | External behavior, errors, events, structs, NatSpec comparison.                                                                              |
+| `AtomWarden`             | Protocol                                 | Atom-wallet claim controller: EIP-712 quorum claims, creator fallback, operator grants, reinitialize.                                        |
+| `IAtomWarden`            | Interface                                | External behavior and claim-authorization struct.                                                                                            |
+| `AtomWallet`             | Protocol                                 | ERC-4337 smart account with Coinbase-style MultiOwnable; one-step claim via `completeClaim`.                                                 |
+| `CoinbaseSmartWalletLib` | Library                                  | MultiOwnable add/remove/validate logic (ERC-7201 namespaced storage), ECDSA + P-256 dispatch.                                                |
+| `IAtomWallet`            | Interface                                | External behavior comparison.                                                                                                                |
+| `TrustBonding`           | Core                                     | Voting-escrow bonding and utilization-based reward distribution.                                                                             |
+
+### Out of scope
+
+- Experimental graduation/bonding curves and Rust curve-parity fixtures — not part of the v1.1.0 upgrade.
+- Legacy Trust / TrustToken and the OZ v4/v5 duality present in the repository — pre-existing, not changed by this
+  upgrade.
+- Deployment scripts beyond their initialization inputs and role split.
+- Anything not part of the v1.1.0 upgrade surface.
+
+### Source artifacts reviewed
+
+- v1.1.0 upgrade scope and design intent for each in-scope feature.
+- In-code NatSpec, interfaces, and the deployment scripts' initialization inputs and role split.
+- The committed adversarial PoC suites under `tests/unit/security/v1.1.0/` (a permissionless hunt and a compositional
+  hunt).
+- The committed invariant, symbolic, storage-layout, and fork upgrade-regression suites.
+
+## System overview
+
+The v1.1.0 release upgrades the core knowledge-graph value layer and adds an affiliate fee router. The native token is
+TRUST.
+
+- **MultiVault** is the core TRUST vault. Users create items (atoms) and claims (triples), deposit TRUST into
+  per-term/per-curve vaults, redeem shares for TRUST, approve on-behalf-of operators, claim atom-wallet deposit fees,
+  and sweep accumulated protocol fees. Heavy write/math paths are delegated to **MultiVaultLib** through Solidity
+  linked-library delegatecalls, so the library storage mirror must remain slot-aligned with MultiVault. v1.1.0 adds a
+  generalized `multicall` / `multicallPayable`, on-behalf-of creates (`createAtomsFor` / `createTriplesFor`),
+  atom-creator attribution, a per-epoch system-utilization rollover replay guard with self-healing, and counter-triple
+  deposit handling on non-default curves.
+- **FeeProxy** is a multi-tenant affiliate router in front of MultiVault. Affiliates register a fee row; users route
+  deposits or creations through an affiliate; FeeProxy deducts the configured fee from the user-supplied gross, pays the
+  affiliate recipient, forwards net value to MultiVault, records lightweight analytics, and refunds overpayment
+  (push-first with a `pendingRefund` pull fallback).
+- **AtomWarden** is the atom-wallet claim controller. It resolves ownership of address-derived atom wallets via three
+  paths: direct address-atom ownership, an EIP-712 multi-signer quorum (`claimWithAuthorization`), and a creator
+  fallback after a claim window. It also exposes operator grants. The EIP-712 domain is versioned for upgrade safety.
+- **AtomWallet** is the ERC-4337 smart account bound to each atom. Pre-claim it is dormant (empty MultiOwnable
+  registry); `completeClaim` (only callable by AtomWarden) seeds the claimant as the primary owner. Post-claim, owner
+  management and execution gate on the Coinbase-style MultiOwnable set, with ECDSA and P-256 passkey support and
+  ERC-1271 signature validation.
+- **TrustBonding** extends a voting-escrow model and distributes TRUST rewards scaled by system and personal utilization
+  ratios, claimed per epoch.
+
+External dependencies: bonding-curve registry, atom-wallet factory and beacon, the ERC-4337 EntryPoint, and (for
+FeeProxy) the MultiVault proxy and a treasury. Behavior-changing authority is held by admin, pauser, and timelock roles
+described below.
+
+## Trust model
+
+Privileged configuration is held by a 4-of-8 multisig (Gnosis Safe) that acts as the proposer, canceller, and executor
+of two OpenZeppelin `TimelockController` contracts: a **parameters timelock** (3-day delay) gating economic/dependency
+configuration, and an **upgrades timelock** (7-day delay) gating implementation upgrades. Both timelocks share the same
+4-of-8 Safe in those roles; only the delay differs by purpose.
+
+| Role / Actor                                                   | Authority                                                                                                   | Holder                                                                                     | Failure impact                                                                                                                                 |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `timelock` (MultiVault, TrustBonding)                          | Set protocol config (fees, dependencies, curve registry, bounds), set timelock.                             | Parameters `TimelockController` (3-day delay); 4-of-8 Safe as proposer/canceller/executor. | A scheduled bad proposal could distort economics or break flows, subject to the 3-day delay and multisig consensus. Accepted trust assumption. |
+| `DEFAULT_ADMIN_ROLE` (all)                                     | Unpause, role administration, reinitialize, set caps/fees (FeeProxy), set MultiVault endpoint (AtomWarden). | 4-of-8 Safe (directly or via the parameters timelock).                                     | Can reconfigure roles/dependencies under multisig consensus. Accepted trust assumption.                                                        |
+| `PAUSER_ROLE` (MultiVault, FeeProxy, AtomWarden, TrustBonding) | Pause user write paths; FeeProxy can pause individual affiliate rows.                                       | Emergency operator / Safe.                                                                 | Can temporarily halt create/deposit/redeem/routing flows.                                                                                      |
+| `OPERATOR_ROLE` (AtomWarden)                                   | Grant/batch-grant atom-wallet ownership, manage nonces.                                                     | Trusted protocol operator.                                                                 | Can direct atom-wallet ownership grants within the granted path.                                                                               |
+| `SIGNER_ROLE` (AtomWarden)                                     | Participate in EIP-712 claim quorum.                                                                        | Backend signer set.                                                                        | A signer below threshold cannot claim; quorum requires distinct live signers.                                                                  |
+| TUP proxy admin / AtomWallet beacon owner                      | Upgrade implementations.                                                                                    | Upgrades `TimelockController` (7-day delay); 4-of-8 Safe as proposer/canceller/executor.   | Can change behavior through upgrade, subject to the 7-day delay and multisig consensus.                                                        |
+| Affiliate (FeeProxy)                                           | Own a fee row; update fees and fee recipient.                                                               | Community/integration operator.                                                            | Bad fee config or reverting recipient DoSes only its own routes.                                                                               |
+| Users / callers                                                | Create, deposit, redeem, approve, route, claim.                                                             | Untrusted.                                                                                 | Subject to value-flow, approval, multicall, signature, and reentrancy review (see findings/invariants).                                        |
+| External dependencies                                          | Curve registry, atom-wallet factory/beacon, EntryPoint, MultiVault, treasury.                               | Trusted configured contracts.                                                              | A wrong/incompatible endpoint can revert or misdirect flows.                                                                                   |
+
+Trusted assumptions:
+
+- The 4-of-8 Safe and the two timelock controllers behave as configured; config changes are semantically validated
+  off-chain before scheduling and pass through the enforced delay.
+- The linked `MultiVaultLib` address is the intended library and its storage mirror matches MultiVault.
+- Curve registry, atom-wallet factory/beacon, EntryPoint, and the configured MultiVault/treasury are the intended
+  compatible contracts.
+- **Privileged setters and initializers perform zero-address checks but not interface/code-compatibility checks on
+  dependency endpoints or economic parameters.** A misconfigured proposal could distort economics or break flows. This
+  is an accepted trusted-admin assumption under the multisig + timelock trust model, with a defense-in-depth
+  recommendation in Residual risks (cheap `code.length`/sentinel checks plus a deployment/upgrade preflight). It is
+  explicitly **not** a permissionless finding.
+
+Untrusted or adversarial actors:
+
+- Any EOA or contract calling open user entry points (create/deposit/redeem/approve/multicall, FeeProxy routing/refund,
+  AtomWarden claims, AtomWallet execution/signature surfaces, TrustBonding lock/claim).
+- Approved operators acting within a granted approval type; contracts receiving TRUST via redeem, fee, or refund paths.
+
+## Entry-point inventory
+
+Consolidated by contract; captures the state-changing surface and its primary risk class.
+
+| Contract           | State-changing entry points                                                                                                                                                                                                    | Payable                              | Access                                                                                                   | Primary risk class                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| MultiVault         | `createAtoms`/`createTriples`, `createAtomsFor`/`createTriplesFor`, `deposit`/`depositBatch`, `redeem`/`redeemBatch`, `approve`, `multicall`, `multicallPayable`, `claimAtomWalletDepositFees`, `sweepAccumulatedProtocolFees` | Create/deposit/multicallPayable: yes | Open (+ approval checks); `whenNotPaused`, `nonReentrant` on value paths                                 | Value/share accounting, multicall TRUST accounting, on-behalf-of authorization |
+| MultiVault (admin) | `pause`/`unpause`, `reinitialize`, `setGeneralConfig`/`setAtomConfig`/`setTripleConfig`/`setWalletConfig`/`setVaultFees`/`setBondingCurveConfig`/`setTimelock`                                                                 | No                                   | Pauser / admin / **timelock**                                                                            | Trusted-admin config validation (see Trust model)                              |
+| MultiVaultLib      | create/deposit/redeem/preview math entry points                                                                                                                                                                                | No direct TRUST                      | Library delegatecall only                                                                                | Storage-slot alignment with MultiVault                                         |
+| FeeProxy           | `registerAffiliate`, `depositVia`/`depositBatchVia`, `createAtomsVia`/`createTriplesVia`, `updateAffiliateFees`/`updateFeeRecipient`, `claimRefund`/`claimRefundTo`, `pauseAffiliate`/`unpauseAffiliate`                       | Register/route: yes                  | Open (+ MultiVault approval checks); pauser/admin/affiliate where noted; `nonReentrant`, `whenNotPaused` | Fee math, approval gating, refund-ledger conservation                          |
+| FeeProxy (admin)   | `setMaxBps`/`setMaxFixedFee`/`setRegistrationFee`, `pause`/`unpause`                                                                                                                                                           | No                                   | `DEFAULT_ADMIN_ROLE` / `PAUSER_ROLE`                                                                     | Cap governance; trusted-admin                                                  |
+| AtomWarden         | `claimOwnershipOverAddressAtom`, `claimWithAuthorization`, `claimAsCreatorAfterExpiry`, `grantAtomWalletOwnership`/`batchGrantAtomWalletOwnership`, `incrementNonce`, config setters, `pause`/`unpause`, `reinitialize`        | No                                   | Open user claims (`whenNotPaused`); operator/admin on grants/config                                      | Quorum integrity, replay/nonce, creator-fallback gating                        |
+| AtomWallet         | `completeClaim`, `execute`/`executeBatch`, MultiOwnable add/remove/transfer, `initialize`                                                                                                                                      | `execute*` can carry value           | `onlyAtomWarden` (claim); `onlyMultiOwnableOwnerOrEntryPoint` / `...OrSelf`; initializer                 | Pre-claim dormancy, owner lockout, signature validation                        |
+| TrustBonding       | `lock`/`lockFor`/`unlock`, `claimRewards`/`claimRewardsBatch`, config setters, `pause`/`unpause`, `initialize`/`reinitialize`                                                                                                  | No                                   | Open user paths (`whenNotPaused`, `nonReentrant`); timelock on bounds/deps                               | Reward budget conservation, utilization-ratio bounds                           |
+
+Entry-point notes:
+
+- `multicallPayable` restricts callable selectors to create/deposit flows and requires `sum(values) == msg.value`;
+  redeem (value-out) selectors are intentionally not allowed inside it.
+- FeeProxy creation routes always credit `msg.sender` as creator and require the relevant MultiVault approval; deposit
+  routes require receiver approval (and delegated-caller approval where applicable).
+- AtomWallet pre-claim has an empty MultiOwnable registry, so signature validation fails and only AtomWarden can seed
+  the first owner via `completeClaim`.
+
+## Spec and diff regression review
+
+Expected behavior (v1.1.0 features):
+
+- Generalized `multicall` / `multicallPayable` must not let users reuse or spoof `msg.value`.
+- On-behalf-of creates honor approval type and attribute shares/utilization to the intended account.
+- Atom-creator attribution records creator and creation time without altering value flow.
+- System-utilization rollover is replay-protected per epoch and self-heals across no-activity epochs.
+- Counter-triple deposits behave correctly on non-default curves.
+- MultiVaultLib extraction preserves storage layout and behavior.
+- AtomWarden signed-claim rebuild enforces an EIP-712 distinct-signer quorum with replay/time-window protection and a
+  creator fallback; AtomWallet one-step claim seeds MultiOwnable ownership.
+- TrustBonding APY math is non-truncating; utilization ratios stay bounded and revert-free.
+
+Observed implementation:
+
+- `multicallPayable` uses transient `_inMulticall` / `_virtualMsgValue`, enforces the exact value sum, and allowlists
+  payable write selectors; create/deposit lib paths read `_effectiveMsgValue()` and `_validatePayment` requires
+  `payment == sum(assets)` exactly.
+- `MultiVaultLib.Storage` mirrors MultiVault slots; `forge inspect MultiVault storage-layout` and the storage-layout
+  regression confirm the expected slot order (mirror aligned, `__gap` of 47 slots, `lastSystemUtilizationEpoch` at slot
+  37).
+- AtomWarden quorum uses OZ `ECDSA.tryRecover` (rejects high-s malleability), includes a per-claimant nonce in the
+  signed digest, and fails loudly on a revoked signer.
+- AtomWallet `completeClaim` is `onlyAtomWarden`; owner removal cannot remove the current `owner()`.
+- TrustBonding utilization paths early-return before the normalization division when `delta >= target`.
+
+Spec / code / tests mismatches:
+
+- None found that affect value flow or authorization. The recurring dependency-endpoint validation gap is a
+  trusted-admin input-validation matter captured in Trust model and Residual risks, not a spec/behavior regression.
+
+NatSpec or comments that disagree with behavior:
+
+- A minor wording nuance in `getUserUtilizationInEpoch` interface NatSpec ("strictly before" vs. the active-snapshot
+  behavior when the recorded history epoch is `<= epoch`) was noted as documentation-only, not a behavior issue.
+  `none found` otherwise.
+
+## Invariants reviewed
+
+| Invariant                                                                                                     | Evidence                                                                                                                                                                       | Status                                                              |
+| ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| Library storage mirror aligns with MultiVault.                                                                | `forge inspect MultiVault storage-layout`; storage-layout regression (7 tests pass).                                                                                           | Holds                                                               |
+| `multicallPayable` cannot duplicate, borrow, or leak `msg.value`.                                             | `invariant_nativeValueConservation` (pass); permissionless-hunt Track 1 + compositional transient/reentry PoCs; exact value-sum + per-call virtual value + selector allowlist. | Holds                                                               |
+| Every initialized vault retains ≥ `minShare` ghost shares (BURN_ADDRESS).                                     | `invariant_ghostSharesPreserved` (pass); permissionless-hunt Track 2.                                                                                                          | Holds                                                               |
+| Holder + burn balances never exceed a vault's total shares (no phantom mint).                                 | `invariant_holderSharesNeverExceedTotal` (pass).                                                                                                                               | Holds                                                               |
+| No account holds both sides of a triple on the same curve.                                                    | `invariant_noSimultaneousCounterStake` (pass); Halmos counter-id proofs (3 pass).                                                                                              | Holds                                                               |
+| Deposit↔redeem round-trip is strictly non-positive (no extraction/inflation grief).                          | Permissionless-hunt Track 2 (10k-run fuzz); round-up fee extraction + ghost minShare.                                                                                          | Holds                                                               |
+| Redeem cannot exceed user shares; redeem callbacks cannot reenter.                                            | Compositional reentry PoCs (deposit/redeem/multicall/multicallPayable reentry all blocked by `nonReentrant`).                                                                  | Holds                                                               |
+| FeeProxy routed value is conserved; batch routes revert atomically; refund ledger is per-`msg.sender`.        | Permissionless-hunt Track 3 (zero-sum fuzz) + compositional batch-atomicity / malicious-affiliate PoCs; `_claimRefundTo` zeroes before transfer + `nonReentrant`.              | Holds                                                               |
+| AtomWarden quorum requires ≥ threshold distinct live signers; no replay.                                      | Permissionless-hunt Track 4; `ECDSA.tryRecover` rejects high-s, nonce in digest, revoked signer fails.                                                                         | Holds                                                               |
+| AtomWallet: only AtomWarden seeds owner; deterministic wallet; no pre-claim bypass; no owner lockout.         | Permissionless-hunt Track 5 + compositional claim-determinism PoCs; empty registry ⇒ ERC-1271 fails pre-claim; `onlyAtomWarden`; primary/last-owner removal blocked.           | Holds                                                               |
+| TrustBonding: Σ claims ≤ budget; epoch-boundary claim takes previous epoch only; ratios bounded, revert-free. | Permissionless-hunt Track 6 (two 10k-run fuzzes) + compositional epoch-boundary PoCs; double-claim guard + budget cap; `delta >= target` early return.                         | Holds                                                               |
+| MultiVault config-setter inputs are semantically validated.                                                   | Review of setters / `_setGeneralConfig`.                                                                                                                                       | Broken (trusted-admin input only; see Trust model / Residual risks) |
+
+## Tests reviewed or added
+
+Commands run (this repository @ `9594d75`, Foundry 1.5.1):
+
+```bash
+forge build
+forge inspect MultiVault storage-layout   # + FeeProxy / AtomWarden / AtomWallet / TrustBonding
+forge test                                 # full suite, offline
+forge test --match-path 'tests/unit/security/**'                  # adversarial PoC suites
+forge test --match-path 'tests/invariant/MultiVaultInvariants.t.sol'
+forge test --match-path 'tests/unit/upgrades/v1.1.0/*'            # fork upgrade regression (RPC)
+halmos --contract MultiVaultCounterIdSymbolic --solver-command <local z3>
+```
+
+Results:
+
+- Build: `forge build` succeeded. Only repo-wide `unsafe-typecast` lint notes on utilization casts in `MultiVaultLib`;
+  reviewed as non-blocking under realistic value bounds.
+- Full suite: **1,688 passed, 0 failed, 0 skipped** across 95 suites (offline). The mirrored suite in the development
+  monorepo also passes (the single offline fork test there resolves green when run with RPC).
+- Adversarial PoC suites: **48 passed, 0 failed** — 28 permissionless-hunt PoCs + 20 compositional PoCs under
+  `tests/unit/security/v1.1.0/`, passing identically in both repositories.
+- Invariant tests: **4 passed** — native-value conservation, ghost shares preserved, holder ≤ total, no simultaneous
+  counter-stake.
+- Storage-layout tests: `forge inspect` clean for all 5 contracts; storage-layout regression **7 passed** (mirror
+  alignment, `__gap` = 47 slots, slot 37).
+- Fork upgrade regression: **25 passed** (`tests/unit/upgrades/v1.1.0/*`, forked against Intuition + Base via RPC).
+- Symbolic (Halmos): **3 proofs passed** (counter-id collision/injectivity/derivation) with a pinned local z3.
+- Component coverage: FeeProxy unit suite reports 100% line/statement/branch/function coverage for `FeeProxy.sol`.
+
+Test gaps:
+
+- None blocking. Medusa property-function wiring is a tooling follow-up (see Automated tool triage); the same stateful
+  properties are exercised by the passing Foundry invariant suite and the Halmos proofs.
+
+## Automated tool triage
+
+| Tool    | Command / version                           | Result                | Triage summary                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------- | ------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Slither | `slither . --exclude-dependencies`; v0.11.3 | Ran; findings triaged | 102 contracts / 100 detectors, 352 results repo-wide; in-scope 10 High / 31 Medium / 104 Low / 108 Info. All in-scope High/Medium are by-design or false positives: `arbitrary-send-eth` = the ERC-4337 `AtomWallet.execute` path (owner/EntryPoint-gated); `delegatecall-loop` = the intentional `multicallPayable` self-delegatecall (value conservation proven by invariant + PoCs); `uninitialized-state` (8) = mappings in upgradeable storage (false positive); `divide-before-multiply` (4) = view-only `getUserApy`/`getSystemApy`; `reentrancy-no-eth` (3) = `multicall`/`multicallPayable`/`claimWithAuthorization`, all `nonReentrant` and proven by the compositional reentry PoCs. No new exploitable issue. |
+| Aderyn  | v0.5.11                                     | Findings triaged      | Repo-wide notes (TRUST-send warnings on create/refund paths, modifier ordering, `__gap`/literal hygiene). All non-blocking; the refund-path note helped surface the now-fixed FP-002.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Medusa  | v1.5.1, `medusa fuzz --config medusa.json`  | Ran; harness OK       | Compiles via crytic-compile and stands up the test chain and fuzz workers (the prior coverage-tracer crash no longer reproduces). Stops at "no property functions" because the config's property prefixes are not yet wired to the invariant handler — a tooling follow-up. The same invariants are covered by the passing Foundry invariant suite and the Halmos proofs.                                                                                                                                                                                                                                                                                                                                                 |
+| Halmos  | v0.3.3, pinned local z3                     | Pass                  | `MultiVaultCounterIdSymbolic`: 3 symbolic proofs passed (counter-id collision/injectivity/derivation consistency); no counterexamples.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| solhint | Not run                                     | Not run               | Lint-only; covered by the Forge lint pass and the static analyzers above.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+
+Untriaged tool output:
+
+- None left as a suspected in-scope security finding. Repo-wide tool output outside the v1.1.0 scope (legacy
+  Trust/TrustToken, WrappedTrust) was not triaged here.
+
+## Findings summary
+
+| ID    | Severity      | Confidence | Title                                                                                                 | Status | Owner          |
+| ----- | ------------- | ---------- | ----------------------------------------------------------------------------------------------------- | ------ | -------------- |
+| F-001 | Informational | Medium     | TrustBonding `_getNormalizedUtilizationRatio` lacks an internal zero-target guard (unreachable today) | Fixed  | Contracts team |
+
+No open findings. Both adversarial passes produced no findings (see below). The single Informational item (F-001) has
+been **fixed** in this change, and the previously-flagged Low item (FeeProxy refund-to-self surplus) was remediated
+earlier. The recurring trusted-admin dependency-validation pattern is captured in Trust model and Residual risks rather
+than as a finding, per the multisig + timelock trust model.
+
+## Findings
+
+### F-001: TrustBonding `_getNormalizedUtilizationRatio` lacks an internal zero-target guard
+
+- Severity: Informational
+- Confidence: Medium
+- Status: Fixed
+- Affected code: `src/protocol/emissions/TrustBonding.sol` — `_getNormalizedUtilizationRatio` (~lines 652–664); callers
+  `_getSystemUtilizationRatio` (~line 641, guarded at ~line 635) and `_getPersonalUtilizationRatio` (~line 602, guarded
+  at ~line 595).
+- Related spec / requirement: Utilization ratios must stay within `[lowerBound, BASIS_POINTS_DIVISOR]` and never revert.
+- Description: `_getNormalizedUtilizationRatio` divides by `target` with no internal guard against `target == 0`. It is
+  safe today only because every caller performs a `delta >= target` early return (returning 100%) before the division,
+  so the division is reachable only when `0 < delta < target`, which forces `target > 0`. The personal path additionally
+  has explicit zero-target branches.
+- Impact: None today — the division-by-zero is unreachable. The risk is purely future-maintenance: a new caller (or a
+  refactor that removes a caller's early return) could reach the division with `target == 0` and revert the reward path.
+  This is the same code site whose suspected zero-target division was investigated in the adversarial hunt and confirmed
+  a false positive under current callers.
+- Realistic scenario: A future change adds a caller of `_getNormalizedUtilizationRatio` without the `delta >= target`
+  precondition.
+- Preconditions / attacker capabilities: None (not exploitable by any actor in the current code).
+- Recommendation: Add a trivial internal guard (return `BASIS_POINTS_DIVISOR` when `target == 0`) so the helper is
+  self-contained, and/or document the caller precondition at the function. Defense-in-depth.
+- Regression test: `tests/unit/TrustBonding/NormalizedUtilizationRatio.t.sol` —
+  `test_getNormalizedUtilizationRatio_zeroTarget_returnsMaxRatioWithoutReverting` (asserts the helper returns
+  `BASIS_POINTS_DIVISOR` for `target == 0` instead of reverting).
+- Variant analysis: n/a — informational, no exploit path; the only "variants" are the two existing callers, both of
+  which early-return before the division.
+- Resolution notes: Fixed — added `if (target == 0) return BASIS_POINTS_DIVISOR;` at the top of
+  `_getNormalizedUtilizationRatio`. Behavior-preserving (the branch was unreachable and the returned value matches what
+  callers already return for a zero target) and storage-neutral (no layout change; the storage-layout regression is
+  unaffected).
+
+### Permissionless adversarial vulnerability hunt — no findings
+
+A directed, hypothesis-driven hunt targeted permissionless high/critical breaks across the six highest-value surfaces.
+All six tracks **hold**; each PoC records the concrete defending mechanism. The one suspected issue (TrustBonding
+zero-target division) was confirmed a false positive (see F-001).
+
+| Track | Surface                       | Invariant tested                                         | Verdict | Defending mechanism                                                                                          |
+| ----- | ----------------------------- | -------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------ |
+| 1     | MultiVault `multicallPayable` | Credited TRUST ≤ `msg.value`; no nested/value-out leg    | Holds   | `sum(values)==msg.value`; per-call `_virtualMsgValue`; `_validatePayment` exact-match; selector allowlist    |
+| 2     | MultiVault deposit↔redeem    | No net-positive round-trip; no inflation grief           | Holds   | Round-up fee extraction + ghost `minShare`→BURN; victim min-deposit still mints > 0 after pro-rata injection |
+| 3     | FeeProxy refund/approval      | TRUST zero-sum; ledger per-`msg.sender`                  | Holds   | Exact fee split; credit-on-push-fail only; zero-before-transfer + `nonReentrant`; no cross-user drain        |
+| 4     | AtomWarden quorum             | ≥ threshold distinct live signers; no replay             | Holds   | `ECDSA.tryRecover` rejects high-s; nonce in digest; revoked signer fails loud                                |
+| 5     | AtomWallet                    | Only warden seeds owner; no pre-claim bypass; no lockout | Holds   | Empty registry ⇒ ERC-1271 fails pre-claim; `onlyAtomWarden`; primary/last-owner removal blocked              |
+| 6     | TrustBonding                  | Σ claims ≤ budget; ratios bounded, revert-free           | Holds   | Double-claim guard + budget cap; `delta >= target` early-returns 100% before the division                    |
+
+Evidence: 28 PoCs passing (`tests/unit/security/v1.1.0/`, permissionless tracks); 4 Foundry invariants passing.
+
+### Compositional hunt — no findings
+
+A second pass attacked the seams between contracts and the edges of the new v1.1.0 surface. All four tracks **hold**.
+
+| Track | Surface                                | What was attempted                                                                                                                                                                                                      | Verdict | Defending mechanism                                                                                                                                                                                 |
+| ----- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A     | FeeProxy → MultiVault                  | Batch route where a downstream leg reverts (min-shares / below-minimum / duplicate triple); malicious affiliate fee-recipient reentering FeeProxy or depositing into a victim; rounding-dust parity vs. the direct path | Holds   | Atomic revert of the whole route (no partial mint, affiliate fee rolls back, proxy retains 0); `nonReentrant` blocks reentry; approval gate blocks on-behalf mutation; proxy holds no rounding dust |
+| B     | Transient storage / multicall reentry  | Leaking `_inMulticall`/`_virtualMsgValue` from a failed `multicallPayable` into a later same-tx call; redeem-callback reentering deposit/redeem/multicall/multicallPayable                                              | Holds   | Transient state does not survive a failed sub-call (shares credited once); `nonReentrant` blocks every reentry variant                                                                              |
+| C     | TrustBonding epoch boundary / rollover | Claim at the exact next-epoch boundary; claim after a skipped epoch; alternate recipient; MultiVault utilization rollover across a multi-epoch quiet gap                                                                | Holds   | Claim takes the previous epoch only; stale epochs forfeit; budget invariant holds; rollover carries prior utilization then applies the delta                                                        |
+| D     | AtomWarden → AtomWallet beacon claim   | Claim before wallet deploy; non-claimant submitter; CREATE2 determinism; claim-once; creator fallback at the exact expiry boundary                                                                                      | Holds   | Claim reverts pre-deploy and for non-claimants; computed address is stable; second claim reverts `AlreadyClaimed`; creator fallback gated to exact expiry                                           |
+
+Evidence: 20 PoCs passing (`tests/unit/security/v1.1.0/`, compositional tracks).
+
+### Previously-flagged items resolved or accepted
+
+- **Fixed (FeeProxy refund-to-self surplus, previously Low):** `claimRefundTo` now reverts
+  `FeeProxy_RefundRecipientIsProxy` when `recipient == address(this)` (`FeeProxy.sol`, ~line 434), closing the
+  unaccounted-surplus path. No open finding.
+- **Accepted trusted-admin dependency-validation pattern:** several privileged setters/initializers (MultiVault config
+  setters, FeeProxy `initialize` MultiVault endpoint, AtomWarden `setMultiVault`, AtomWallet `initialize` inputs,
+  TrustBonding reward-dependency setters) perform zero-address checks but not interface/code-compatibility checks. All
+  are gated by the 4-of-8 Safe acting through a `TimelockController`, not by untrusted callers, and are addressed via
+  the defense-in-depth recommendation in Residual risks rather than as findings.
+
+## Variant analysis log
+
+| Finding | Variant surface checked                  | Status         | Notes                                                                             |
+| ------- | ---------------------------------------- | -------------- | --------------------------------------------------------------------------------- |
+| F-001   | Single-call path                         | Not applicable | Informational; no exploit. Both current callers early-return before the division. |
+| F-001   | Batch / preview / router / upgrade paths | Not applicable | No value or authorization impact; helper is internal-only.                        |
+
+Adversarial-hunt variant sweep: not applicable — no confirmed break to sweep. Both hunts already exercise single / batch
+/ on-behalf / router / preview / upgrade angles where relevant.
+
+## Operational security notes
+
+- Multisig ownership: privileged roles and timelock control are held by a 4-of-8 multisig (Gnosis Safe).
+- Signer threshold: AtomWarden quorum threshold is admin-configured; the Safe threshold is 4-of-8.
+- Upgrade authority: TUP proxy admin and AtomWallet beacon owner are the upgrades `TimelockController` (7-day delay),
+  with the 4-of-8 Safe as proposer/canceller/executor.
+- Timelocks: parameters `TimelockController` (3-day delay) gates config; upgrades `TimelockController` (7-day delay)
+  gates implementation upgrades; the same 4-of-8 Safe holds proposer/canceller/executor on both.
+- Env secret handling: no secret values were printed or reviewed.
+- Emergency pause and recovery: pauser-gated pause disables guarded user write paths; FeeProxy supports global and
+  per-affiliate pause; fee sweep remains deterministic to the configured treasury.
+- Monitoring / alerting: recommended alerts — config-change events, protocol-fee sweep, atom-wallet fee claims, FeeProxy
+  affiliate registration / cap changes / global + per-affiliate pause / nonzero pending-refund credits / proxy native
+  balance exceeding the sum of known pending refunds, AtomWarden claim and grant events, TrustBonding reward claims.
+
+## Residual risks
+
+| Risk                                                                                                                                          | Impact                                                                                               | Owner                          | Follow-up / acceptance rationale                                                                                                                                                                   |
+| --------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Privileged setters/initializers validate only zero addresses, not interface/code compatibility, for dependency endpoints and economic params. | A bad multisig+timelock proposal or misconfigured deployment could distort economics or break flows. | Contracts team / release owner | Accepted under the multisig + timelock trust model. Defense-in-depth: add cheap `code.length`/sentinel checks where size allows, plus a deployment/upgrade preflight and post-config smoke checks. |
+| `MultiVaultMigrationMode` exceeds EIP-170 in size output.                                                                                     | Accidental deployment of this one-time artifact would fail.                                          | Release owner                  | Keep explicitly out of deployable implementation scope.                                                                                                                                            |
+| Deferred-scope items (per-curve fund isolation, withdrawal rate-limiting, compromised-key recovery for bonded positions).                     | Out of v1.1.0 by design.                                                                             | Product / contracts            | Tracked separately; not part of this release.                                                                                                                                                      |
+
+## Fable 5 deep pre-audit follow-up
+
+> Deeper, hypothesis-driven adversarial pass layered on top of the consolidation review above. Goal: find **net-new**
+> permissionless high/critical issues the prior 48 PoCs missed — name the exact invariant, function, and attacker
+> capability, then attempt to break it with a PoC. Same scope and trusted-admin exclusions as the parent report.
+> Local-only, first-party defensive review.
+
+- Found 2026-06-09; remediated 2026-06-10. Target: `intuition-contracts-v2`, branch `feat/v1.1.0-core-upgrade` (found at
+  HEAD `92a5f6b`). Foundry 1.5.1.
+- Added **27 PoCs across 6 files** under `tests/unit/security/v1.1.0/`; the v1.1.0 security suite is **83 passing, 0
+  failing** (includes the F-002 regression suite with a positively-validated P-256/WebAuthn vector); `forge fmt --check`
+  clean. Mirrored across both the monorepo `contracts/core/` and the public `intuition-contracts-v2`.
+- Result: **one net-new finding (F-002, Medium / High-confidence) — now FIXED and CLOSED** (AtomWallet signature
+  validation for owner index ≥ 1); the other five hypotheses are defended negatives with the mechanism recorded. One
+  prior-pass speculation (transient-state "leak on revert") is explicitly refuted below.
+- Model-routing note: per the engagement framing, this pass was run straight through as ordinary first-party defensive
+  engineering; per-track CLD-5-vs-Opus classifier telemetry was not collected (it is not part of the security work and
+  the pass stands on its own merits).
+
+### Per-hypothesis verdicts
+
+| #   | Hypothesis                                               | PoC file                                | Tests | Verdict                      | Defending mechanism / finding                                                                                                                                                                                                                                                                                                                                                   |
+| --- | -------------------------------------------------------- | --------------------------------------- | ----- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| H1  | MultiVaultLib storage-mirror integrity (new slots 34–37) | `StorageMirrorIntegrity.t.sol`          | 4     | Defended                     | Library `_s().slot == 0` mirrors MultiVault's declared layout byte-exactly; `atomCreators`(35)/`atomCreatedAt`(36) are create-only and read back identically; `lastSystemUtilizationEpoch`(37) raw slot matches the getter after rollover; deposits do not perturb creator slots. Inherited OZ contracts use ERC-7201 namespaced storage, so slots 0–37 + `__gap[47]` are free. |
+| H2  | Transient value accounting in multicallPayable           | `MulticallPayableValueAccounting.t.sol` | 2     | Defended                     | A multi-subcall `multicallPayable` that reverts on a later subcall (after `_virtualMsgValue` was set) is rolled back by EIP-1153 frame-revert semantics; a same-tx direct deposit is credited exactly its own `msg.value` (matched against a control). Successful batches spend exactly `msg.value`.                                                                            |
+| H3  | Cross-curve redeem ≤ deposit                             | `CrossCurveRedeemBound.t.sol`           | 6     | Defended                     | Round trips are non-profitable at 100k-ether magnitudes (100× the prior bound, 10k-run fuzz across all three curves), across 30 accumulated small deposits, in two-user shared vaults, and on triple vaults. Rounding favors the vault on every path.                                                                                                                           |
+| H4  | AtomWarden quorum soundness                              | `AtomWardenQuorumSoundness.t.sol`       | 4     | Defended                     | Threshold raised after signing → `InsufficientSigners`; duplicate-signer padding → `NonCanonicalSignerOrder`; contract (ERC-1271) signers cannot satisfy the quorum (raw `ECDSA.tryRecover` + `SIGNER_ROLE`); a chain-id change invalidates a prior signature (EIP-712 domain binds live `block.chainid`).                                                                      |
+| H5  | AtomWallet ERC-4337 / P-256 auth & claim transition      | `AtomWalletAuthEdges.t.sol`             | 13    | **F-002 (fixed)** + defended | Surfaced F-002: signature validation reverted for any owner at index ≥ 1 (now fixed — see below). Defended: one-way `completeClaim`, pre-claim `execute` rejected. Post-fix regression proves owners at every index validate.                                                                                                                                                   |
+| H6  | TrustBonding emission-budget conservation                | `EmissionBudgetConservation.t.sol`      | 6     | Defended                     | Per-epoch claim cap binds (claim capped to remaining budget; total lands exactly on the ceiling); multi-user claims sum exactly to the epoch total and stay ≤ budget; an adversarially inflated system-utilization delta caps the budget at the controller maximum (ratio ≤ 100%); zero utilization floors at the lower bound; double-claim reverts.                            |
+
+### F-002 — AtomWallet signature validation is broken for any owner at index ≥ 1
+
+- **Severity / confidence / status:** Medium / High / **FIXED & CLOSED** (remediated 2026-06-10; index-≥-1 validation
+  regression suite green).
+- **Where:** `CoinbaseSmartWalletLib.isValidSignature` (consumed by `AtomWallet.isValidSignature`, ERC-1271, and
+  `AtomWallet._validateSignature`, ERC-4337).
+- **Invariant violated:** any current MultiOwnable owner can authenticate by signature; and (per the library's own
+  NatSpec) validation returns `SIG_VALIDATION_FAILED` rather than reverting.
+- **Root cause:** the `SignatureWrapper` is encoded inline everywhere in the codebase as
+  `abi.encode(uint256 ownerIndex, bytes signatureData)` (see the canonical encoder in
+  `tests/unit/AtomWallet/AtomWallet.t.sol`). The library's manual pre-checks validate exactly that inline layout (they
+  require the second word to equal `0x40`), but it then calls `abi.decode(signature, (SignatureWrapper))`. Decoding a
+  single dynamic struct reads the **first** word as an offset-to-struct — and that word is `ownerIndex`. So
+  `ownerIndex == 0` decodes (offset 0 coincides with the buffer start) while `ownerIndex ≥ 1` makes `abi.decode`
+  **revert**. The canonical "wrapped" struct encoding does not help either: its second word is `ownerIndex`, so the
+  `offset != 64` pre-check rejects it (returns `false`) for every index. There is therefore no encoding under which an
+  owner at index ≥ 1 can be validated.
+- **Reachability / impact:** `completeClaim` seeds the primary owner at index 0 (worked), but every subsequently added
+  co-owner, every P-256 / passkey co-owner (passkeys can **only** be added, never seeded at index 0), and the incoming
+  owner after `transferOwnership` (index 0 is removed and the new owner is appended at a monotonic index ≥ 1) all land
+  at index ≥ 1 and **could not produce a valid ERC-1271 or ERC-4337 signature**. Direct `execute` calls gated by
+  registry membership (by `msg.sender`) still worked for an EOA owner, so an EOA owner was degraded but not locked. The
+  worst case is bounded by an existing protection: the primary (index-0 address) owner **cannot be removed**
+  (`AtomWallet_OwnerCannotBeRemoved`), so a wallet always retains an address owner — a pure passkey-only wallet is not
+  reachable. The most material impact was therefore (a) co-owners and passkey co-owners at index ≥ 1 being unusable for
+  signing, and (b) the post-`transferOwnership` owner being unable to sign ERC-4337/1271 (the new owner sits at index 1
+  and old index 0 is vacated). The revert path also violated the documented ERC-4337 non-revert contract. Not a
+  fund-theft or permissionless takeover.
+- **Remediation (applied):** in `CoinbaseSmartWalletLib.isValidSignature`, decode the wrapper as the inline
+  `(uint256, bytes)` tuple that every producer emits —
+  `(uint256 ownerIndex, bytes signatureData) = abi.decode(signature, (uint256, bytes))` — instead of
+  `abi.decode(signature, (SignatureWrapper))`. This matches the layout the existing pre-checks already validate, so it
+  cannot revert post-checks and works for every owner index; out-of-range indices now cleanly return the ERC-1271
+  failure magic. The bounds-check pre-validation and non-revert design (our intentional, safer divergence from upstream
+  Coinbase, which reverts on bad input) are preserved. Also defined named `ERC1271_MAGIC_VALUE` /
+  `ERC1271_INVALID_SIGNATURE` constants in `AtomWallet` (no more inline `0x1626ba7e` / `0xffffffff`).
+- **Regression (locked):** `AtomWalletAuthEdges.t.sol` — index-0 control, multiple EOA co-owners each validating at
+  their index, owner removal revoking only that owner, re-add landing at a fresh index, post-`transferOwnership` new
+  owner validating at index 1, combined EOA + passkey (EOA validates, passkey co-owner reachable and non-reverting),
+  passkey co-owner reachable with the primary owner protected from removal, and out-of-range index returning the failure
+  magic non-revertingly. It also includes **positively-validated P-256/WebAuthn vectors** — a passkey co-owner
+  validating a real signature, and a combined EOA + passkey wallet where both validate — with Solady's P-256 verifier
+  etched at the RIP-7212 precompile for local execution (production chains expose it natively). The ERC-4337
+  `_validateSignature` path shares the same library call and inherits the fix.
+
+### Refuted prior-pass speculation (recorded as a non-finding)
+
+An earlier exploratory note flagged that `multicallPayable` "does not clear `_inMulticall` / `_virtualMsgValue` on
+revert." This is **not** a defect: under EIP-1153, transient writes made in a call frame that reverts are rolled back
+with that frame, so a bubbled-up revert resets both vars. `TransientReentry.t.sol` (single subcall) and the new
+`MulticallPayableValueAccounting.t.sol` (multi-subcall, caught revert, same-tx direct deposit) both confirm no leak.
+
+### Go / no-go
+
+**Go.** F-002 was the only net-new finding and it is now fixed and closed, with an index-≥-1 validation regression suite
+green and the full security + core suites passing in both repos. All other tracks remained Green throughout. The
+conditional hold recorded while F-002 was open is lifted.

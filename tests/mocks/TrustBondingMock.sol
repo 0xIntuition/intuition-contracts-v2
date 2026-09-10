@@ -11,11 +11,7 @@ contract TrustBondingMock is TrustBonding {
     /**
      * @notice Exposes the internal _getNormalizedUtilizationRatio function
      */
-    function exposed_getNormalizedUtilizationRatio(
-        uint256 delta,
-        uint256 target,
-        uint256 lowerBound
-    )
+    function exposed_getNormalizedUtilizationRatio(uint256 delta, uint256 target, uint256 lowerBound)
         external
         pure
         returns (uint256)

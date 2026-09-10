@@ -68,7 +68,8 @@ interface ITrustBonding {
     /// @dev Thrown when an invalid epoch number is provided
     error TrustBonding_InvalidEpoch();
 
-    /// @dev Thrown when an invalid utilization lower bound is provided (must be between 0 and 1e18)
+    /// @dev Thrown when an invalid utilization lower bound is provided. Bounds are in basis points and must fall
+    ///      within the per-ratio minimum and `BASIS_POINTS_DIVISOR` (10_000 = 100%)
     error TrustBonding_InvalidUtilizationLowerBound();
 
     /// @dev Thrown when the epoch budget is fully exhausted and no more rewards can be claimed
@@ -114,8 +115,7 @@ interface ITrustBonding {
         address _satelliteEmissionsController,
         uint256 _systemUtilizationLowerBound,
         uint256 _personalUtilizationLowerBound
-    )
-        external;
+    ) external;
 
     /**
      * @notice Returns the length of an epoch in seconds
@@ -154,6 +154,14 @@ interface ITrustBonding {
     function previousEpoch() external view returns (uint256);
 
     /// @notice Returns the amount of TRUST tokens emitted per epoch
+    /// @dev The epoch's scheduled emission, scaled by the system utilization ratio. The schedule
+    ///      (`ICoreEmissionsController.getEmissionsAtEpoch`) is fixed, geometrically declining and entirely
+    ///      behaviour-independent, and the ratio is bounded above by `BASIS_POINTS_DIVISOR`. This value is
+    ///      therefore always less than or equal to the scheduled amount: a 100% system ratio releases exactly
+    ///      the schedule, it does not raise it, and the lower bound is a reduction below the schedule whose
+    ///      remainder stays on the reclaim side. The ratio governs the split between released and reclaimed
+    ///      emissions inside a fixed ceiling — no utilization outcome, however favourable, can increase
+    ///      issuance or draw down more than the schedule provides.
     /// @param epoch The epoch to query
     /// @return The amount of TRUST tokens emitted in the specified epoch
     function emissionsForEpoch(uint256 epoch) external view returns (uint256);
@@ -187,6 +195,13 @@ interface ITrustBonding {
 
     /**
      * @notice Returns the amount of rewards a user is eligible for in a specific epoch
+     * @dev The account's veTRUST-proportional slice of the epoch's emissions —
+     *      `userBondedBalanceAtEpochEnd * emissionsForEpoch / totalBondedBalanceAtEpochEnd` — measured before
+     *      the personal utilization ratio is applied. Because the individual bonded balances sum to the total
+     *      and the ratio only ever scales a slice down, the sum of every participant's claim is bounded by the
+     *      epoch budget by construction. No utilization outcome lets one account claim into another account's
+     *      entitlement, and claim ordering within an epoch does not change what anyone receives; a higher
+     *      ratio draws only on the reclaim residual, never on another participant's share.
      * @param _account The user's address
      * @param _epoch The epoch number to query
      * @return The amount of rewards the user is eligible for
@@ -203,16 +218,27 @@ interface ITrustBonding {
 
     /**
      * @notice Returns the system utilization ratio for a specific epoch
+     * @dev Derived from the change in `MultiVault.totalUtilization` between `_epoch - 1` and `_epoch`, measured
+     *      against the rewards the system claimed in the prior epoch. It is a point-in-time delta of a signed
+     *      counter and is not time-weighted: it carries no notion of how long capital stayed in
+     *      the vaults. See the `totalUtilization` / `personalUtilization` NatSpec on `MultiVault` for the full
+     *      semantics, including why a deposit/redeem round-trip does not net to zero.
      * @param _epoch The epoch number to query
-     * @return The system utilization ratio (scaled by 1e18)
+     * @return The system utilization ratio in basis points, where `BASIS_POINTS_DIVISOR` (10_000) is 100%
      */
     function getSystemUtilizationRatio(uint256 _epoch) external view returns (uint256);
 
     /**
      * @notice Returns the personal utilization ratio for a user in a specific epoch
+     * @dev Derived from the change in the user's `MultiVault.personalUtilization` between `_epoch - 1` and
+     *      `_epoch`, measured against the rewards that user claimed in the prior epoch. It is a point-in-time
+     *      delta of a signed counter and is not time-weighted: capital committed in the final
+     *      block of an epoch counts the same as identical capital held for the whole epoch. Duration is priced
+     *      by the bonding lock, not here. See the `personalUtilization` NatSpec on `MultiVault` for the full
+     *      semantics, including why a deposit/redeem round-trip does not net to zero.
      * @param _account The user's address
      * @param _epoch The epoch number to query
-     * @return The personal utilization ratio for the user (scaled by 1e18)
+     * @return The personal utilization ratio for the user in basis points, where 10_000 is 100%
      */
     function getPersonalUtilizationRatio(address _account, uint256 _epoch) external view returns (uint256);
 
@@ -234,10 +260,7 @@ interface ITrustBonding {
     /// @param epoch The epoch number to query
     /// @return eligibleRewards The total rewards the user is eligible for in the specified epoch
     /// @return maxRewards The rewards available for the user to claim in the specified epoch
-    function getUserRewardsForEpoch(
-        address account,
-        uint256 epoch
-    )
+    function getUserRewardsForEpoch(address account, uint256 epoch)
         external
         view
         returns (uint256 eligibleRewards, uint256 maxRewards);
@@ -303,15 +326,29 @@ interface ITrustBonding {
 
     /**
      * @notice Updates the lower bound for the system utilization ratio
-     * @param newLowerBound The new lower bound for the system utilization ratio (must be between 0 and 1e18)
-     * @dev Can only be called by the timelock. Reverts if newLowerBound is invalid
+     * @param newLowerBound The new lower bound in basis points, where 10_000 is 100%. Must be within
+     *        [`MINIMUM_SYSTEM_UTILIZATION_LOWER_BOUND` (4_000), `BASIS_POINTS_DIVISOR` (10_000)]
+     * @dev Can only be called by the timelock. Reverts if newLowerBound is outside that range.
+     *
+     *      The bound is read from storage when rewards are claimed, NOT snapshotted per epoch, so a change
+     *      applies to any epoch not yet claimed. This is intentional and bounded on both sides: the value can
+     *      never leave the hardcoded `[4_000, 10_000]` window, so the worst case a pending claim can be moved
+     *      is from 100% down to the 40% floor — and raising the bound only ever increases rewards. Governance
+     *      cannot zero out or arbitrarily reduce accrued rewards through this setter, and any change must
+     *      clear the timelock delay first, giving holders notice to claim beforehand.
      */
     function updateSystemUtilizationLowerBound(uint256 newLowerBound) external;
 
     /**
      * @notice Updates the lower bound for the personal utilization ratio
-     * @param newLowerBound The new lower bound for the personal utilization ratio (must be between 0 and 1e18)
-     * @dev Can only be called by the timelock. Reverts if newLowerBound is invalid
+     * @param newLowerBound The new lower bound in basis points, where 10_000 is 100%. Must be within
+     *        [`MINIMUM_PERSONAL_UTILIZATION_LOWER_BOUND` (2_500), `BASIS_POINTS_DIVISOR` (10_000)]
+     * @dev Can only be called by the timelock. Reverts if newLowerBound is outside that range.
+     *
+     *      As with the system bound, the value is read at claim time rather than snapshotted per epoch, so a
+     *      change applies to any epoch not yet claimed. Bounded the same way: the value can never leave the
+     *      hardcoded `[2_500, 10_000]` window, capping the worst case for a pending claim at the 25% floor,
+     *      and the timelock delay gives holders notice to claim beforehand.
      */
     function updatePersonalUtilizationLowerBound(uint256 newLowerBound) external;
 

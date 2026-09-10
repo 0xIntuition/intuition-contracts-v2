@@ -83,6 +83,19 @@ export const MultiVaultMigrationModeAbi = [
   },
   {
     "type": "function",
+    "name": "PAUSER_ROLE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "TRIPLE_SALT",
     "inputs": [],
     "outputs": [
@@ -148,7 +161,7 @@ export const MultiVaultMigrationModeAbi = [
       }
     ],
     "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "payable"
   },
   {
     "type": "function",
@@ -183,6 +196,44 @@ export const MultiVaultMigrationModeAbi = [
         "name": "atomWalletDepositFee",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "atomCreatedAt",
+    "inputs": [
+      {
+        "name": "atomId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "createdAt",
+        "type": "uint48",
+        "internalType": "uint48"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "atomCreators",
+    "inputs": [
+      {
+        "name": "atomId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "creator",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -412,7 +463,7 @@ export const MultiVaultMigrationModeAbi = [
     "name": "claimAtomWalletDepositFees",
     "inputs": [
       {
-        "name": "termId",
+        "name": "atomId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -523,8 +574,110 @@ export const MultiVaultMigrationModeAbi = [
   },
   {
     "type": "function",
+    "name": "createAtomsFor",
+    "inputs": [
+      {
+        "name": "creator",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "data",
+        "type": "bytes[]",
+        "internalType": "bytes[]"
+      },
+      {
+        "name": "assets",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "createAtomsWithUris",
+    "inputs": [
+      {
+        "name": "creator",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "data",
+        "type": "bytes[]",
+        "internalType": "bytes[]"
+      },
+      {
+        "name": "assets",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "uris",
+        "type": "bytes[][]",
+        "internalType": "bytes[][]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
     "name": "createTriples",
     "inputs": [
+      {
+        "name": "subjectIds",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      },
+      {
+        "name": "predicateIds",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      },
+      {
+        "name": "objectIds",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      },
+      {
+        "name": "assets",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "createTriplesFor",
+    "inputs": [
+      {
+        "name": "creator",
+        "type": "address",
+        "internalType": "address"
+      },
       {
         "name": "subjectIds",
         "type": "bytes32[]",
@@ -658,7 +811,7 @@ export const MultiVaultMigrationModeAbi = [
     ],
     "outputs": [
       {
-        "name": "shares",
+        "name": "",
         "type": "uint256[]",
         "internalType": "uint256[]"
       }
@@ -804,6 +957,62 @@ export const MultiVaultMigrationModeAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getAtomCreatedAt",
+    "inputs": [
+      {
+        "name": "atomId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint48",
+        "internalType": "uint48"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getAtomCreator",
+    "inputs": [
+      {
+        "name": "atomId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getAtomUriConfig",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "maxUriCount",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "maxUriLength",
+        "type": "uint32",
+        "internalType": "uint32"
       }
     ],
     "stateMutability": "view"
@@ -1078,7 +1287,7 @@ export const MultiVaultMigrationModeAbi = [
     "name": "getTripleIdFromCounterId",
     "inputs": [
       {
-        "name": "counterId",
+        "name": "counterTripleId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -1490,10 +1699,82 @@ export const MultiVaultMigrationModeAbi = [
   },
   {
     "type": "function",
+    "name": "isApprovedToCreate",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "creator",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "approved",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isApprovedToDeposit",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "receiver",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "approved",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isApprovedToRedeem",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "receiver",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "approved",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "isAtom",
     "inputs": [
       {
-        "name": "atomId",
+        "name": "termId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -1531,7 +1812,7 @@ export const MultiVaultMigrationModeAbi = [
     "name": "isTermCreated",
     "inputs": [
       {
-        "name": "id",
+        "name": "termId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -1566,10 +1847,23 @@ export const MultiVaultMigrationModeAbi = [
   },
   {
     "type": "function",
+    "name": "lastSystemUtilizationEpoch",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "maxRedeem",
     "inputs": [
       {
-        "name": "sender",
+        "name": "account",
         "type": "address",
         "internalType": "address"
       },
@@ -1592,6 +1886,30 @@ export const MultiVaultMigrationModeAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "multicall",
+    "inputs": [
+      {
+        "name": "data",
+        "type": "bytes[]",
+        "internalType": "bytes[]"
+      },
+      {
+        "name": "values",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "results",
+        "type": "bytes[]",
+        "internalType": "bytes[]"
+      }
+    ],
+    "stateMutability": "payable"
   },
   {
     "type": "function",
@@ -1659,7 +1977,7 @@ export const MultiVaultMigrationModeAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "assetsAfterFixedFees",
+        "name": "feeBaseAssets",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -1761,7 +2079,7 @@ export const MultiVaultMigrationModeAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "assetsAfterFixedFees",
+        "name": "feeBaseAssets",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -1829,7 +2147,7 @@ export const MultiVaultMigrationModeAbi = [
         "internalType": "uint256"
       }
     ],
-    "stateMutability": "nonpayable"
+    "stateMutability": "payable"
   },
   {
     "type": "function",
@@ -1863,11 +2181,24 @@ export const MultiVaultMigrationModeAbi = [
     ],
     "outputs": [
       {
-        "name": "received",
+        "name": "",
         "type": "uint256[]",
         "internalType": "uint256[]"
       }
     ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "reinitialize",
+    "inputs": [
+      {
+        "name": "_timelock",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
     "stateMutability": "nonpayable"
   },
   {
@@ -1926,6 +2257,24 @@ export const MultiVaultMigrationModeAbi = [
             "internalType": "uint256"
           }
         ]
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setAtomUriConfig",
+    "inputs": [
+      {
+        "name": "maxUriCount",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "maxUriLength",
+        "type": "uint32",
+        "internalType": "uint32"
       }
     ],
     "outputs": [],
@@ -2019,6 +2368,19 @@ export const MultiVaultMigrationModeAbi = [
         "name": "_termCount",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setTimelock",
+    "inputs": [
+      {
+        "name": "_timelock",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "outputs": [],
@@ -2145,6 +2507,19 @@ export const MultiVaultMigrationModeAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "timelock",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -2353,6 +2728,31 @@ export const MultiVaultMigrationModeAbi = [
   },
   {
     "type": "event",
+    "name": "AtomContextRegistered",
+    "inputs": [
+      {
+        "name": "termId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "registrant",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "uris",
+        "type": "bytes[]",
+        "indexed": false,
+        "internalType": "bytes[]"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "AtomCreated",
     "inputs": [
       {
@@ -2384,6 +2784,25 @@ export const MultiVaultMigrationModeAbi = [
   },
   {
     "type": "event",
+    "name": "AtomUriConfigUpdated",
+    "inputs": [
+      {
+        "name": "maxUriCount",
+        "type": "uint32",
+        "indexed": false,
+        "internalType": "uint32"
+      },
+      {
+        "name": "maxUriLength",
+        "type": "uint32",
+        "indexed": false,
+        "internalType": "uint32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "AtomWalletDepositFeeCollected",
     "inputs": [
       {
@@ -2399,7 +2818,7 @@ export const MultiVaultMigrationModeAbi = [
         "internalType": "address"
       },
       {
-        "name": "amount",
+        "name": "feeAmount",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -2498,7 +2917,7 @@ export const MultiVaultMigrationModeAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "totalShares",
+        "name": "receiverSharesAfter",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -2672,7 +3091,7 @@ export const MultiVaultMigrationModeAbi = [
         "internalType": "address"
       },
       {
-        "name": "amount",
+        "name": "feeAmount",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -2697,7 +3116,7 @@ export const MultiVaultMigrationModeAbi = [
         "internalType": "address"
       },
       {
-        "name": "amount",
+        "name": "feeAmount",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -2716,7 +3135,7 @@ export const MultiVaultMigrationModeAbi = [
         "internalType": "address"
       },
       {
-        "name": "receiver",
+        "name": "account",
         "type": "address",
         "indexed": true,
         "internalType": "address"
@@ -2740,19 +3159,19 @@ export const MultiVaultMigrationModeAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "totalShares",
+        "name": "accountSharesAfter",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
       },
       {
-        "name": "assets",
+        "name": "assetsAfterFees",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
       },
       {
-        "name": "fees",
+        "name": "totalFees",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -2880,6 +3299,19 @@ export const MultiVaultMigrationModeAbi = [
         "type": "uint8",
         "indexed": false,
         "internalType": "enum VaultType"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "TimelockSet",
+    "inputs": [
+      {
+        "name": "timelock",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
       }
     ],
     "anonymous": false
@@ -3121,7 +3553,7 @@ export const MultiVaultMigrationModeAbi = [
     "name": "MultiVaultCore_AtomDoesNotExist",
     "inputs": [
       {
-        "name": "termId",
+        "name": "atomId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -3148,7 +3580,7 @@ export const MultiVaultMigrationModeAbi = [
     "name": "MultiVaultCore_TripleDoesNotExist",
     "inputs": [
       {
-        "name": "termId",
+        "name": "tripleId",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -3198,6 +3630,16 @@ export const MultiVaultMigrationModeAbi = [
   },
   {
     "type": "error",
+    "name": "MultiVault_AtomUriCountExceeded",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MultiVault_AtomUriLengthExceeded",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "MultiVault_BurnFromZeroAddress",
     "inputs": []
   },
@@ -3214,6 +3656,11 @@ export const MultiVaultMigrationModeAbi = [
   {
     "type": "error",
     "name": "MultiVault_CannotDirectlyInitializeCounterTriple",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MultiVault_CreatorNotApproved",
     "inputs": []
   },
   {
@@ -3279,6 +3726,11 @@ export const MultiVaultMigrationModeAbi = [
   },
   {
     "type": "error",
+    "name": "MultiVault_InvalidAtomUriConfig",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "MultiVault_InvalidBondingCurveId",
     "inputs": []
   },
@@ -3289,12 +3741,32 @@ export const MultiVaultMigrationModeAbi = [
   },
   {
     "type": "error",
+    "name": "MultiVault_MulticallValueMismatch",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MultiVault_NestedMulticall",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "MultiVault_NoAtomDataProvided",
     "inputs": []
   },
   {
     "type": "error",
     "name": "MultiVault_OnlyAssociatedAtomWallet",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MultiVault_OnlyTimelock",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MultiVault_RedeemYieldsNoAssets",
     "inputs": []
   },
   {
@@ -3333,7 +3805,7 @@ export const MultiVaultMigrationModeAbi = [
     "name": "MultiVault_TripleExists",
     "inputs": [
       {
-        "name": "termId",
+        "name": "tripleId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
@@ -3353,6 +3825,11 @@ export const MultiVaultMigrationModeAbi = [
         "internalType": "bytes32"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "MultiVault_UnexpectedValue",
+    "inputs": []
   },
   {
     "type": "error",

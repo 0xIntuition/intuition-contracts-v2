@@ -26,6 +26,18 @@ import { MultiVaultAbi, MultiVaultBytecode } from "@0xintuition/contracts-v2";
 const vault = getContract({ address, abi: MultiVaultAbi, client });
 ```
 
+`MultiVault` and `MultiVaultMigrationMode` link the external library `MultiVaultLib`, so their bytecode contains
+`__$…$__` placeholders. To deploy them, first deploy `MultiVaultLib`, then substitute its address using the exported
+link references:
+
+```ts
+import { MultiVaultBytecode, MultiVaultLibBytecode, MultiVaultLinkReferences } from "@0xintuition/contracts-v2/bytecodes";
+
+const libAddress = await deploy({ bytecode: MultiVaultLibBytecode }); // deploy the library first
+const placeholder = MultiVaultLinkReferences["src/libraries/MultiVaultLib.sol:MultiVaultLib"];
+const linkedBytecode = MultiVaultBytecode.replaceAll(placeholder, libAddress.slice(2).toLowerCase());
+```
+
 Both ESM and CommonJS are supported, with full TypeScript declarations.
 
 ### Using the Solidity sources

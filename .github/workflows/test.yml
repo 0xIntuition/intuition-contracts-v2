@@ -30,7 +30,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: nightly
+          version: v1.5.1
 
       - name: Install Bun
         uses: oven-sh/setup-bun@v2
@@ -68,7 +68,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: nightly
+          version: v1.5.1
 
       - name: Cache Foundry dependencies
         uses: actions/cache@v6
@@ -96,9 +96,7 @@ jobs:
             bun-${{ runner.os }}-
 
       - name: Install JS deps
-        run: |
-          bun install --frozen-lockfile
-          forge install
+        run: bun install --frozen-lockfile
 
       - name: Run Forge build
         id: forge-build
@@ -136,7 +134,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: nightly
+          version: v1.5.1
 
       - name: Cache Foundry dependencies
         uses: actions/cache@v6
@@ -164,9 +162,7 @@ jobs:
             bun-${{ runner.os }}-
 
       - name: Install JS deps
-        run: |
-          bun install --frozen-lockfile
-          forge install
+        run: bun install --frozen-lockfile
 
       - name: Generate gas report
         id: gas-report

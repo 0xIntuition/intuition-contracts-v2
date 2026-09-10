@@ -7,16 +7,21 @@ import * as path from 'path';
 const CONTRACTS_TO_EXTRACT = [
   'MultiVault',
   'MultiVaultMigrationMode',
+  'FeeProxy',
   'BaseEmissionsController',
   'SatelliteEmissionsController',
   'TrustBonding',
   'BondingCurveRegistry',
   'LinearCurve',
   'OffsetProgressiveCurve',
+  'DynamicFeeFlatPriceCurve',
   'AtomWallet',
   'AtomWalletFactory',
+  'AtomWarden',
   'Trust',
-  'TrustToken'
+  'TrustToken',
+  'WrappedTrust',
+  'MultiVaultLib'
 ];
 
 interface ContractArtifact {
