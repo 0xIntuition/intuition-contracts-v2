@@ -722,8 +722,7 @@ library MultiVaultLib {
         Storage storage s = _s();
         uint256 curveId = s.bondingCurveConfig.defaultCurveId;
 
-        // The predicate is evaluated inline at both sites rather than held in a local: this frame
-        // is at the stack ceiling, and the component mapping it reads is already written above.
+        // Called twice rather than cached: one more local puts this frame over the stack limit.
         (uint256 sharesForReceiver, uint256 feeBaseAssets, uint256 assetsAfterFees) =
             _calculateTripleCreate(tripleId, _shouldChargeAtomDepositFraction(tripleId), assets);
 
@@ -1583,13 +1582,17 @@ library MultiVaultLib {
         return true;
     }
 
+    /// @dev Whether a triple's atom-deposit fraction is charged: every one of its three atoms must clear
+    ///      {_shouldChargeFees}. Reads the atoms from the triple's component mapping, so it is only
+    ///      meaningful once the triple exists.
     function _shouldChargeAtomDepositFraction(bytes32 tripleId) private view returns (bool) {
         bytes32[3] memory atomIds = _s().triples[tripleId];
         return _shouldChargeAtomDepositFractionFor(atomIds[0], atomIds[1], atomIds[2]);
     }
 
-    /// @dev The same test keyed on the atoms themselves. Used by the creation preview, which runs
-    ///      before the triple's component mapping exists and would otherwise test three empty ids.
+    /// @dev The same test as {_shouldChargeAtomDepositFraction}, keyed on the atoms themselves. Used by
+    ///      the creation preview, which runs before the triple's component mapping exists and would
+    ///      otherwise test three empty ids.
     function _shouldChargeAtomDepositFractionFor(bytes32 subjectId, bytes32 predicateId, bytes32 objectId)
         private
         view
