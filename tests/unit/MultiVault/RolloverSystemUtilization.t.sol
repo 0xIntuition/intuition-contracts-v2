@@ -5,6 +5,8 @@ import { Test } from "forge-std/src/Test.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 import { MultiVault } from "src/protocol/MultiVault.sol";
+import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
+import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
 import {
     GeneralConfig,
     AtomConfig,
@@ -66,7 +68,24 @@ contract RolloverSystemUtilizationTest is Test {
             entryPoint: address(1), atomWarden: address(1), atomWalletBeacon: address(1), atomWalletFactory: address(1)
         });
         VaultFees memory vaultFees = VaultFees({ entryFee: 0, exitFee: 0, protocolFee: 0 });
-        BondingCurveConfig memory bondingCurveConfig = BondingCurveConfig({ registry: address(1), defaultCurveId: 1 });
+        // `initialize` resolves the default curve through the registry and rejects a hook-bearing
+        // one, so the fixture needs a real registry holding a hookless curve at id 1.
+        BondingCurveRegistry registryImplementation = new BondingCurveRegistry();
+        TransparentUpgradeableProxy registryProxy = new TransparentUpgradeableProxy(
+            address(registryImplementation),
+            address(this),
+            abi.encodeWithSelector(BondingCurveRegistry.initialize.selector, address(this))
+        );
+        LinearCurve linearCurveImplementation = new LinearCurve();
+        TransparentUpgradeableProxy linearCurveProxy = new TransparentUpgradeableProxy(
+            address(linearCurveImplementation),
+            address(this),
+            abi.encodeWithSelector(LinearCurve.initialize.selector, "Linear")
+        );
+        BondingCurveRegistry(address(registryProxy)).addBondingCurve(address(linearCurveProxy));
+
+        BondingCurveConfig memory bondingCurveConfig =
+            BondingCurveConfig({ registry: address(registryProxy), defaultCurveId: 1 });
 
         bytes memory initData = abi.encodeWithSelector(
             MultiVault.initialize.selector,

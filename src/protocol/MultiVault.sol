@@ -9,6 +9,8 @@ import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 
 import { IMultiVault, ApprovalTypes, VaultState, VaultType } from "src/interfaces/IMultiVault.sol";
 import { IAtomWallet } from "src/interfaces/IAtomWallet.sol";
+import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
+import { IBondingCurveRegistry } from "src/interfaces/IBondingCurveRegistry.sol";
 import {
     IMultiVaultCore,
     GeneralConfig,
@@ -245,6 +247,10 @@ contract MultiVault is
 
     error MultiVault_DefaultCurveMustBeInitializedViaCreatePaths();
 
+    error MultiVault_DefaultCurveNotRegistered();
+
+    error MultiVault_DefaultCurveHasFeeHook();
+
     error MultiVault_DepositTooSmallToCoverMinShares();
 
     error MultiVault_CannotDirectlyInitializeCounterTriple();
@@ -319,6 +325,9 @@ contract MultiVault is
         __MultiVaultCore_init(
             _generalConfig, _atomConfig, _tripleConfig, _walletConfig, _vaultFees, _bondingCurveConfig
         );
+        // After the core validation so its own errors keep precedence; a failure here still reverts
+        // the whole initialization.
+        _assertDefaultCurveIsHookless(_bondingCurveConfig);
         _grantRole(DEFAULT_ADMIN_ROLE, _generalConfig.admin);
     }
 
@@ -810,9 +819,34 @@ contract MultiVault is
     }
 
     /// @inheritdoc IMultiVault
+    /// @dev Validated by {_assertDefaultCurveIsHookless}, the same check {initialize} applies.
     function setBondingCurveConfig(BondingCurveConfig memory _bondingCurveConfig) external onlyTimelock {
+        _assertDefaultCurveIsHookless(_bondingCurveConfig);
+
         bondingCurveConfig = _bondingCurveConfig;
         emit BondingCurveConfigUpdated(_bondingCurveConfig.registry, _bondingCurveConfig.defaultCurveId);
+    }
+
+    /// @dev The default curve must exist in the supplied registry and must not carry a fee hook. The
+    ///      term-creation paths mint the creator's shares on `defaultCurveId` without dispatching the
+    ///      curve hooks (see {IBaseCurve.recordDeposit}), so a hook-bearing default would leave every
+    ///      created position without a curve ledger entry and make its first redemption underflow.
+    ///      The default vault also receives entry, exit and atom-deposit-fraction value as assets
+    ///      without shares, which a hook curve's stake ledger cannot see. Checked on both paths that
+    ///      write the config, {initialize} and {setBondingCurveConfig}. It is a check at write time
+    ///      against what the curve reports then: a curve whose hook flags change afterwards, for
+    ///      example through an implementation upgrade behind its proxy, is not re-validated, which
+    ///      is why the flags and the default choice stay with the registry owner and the timelock.
+    ///      Hooklessness is the only property checked here; the creation paths also assume the
+    ///      default curve prices 1:1 (see {MultiVaultCore._getAtomCost}), and that remains a
+    ///      deployment rule.
+    function _assertDefaultCurveIsHookless(BondingCurveConfig memory _bondingCurveConfig) private view {
+        address defaultCurve =
+            IBondingCurveRegistry(_bondingCurveConfig.registry).curveAddresses(_bondingCurveConfig.defaultCurveId);
+        if (defaultCurve == address(0)) revert MultiVault_DefaultCurveNotRegistered();
+        if (IBaseCurve(defaultCurve).hasDepositFeeHook() || IBaseCurve(defaultCurve).hasRedeemFeeHook()) {
+            revert MultiVault_DefaultCurveHasFeeHook();
+        }
     }
 
     /// @inheritdoc IMultiVault
