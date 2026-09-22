@@ -14,8 +14,8 @@ flowchart LR
     DynamicFeeFlatPriceCurve__accrueToProtocol["_accrueToProtocol"]
     DynamicFeeFlatPriceCurve__applyDepositBand["_applyDepositBand"]
     DynamicFeeFlatPriceCurve__creditByWeight["_creditByWeight"]
-    DynamicFeeFlatPriceCurve__creditCapped["_creditCapped"]
     DynamicFeeFlatPriceCurve__creditDownward["_creditDownward"]
+    DynamicFeeFlatPriceCurve__creditEligibleCapped["_creditEligibleCapped"]
     DynamicFeeFlatPriceCurve__depositFeeBps["_depositFeeBps"]
     DynamicFeeFlatPriceCurve__fulcrumDistance["_fulcrumDistance"]
     DynamicFeeFlatPriceCurve__isEligibleStake["_isEligibleStake"]
@@ -44,22 +44,21 @@ flowchart LR
   DynamicFeeFlatPriceCurve__replayDepositBands --> DynamicFeeFlatPriceCurve__tierUpperEdge
   DynamicFeeFlatPriceCurve__replayDepositBands --> DynamicFeeFlatPriceCurve__walkDepositBands
   DynamicFeeFlatPriceCurve__tierOf --> DynamicFeeFlatPriceCurve__tierUpperEdge
-  DynamicFeeFlatPriceCurve__creditDownward --> DynamicFeeFlatPriceCurve__creditCapped
-  DynamicFeeFlatPriceCurve__creditDownward --> DynamicFeeFlatPriceCurve__isEligibleStake
+  DynamicFeeFlatPriceCurve__creditDownward --> DynamicFeeFlatPriceCurve__creditEligibleCapped
   DynamicFeeFlatPriceCurve__payFulcrumTiers --> DynamicFeeFlatPriceCurve__creditByWeight
   DynamicFeeFlatPriceCurve__payFulcrumTiers --> DynamicFeeFlatPriceCurve__weighPriorTiers
   DynamicFeeFlatPriceCurve__applyDepositBand --> DynamicFeeFlatPriceCurve__payDepositFee
   DynamicFeeFlatPriceCurve__applyDepositBand --> DynamicFeeFlatPriceCurve__settleLot
   DynamicFeeFlatPriceCurve__walkDepositBands --> DynamicFeeFlatPriceCurve__depositFeeBps
   DynamicFeeFlatPriceCurve__walkDepositBands --> DynamicFeeFlatPriceCurve__tierUpperEdge
-  DynamicFeeFlatPriceCurve__creditCapped --> DynamicFeeFlatPriceCurve__tierWidthAt
-  DynamicFeeFlatPriceCurve__isEligibleStake --> DynamicFeeFlatPriceCurve__tierWidthAt
+  DynamicFeeFlatPriceCurve__creditEligibleCapped --> DynamicFeeFlatPriceCurve__tierWidthAt
   DynamicFeeFlatPriceCurve__weighPriorTiers --> DynamicFeeFlatPriceCurve__fulcrumDistance
   DynamicFeeFlatPriceCurve__weighPriorTiers --> DynamicFeeFlatPriceCurve__isEligibleStake
   DynamicFeeFlatPriceCurve__weighPriorTiers --> DynamicFeeFlatPriceCurve__tierWidthAt
   DynamicFeeFlatPriceCurve__weighPriorTiers --> DynamicFeeFlatPriceCurve__triangularWeight
   DynamicFeeFlatPriceCurve__weighPriorTiers --> DynamicFeeFlatPriceCurve__weighByFill
   DynamicFeeFlatPriceCurve__tierWidthAt --> DynamicFeeFlatPriceCurve__tierUpperEdge
+  DynamicFeeFlatPriceCurve__isEligibleStake --> DynamicFeeFlatPriceCurve__tierWidthAt
   DynamicFeeFlatPriceCurve__weighByFill --> DynamicFeeFlatPriceCurve__tierWidthAt
   style DynamicFeeFlatPriceCurve_recordDeposit stroke-width:3px
 ```
@@ -71,16 +70,15 @@ DynamicFeeFlatPriceCurve.recordDeposit
   DynamicFeeFlatPriceCurve._payDepositFee
     DynamicFeeFlatPriceCurve._accrueToProtocol
     DynamicFeeFlatPriceCurve._creditDownward
-      DynamicFeeFlatPriceCurve._creditCapped
+      DynamicFeeFlatPriceCurve._creditEligibleCapped
         DynamicFeeFlatPriceCurve._tierWidthAt
           DynamicFeeFlatPriceCurve._tierUpperEdge
-      DynamicFeeFlatPriceCurve._isEligibleStake
-        DynamicFeeFlatPriceCurve._tierWidthAt  (expanded above)
     DynamicFeeFlatPriceCurve._payFulcrumTiers
       DynamicFeeFlatPriceCurve._creditByWeight
       DynamicFeeFlatPriceCurve._weighPriorTiers
         DynamicFeeFlatPriceCurve._fulcrumDistance
-        DynamicFeeFlatPriceCurve._isEligibleStake  (expanded above)
+        DynamicFeeFlatPriceCurve._isEligibleStake
+          DynamicFeeFlatPriceCurve._tierWidthAt  (expanded above)
         DynamicFeeFlatPriceCurve._tierWidthAt  (expanded above)
         DynamicFeeFlatPriceCurve._triangularWeight
         DynamicFeeFlatPriceCurve._weighByFill

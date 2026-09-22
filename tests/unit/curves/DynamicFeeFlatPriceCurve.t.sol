@@ -1246,6 +1246,45 @@ contract DynamicFeeFlatPriceCurveTest is Test {
         assertEq(dynamicFeeCurve.protocolAccrued(), 0, "nothing accrues to the protocol");
     }
 
+    /// @dev A reroute step at an eligible tier still reports itself when the tier's fill floors the
+    ///      credit to zero: dave's single wei at tier 3 is eligible at a zero floor, takes nothing of
+    ///      carol's slice, and the event carries that zero. The walk then moves on and the full tier
+    ///      below takes the slice. Pins the event's full data, not only its topics.
+    function test_recordRedeem_rerouteEmitsAZeroAmountForAnEligibleTierWhoseCreditFloorsToZero() external {
+        address dave = makeAddr("dave");
+        _recordDeposit(T1, alice, 10e18, 0); // fills tier 0
+        _recordDeposit(T1, bob, 12e18, 0); // fills tier 1
+        _recordDeposit(T1, carol, 14.4e18, 0); // fills tier 2; vault -> 36.4 (tier 3)
+        _recordDeposit(T1, dave, 1, 0); // one wei at tier 3
+
+        vm.expectEmit(true, true, true, true);
+        emit DynamicFeeFlatPriceCurve.RedeemFeeRerouted(T1, 2, 3, 0);
+        vm.expectEmit(true, true, true, true);
+        emit DynamicFeeFlatPriceCurve.RedeemFeeRerouted(T1, 2, 1, 1e18);
+        _recordRedeem(T1, carol, 1e18, 1e18);
+
+        assertEq(dynamicFeeCurve.claimable(dave, T1), 0, "a one-wei seat takes nothing of the slice");
+        assertApproxEqAbs(dynamicFeeCurve.claimable(bob, T1), 1e18, 1e3, "the full tier below takes it all");
+    }
+
+    /// @dev When every drawn lot's notional fee floors to zero (one-wei lots), the apportioning has
+    ///      no weights to split by and the whole fee lands on the last lot drawn, so nothing is lost
+    ///      and nothing is split by a zero denominator. Pinned on the per-lot events.
+    function test_recordRedeem_zeroNotionalWeightsHandTheWholeFeeToTheLastLotDrawn() external {
+        address eve = makeAddr("eve");
+        _recordDeposit(T1, eve, 1, 0); // one wei at tier 0
+        _recordDeposit(T1, alice, 10e18, 0); // fills tier 0; vault -> tier 1
+        _recordDeposit(T1, eve, 1, 0); // one wei at tier 1
+
+        vm.expectEmit(true, true, true, true);
+        emit DynamicFeeFlatPriceCurve.RedeemLotRecorded(T1, eve, 1, 1, 0);
+        vm.expectEmit(true, true, true, true);
+        emit DynamicFeeFlatPriceCurve.RedeemLotRecorded(T1, eve, 0, 1, 1e18);
+        _recordRedeem(T1, eve, 2, 1e18);
+
+        assertEq(dynamicFeeCurve.userStake(T1, eve), 0, "both lots drained");
+    }
+
     /// @dev What the spike's walk cannot place accrues; it does not join the spread, which would pay
     ///      the same thin tiers a second time. Tiers 1 and 0 are both half filled below a tier-2
     ///      deposit with a 50% spike. The walk pays tier 1 a quarter of the fee and tier 0 an eighth,
