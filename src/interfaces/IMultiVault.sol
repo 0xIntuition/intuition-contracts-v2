@@ -36,6 +36,12 @@ struct VaultState {
 ///      `BOTH` is kept for backward compatibility and means
 ///      `DEPOSIT | REDEMPTION` (its historical meaning).
 ///
+///      An approval hands the sender control over the receiver's position, not just
+///      the right to add to it. On a curve with a deposit fee hook, a delegated deposit
+///      is recorded against the receiver and can move the receiver's recorded tier and
+///      exit fee rate, and redemptions never move it back. Approve only accounts you
+///      trust to act on your position.
+///
 ///      NONE                    = 0 (0b000)
 ///      DEPOSIT                 = 1 (0b001)
 ///      REDEMPTION              = 2 (0b010)
