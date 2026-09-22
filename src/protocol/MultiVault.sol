@@ -469,12 +469,12 @@ contract MultiVault is
     }
 
     /// @inheritdoc IMultiVault
-    function previewTripleCreate(bytes32 termId, uint256 assets)
+    function previewTripleCreate(bytes32 subjectId, bytes32 predicateId, bytes32 objectId, uint256 assets)
         external
         view
         returns (uint256 shares, uint256 feeBaseAssets, uint256 assetsAfterFees)
     {
-        return MultiVaultLib.calculateTripleCreate(termId, assets);
+        return MultiVaultLib.calculateTripleCreate(subjectId, predicateId, objectId, assets);
     }
 
     /// @inheritdoc IMultiVault

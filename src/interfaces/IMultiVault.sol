@@ -487,14 +487,22 @@ interface IMultiVault {
         returns (uint256 assetsAfterFees, uint256 sharesUsed);
 
     /// @notice Simulates the creation of a triple with an initial deposit
-    /// @dev Returns the expected shares to be minted and the net assets credited after fees
-    /// @param termId The ID of the triple
+    /// @dev Returns the expected shares to be minted and the net assets credited after fees. Keyed on
+    ///      the three atom ids rather than the triple id: the atom-deposit fraction is charged only
+    ///      when all three atom default vaults clear `feeThreshold`, and the triple's component
+    ///      mapping that the write path reads for that test is written during creation itself, so a
+    ///      quote keyed on a not-yet-created triple id would read three empty ids and omit the
+    ///      fraction. Evaluating against the supplied atoms makes the quote match what
+    ///      `createTriples` charges.
+    /// @param subjectId The ID of the subject atom
+    /// @param predicateId The ID of the predicate atom
+    /// @param objectId The ID of the object atom
     /// @param assets The amount of assets the user would send
     /// @return shares The expected shares to be minted for the user
     /// @return feeBaseAssets The base the rate fees are computed on: `assets` less the fixed triple cost
     /// (`tripleCreationProtocolFee` + the two `minShare` seeds). Not itself credited to the vault
     /// @return assetsAfterFees The net assets that will be added to the vault (after all fees)
-    function previewTripleCreate(bytes32 termId, uint256 assets)
+    function previewTripleCreate(bytes32 subjectId, bytes32 predicateId, bytes32 objectId, uint256 assets)
         external
         view
         returns (uint256 shares, uint256 feeBaseAssets, uint256 assetsAfterFees);
