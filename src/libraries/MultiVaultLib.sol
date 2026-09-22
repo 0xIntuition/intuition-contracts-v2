@@ -1519,6 +1519,14 @@ library MultiVaultLib {
     ///      {_initializeOppositeTripleVault}. Mirrored at both the execution-path
     ///      ({_processDeposit}) and calc-path ({_calculateTripleDeposit}) guard sites so
     ///      {previewDeposit} cannot disagree with {deposit} about feasibility.
+    ///
+    ///      Under a fixed default curve, condition (c) never holds: {_createTriple} registers the
+    ///      counter-triple and seeds its default-curve vault with min shares in the same call, and
+    ///      those shares are never redeemable, so that vault stays non-empty for the life of the
+    ///      term. The guard is reachable only for a counter-triple whose default-curve vault was
+    ///      never seeded: after `defaultCurveId` changes, or for terms registered by the retired
+    ///      migration path, which wrote the counter-triple mapping without seeding. It is kept only
+    ///      as an extra defense in depth. 
     function _isDirectCounterTripleTermInit(bytes32 termId, uint256 curveId) private view returns (bool) {
         return _isNewVault(termId, curveId) && _isCounterTriple(termId)
             && _isNewVault(termId, _s().bondingCurveConfig.defaultCurveId);
