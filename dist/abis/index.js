@@ -16,7 +16,7 @@ import {
   TrustBondingAbi,
   TrustTokenAbi,
   WrappedTrustAbi
-} from "../chunk-DMBJP4MA.js";
+} from "../chunk-KJUJBOB3.js";
 export {
   AtomWalletAbi,
   AtomWalletFactoryAbi,
