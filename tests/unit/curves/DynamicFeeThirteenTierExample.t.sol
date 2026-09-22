@@ -81,7 +81,7 @@ contract DynamicFeeThirteenTierExampleTest is Test {
             redeemCapBps: 1000,
             redeemToFulcrumTiersBps: 0,
             depositToPriorTierBps: 0,
-            minEligibleTierStake: 0
+            minEligibleTierStakeBps: 0
         });
     }
 
@@ -216,7 +216,10 @@ contract DynamicFeeThirteenTierExampleTest is Test {
         assertEq(dynamicFeeCurve.tierOf(0), 0, "empty vault sits in tier 0");
         dynamicFeeCurve.recordDeposit{ value: 0 }(TERM, alice, 1500e18);
 
-        assertEq(dynamicFeeCurve.userTier(TERM, alice), 0, "alice books entry tier 0");
+        // 1,000 fills tier 0 and 500 spills into tier 1: two lots, top lot at tier 1.
+        assertEq(dynamicFeeCurve.lotStake(TERM, alice, 0), 1000e18, "alice's tier-0 lot fills the band");
+        assertEq(dynamicFeeCurve.lotStake(TERM, alice, 1), 500e18, "alice's tier-1 lot");
+        assertEq(dynamicFeeCurve.userTopTier(TERM, alice), 1, "alice's top lot is tier 1");
         assertEq(dynamicFeeCurve.userStake(TERM, alice), 1500e18, "alice's stake");
 
         // 2. Her deposit lifted the vault into tier 1.
@@ -228,10 +231,11 @@ contract DynamicFeeThirteenTierExampleTest is Test {
         assertEq(bobFee, 13.5e18, "900 TRUST at tier 1's 1.5%");
 
         // 4. The fee is distributed by the triangular kernel over the occupied prior tiers. Only tier 0
-        //    (alice) holds stake, so it earns the whole fee — nothing leaks to protocol.
+        //    (alice's full 1,000 lot) sits below tier 1, so it earns the whole fee — nothing leaks to
+        //    protocol. Her tier-1 lot is not a prior tier of the band being charged and earns nothing.
         dynamicFeeCurve.recordDeposit{ value: bobFee }(TERM, bob, 900e18);
 
-        assertEq(dynamicFeeCurve.userTier(TERM, bob), 1, "bob books entry tier 1");
+        assertEq(dynamicFeeCurve.userTopTier(TERM, bob), 1, "bob's one lot sits at tier 1");
         assertEq(
             dynamicFeeCurve.claimable(alice, TERM), 13.5e18, "alice (sole occupied prior tier) earns the whole fee"
         );
@@ -292,7 +296,7 @@ contract DynamicFeeThirteenTierExampleTest is Test {
         uint256 gasUsed = gasBefore - gasleft();
 
         emit log_named_uint("13-tier full-sweep recordDeposit gas", gasUsed);
-        emit log_named_uint("depositor booked tier", dynamicFeeCurve.userTier(TERM, alice));
+        emit log_named_uint("depositor top lot tier", dynamicFeeCurve.userTopTier(TERM, alice));
 
         // Loose ceiling: the point is to pin the ORDER of the cost so a regression that turns the
         // replay quadratic in something other than the tier count fails loudly.

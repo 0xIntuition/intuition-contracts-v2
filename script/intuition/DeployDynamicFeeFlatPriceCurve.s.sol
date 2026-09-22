@@ -8,6 +8,7 @@ import { SetupScript } from "script/SetupScript.s.sol";
 import { BondingCurveRegistry } from "src/protocol/curves/BondingCurveRegistry.sol";
 import { DynamicFeeFlatPriceCurve } from "src/protocol/curves/DynamicFeeFlatPriceCurve.sol";
 import { DynamicFeeConfig } from "src/interfaces/IDynamicFeeFlatPriceCurve.sol";
+import { DynamicFeeLaunchSchedule } from "script/intuition/DynamicFeeLaunchSchedule.sol";
 
 /*
 Deploys the flat-price / dynamic-fee curve:
@@ -121,25 +122,32 @@ contract DeployDynamicFeeFlatPriceCurve is SetupScript {
         }
     }
 
-    /// @dev Seed schedule: the decided 13-tier cap with 1% + 0.5%/tier deposit fees and 2% + 0.5%/tier
-    ///      withdrawal fees, both capped at 10%. Fee distribution: triangular fulcrum, alpha = BPS,
-    ///      sigma = 4e18 (the nearest-first window). Exit fees go to the leaver's own
-    ///      tier (the exiting-tier default), falling through to the nearest occupied tier when that tier
-    ///      has no residual holders. `growthG = 0.2` -> `tierWidthGrowthBps = 2000`, i.e. each tier band is
-    ///      1.2x the one below it (compounding): widths run 5,000 -> 44,581 TRUST across the 13 tiers.
-    ///      The terminal tier 12 begins at the tier-11 edge, ~197,903 TRUST, and absorbs everything
-    ///      above it unbounded; tier 12's own closed-form edge (~242,483 TRUST) is inert (never a
-    ///      boundary, since `tierOf` caps at the terminal tier).
+    /// @dev Seed schedule: 16 tiers, `width0 = 2,000 TRUST`, `tierWidthGrowthBps = 3500` so each band
+    ///      is 1.35x the one below it (compounding: the terminal band is about 90x the first, and the
+    ///      terminal tier begins near 510,000 TRUST and absorbs everything above it unbounded). Deposit
+    ///      fees 1% + 0.45%/tier capped at 5.5%; withdrawal fees 1.5% + 0.35%/tier capped at 4.5%.
+    ///      Both legs use a triangular fulcrum with alpha = 5000 bps and sigma = 6 tiers, so the peak
+    ///      sits mid-span and slides up as the vault grows. 10% of each deposit fee walks down the
+    ///      prior tiers, nearest first, each taking up to its fill; 75% of each redeem fee goes to
+    ///      the prior tiers through the kernel and 25% to the other holders of the redeemed lot's
+    ///      tier, falling through to the nearest eligible tiers, above first then below, when that
+    ///      tier cannot take it. The kernel
+    ///      spread weights every prior tier by its occupancy at a common rate capped at the schedule,
+    ///      so a thin tier earns its fill, an over-full tier earns proportionally more, and only what
+    ///      no stake is there to earn at the schedule rate accrues to the protocol bucket.
     ///      These are the values the curve DEPLOYS with, not fixed constants: tier widths/edges, per-tier
     ///      fees, and the fulcrum alpha/sigma are all retunable post-deploy via `setConfig`, so treat any
-    ///      number below as the starting schedule rather than a permanent one. The 13-tier count and the
-    ///      schedule shape are what stay put. Note `tierWidthGrowthBps` is a COMPOUNDING rate —
-    ///      the same numeric value stretches the ladder far more than a linear ramp would.
-    ///      `minEligibleTierStake` — the floor a tier must hold to receive redistributed fees — ships at
-    ///      0, i.e. DISABLED, reproducing the plain occupancy behaviour, so the mechanism changes nothing
-    ///      until governance turns it on. Raising it is a `setConfig` action by the parameters timelock
-    ///      like any other parameter, bounded by the curve's immutable `MAX_MIN_ELIGIBLE_TIER_STAKE`, and
-    ///      it emits `MinEligibleTierStakeUpdated` with the before/after values so a raise is monitorable.
+    ///      number below as the starting schedule rather than a permanent one. Note `tierWidthGrowthBps`
+    ///      is a COMPOUNDING rate — the same numeric value stretches the ladder far more than a linear
+    ///      ramp would.
+    ///      `minEligibleTierStakeBps` — the floor a tier must hold to receive redistributed fees, as a
+    ///      fraction of that tier's width — ships at 0, i.e. disabled, reducing eligibility to a non-zero
+    ///      occupancy check. The occupancy weighting of the kernel spread and the fill cap on the
+    ///      single-target credits (the spike and the exiting-tier slice each pay a tier at most its
+    ///      `stake / width` of the amount) are always on and do not depend on this value. Raising the floor
+    ///      is a `setConfig` action by the parameters timelock like any other parameter, bounded by
+    ///      `BPS`, and it emits `MinEligibleTierStakeUpdated` with the before/after values so a raise is
+    ///      monitorable.
     /// @dev The currently chosen launch-optimized configuration, deployed on the Intuition
     ///      Sepolia QA stack as "The Launch Optimized Config v3".
     ///
@@ -148,23 +156,6 @@ contract DeployDynamicFeeFlatPriceCurve is SetupScript {
     ///      exist, since it defines the tier edges those positions sit under (and `tierCount` can
     ///      only grow).
     function _defaultConfig() internal pure returns (DynamicFeeConfig memory config) {
-        config = DynamicFeeConfig({
-            width0: 2000e18,
-            tierCount: 16,
-            tierWidthGrowthBps: 3500,
-            depositBaseBps: 100,
-            depositGrowthBps: 45,
-            depositCapBps: 550,
-            depositFulcrumAlphaBps: 5000,
-            depositKernelSpread: 6e18,
-            redeemFulcrumAlphaBps: 5000,
-            redeemKernelSpread: 6e18,
-            redeemBaseBps: 150,
-            redeemGrowthBps: 35,
-            redeemCapBps: 450,
-            redeemToFulcrumTiersBps: 7500,
-            depositToPriorTierBps: 1000,
-            minEligibleTierStake: 0
-        });
+        config = DynamicFeeLaunchSchedule.config();
     }
 }

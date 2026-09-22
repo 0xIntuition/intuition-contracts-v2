@@ -38,9 +38,12 @@ struct VaultState {
 ///
 ///      An approval hands the sender control over the receiver's position, not just
 ///      the right to add to it. On a curve with a deposit fee hook, a delegated deposit
-///      is recorded against the receiver and can move the receiver's recorded tier and
-///      exit fee rate, and redemptions never move it back. Approve only accounts you
-///      trust to act on your position.
+///      is recorded against the receiver: it opens or tops up one lot per tier band the
+///      deposit traverses, starting at the vault's current tier. The receiver's next
+///      redemption draws from their highest lot first, at that tier's rate, so a delegated
+///      deposit that reaches a tier above the receiver's existing lots raises the rate on
+///      their next shares out until that lot is drained. Stake the receiver already holds
+///      keeps its own tier. Approve only accounts you trust to act on your position.
 ///
 ///      NONE                    = 0 (0b000)
 ///      DEPOSIT                 = 1 (0b001)
@@ -461,8 +464,9 @@ interface IMultiVault {
     /// @dev Returns the net assets the user would receive after fees and the shares to be burned
     /// @dev Account-agnostic. This signature carries no account, so a curve fee hook is quoted with
     ///      `address(0)` and any curve pricing its fee off per-holder state falls back to a
-    ///      vault-level default. On the dynamic-fee curve a holder's rate keys on their recorded tier
-    ///      while the fallback uses the vault's current tier, so this figure can differ from execution
+    ///      vault-level default. On the dynamic-fee curve a holder's shares are priced lot by lot at
+    ///      the tiers they entered through, highest first, while the fallback uses the vault's
+    ///      current tier, so this figure can differ from execution
     ///      in either direction, so it is not a source for a redemption `minAssets` on a hook-bearing
     ///      curve: over-statement makes the slippage guard reject the redemption. The curve's own
     ///      account-aware view gives the holder's true curve fee. That view is net of the curve's

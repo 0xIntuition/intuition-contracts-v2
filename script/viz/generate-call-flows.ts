@@ -169,10 +169,10 @@ const ENTRY_POINTS: EntryPoint[] = [
 		fn: 'previewRedeemFor',
 		title: 'DynamicFeeFlatPriceCurve.previewRedeemFor',
 		blurb:
-			'The account-aware redeem quote. Prices the withdrawal fee at the HOLDER\'s recorded tier, ' +
-			'unlike `MultiVault.previewRedeem`, which is account-agnostic and falls back to the vault\'s ' +
-			'current tier. Read-only, and net of this curve\'s fee only — MultiVault\'s own protocol and ' +
-			'exit fees are not modelled here.',
+			"The account-aware redeem quote. Prices the redeem fee across the HOLDER's lots, highest " +
+			"tier first, each portion at its own lot's rate, unlike `MultiVault.previewRedeem`, which " +
+			"is account-agnostic and falls back to the vault's current tier. Read-only, and net of this " +
+			"curve's fee only — MultiVault's own protocol and exit fees are not modelled here.",
 	},
 	{
 		slug: 'curve-claimable-across',

@@ -32,6 +32,7 @@ contract DynamicFeeInvariantHandler is Test {
     ///      that would hide it.
     uint256 public ladderRetunesLanded;
     uint256 public kernelRetunesLanded;
+    uint256 public routingRetunesLanded;
 
     constructor(
         MultiVault multiVault,
@@ -108,7 +109,7 @@ contract DynamicFeeInvariantHandler is Test {
         // deposits instead of jumping straight to the 64-tier ceiling.
         cfg.tierCount = bound(tierSeed, cfg.tierCount, cfg.tierCount + 2);
         if (cfg.tierCount > CURVE.MAX_TIER_COUNT()) cfg.tierCount = CURVE.MAX_TIER_COUNT();
-        cfg.minEligibleTierStake = bound(floorSeed, 0, CURVE.MAX_MIN_ELIGIBLE_TIER_STAKE());
+        cfg.minEligibleTierStakeBps = bound(floorSeed, 0, 10_000);
         vm.prank(OWNER);
         try CURVE.setConfig(cfg) {
             ++ladderRetunesLanded;
@@ -132,6 +133,22 @@ contract DynamicFeeInvariantHandler is Test {
             ++kernelRetunesLanded;
         } catch { }
     }
+
+    /// @dev The routing levers: how much of a redeem fee goes through the kernel rather than to the
+    ///      exiting tier's other holders, and how much of a deposit fee spikes to the prior tiers
+    ///      before the kernel. Each selects a different set of credit paths (the exiting-tier slice
+    ///      and its walk above and below, the spike's walk down, the cohort fallback when the
+    ///      spread places nothing), so leaving both at zero would exercise the spread alone. The full
+    ///      range is valid, and the suite starts from the launch values (see the test's `setUp`).
+    function retuneRouting(uint256 fulcrumSeed, uint256 spikeSeed) external {
+        DynamicFeeConfig memory cfg = CURVE.getConfig();
+        cfg.redeemToFulcrumTiersBps = bound(fulcrumSeed, 0, 10_000);
+        cfg.depositToPriorTierBps = bound(spikeSeed, 0, 10_000);
+        vm.prank(OWNER);
+        try CURVE.setConfig(cfg) {
+            ++routingRetunesLanded;
+        } catch { }
+    }
 }
 
 /// @title  DynamicFeeInvariantTest
@@ -149,6 +166,15 @@ contract DynamicFeeInvariantTest is BaseTest {
     function setUp() public override {
         super.setUp();
         atomId = createSimpleAtom("invariant", ATOM_COST[0], users.alice);
+        // Start from the launch routing rather than the harness default of zero on both levers, so
+        // the exiting-tier slice, its walks, the spike and the cohort fallback are live from the first
+        // action; the handler then moves both levers across their full range.
+        DynamicFeeConfig memory cfg = dynamicFeeCurve.getConfig();
+        cfg.redeemToFulcrumTiersBps = 7500;
+        cfg.depositToPriorTierBps = 1000;
+        vm.stopPrank(); // `createSimpleAtom` leaves its prank open
+        vm.prank(users.admin);
+        dynamicFeeCurve.setConfig(cfg);
         // Seed the dynamic vault so it exists before the fuzzer starts.
         makeDeposit(users.alice, users.alice, atomId, DYNAMIC_FEE_CURVE_ID, 10e18, 0);
         // `makeDeposit` leaves a prank open (via `resetPrank`). An open prank makes every `vm.prank`
@@ -176,6 +202,7 @@ contract DynamicFeeInvariantTest is BaseTest {
         assertGt(handler.depositsLanded(), 0, "the fuzz run must land at least one deposit");
         assertGt(handler.ladderRetunesLanded(), 0, "the fuzz run must land at least one ladder retune");
         assertGt(handler.kernelRetunesLanded(), 0, "the fuzz run must land at least one kernel retune");
+        assertGt(handler.routingRetunesLanded(), 0, "the fuzz run must land at least one routing retune");
     }
 
     /// @dev Flat par: totalAssets == totalShares on the dynamic vault, always.
@@ -203,6 +230,30 @@ contract DynamicFeeInvariantTest is BaseTest {
                 protocol.multiVault.getShares(actor, atomId, DYNAMIC_FEE_CURVE_ID),
                 "side-pocket ledger must mirror vault shares"
             );
+        }
+    }
+
+    /// @dev The lot ledger is internally consistent for every actor: a position is the sum of its
+    ///      lots, the mask flags exactly the non-empty lots, and every tier's occupancy is the sum of
+    ///      the actors' lots there. Ladder retunes only ever grow `tierCount`, so a lot is never
+    ///      stranded above the tiers walked here.
+    function invariant_lotLedgerIsConsistent() external view {
+        uint256 tierCount = dynamicFeeCurve.getConfig().tierCount;
+        uint256[] memory perTier = new uint256[](tierCount);
+        for (uint256 i = 0; i < ACTOR_COUNT; ++i) {
+            address actor = handler.actorAt(i);
+            uint256 mask = dynamicFeeCurve.lotMask(atomId, actor);
+            uint256 summed;
+            for (uint256 t = 0; t < tierCount; ++t) {
+                uint256 lot = dynamicFeeCurve.lotStake(atomId, actor, t);
+                assertEq(lot > 0, (mask >> t) & 1 == 1, "a mask bit is set exactly when the lot is non-empty");
+                summed += lot;
+                perTier[t] += lot;
+            }
+            assertEq(summed, dynamicFeeCurve.userStake(atomId, actor), "a position is the sum of its lots");
+        }
+        for (uint256 t = 0; t < tierCount; ++t) {
+            assertEq(perTier[t], dynamicFeeCurve.tierStake(atomId, t), "tier occupancy is the sum of the lots there");
         }
     }
 }
