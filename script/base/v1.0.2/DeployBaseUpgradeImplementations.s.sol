@@ -32,7 +32,8 @@ contract DeployBaseUpgradeImplementations is SetupScript {
     address internal constant BASE_EC_PROXY = 0x7745bDEe668501E5eeF7e9605C746f9cDfb60667;
     address internal constant BASE_EC_PROXY_ADMIN = 0x58dCdf3b6F5D03835CF6556EdC798bfd690B251a;
     address internal constant BASE_UPGRADES_TIMELOCK = 0x1E442BbB08c98100b18fa830a88E8A57b5dF9157;
-    string internal constant OPERATIONS_ARTIFACT_PATH = "/script/upgrades/out/v1.0.2-base-8453-operations.json";
+    string internal constant OPERATIONS_ARTIFACT_PATH =
+        "/script/intuition/v1.0.2/safe-txs/out/v1.0.2-base-8453-operations.json";
 
     BaseEmissionsController public baseEmissionsControllerImplementation;
 

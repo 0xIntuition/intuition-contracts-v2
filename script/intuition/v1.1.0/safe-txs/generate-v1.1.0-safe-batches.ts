@@ -199,7 +199,7 @@ const ADMIN_SAFE = "0xbeA18ab4c83a12be25f8AA8A10D8747A07Cdc6eb";
 
 /**
  * Safe TX-Builder version. Matches the repo's previously-generated batch at
- * script/upgrades/out/test-intuition-trust-bonding-schedule.json.
+ * script/intuition/v1.0.2/safe-txs/out/test-intuition-trust-bonding-schedule.json.
  */
 const TX_BUILDER_VERSION = "1.17.1";
 
@@ -319,7 +319,7 @@ const PAUSER_ROLE = "0x65d7a28e3265b37a6474929f336521b332c1681b933f6cb9f33766734
 
 /*
   Human-readable fragments, matching the style already used across
-  script/upgrades/. Kept minimal and local so a reviewer can check each
+  script/intuition/v1.0.2/safe-txs/. Kept minimal and local so a reviewer can check each
   signature against the contract source without leaving this file.
 */
 
@@ -758,7 +758,7 @@ const buildBatches = (): Batch[] => {
         "",
         "DELIBERATELY NOT BUNDLED WITH THE UPGRADE. The upgrade batch carries a hard atomicity requirement and stays exactly as large as that requires and no larger. Registering a curve into a registry that the upgraded MultiVault has not yet been confirmed to read correctly also inverts the natural verification order.",
         "",
-        "IRREVERSIBLE. Curve ids are append-only and cannot be removed. Before signing, verify on-chain: (a) the curve's multiVault() equals the production MultiVault proxy — its record hooks are onlyMultiVault, and a miswired curve makes every deposit and redeem on its id revert forever; (b) the curve's owner() has been transferred off the deploying EOA to this Safe; (c) a fork simulation of this transaction followed by a deposit on the new curve id succeeds.",
+        "IRREVERSIBLE. Curve ids are append-only and cannot be removed. Before signing, verify on-chain: (a) the curve's multiVault() equals the production MultiVault proxy — its record hooks are onlyMultiVault, and a miswired curve makes every deposit and redeem on its id revert forever; (b) the curve's owner() is this Safe (set at initialize by the deploy script, so a deployer-owned curve means the script ran with the wrong chain branch); (c) a fork simulation of this transaction followed by a deposit on the new curve id succeeds.",
         "",
         "DEPENDS ON: steps 01-04 executed and verified.",
       ].join("\n"),

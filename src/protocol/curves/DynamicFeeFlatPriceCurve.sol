@@ -51,11 +51,11 @@ import {
  *         deposit leg applies no such subtraction.
  *
  * @dev    Custody: this contract holds the redistributed fee TRUST (native), and principal stays in
- *         {MultiVault} at par. `Ownable`, and on governed networks the owner is the parameters
- *         `TimelockController`, so every fee action runs the same Safe and timelock path as the
- *         equivalent MultiVault setters. Integer accumulator division leaves sub-wei-per-share dust
- *         as an unattributed contract balance; undistributable fee accrual goes to {protocolAccrued}.
- *         Neither path touches principal.
+ *         {MultiVault} at par. `Ownable2Step`, and on governed networks the owner is the admin Safe,
+ *         so fee actions execute without a timelock delay; the fee caps are immutable and proxy
+ *         upgrades stay behind the upgrades timelock. Integer accumulator division leaves
+ *         sub-wei-per-share dust as an unattributed contract balance; undistributable fee accrual
+ *         goes to {protocolAccrued}. Neither path touches principal.
  */
 contract DynamicFeeFlatPriceCurve is
     LinearCurve,

@@ -32,6 +32,11 @@ assert it succeeds.
 Requires env vars pointing at the live deployment on the target chain:
   BONDING_CURVE_REGISTRY_ADDRESS, MULTIVAULT_ADDRESS
 
+Fresh testnet deployments must also provide the upgrades timelock created by
+`IntuitionDeployAndSetup` and the admin address that owns the curve:
+  INTUITION_SEPOLIA_UPGRADES_TIMELOCK_CONTROLLER,
+  INTUITION_SEPOLIA_ADMIN_ADDRESS
+
 LOCAL
 forge script script/intuition/DeployDynamicFeeFlatPriceCurve.s.sol:DeployDynamicFeeFlatPriceCurve \
 --optimizer-runs 10000 --rpc-url anvil --broadcast --slow
@@ -50,12 +55,12 @@ contract DeployDynamicFeeFlatPriceCurve is SetupScript {
     address public UPGRADES_TIMELOCK_CONTROLLER;
 
     /// @dev Owner of the deployed curve — holds `setConfig`, `setTierFeeOverride`,
-    ///      `clearTierFeeOverride`, `sweepProtocol` and `renounceOwnership`. On governed networks this
-    ///      MUST be the parameters `TimelockController`, so every fee action goes through the same
-    ///      4-of-8 Safe + timelock path as the equivalent `MultiVault` setters. The curve is `Ownable`
-    ///      with no role system, so setting the owner to the timelock is the whole gating mechanism —
-    ///      no separate `onlyTimelock` modifier is required or wanted.
-    address public PARAMETERS_TIMELOCK_CONTROLLER;
+    ///      `clearTierFeeOverride`, `sweepProtocol` and `renounceOwnership`. On governed networks this is
+    ///      the admin Safe (`ADMIN`), so fee retunes execute without a timelock delay while launch
+    ///      parameters are being tuned. The fee caps are immutable, and the proxy's upgrade admin stays
+    ///      the upgrades `TimelockController`. The curve is `Ownable2Step`, so ownership can later move
+    ///      to a `TimelockController` with `transferOwnership` + `acceptOwnership`.
+    address public CURVE_OWNER;
 
     /// @dev Must be globally unique in the registry; distinct from the default "Linear Curve".
     string internal constant CURVE_NAME = "Dynamic Fee Flat Price Curve";
@@ -65,16 +70,19 @@ contract DeployDynamicFeeFlatPriceCurve is SetupScript {
 
         if (block.chainid == NETWORK_ANVIL) {
             UPGRADES_TIMELOCK_CONTROLLER = msg.sender;
-            PARAMETERS_TIMELOCK_CONTROLLER = msg.sender;
+            CURVE_OWNER = msg.sender;
         } else if (block.chainid == NETWORK_INTUITION_SEPOLIA) {
-            UPGRADES_TIMELOCK_CONTROLLER = 0x81c66D5dD09F1dEF8493E5A5B459e2E9028a4430;
-            PARAMETERS_TIMELOCK_CONTROLLER = 0xA87E4EEd6C71966E938b45c0e2127344DC597D12;
+            UPGRADES_TIMELOCK_CONTROLLER = vm.envAddress("INTUITION_SEPOLIA_UPGRADES_TIMELOCK_CONTROLLER");
+            CURVE_OWNER = ADMIN;
         } else if (block.chainid == NETWORK_INTUITION) {
             UPGRADES_TIMELOCK_CONTROLLER = 0x321e5d4b20158648dFd1f360A79CAFc97190bAd1;
-            PARAMETERS_TIMELOCK_CONTROLLER = 0x71b0F1ABebC2DaA0b7B5C3f9b72FAa1cd9F35FEA;
+            CURVE_OWNER = ADMIN;
         } else {
             revert("Unsupported chain for DeployDynamicFeeFlatPriceCurve script");
         }
+
+        require(UPGRADES_TIMELOCK_CONTROLLER != address(0), "Upgrades timelock not provided");
+        require(CURVE_OWNER != address(0), "Curve owner not provided");
     }
 
     function run() public broadcast {
@@ -92,7 +100,7 @@ contract DeployDynamicFeeFlatPriceCurve is SetupScript {
             abi.encodeWithSelector(
                 DynamicFeeFlatPriceCurve.initialize.selector,
                 CURVE_NAME,
-                PARAMETERS_TIMELOCK_CONTROLLER, // governed networks: the parameters timelock, never the deploying key
+                CURVE_OWNER, // governed networks: the admin Safe, never the deploying key
                 multiVaultAddr,
                 _defaultConfig()
             )
@@ -145,7 +153,7 @@ contract DeployDynamicFeeFlatPriceCurve is SetupScript {
     ///      occupancy check. The occupancy weighting of the kernel spread and the fill cap on the
     ///      single-target credits (the spike and the exiting-tier slice each pay a tier at most its
     ///      `stake / width` of the amount) are always on and do not depend on this value. Raising the floor
-    ///      is a `setConfig` action by the parameters timelock like any other parameter, bounded by
+    ///      is a `setConfig` action by the owner like any other parameter, bounded by
     ///      `BPS`, and it emits `MinEligibleTierStakeUpdated` with the before/after values so a raise is
     ///      monitorable.
     /// @dev The currently chosen launch-optimized configuration, deployed on the Intuition
