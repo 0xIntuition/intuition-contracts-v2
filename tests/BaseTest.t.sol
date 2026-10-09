@@ -497,7 +497,7 @@ abstract contract BaseTest is Modifiers, Test {
             redeemCapBps: 1000,
             redeemToFulcrumTiersBps: 0,
             depositToPriorTierBps: 0,
-            minEligibleTierStake: 0
+            minEligibleTierStakeBps: 0
         });
     }
 

@@ -116,7 +116,17 @@ export const MultiVaultLibAbi = [
     "name": "calculateTripleCreate",
     "inputs": [
       {
-        "name": "termId",
+        "name": "subjectId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "predicateId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "objectId",
         "type": "bytes32",
         "internalType": "bytes32"
       },

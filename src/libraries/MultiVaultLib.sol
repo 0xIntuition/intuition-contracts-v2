@@ -438,13 +438,19 @@ library MultiVaultLib {
         return _calculateAtomCreate(termId, assets);
     }
 
-    /// @dev Mirror of {MultiVault._calculateTripleCreate}.
-    function calculateTripleCreate(bytes32 termId, uint256 assets)
+    /// @dev Preview-path mirror of {_calculateTripleCreate}. Keyed on the atom ids because the
+    ///      triple's component mapping is only written during creation, so chargeability of the
+    ///      atom-deposit fraction is evaluated against the atoms directly; see
+    ///      {IMultiVault.previewTripleCreate}.
+    function calculateTripleCreate(bytes32 subjectId, bytes32 predicateId, bytes32 objectId, uint256 assets)
         public
         view
         returns (uint256 shares, uint256 feeBaseAssets, uint256 assetsAfterFees)
     {
-        return _calculateTripleCreate(termId, assets);
+        bytes32 tripleId = _calculateTripleId(subjectId, predicateId, objectId);
+        return _calculateTripleCreate(
+            tripleId, _shouldChargeAtomDepositFractionFor(subjectId, predicateId, objectId), assets
+        );
     }
 
     /// @dev Mirror of {MultiVault._calculateDeposit}. The internal calc also resolves the fee-hook
@@ -716,8 +722,9 @@ library MultiVaultLib {
         Storage storage s = _s();
         uint256 curveId = s.bondingCurveConfig.defaultCurveId;
 
+        // Called twice rather than cached: one more local puts this frame over the stack limit.
         (uint256 sharesForReceiver, uint256 feeBaseAssets, uint256 assetsAfterFees) =
-            _calculateTripleCreate(tripleId, assets);
+            _calculateTripleCreate(tripleId, _shouldChargeAtomDepositFraction(tripleId), assets);
 
         _accumulateVaultProtocolFees(feeBaseAssets);
 
@@ -1037,7 +1044,10 @@ library MultiVaultLib {
         shares = _depositShares(termId, curveId, assetsAfterFees);
     }
 
-    function _calculateTripleCreate(bytes32 termId, uint256 assets)
+    /// @dev `chargeAtomDepositFraction` is decided by the caller: the write path resolves it from the
+    ///      triple's component mapping once that mapping exists, the preview path from the atom ids
+    ///      it is handed, so both quote the same fee schedule.
+    function _calculateTripleCreate(bytes32 termId, bool chargeAtomDepositFraction, uint256 assets)
         private
         view
         returns (uint256 shares, uint256 feeBaseAssets, uint256 assetsAfterFees)
@@ -1053,9 +1063,8 @@ library MultiVaultLib {
         feeBaseAssets = assets - tripleCost;
 
         uint256 protocolFeeAmount = _feeOnRaw(feeBaseAssets, s.vaultFees.protocolFee);
-        uint256 atomDepositFractionAmount = _shouldChargeAtomDepositFraction(termId)
-            ? _feeOnRaw(feeBaseAssets, s.tripleConfig.atomDepositFractionForTriple)
-            : 0;
+        uint256 atomDepositFractionAmount =
+            chargeAtomDepositFraction ? _feeOnRaw(feeBaseAssets, s.tripleConfig.atomDepositFractionForTriple) : 0;
 
         assetsAfterFees = feeBaseAssets - protocolFeeAmount - atomDepositFractionAmount;
         shares = _convertToShares(termId, curveId, assetsAfterFees);
@@ -1519,6 +1528,14 @@ library MultiVaultLib {
     ///      {_initializeOppositeTripleVault}. Mirrored at both the execution-path
     ///      ({_processDeposit}) and calc-path ({_calculateTripleDeposit}) guard sites so
     ///      {previewDeposit} cannot disagree with {deposit} about feasibility.
+    ///
+    ///      Under a fixed default curve, condition (c) never holds: {_createTriple} registers the
+    ///      counter-triple and seeds its default-curve vault with min shares in the same call, and
+    ///      those shares are never redeemable, so that vault stays non-empty for the life of the
+    ///      term. The guard is reachable only for a counter-triple whose default-curve vault was
+    ///      never seeded: after `defaultCurveId` changes, or for terms registered by the retired
+    ///      migration path, which wrote the counter-triple mapping without seeding. It is kept only
+    ///      as an extra defense in depth.
     function _isDirectCounterTripleTermInit(bytes32 termId, uint256 curveId) private view returns (bool) {
         return _isNewVault(termId, curveId) && _isCounterTriple(termId)
             && _isNewVault(termId, _s().bondingCurveConfig.defaultCurveId);
@@ -1565,9 +1582,23 @@ library MultiVaultLib {
         return true;
     }
 
+    /// @dev Whether a triple's atom-deposit fraction is charged: every one of its three atoms must clear
+    ///      {_shouldChargeFees}. Reads the atoms from the triple's component mapping, so it is only
+    ///      meaningful once the triple exists.
     function _shouldChargeAtomDepositFraction(bytes32 tripleId) private view returns (bool) {
         bytes32[3] memory atomIds = _s().triples[tripleId];
-        return _shouldChargeFees(atomIds[0]) && _shouldChargeFees(atomIds[1]) && _shouldChargeFees(atomIds[2]);
+        return _shouldChargeAtomDepositFractionFor(atomIds[0], atomIds[1], atomIds[2]);
+    }
+
+    /// @dev The same test as {_shouldChargeAtomDepositFraction}, keyed on the atoms themselves. Used by
+    ///      the creation preview, which runs before the triple's component mapping exists and would
+    ///      otherwise test three empty ids.
+    function _shouldChargeAtomDepositFractionFor(bytes32 subjectId, bytes32 predicateId, bytes32 objectId)
+        private
+        view
+        returns (bool)
+    {
+        return _shouldChargeFees(subjectId) && _shouldChargeFees(predicateId) && _shouldChargeFees(objectId);
     }
 
     /// @dev Counter-stake is scoped per curve: it only blocks holding both sides of a triple on the

@@ -197,7 +197,7 @@ contract CurveFeeGuardrailsTest is BaseTest {
         makeDeposit(users.charlie, users.charlie, atomId, DYN, 120e18, 0);
         makeDeposit(users.alice, users.alice, atomId, DYN, 120e18, 0);
 
-        uint256 holderTier = dynamicFeeCurve.userTier(atomId, users.bob);
+        uint256 holderTier = dynamicFeeCurve.userTopTier(atomId, users.bob);
         uint256 vaultTier = dynamicFeeCurve.tierOf(dynamicFeeCurve.vaultStake(atomId));
         assertTrue(holderTier != vaultTier, "fixture must place the holder off the vault tier");
 

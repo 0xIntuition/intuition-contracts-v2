@@ -36,6 +36,15 @@ struct VaultState {
 ///      `BOTH` is kept for backward compatibility and means
 ///      `DEPOSIT | REDEMPTION` (its historical meaning).
 ///
+///      An approval hands the sender control over the receiver's position, not just
+///      the right to add to it. On a curve with a deposit fee hook, a delegated deposit
+///      is recorded against the receiver: it opens or tops up one lot per tier band the
+///      deposit traverses, starting at the vault's current tier. The receiver's next
+///      redemption draws from their highest lot first, at that tier's rate, so a delegated
+///      deposit that reaches a tier above the receiver's existing lots raises the rate on
+///      their next shares out until that lot is drained. Stake the receiver already holds
+///      keeps its own tier. Approve only accounts you trust to act on your position.
+///
 ///      NONE                    = 0 (0b000)
 ///      DEPOSIT                 = 1 (0b001)
 ///      REDEMPTION              = 2 (0b010)
@@ -455,8 +464,9 @@ interface IMultiVault {
     /// @dev Returns the net assets the user would receive after fees and the shares to be burned
     /// @dev Account-agnostic. This signature carries no account, so a curve fee hook is quoted with
     ///      `address(0)` and any curve pricing its fee off per-holder state falls back to a
-    ///      vault-level default. On the dynamic-fee curve a holder's rate keys on their recorded tier
-    ///      while the fallback uses the vault's current tier, so this figure can differ from execution
+    ///      vault-level default. On the dynamic-fee curve a holder's shares are priced lot by lot at
+    ///      the tiers they entered through, highest first, while the fallback uses the vault's
+    ///      current tier, so this figure can differ from execution
     ///      in either direction, so it is not a source for a redemption `minAssets` on a hook-bearing
     ///      curve: over-statement makes the slippage guard reject the redemption. The curve's own
     ///      account-aware view gives the holder's true curve fee. That view is net of the curve's
@@ -481,14 +491,22 @@ interface IMultiVault {
         returns (uint256 assetsAfterFees, uint256 sharesUsed);
 
     /// @notice Simulates the creation of a triple with an initial deposit
-    /// @dev Returns the expected shares to be minted and the net assets credited after fees
-    /// @param termId The ID of the triple
+    /// @dev Returns the expected shares to be minted and the net assets credited after fees. Keyed on
+    ///      the three atom ids rather than the triple id: the atom-deposit fraction is charged only
+    ///      when all three atom default vaults clear `feeThreshold`, and the triple's component
+    ///      mapping that the write path reads for that test is written during creation itself, so a
+    ///      quote keyed on a not-yet-created triple id would read three empty ids and omit the
+    ///      fraction. Evaluating against the supplied atoms makes the quote match what
+    ///      `createTriples` charges.
+    /// @param subjectId The ID of the subject atom
+    /// @param predicateId The ID of the predicate atom
+    /// @param objectId The ID of the object atom
     /// @param assets The amount of assets the user would send
     /// @return shares The expected shares to be minted for the user
     /// @return feeBaseAssets The base the rate fees are computed on: `assets` less the fixed triple cost
     /// (`tripleCreationProtocolFee` + the two `minShare` seeds). Not itself credited to the vault
     /// @return assetsAfterFees The net assets that will be added to the vault (after all fees)
-    function previewTripleCreate(bytes32 termId, uint256 assets)
+    function previewTripleCreate(bytes32 subjectId, bytes32 predicateId, bytes32 objectId, uint256 assets)
         external
         view
         returns (uint256 shares, uint256 feeBaseAssets, uint256 assetsAfterFees);

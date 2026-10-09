@@ -2062,7 +2062,17 @@ export const MultiVaultMigrationModeAbi = [
     "name": "previewTripleCreate",
     "inputs": [
       {
-        "name": "termId",
+        "name": "subjectId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "predicateId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "objectId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
@@ -3665,7 +3675,17 @@ export const MultiVaultMigrationModeAbi = [
   },
   {
     "type": "error",
+    "name": "MultiVault_DefaultCurveHasFeeHook",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "MultiVault_DefaultCurveMustBeInitializedViaCreatePaths",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MultiVault_DefaultCurveNotRegistered",
     "inputs": []
   },
   {

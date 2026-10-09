@@ -12,8 +12,13 @@ contract MaliciousAffiliateFeeRecipient {
     enum AttackMode {
         None,
         ReenterFeeProxy,
-        MultiVaultOnBehalfDeposit
+        MultiVaultOnBehalfDeposit,
+        ObserveVictimThenSelfDeposit
     }
+
+    /// @dev Own-account deposit size for the observe mode; funded by the test, independent of the
+    ///      affiliate fee received so it clears MultiVault's minimum deposit on every route.
+    uint256 public constant SELF_DEPOSIT = 1 ether;
 
     IFeeProxy internal immutable feeProxy;
     IMultiVault internal immutable multiVault;
@@ -25,6 +30,8 @@ contract MaliciousAffiliateFeeRecipient {
     bool public attackAttempted;
     bool public feeProxyReentered;
     bool public multiVaultOnBehalfSucceeded;
+    bool public selfDepositSucceeded;
+    uint256 public victimSharesAtCallback;
     bytes4 public lastRevertSelector;
 
     bool internal entered;
@@ -58,6 +65,16 @@ contract MaliciousAffiliateFeeRecipient {
             } catch (bytes memory reason) {
                 lastRevertSelector = _selector(reason);
             }
+        } else if (attackMode == AttackMode.ObserveVictimThenSelfDeposit) {
+            // Snapshot what the user already holds at the moment the affiliate payment runs, then
+            // trade on MultiVault for this contract's own account. The recipient is free to trade;
+            // the ordering property under test is only that the user's operation settled first.
+            victimSharesAtCallback = multiVault.getShares(victimReceiver, targetTermId, curveId);
+            try multiVault.deposit{ value: SELF_DEPOSIT }(address(this), targetTermId, curveId, 0) returns (uint256) {
+                selfDepositSucceeded = true;
+            } catch (bytes memory reason) {
+                lastRevertSelector = _selector(reason);
+            }
         }
 
         entered = false;
@@ -78,6 +95,8 @@ contract MaliciousAffiliateFeeRecipient {
         attackAttempted = false;
         feeProxyReentered = false;
         multiVaultOnBehalfSucceeded = false;
+        selfDepositSucceeded = false;
+        victimSharesAtCallback = 0;
         lastRevertSelector = bytes4(0);
     }
 
@@ -310,6 +329,167 @@ contract FeeProxyMultiVaultTest is FeeProxyBaseTest {
             "victim receives only the intended routed shares"
         );
         assertEq(address(feeProxy).balance, 0, "proxy balance conserved");
+    }
+
+    /* =================================================== */
+    /*        AFFILIATE PAYMENT RUNS AFTER THE ROUTED CALL  */
+    /* =================================================== */
+
+    /// @dev Registration order in {BaseTest}: linear (1), offset progressive (2), progressive (3),
+    ///      dynamic fee (4). The offset progressive curve prices each share off supply, so a deposit
+    ///      that lands ahead of the user's would visibly change what the user is minted.
+    uint256 internal constant OFFSET_PROGRESSIVE_CURVE_ID = 2;
+
+    function _deployObservingRecipient(uint256 curveId) internal returns (MaliciousAffiliateFeeRecipient recipient) {
+        recipient = new MaliciousAffiliateFeeRecipient(
+            IFeeProxy(address(feeProxy)), IMultiVault(address(protocol.multiVault)), curveId
+        );
+        vm.deal(address(recipient), INITIAL_REGISTRATION_FEE + recipient.SELF_DEPOSIT());
+        recipient.register{ value: INITIAL_REGISTRATION_FEE }(_sampleFeeConfig());
+    }
+
+    function _assertRecipientRanAfterUser(
+        MaliciousAffiliateFeeRecipient recipient,
+        address user,
+        bytes32 termId,
+        uint256 curveId
+    ) internal view {
+        assertTrue(recipient.attackAttempted(), "fee recipient callback must have run");
+        assertTrue(recipient.selfDepositSucceeded(), "recipient may still trade on MultiVault for itself");
+        assertGt(recipient.victimSharesAtCallback(), 0, "user's position already existed when the recipient ran");
+        assertEq(
+            recipient.victimSharesAtCallback(),
+            protocol.multiVault.getShares(user, termId, curveId),
+            "user's position was fully settled before the recipient ran"
+        );
+        assertEq(address(feeProxy).balance, 0, "proxy balance conserved");
+    }
+
+    function test_affiliatePayment_runsAfterUserDeposit_recipientCannotRepriceProgressiveCurve() external {
+        assertEq(
+            protocol.curveRegistry.curveAddresses(OFFSET_PROGRESSIVE_CURVE_ID),
+            address(offsetProgressiveCurve),
+            "curve id 2 must be the offset progressive curve"
+        );
+        bytes32 atomId = _createAtomDirect("ordering-progressive", users.alice);
+        // Seed the progressive vault so a front-running deposit would move a live share price.
+        _makeDepositDirect(users.bob, users.bob, atomId, OFFSET_PROGRESSIVE_CURVE_ID, 10 ether);
+
+        MaliciousAffiliateFeeRecipient recipient = _deployObservingRecipient(OFFSET_PROGRESSIVE_CURVE_ID);
+        recipient.configure(MaliciousAffiliateFeeRecipient.AttackMode.ObserveVictimThenSelfDeposit, atomId, users.alice);
+
+        uint256 gross = 20 ether;
+        uint256 fee = (gross * SAMPLE_DEPOSIT_BPS) / BPS_DIVISOR + SAMPLE_DEPOSIT_FIXED_FEE;
+        (uint256 quotedShares,) = protocol.multiVault.previewDeposit(atomId, OFFSET_PROGRESSIVE_CURVE_ID, gross - fee);
+
+        // `minShares` is the pre-call quote: had the recipient's deposit landed first, the price
+        // would have moved and MultiVault would have rejected the user's deposit on slippage.
+        vm.deal(users.alice, gross);
+        vm.startPrank(users.alice);
+        uint256 routedShares = feeProxy.depositVia{ value: gross }(
+            address(recipient), users.alice, atomId, OFFSET_PROGRESSIVE_CURVE_ID, gross, quotedShares, _looseFeeGuard()
+        );
+        vm.stopPrank();
+
+        assertEq(routedShares, quotedShares, "user is minted exactly the pre-call quote");
+        assertGt(
+            protocol.multiVault.getShares(address(recipient), atomId, OFFSET_PROGRESSIVE_CURVE_ID),
+            0,
+            "recipient's own deposit landed, after the user's"
+        );
+        _assertRecipientRanAfterUser(recipient, users.alice, atomId, OFFSET_PROGRESSIVE_CURVE_ID);
+    }
+
+    function test_affiliatePayment_runsAfterUserOperation_depositBatchVia() external {
+        bytes32 atomA = _createAtomDirect("ordering-batch-a", users.alice);
+        bytes32 atomB = _createAtomDirect("ordering-batch-b", users.alice);
+
+        MaliciousAffiliateFeeRecipient recipient = _deployObservingRecipient(CURVE_ID);
+        recipient.configure(MaliciousAffiliateFeeRecipient.AttackMode.ObserveVictimThenSelfDeposit, atomA, users.alice);
+
+        bytes32[] memory termIds = new bytes32[](2);
+        termIds[0] = atomA;
+        termIds[1] = atomB;
+        uint256[] memory curveIds = new uint256[](2);
+        curveIds[0] = CURVE_ID;
+        curveIds[1] = CURVE_ID;
+        uint256[] memory assets = new uint256[](2);
+        assets[0] = 3 ether;
+        assets[1] = 2 ether;
+        uint256[] memory minShares = new uint256[](2);
+
+        vm.deal(users.alice, 5 ether);
+        vm.startPrank(users.alice);
+        feeProxy.depositBatchVia{ value: 5 ether }(
+            address(recipient), users.alice, termIds, curveIds, assets, minShares, _looseFeeGuard()
+        );
+        vm.stopPrank();
+
+        _assertRecipientRanAfterUser(recipient, users.alice, atomA, CURVE_ID);
+    }
+
+    function test_affiliatePayment_runsAfterUserOperation_createAtomsVia() external {
+        bytes memory atomData = "ordering-create-atom";
+        bytes32 atomId = calculateAtomId(atomData);
+
+        MaliciousAffiliateFeeRecipient recipient = _deployObservingRecipient(CURVE_ID);
+        recipient.configure(MaliciousAffiliateFeeRecipient.AttackMode.ObserveVictimThenSelfDeposit, atomId, users.alice);
+
+        vm.deal(users.alice, 2 ether);
+        vm.startPrank(users.alice);
+        bytes32[] memory ids = feeProxy.createAtomsVia{ value: 2 ether }(
+            address(recipient), _toBytesArray(string(atomData)), _toUintArray(2 ether), _looseFeeGuard()
+        );
+        vm.stopPrank();
+
+        assertEq(ids[0], atomId, "created atom id");
+        _assertRecipientRanAfterUser(recipient, users.alice, atomId, CURVE_ID);
+    }
+
+    function test_affiliatePayment_runsAfterUserOperation_createAtomsWithUrisVia() external {
+        bytes memory atomData = "ordering-create-atom-with-uris";
+        bytes32 atomId = calculateAtomId(atomData);
+        bytes[][] memory uris = new bytes[][](1);
+        uris[0] = new bytes[](1);
+        uris[0][0] = "https://example.com/ordering";
+
+        MaliciousAffiliateFeeRecipient recipient = _deployObservingRecipient(CURVE_ID);
+        recipient.configure(MaliciousAffiliateFeeRecipient.AttackMode.ObserveVictimThenSelfDeposit, atomId, users.alice);
+
+        vm.deal(users.alice, 2 ether);
+        vm.startPrank(users.alice);
+        bytes32[] memory ids = feeProxy.createAtomsWithUrisVia{ value: 2 ether }(
+            address(recipient), _toBytesArray(string(atomData)), _toUintArray(2 ether), uris, _looseFeeGuard()
+        );
+        vm.stopPrank();
+
+        assertEq(ids[0], atomId, "created atom id");
+        _assertRecipientRanAfterUser(recipient, users.alice, atomId, CURVE_ID);
+    }
+
+    function test_affiliatePayment_runsAfterUserOperation_createTriplesVia() external {
+        (bytes32 subjectId, bytes32 predicateId, bytes32 objectId) = _bootstrapTripleAtoms("ordering");
+        bytes32 tripleId = protocol.multiVault.calculateTripleId(subjectId, predicateId, objectId);
+
+        MaliciousAffiliateFeeRecipient recipient = _deployObservingRecipient(CURVE_ID);
+        recipient.configure(
+            MaliciousAffiliateFeeRecipient.AttackMode.ObserveVictimThenSelfDeposit, tripleId, users.alice
+        );
+
+        vm.deal(users.alice, 3 ether);
+        vm.startPrank(users.alice);
+        bytes32[] memory ids = feeProxy.createTriplesVia{ value: 3 ether }(
+            address(recipient),
+            _toBytes32Array(subjectId),
+            _toBytes32Array(predicateId),
+            _toBytes32Array(objectId),
+            _toUintArray(3 ether),
+            _looseFeeGuard()
+        );
+        vm.stopPrank();
+
+        assertEq(ids[0], tripleId, "created triple id");
+        _assertRecipientRanAfterUser(recipient, users.alice, tripleId, CURVE_ID);
     }
 
     struct VaultProbe {

@@ -46,9 +46,13 @@ contract DynamicFeeMedusaHandler is Test {
             redeemBaseBps: 200,
             redeemGrowthBps: 50,
             redeemCapBps: 1000,
-            redeemToFulcrumTiersBps: 0,
-            depositToPriorTierBps: 0,
-            minEligibleTierStake: 0
+            // The launch routing: three quarters of a redeem fee through the kernel, a tenth of a
+            // deposit fee as the prior-tier spike, so the exiting-tier slice, its walks, the spike and
+            // the cohort fallback are live from the first action. Both levers are then moved across
+            // their full range by the setters below.
+            redeemToFulcrumTiersBps: 7500,
+            depositToPriorTierBps: 1000,
+            minEligibleTierStakeBps: 0
         });
 
         DynamicFeeFlatPriceCurve impl = new DynamicFeeFlatPriceCurve();
@@ -101,11 +105,20 @@ contract DynamicFeeMedusaHandler is Test {
     }
 
     /// @notice Let the campaign explore the deposit prior-tier spike across its full range so the
-    ///         stateful net exercises the lump-to-nearest-occupied-prior-tier path, not just the
-    ///         pure-fulcrum default. Owner-only setter; the handler is the curve owner.
+    ///         stateful net exercises the spike's walk down the prior tiers, not just the kernel
+    ///         spread. Owner-only setter; the handler is the curve owner.
     function setPriorTierShare(uint256 shareBps) public {
         DynamicFeeConfig memory config = curve.getConfig();
         config.depositToPriorTierBps = _bound(shareBps, 0, 10_000);
+        curve.setConfig(config);
+    }
+
+    /// @notice Same for the redeem leg: the share of each redeem fee routed through the kernel, so
+    ///         the campaign covers the exiting-tier slice and its walks at zero, the pure spread at
+    ///         the full value, and every mix between.
+    function setFulcrumShare(uint256 shareBps) public {
+        DynamicFeeConfig memory config = curve.getConfig();
+        config.redeemToFulcrumTiersBps = _bound(shareBps, 0, 10_000);
         curve.setConfig(config);
     }
 

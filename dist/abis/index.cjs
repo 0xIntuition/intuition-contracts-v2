@@ -1987,7 +1987,17 @@ var MultiVaultAbi = [
     "name": "previewTripleCreate",
     "inputs": [
       {
-        "name": "termId",
+        "name": "subjectId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "predicateId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "objectId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
@@ -3577,7 +3587,17 @@ var MultiVaultAbi = [
   },
   {
     "type": "error",
+    "name": "MultiVault_DefaultCurveHasFeeHook",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "MultiVault_DefaultCurveMustBeInitializedViaCreatePaths",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MultiVault_DefaultCurveNotRegistered",
     "inputs": []
   },
   {
@@ -5820,7 +5840,17 @@ var MultiVaultMigrationModeAbi = [
     "name": "previewTripleCreate",
     "inputs": [
       {
-        "name": "termId",
+        "name": "subjectId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "predicateId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "objectId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
@@ -7423,7 +7453,17 @@ var MultiVaultMigrationModeAbi = [
   },
   {
     "type": "error",
+    "name": "MultiVault_DefaultCurveHasFeeHook",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "MultiVault_DefaultCurveMustBeInitializedViaCreatePaths",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MultiVault_DefaultCurveNotRegistered",
     "inputs": []
   },
   {
@@ -15481,19 +15521,6 @@ var DynamicFeeFlatPriceCurveAbi = [
   },
   {
     "type": "function",
-    "name": "MAX_MIN_ELIGIBLE_TIER_STAKE",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "MAX_REDEEM_CAP_BPS",
     "inputs": [],
     "outputs": [
@@ -15521,6 +15548,19 @@ var DynamicFeeFlatPriceCurveAbi = [
   {
     "type": "function",
     "name": "MAX_TIER_COUNT",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "NO_LOT",
     "inputs": [],
     "outputs": [
       {
@@ -15874,7 +15914,7 @@ var DynamicFeeFlatPriceCurveAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "minEligibleTierStake",
+            "name": "minEligibleTierStakeBps",
             "type": "uint256",
             "internalType": "uint256"
           }
@@ -16009,7 +16049,7 @@ var DynamicFeeFlatPriceCurveAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "minEligibleTierStake",
+            "name": "minEligibleTierStakeBps",
             "type": "uint256",
             "internalType": "uint256"
           }
@@ -16031,6 +16071,88 @@ var DynamicFeeFlatPriceCurveAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "lotMask",
+    "inputs": [
+      {
+        "name": "termId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "mask",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "lotRewardDebt",
+    "inputs": [
+      {
+        "name": "termId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "tier",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "debt",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "lotStake",
+    "inputs": [
+      {
+        "name": "termId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "tier",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "stake",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -16424,30 +16546,6 @@ var DynamicFeeFlatPriceCurveAbi = [
   },
   {
     "type": "function",
-    "name": "rewardDebt",
-    "inputs": [
-      {
-        "name": "termId",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "debt",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "setConfig",
     "inputs": [
       {
@@ -16531,7 +16629,7 @@ var DynamicFeeFlatPriceCurveAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "minEligibleTierStake",
+            "name": "minEligibleTierStakeBps",
             "type": "uint256",
             "internalType": "uint256"
           }
@@ -16708,7 +16806,7 @@ var DynamicFeeFlatPriceCurveAbi = [
   },
   {
     "type": "function",
-    "name": "userAvgTier",
+    "name": "userLots",
     "inputs": [
       {
         "name": "termId",
@@ -16723,9 +16821,14 @@ var DynamicFeeFlatPriceCurveAbi = [
     ],
     "outputs": [
       {
-        "name": "avgTierScaled",
-        "type": "uint256",
-        "internalType": "uint256"
+        "name": "tiers",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "stakes",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
       }
     ],
     "stateMutability": "view"
@@ -16756,7 +16859,7 @@ var DynamicFeeFlatPriceCurveAbi = [
   },
   {
     "type": "function",
-    "name": "userTier",
+    "name": "userTopTier",
     "inputs": [
       {
         "name": "termId",
@@ -16771,7 +16874,7 @@ var DynamicFeeFlatPriceCurveAbi = [
     ],
     "outputs": [
       {
-        "name": "tier",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -16950,13 +17053,7 @@ var DynamicFeeFlatPriceCurveAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "accountTier",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "accountAvgTier",
+        "name": "topTier",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -16982,13 +17079,13 @@ var DynamicFeeFlatPriceCurveAbi = [
     "name": "MinEligibleTierStakeUpdated",
     "inputs": [
       {
-        "name": "previousMinEligibleTierStake",
+        "name": "previousMinEligibleTierStakeBps",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
       },
       {
-        "name": "newMinEligibleTierStake",
+        "name": "newMinEligibleTierStakeBps",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -17099,6 +17196,43 @@ var DynamicFeeFlatPriceCurveAbi = [
   },
   {
     "type": "event",
+    "name": "RedeemLotRecorded",
+    "inputs": [
+      {
+        "name": "termId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "lotTier",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "lotShares",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "lotFee",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "RedeemRecorded",
     "inputs": [
       {
@@ -17126,7 +17260,7 @@ var DynamicFeeFlatPriceCurveAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "exitTier",
+        "name": "topTier",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -21037,7 +21171,17 @@ var MultiVaultLibAbi = [
     "name": "calculateTripleCreate",
     "inputs": [
       {
-        "name": "termId",
+        "name": "subjectId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "predicateId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "objectId",
         "type": "bytes32",
         "internalType": "bytes32"
       },

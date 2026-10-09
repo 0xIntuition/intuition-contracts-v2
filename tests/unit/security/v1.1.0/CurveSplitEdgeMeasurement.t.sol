@@ -19,11 +19,12 @@ import { DynamicFeeConfig } from "src/interfaces/IDynamicFeeFlatPriceCurve.sol";
 ///         Two things are asserted rather than merely printed, so this is a regression guard and not
 ///         just a report:
 ///           1. every sampled arrangement stays under the ceiling the neutrality suite uses, and
-///           2. the wallet-count residual SATURATES — the high-N half of the range is no worse than
-///              the low-N half. That is the load-bearing economic property. A residual that grew with
-///              wallet count would be a sybil attack that scales; one that plateaus is a structural
-///              floor of the position model (one account holds one stake-weighted bucket, N accounts
-///              hold N), which is documented and deliberately out of scope to close.
+///           2. the wallet-count residual is ZERO on the deposit leg, and so trivially saturates. One
+///              account's lots are the same lots N accounts would hold, one per band entered, and
+///              the deposit leg applies no per-account exclusion, so it cannot tell the two
+///              arrangements apart. Under the earlier averaged position model (one account held one
+///              stake-weighted bucket, N accounts held N) the residual was a structural floor that
+///              merely plateaued with N; the sweep here is what guards that it stays closed.
 ///
 ///         The printed maxima are the source of the figures quoted in {CurveDepositNeutralityTest}'s
 ///         ceiling notes. Re-run this file after any change to the ladder, the kernel or the fee
@@ -71,7 +72,7 @@ contract CurveSplitEdgeMeasurementTest is Test {
             redeemCapBps: 1000,
             redeemToFulcrumTiersBps: 0,
             depositToPriorTierBps: 0,
-            minEligibleTierStake: 0
+            minEligibleTierStakeBps: 0
         });
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
             address(implementation),
@@ -195,24 +196,14 @@ contract CurveSplitEdgeMeasurementTest is Test {
         assertLt(worstBps, NEUTRALITY_SUB_BAND_CEILING_BPS, "a sampled sub-band split exceeded the suite's ceiling");
     }
 
-    /// @dev Does the residual have a configuration lever? The intuitive answer is "narrow the earning
-    ///      window so one account can occupy fewer of its tiers at once", and it is WRONG in both
-    ///      directions. This measures it rather than reasoning about it, because reasoning about it is
-    ///      how the wrong answer got written down in the first place.
-    ///
-    ///      A sigma at or below one tier does not narrow the spread, it COLLAPSES it: every prior tier
-    ///      falls outside the triangular window, `sumWeights` reaches zero, and the whole pool is
-    ///      awarded to a single tier. A split arrangement has a wallet sitting in that tier and a lump
-    ///      does not, so winner-takes-all is the best case for the splitter, not the worst.
-    ///
-    ///      Lowering `depositFulcrumAlphaBps` raises it too, for the mirror reason: it moves the peak from the
-    ///      tiers nearest the source down onto the earliest tiers. A single averaged bucket sits near
-    ///      the middle of what the deposit traversed; a split arrangement has a wallet at the bottom of
-    ///      it. Moving the peak to an extreme rewards whoever can occupy extremes.
-    ///
-    ///      The shipped `(depositFulcrumAlphaBps = BPS, sigma = 4e18)` is therefore already in a reasonable part
-    ///      of the space. Asserted loosely — these are small-sample maxima and the point is the
-    ///      DIRECTION, not the values.
+    /// @dev The kernel configuration is not a lever on the wallet residual, in either direction. Under
+    ///      the averaged position model it was: a sigma at or below one tier collapses the spread to a
+    ///      single winner-takes-all tier, and a low `depositFulcrumAlphaBps` moves the peak onto the
+    ///      earliest tiers, and both rewarded the arrangement that had a wallet sitting at the extreme
+    ///      while a lump's averaged bucket sat in the middle. With one lot per band a lump occupies the
+    ///      same tiers a split does, so whichever tier the kernel favours, both arrangements hold it
+    ///      equally. Measured at the shipped kernel and at both levers rather than argued, since
+    ///      arguing about it is how the earlier wrong answer got written down.
     function test_measure_theObviousConfigLeversDoNotReduceTheResidual() external {
         uint256 shipped = _worstWalletEdgeBpsAt(10_000, 4e18, 8);
         uint256 collapsedSigma = _worstWalletEdgeBpsAt(10_000, 1e18, 8);
@@ -222,8 +213,9 @@ contract CurveSplitEdgeMeasurementTest is Test {
         console.log("sub-tier sigma (sigma=1)     edge bps:", collapsedSigma);
         console.log("lowered alpha  (alpha=0)     edge bps:", loweredAlpha);
 
-        assertGt(collapsedSigma, shipped, "a sub-tier sigma makes the residual worse, not better");
-        assertGt(loweredAlpha, shipped, "lowering the fulcrum onto the earliest tiers makes it worse");
+        assertEq(shipped, 0, "no wallet residual at the shipped kernel");
+        assertEq(collapsedSigma, 0, "a collapsed spread opens none either");
+        assertEq(loweredAlpha, 0, "nor does a fulcrum on the earliest tiers");
     }
 
     /// @dev {_worstWalletEdgeBps} against a non-default kernel. Kept separate so the main sweep stays
@@ -285,7 +277,7 @@ contract CurveSplitEdgeMeasurementTest is Test {
             redeemCapBps: 1000,
             redeemToFulcrumTiersBps: 0,
             depositToPriorTierBps: 0,
-            minEligibleTierStake: 0
+            minEligibleTierStakeBps: 0
         });
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
             address(implementation),

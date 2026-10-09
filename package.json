@@ -102,6 +102,7 @@
     "prettier:check": "prettier --check \"**/*.{json,md,yml}\"",
     "prettier:write": "prettier --write \"**/*.{json,md,yml}\"",
     "test": "forge test",
+    "test:upgrades": "bun test script/intuition/v1.0.2/safe-txs",
     "coverage": "forge coverage --no-match-coverage '(script|tests|src/legacy)'",
     "test:coverage": "forge coverage",
     "test:coverage:report": "forge coverage --no-match-coverage '(script|tests|src/legacy)' --report lcov && genhtml lcov.info --branch-coverage --output-dir coverage --ignore-errors inconsistent",

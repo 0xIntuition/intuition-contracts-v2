@@ -5,6 +5,7 @@ import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
+import { LibBit } from "solady/utils/LibBit.sol";
 import { LibSort } from "solady/utils/LibSort.sol";
 
 import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
@@ -33,25 +34,28 @@ import {
  *
  * @dev    A deposit is replayed band by band: each band is charged its own rate and distributes its
  *         slice of the fee to the tiers strictly below it, before that band's own stake lands
- *         ({_replayDepositBands}). A redeem fee is charged at the exiting holder's bucket and
- *         splits between that tier's other holders and the prior tiers ({recordRedeem}). Both legs
- *         reach the prior tiers through the same sliding-fulcrum triangular kernel
- *         ({_payFulcrumTiers}), and both rates come from {_depositFeeBps} / {_redeemFeeBps}.
+ *         ({_replayDepositBands}). Stake is held as lots, one per holder and tier, each keyed to
+ *         the band it landed in. A redeem unwinds the holder's lots highest tier first, charges each
+ *         portion at its own lot's rate, and splits each portion between that tier's other holders
+ *         and the prior tiers ({recordRedeem}). Both legs reach the prior tiers through the same
+ *         sliding-fulcrum triangular kernel ({_payFulcrumTiers}), and both rates come from
+ *         {_depositFeeBps} / {_redeemFeeBps}.
  *
  * @dev    Credit uses an O(1) MasterChef-style accumulator rather than an O(cohort) push:
- *         `accFeePerShare[termId][tier]` tracks fee per unit of stake, and a holder's unsettled amount
- *         is `stake * accFeePerShare[bucket] - rewardDebt`. A bucket is `round(avgEntryTier)`, the
- *         holder's stake-weighted average entry tier. Settling moves a term's unsettled amount into
- *         the account-wide settled balance that {claim} pays out. The redeem leg excludes the exiter
- *         exactly, by omitting their stake from the recipient denominator and re-basing their
- *         `rewardDebt`; the deposit leg applies no such subtraction.
+ *         `accFeePerShare[termId][tier]` tracks fee per unit of stake, and a lot's unsettled amount
+ *         is `lotStake * accFeePerShare[tier] - lotRewardDebt`. A holder's position is the set of
+ *         lots flagged in `lotMask`, at most one per tier, so settling is O(lots) with lots bounded
+ *         by `tierCount`. Settling moves a term's unsettled amount into the account-wide settled
+ *         balance that {claim} pays out. The redeem leg excludes the exiter exactly, by omitting
+ *         their residual lots from every recipient denominator and re-basing their lot debts; the
+ *         deposit leg applies no such subtraction.
  *
  * @dev    Custody: this contract holds the redistributed fee TRUST (native), and principal stays in
- *         {MultiVault} at par. `Ownable`, and on governed networks the owner is the parameters
- *         `TimelockController`, so every fee action runs the same Safe and timelock path as the
- *         equivalent MultiVault setters. Integer accumulator division leaves sub-wei-per-share dust
- *         as an unattributed contract balance; undistributable fee accrual goes to {protocolAccrued}.
- *         Neither path touches principal.
+ *         {MultiVault} at par. `Ownable2Step`, and on governed networks the owner is the admin Safe,
+ *         so fee actions execute without a timelock delay; the fee caps are immutable and proxy
+ *         upgrades stay behind the upgrades timelock. Integer accumulator division leaves
+ *         sub-wei-per-share dust as an unattributed contract balance; undistributable fee accrual
+ *         goes to {protocolAccrued}. Neither path touches principal.
  */
 contract DynamicFeeFlatPriceCurve is
     LinearCurve,
@@ -60,6 +64,7 @@ contract DynamicFeeFlatPriceCurve is
     IDynamicFeeFlatPriceCurve
 {
     using FixedPointMathLib for uint256;
+    using LibBit for uint256;
     using LibSort for uint256[];
 
     /* =================================================== */
@@ -72,11 +77,20 @@ contract DynamicFeeFlatPriceCurve is
     /// @notice Fixed-point scale for the per-tier fee accumulator.
     uint256 public constant ACC_PRECISION = 1e18;
 
-    /// @notice Fixed-point scale for the stake-weighted average entry tier.
+    /// @notice Fixed-point scale for tier distances in the fulcrum kernel.
     uint256 public constant TIER_PRECISION = 1e18;
+
+    /// @notice Sentinel returned by {userTopTier} and carried by {DepositRecorded} when the account
+    ///         holds no lot: one past the highest tier index a 256-bit lot mask can hold.
+    uint256 public constant NO_LOT = 256;
 
     /// @dev Fixed-point one, for the compounding tier-width math.
     uint256 private constant WAD = 1e18;
+
+    /// @dev Scale of an effective weight in the fulcrum spread: a kernel weight in `TIER_PRECISION`
+    ///      times a fill ratio carried at `TIER_PRECISION`, so a tier at the edge of the window, whose
+    ///      kernel weight is a single unit, keeps its share instead of rounding to nothing.
+    uint256 private constant WEIGHT_PRECISION = TIER_PRECISION * TIER_PRECISION;
 
     /// @notice Upper bound on the triangular spread `σ`, in `TIER_PRECISION` tier units. Bounds the
     ///         earning window and keeps the weight math well away from overflow; far wider than any
@@ -109,33 +123,6 @@ contract DynamicFeeFlatPriceCurve is
     ///         configuration from the reachable set. Immutable.
     uint256 public constant MAX_REDEEM_CAP_BPS = 2000;
 
-    /// @notice Hard ceiling on `config.minEligibleTierStake`, above which no floor may be stored.
-    /// @dev    Bounds how much of the fee stream governance can starve into {protocolAccrued}. Without
-    ///         it the floor would expand owner power rather than restate it: a huge `width0` can
-    ///         already route every deposit fee to the protocol bucket (the vault falls inside tier 0,
-    ///         so {_payFulcrumTiers} short-circuits on `span == 0`), but redeem fees key on the
-    ///         holder's bucket and still reach real cohorts. An unbounded floor would starve both
-    ///         streams in one transaction, and {sweepProtocol} would collect.
-    ///
-    ///         The guarantee is narrow: the floor can never exceed 1000 TRUST, so any tier whose
-    ///         recipient stake is at least that much always qualifies. Recipient stake is raw
-    ///         `tierStake` on the deposit leg, which applies no exclusion, and `tierStake` less the
-    ///         exiter's own residual on the redeem leg — so on that leg a tier holding far more than
-    ///         the ceiling can still fail the test.
-    ///
-    ///         It does not guarantee that some tier always qualifies. `Σ tierStake[termId][t] ==
-    ///         vaultStake` bounds only the raw bucket totals, and the redeem path's sub-floor branch
-    ///         does not search for a qualifying tier at all, so an orphaned slice accrues straight to
-    ///         {protocolAccrued}. A term of any size can therefore route a fee wholly to
-    ///         {protocolAccrued} under a high floor. The ceiling caps the magnitude of a governance
-    ///         parameter; it is not an anti-starvation invariant.
-    ///
-    ///         The value is a policy ceiling rather than a constant derived from a particular schedule.
-    ///         It is sized against a tier-0 width on the order of a few thousand TRUST, and a `width0`
-    ///         configured orders of magnitude away from that would need it revisited. Immutable, since
-    ///         it bounds what governance may configure.
-    uint256 public constant MAX_MIN_ELIGIBLE_TIER_STAKE = 1000e18;
-
     /* =================================================== */
     /*                    STATE VARIABLES                  */
     /* =================================================== */
@@ -164,23 +151,27 @@ contract DynamicFeeFlatPriceCurve is
     ///         vault would make the ladder read the wrong quantity.
     mapping(bytes32 termId => uint256 stake) public vaultStake;
 
-    /// @notice Sum of stake held by users whose bucket (`round(avgEntryTier)`) is `tier`.
+    /// @notice Sum of the lots sitting at `tier`: the stake that entered through that band and has
+    ///         not been redeemed. Every lot stays at its entry tier for life.
     mapping(bytes32 termId => mapping(uint256 tier => uint256 stake)) public tierStake;
 
     /// @notice ACC_PRECISION-scaled accumulated fee per unit of stake, per vault and tier.
     mapping(bytes32 termId => mapping(uint256 tier => uint256 acc)) public accFeePerShare;
 
-    /// @notice A user's tracked stake in a vault (equal to their dynamic-curve share balance).
+    /// @notice A user's tracked stake in a vault (equal to their dynamic-curve share balance), the
+    ///         sum of their lots.
     mapping(bytes32 termId => mapping(address account => uint256 stake)) public userStake;
 
-    /// @notice A user's bucket, `round(avgEntryTier)`; selects which tier accumulator they earn from.
-    mapping(bytes32 termId => mapping(address account => uint256 tier)) public userTier;
+    /// @notice A user's lot at `tier`: the stake they hold that entered through that band. A holder
+    ///         has at most one lot per tier; a later deposit landing in the same band tops it up.
+    mapping(bytes32 termId => mapping(address account => mapping(uint256 tier => uint256 stake))) public lotStake;
 
-    /// @notice A user's TIER_PRECISION-scaled stake-weighted average entry tier.
-    mapping(bytes32 termId => mapping(address account => uint256 avgTierScaled)) public userAvgTier;
+    /// @notice A lot's settled reward debt: `lotStake * accFeePerShare[tier] / ACC_PRECISION`.
+    mapping(bytes32 termId => mapping(address account => mapping(uint256 tier => uint256 debt))) public lotRewardDebt;
 
-    /// @notice A user's settled reward debt: `stake * accFeePerShare[userTier] / ACC_PRECISION`.
-    mapping(bytes32 termId => mapping(address account => uint256 debt)) public rewardDebt;
+    /// @notice Bit `tier` is set iff `lotStake[termId][account][tier] > 0`. The position's index: the
+    ///         settle and unwind loops walk its set bits, and its highest bit is the holder's top lot.
+    mapping(bytes32 termId => mapping(address account => uint256 mask)) public lotMask;
 
     /// @notice Settled native earnings per account, across all terms, awaiting {claim}.
     mapping(address account => uint256 amount) internal settledEarnings;
@@ -189,18 +180,25 @@ contract DynamicFeeFlatPriceCurve is
     /// @dev    Mostly whole slices rather than rounding dust. The balance accrues from:
     ///         (1) a deposit or redeem fee whose source tier is 0, leaving no prior tier to spread
     ///             to ({_payFulcrumTiers} short-circuits on `span == 0`). This keys on the source
-    ///             tier, not on whether holders exist: buckets are `round(avgEntryTier)`, so holders
+    ///             tier, not on whether holders exist: lots stay at their entry tier, so holders
     ///             can remain recorded at higher tiers with non-zero `tierStake` while `vaultStake`
     ///             has fallen back inside `edge(0)`;
-    ///         (2) a fulcrum pool for which no prior tier is eligible at all, including the
-    ///             last-redeemer case ({_awardNearestOrProtocol});
-    ///         (3) the exiting-tier slice when that tier's residual cohort holds stake but less than
-    ///             `config.minEligibleTierStake` ({recordRedeem});
-    ///         (4) the kernel-allocation remainder — `fulcrumFeePool` less the sum of the credited slices —
-    ///             which also absorbs any single slice that floors to zero ({_payFulcrumTiers}).
-    ///         (1) through (3) are the intended terminal behaviour: with no cohort to reward, the
-    ///         protocol absorbs the fee rather than forfeiting it. The name means "undistributable",
-    ///         not "negligible" — for a young or shrunken vault it can be the whole fee stream.
+    ///         (2) a fulcrum pool for which no prior tier is eligible at all, neither inside the
+    ///             kernel window nor in the fill-only fallback across the whole prior ladder,
+    ///             including the last-redeemer case;
+    ///         (3) the part of a pool that no stake is there to earn at the schedule rate: the spread
+    ///             weights each tier by its occupancy, so over-full tiers absorb what thinner ones
+    ///             leave, but once the prior ladder as a whole holds less than its widths every tier
+    ///             is paid at the schedule ceiling and the shortfall lands here ({_payFulcrumTiers});
+    ///         (4) the part of a single-target credit, the deposit spike or a redeemed lot's
+    ///             exiting-tier slice, that no candidate tier could take at its fill
+    ///             ({_creditDownward}, {_rerouteExitSlice}). Every tier has already taken its fill of
+    ///             it, so the spread would pay the same tiers a second time.
+    ///         All four are the intended terminal behaviour: with no cohort to reward at the schedule
+    ///         rate, the protocol absorbs the fee rather than forfeiting it or paying a thin seat above
+    ///         the schedule. The name means "undistributable", not "negligible" — for a young vault it
+    ///         can be the whole fee stream, since every first band and every exit while the vault sits
+    ///         in tier 0 has no prior tier to reach.
     ///
     ///         Not covered by this balance: {_creditByWeight} counts a slice as assigned even when its
     ///         per-share increment floors to zero. Such a slice credits no account, is not added here,
@@ -224,17 +222,16 @@ contract DynamicFeeFlatPriceCurve is
         uint256 redeemKernelSpread
     );
     /// @notice One deposit, summarized. `sourceTier` is the vault's tier before the deposit (the
-    ///         first band the stake traversed); `accountTier` / `accountAvgTier` are the account's
-    ///         `userTier` / `userAvgTier` after it. {DepositBandRecorded} carries the per-band
-    ///         breakdown that produced them.
+    ///         first band the stake traversed); `topTier` is the account's highest lot after it, or
+    ///         `NO_LOT` when the account still holds none. {DepositBandRecorded} carries the
+    ///         per-band breakdown that produced them.
     event DepositRecorded(
         bytes32 indexed termId,
         address indexed account,
         uint256 shares,
         uint256 fee,
         uint256 sourceTier,
-        uint256 accountTier,
-        uint256 accountAvgTier
+        uint256 topTier
     );
 
     /// @notice One tier band of one deposit: the portion of the stake that landed in `bandTier` and
@@ -244,8 +241,15 @@ contract DynamicFeeFlatPriceCurve is
     event DepositBandRecorded(
         bytes32 indexed termId, address indexed account, uint256 bandTier, uint256 bandStake, uint256 bandFee
     );
-    event RedeemRecorded(
-        bytes32 indexed termId, address indexed account, uint256 shares, uint256 fee, uint256 exitTier
+    /// @notice One redeem, summarized. `topTier` is the account's highest lot before the unwind,
+    ///         the first lot the redeem drew from. {RedeemLotRecorded} carries the per-lot breakdown.
+    event RedeemRecorded(bytes32 indexed termId, address indexed account, uint256 shares, uint256 fee, uint256 topTier);
+
+    /// @notice One lot's portion of one redeem: `lotShares` taken from the account's lot at
+    ///         `lotTier` and the portion of the fee charged and distributed for it. Emitted once per
+    ///         lot the redeem draws from, highest tier first.
+    event RedeemLotRecorded(
+        bytes32 indexed termId, address indexed account, uint256 lotTier, uint256 lotShares, uint256 lotFee
     );
     event Claimed(address indexed account, uint256 amount);
     event ProtocolAccruedIncreased(uint256 amount);
@@ -253,7 +257,7 @@ contract DynamicFeeFlatPriceCurve is
     event RedeemFeeRerouted(bytes32 indexed termId, uint256 exitTier, uint256 recipientTier, uint256 amount);
     event TierFeeOverrideSet(uint256 indexed tier, uint16 depositFeeBps, uint16 redeemFeeBps);
     event TierFeeOverrideCleared(uint256 indexed tier);
-    event MinEligibleTierStakeUpdated(uint256 previousMinEligibleTierStake, uint256 newMinEligibleTierStake);
+    event MinEligibleTierStakeUpdated(uint256 previousMinEligibleTierStakeBps, uint256 newMinEligibleTierStakeBps);
 
     /* =================================================== */
     /*                        ERRORS                       */
@@ -331,15 +335,15 @@ contract DynamicFeeFlatPriceCurve is
     ///
     ///         Positions are not migrated. The accumulators are index-keyed
     ///         (`accFeePerShare[termId][tier]`), and changing `width0`, `tierWidthGrowthBps` or `tierCount`
-    ///         changes what each index means without moving any holder between indices. A holder
-    ///         keeps their recorded bucket while that bucket denotes a different band, so the fee
-    ///         stream re-targets: the cohort a slice was promised to is not necessarily the cohort
-    ///         that receives it afterwards. Migrating positions instead would be unbounded in the
-    ///         number of holders, which makes a retune an economic action rather than a parameter
-    ///         tweak. {ConfigUpdated} emits the new ladder shape, which makes one observable.
+    ///         changes what each index means without moving any lot between indices. A lot keeps
+    ///         its recorded tier while that tier denotes a different band, so the fee stream
+    ///         re-targets: the cohort a slice was promised to is not necessarily the cohort that
+    ///         receives it afterwards. Migrating positions instead would be unbounded in the number
+    ///         of holders, which makes a retune an economic action rather than a parameter tweak.
+    ///         {ConfigUpdated} emits the new ladder shape, which makes one observable.
     ///
-    ///         `tierCount` may only grow once set, so no occupied bucket can be stranded above the
-    ///         schedule ({_roundTier} and the distribution walk always cover every live bucket index).
+    ///         `tierCount` may only grow once set, so no occupied lot tier can be stranded above the
+    ///         schedule (the distribution walk always covers every live tier index).
     /// @param _config The new configuration
     function setConfig(DynamicFeeConfig calldata _config) external onlyOwner {
         _setConfig(_config);
@@ -418,16 +422,17 @@ contract DynamicFeeFlatPriceCurve is
     }
 
     /// @inheritdoc IBaseCurve
-    /// @dev The rate keys on `account`'s tracked entry tier; an account with no tracked stake (e.g.
-    ///      the account-less preview path passing address(0)) falls back to the vault's current tier.
+    /// @dev Piecewise across `account`'s lots, highest tier first, each portion at its own lot's
+    ///      rate ({_lotRedeemFee}). Flat 1:1 pricing means `grossAssets` is also the share count the
+    ///      unwind walks. An account with no lots (e.g. the account-less preview path passing
+    ///      address(0)) is priced at the vault's current tier.
     function quoteRedeemFee(bytes32 termId, address account, uint256 grossAssets)
         external
         view
         override
         returns (uint256 fee)
     {
-        uint256 rateTier = userStake[termId][account] > 0 ? userTier[termId][account] : _tierOf(vaultStake[termId]);
-        return grossAssets.mulDivUp(_redeemFeeBps(rateTier), BPS);
+        return _lotRedeemFee(termId, account, grossAssets);
     }
 
     /* =================================================== */
@@ -475,18 +480,17 @@ contract DynamicFeeFlatPriceCurve is
             vaultStake[termId] = startAssets + shares;
         }
 
-        emit DepositRecorded(
-            termId, account, shares, feeAmount, sourceTier, userTier[termId][account], userAvgTier[termId][account]
-        );
+        emit DepositRecorded(termId, account, shares, feeAmount, sourceTier, lotMask[termId][account].fls());
     }
 
     /// @inheritdoc IBaseCurve
-    /// @dev Receives the redeem fee as native value and distributes it to the residual holders of
-    ///      the exiting tier, with a configurable `redeemToFulcrumTiersBps` slice routed to the
-    ///      eligible prior tiers through the triangular fulcrum kernel; the exiter is excluded from
-    ///      the fee they pay. When the exiting tier has no residual cohort, its slice falls through to
-    ///      the nearest eligible tier (above first, then below) rather than to the protocol.
-    ///      `onlyMultiVault`.
+    /// @dev Receives the redeem fee as native value and distributes it per lot drawn: a configurable
+    ///      `redeemToFulcrumTiersBps` slice to the eligible prior tiers through the occupancy-weighted
+    ///      fulcrum kernel, the rest to the other holders of that lot's tier up to their fill, then
+    ///      to the eligible tiers above and below, each up to its fill. The exiter is excluded from
+    ///      the fee they pay at every tier. When the kernel spread can place nothing, the fulcrum
+    ///      slices go to the cohorts of the drawn lots' tiers, capped; what no holder can take
+    ///      accrues to the protocol bucket. `onlyMultiVault`.
     function recordRedeem(bytes32 termId, address account, uint256 shares)
         external
         payable
@@ -499,81 +503,38 @@ contract DynamicFeeFlatPriceCurve is
         uint256 feeAmount = msg.value;
         // Tier before the exit is removed — matches the spec's `currentTier` for the fulcrum split.
         uint256 currentTier = _tierOf(vaultStake[termId]);
-        uint256 exitTier = userTier[termId][account];
+        uint256 topTier = lotMask[termId][account].fls();
 
-        // Settle the exiter, then remove the exiting portion so they are excluded from the fee they
-        // are about to pay.
+        // Bank everything the position has earned so far, then take the exiting stake from the lots,
+        // highest tier first, so the exiter's residual lots are outside every denominator below.
         _settle(termId, account);
-        userStake[termId][account] -= shares;
-        tierStake[termId][exitTier] -= shares;
-        uint256 residual = userStake[termId][account];
+        (uint256[] memory lotTiers, uint256[] memory lotShares, uint256 residualMask) =
+            _unwindLots(termId, account, shares);
 
-        uint256 toFulcrum = feeAmount.mulDiv(config.redeemToFulcrumTiersBps, BPS);
-        uint256 toExitingTier = feeAmount - toFulcrum;
-        uint256 undistributed;
+        // (1) Per lot: its portion of the fee splits into an exiting-tier slice for that tier's other
+        //     holders and a fulcrum slice. Whatever the exiting-tier slice cannot place across every
+        //     tier at the schedule rate is carried as `leftover` and accrues: every tier has already
+        //     taken its fill of it, and the spread would offer it to the same tiers a second time.
+        (uint256 fulcrum, uint256 leftover) = _distributeLotFees(termId, account, feeAmount, lotTiers, lotShares);
 
-        // (1) Exiting-tier slice -> the residual holders of the exiting tier (exiter excluded).
-        // `cohortStake` is exactly the other holders' stake in the exiting tier: `tierStake` has already had
-        // `shares` removed above and `residual` is the exiter's remainder, so the redemption
-        // size cancels out. An exiter therefore cannot size a partial redeem to push their own tier
-        // under the floor and steer the fee — `cohortStake` does not depend on `shares`.
-        uint256 cohortStake = tierStake[termId][exitTier] - residual;
-        if (toExitingTier > 0) {
-            if (_isEligibleStake(cohortStake)) {
-                accFeePerShare[termId][exitTier] += toExitingTier.fullMulDiv(ACC_PRECISION, cohortStake);
-            } else if (cohortStake == 0) {
-                // The exiting tier has no residual cohort at all, so rather than forfeit its slice to
-                // the protocol, route it to the nearest eligible tier — searched above first, so the
-                // holder who sat above the exiter earns it, then below. Only when no other tier holds
-                // eligible stake (the last-withdrawer / empty-vault case) does it fall through to
-                // {_payFulcrumTiers}, and ultimately to protocol accrual.
-                (uint256 recipientTier, uint256 recipientStake) = _nearestEligibleTier(termId, exitTier);
-                // Sentinel, not an occupancy test: {_nearestEligibleTier} already applies the floor and
-                // returns `(0, 0)` when nothing qualifies. This only asks whether the scan found one.
-                if (recipientStake > 0) {
-                    accFeePerShare[termId][recipientTier] += toExitingTier.fullMulDiv(ACC_PRECISION, recipientStake);
-                    emit RedeemFeeRerouted(termId, exitTier, recipientTier, toExitingTier);
-                } else {
-                    undistributed += toExitingTier;
-                }
-            } else {
-                // The cohort exists but is sub-floor, which orphans the slice: its intended recipients
-                // are disqualified. Reachable only once the floor is live, since
-                // `0 < cohortStake < minEligibleTierStake` is an empty domain at the zero default.
-                // It accrues to the protocol rather than being redistributed, because every
-                // redistribution route available here concentrates on one tier and is steerable by
-                // whoever is willing to post the floor:
-                //   - The reroute above is winner-takes-all and searches upward first, so a position
-                //     one tier up takes the whole exit fee, undiluted.
-                //   - Folding into the fulcrum spread is no better. A sole eligible prior tier takes
-                //     its entire kernel share, and {_weighPriorTiers} records a non-zero `stakes`
-                //     entry for an eligible tier even when the kernel gives it zero weight. Once the
-                //     floor disqualifies every positive-weight tier, `sumWeights` is zero and
-                //     {_awardNearestOrProtocol} — which reads `stakes` and ignores `weights` — hands
-                //     the whole pool to a tier the kernel says earns nothing.
-                // At floor 0 none of this arises: the residual cohort is eligible and receives the
-                // slice, so the orphaned slice goes to the one sink with no beneficiary to steer.
-                protocolAccrued += toExitingTier;
-                emit ProtocolAccruedIncreased(toExitingTier);
-            }
-        }
-
-        // (2) Fulcrum slice (+ any undistributable exiting-tier slice) -> the eligible prior tiers.
-        _payFulcrumTiers(
-            termId,
-            toFulcrum + undistributed,
-            currentTier,
-            exitTier,
-            residual,
-            config.redeemFulcrumAlphaBps,
-            config.redeemKernelSpread
+        // (2) One fulcrum spread for the whole redeem, from the vault's tier, with every residual lot
+        //     of the exiter excluded. If the spread could place nothing at all (the vault sits in
+        //     tier 0, or every prior tier is empty), the fulcrum slices go to the cohorts of the tiers
+        //     this redeem drew from instead. Only what nobody can take accrues to the protocol.
+        uint256 unpaid = _payFulcrumTiers(
+            termId, fulcrum, currentTier, account, config.redeemFulcrumAlphaBps, config.redeemKernelSpread
         );
+        if (unpaid == fulcrum && fulcrum > 0) {
+            unpaid = _creditLotCohorts(termId, account, lotTiers, fulcrum);
+        }
+        _accrueToProtocol(unpaid + leftover);
 
-        // Re-base against the post-distribution accumulator: excludes the exiter from their own fee.
-        rewardDebt[termId][account] = residual.fullMulDiv(accFeePerShare[termId][exitTier], ACC_PRECISION);
+        // Re-base every residual lot against the post-distribution accumulators: excludes the exiter
+        // from their own fee on every tier it reached.
+        _rebaseLots(termId, account, residualMask);
         vaultStake[termId] -= shares;
 
-        emit RedeemRecorded(termId, account, shares, feeAmount, exitTier);
+        emit RedeemRecorded(termId, account, shares, feeAmount, topTier);
     }
 
     /* =================================================== */
@@ -680,26 +641,30 @@ contract DynamicFeeFlatPriceCurve is
     }
 
     /// @dev Shared term-scoped pending computation behind {claimable}, {pendingFor} and {claimableAcross}.
-    ///      Does not consult `config.minEligibleTierStake`. The floor gates who receives future credit,
+    ///      Does not consult `config.minEligibleTierStakeBps`. The floor gates who receives future credit,
     ///      not who may surface credit already earned. Applying `_isEligibleStake` here, or in
     ///      {_settle}, {claim}, {claimable} or {claimableAcross}, would strand earned funds:
     ///      `accFeePerShare` would still hold the credit but nothing would read it out, and `settledEarnings` is
     ///      only ever written from {_settle}.
-    function _pendingFor(address account, bytes32 termId) private view returns (uint256) {
-        uint256 stake = userStake[termId][account];
-        if (stake == 0) return 0;
-        uint256 accumulated = stake.fullMulDiv(accFeePerShare[termId][userTier[termId][account]], ACC_PRECISION);
-        uint256 debt = rewardDebt[termId][account];
-        return accumulated > debt ? accumulated - debt : 0;
+    function _pendingFor(address account, bytes32 termId) private view returns (uint256 pending) {
+        uint256 mask = lotMask[termId][account];
+        while (mask != 0) {
+            uint256 tier = mask.fls();
+            uint256 accumulated =
+                lotStake[termId][account][tier].fullMulDiv(accFeePerShare[termId][tier], ACC_PRECISION);
+            uint256 debt = lotRewardDebt[termId][account][tier];
+            if (accumulated > debt) pending += accumulated - debt;
+            mask ^= 1 << tier;
+        }
     }
 
     /// @notice Account-aware redeem preview: the net assets `account` would receive for `shares`,
-    ///         after this curve's redeem fee priced at that account's recorded tier.
+    ///         after this curve's redeem fee priced across that account's lots.
     /// @dev    `IMultiVault.previewRedeem` is account-agnostic and reaches {quoteRedeemFee} with
-    ///         `address(0)`, which falls back to the vault's current tier. A holder's tier is their
-    ///         stake-weighted average entry tier and routinely differs, so the vault-level preview
-    ///         diverges from execution in both directions; this function is the holder-accurate
-    ///         quote. Flat 1:1 pricing means gross assets equal shares.
+    ///         `address(0)`, which falls back to the vault's current tier. A holder's shares are
+    ///         priced lot by lot from their highest tier down and routinely differ, so the
+    ///         vault-level preview diverges from execution in both directions; this function is the
+    ///         holder-accurate quote. Flat 1:1 pricing means gross assets equal shares.
     /// @dev    Not an execution-net payout. The returned figure is net of this curve's redeem fee
     ///         only; MultiVault additionally charges its own protocol and exit fees on the same
     ///         redemption, which this contract does not model. `assetsAfterCurveFee` is therefore
@@ -718,9 +683,37 @@ contract DynamicFeeFlatPriceCurve is
         view
         returns (uint256 assetsAfterCurveFee, uint256 fee)
     {
-        uint256 rateTier = userStake[termId][account] > 0 ? userTier[termId][account] : _tierOf(vaultStake[termId]);
-        fee = shares.mulDivUp(_redeemFeeBps(rateTier), BPS);
+        fee = _lotRedeemFee(termId, account, shares);
         assetsAfterCurveFee = shares - fee;
+    }
+
+    /// @notice The highest tier at which `account` holds a lot in `termId`: the lot a redeem draws
+    ///         from first, and so the rate the next share out is charged at. `NO_LOT` when the
+    ///         account holds no lot.
+    function userTopTier(bytes32 termId, address account) external view returns (uint256) {
+        return lotMask[termId][account].fls();
+    }
+
+    /// @notice Every lot `account` holds in `termId`, highest tier first, which is the order a
+    ///         redeem unwinds them.
+    function userLots(bytes32 termId, address account)
+        external
+        view
+        returns (uint256[] memory tiers, uint256[] memory stakes)
+    {
+        uint256 mask = lotMask[termId][account];
+        uint256 count = mask.popCount();
+        tiers = new uint256[](count);
+        stakes = new uint256[](count);
+        for (uint256 i; i < count;) {
+            uint256 tier = mask.fls();
+            tiers[i] = tier;
+            stakes[i] = lotStake[termId][account][tier];
+            mask ^= 1 << tier;
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     /// @notice Return the full tier + fee configuration.
@@ -757,17 +750,280 @@ contract DynamicFeeFlatPriceCurve is
     /*                  INTERNAL: ACCOUNTING              */
     /* =================================================== */
 
-    /// @dev Settle a user's unsettled fees into `settledEarnings` and re-base their reward debt to the current
-    ///      accumulator of their tier. Settles against that accumulator as it stands, without
-    ///      consulting `config.minEligibleTierStake`; see {_pendingFor} for why.
+    /// @dev Settle every lot of a user's position into `settledEarnings` and re-base each lot's
+    ///      reward debt to the current accumulator of its tier. Settles against those accumulators as
+    ///      they stand, without consulting `config.minEligibleTierStakeBps`; see {_pendingFor} for
+    ///      why.
     function _settle(bytes32 termId, address account) private {
-        uint256 tier = userTier[termId][account];
-        uint256 accumulated = userStake[termId][account].fullMulDiv(accFeePerShare[termId][tier], ACC_PRECISION);
-        uint256 debt = rewardDebt[termId][account];
-        if (accumulated > debt) {
-            settledEarnings[account] += accumulated - debt;
+        uint256 mask = lotMask[termId][account];
+        uint256 earned;
+        while (mask != 0) {
+            uint256 tier = mask.fls();
+            earned += _settleLot(termId, account, tier);
+            mask ^= 1 << tier;
         }
-        rewardDebt[termId][account] = accumulated;
+        if (earned > 0) {
+            settledEarnings[account] += earned;
+        }
+    }
+
+    /// @dev Settle one lot: return what it has earned since its last settlement and re-base its
+    ///      debt to its tier's current accumulator. The caller books the return value.
+    function _settleLot(bytes32 termId, address account, uint256 tier) private returns (uint256 earned) {
+        uint256 accumulated = lotStake[termId][account][tier].fullMulDiv(accFeePerShare[termId][tier], ACC_PRECISION);
+        uint256 debt = lotRewardDebt[termId][account][tier];
+        if (accumulated > debt) {
+            earned = accumulated - debt;
+        }
+        lotRewardDebt[termId][account][tier] = accumulated;
+    }
+
+    /// @dev Re-base every lot of `account`'s position to its tier's current accumulator without
+    ///      settling. Used after a redeem's distributions so the exiter is excluded from the credit
+    ///      those distributions just wrote, on every tier they still hold a lot at; the pending
+    ///      amount those lots carried was banked by {_settle} before the distributions ran. `mask` is
+    ///      the position's residual lot mask as {_unwindLots} left it in storage.
+    function _rebaseLots(bytes32 termId, address account, uint256 mask) private {
+        while (mask != 0) {
+            uint256 tier = mask.fls();
+            lotRewardDebt[termId][account][tier] =
+                lotStake[termId][account][tier].fullMulDiv(accFeePerShare[termId][tier], ACC_PRECISION);
+            mask ^= 1 << tier;
+        }
+    }
+
+    /// @dev Redeem fee for `shares` taken from `account`'s lots, highest tier first, each portion at
+    ///      its own lot's rate and rounded up. Shares beyond the recorded lots (an account with no
+    ///      lots, such as the account-less preview) are priced at the vault's current tier. Bounded
+    ///      by the number of lots, at most `tierCount`.
+    function _lotRedeemFee(bytes32 termId, address account, uint256 shares) private view returns (uint256 fee) {
+        uint256 mask = lotMask[termId][account];
+        uint256 remaining = shares;
+        while (remaining > 0 && mask != 0) {
+            uint256 tier = mask.fls();
+            uint256 lot = lotStake[termId][account][tier];
+            uint256 take = lot < remaining ? lot : remaining;
+            fee += take.mulDivUp(_redeemFeeBps(tier), BPS);
+            remaining -= take;
+            mask ^= 1 << tier;
+        }
+        if (remaining > 0) {
+            fee += remaining.mulDivUp(_redeemFeeBps(_tierOf(vaultStake[termId])), BPS);
+        }
+    }
+
+    /// @dev Take `shares` from `account`'s lots, highest tier first, and report what was taken from
+    ///      each: `lotTiers[i]` / `lotShares[i]` for the `i`-th lot drawn from, in draw order. The
+    ///      arrays are allocated for the position's lot count and trimmed to the lots actually drawn
+    ///      from, so their length is the draw count. Also returns the residual lot mask, already
+    ///      written to storage, so the re-base after the distributions need not read it back.
+    ///
+    ///      `userStake` is debited first: a redeem larger than the position underflows there, as it
+    ///      did before, and the walk below never runs out of lots because `userStake` is the sum of
+    ///      them. Lots and tier occupancy are reduced here, before any distribution, so that every
+    ///      denominator the distributions read already excludes the exiting stake.
+    function _unwindLots(bytes32 termId, address account, uint256 shares)
+        private
+        returns (uint256[] memory lotTiers, uint256[] memory lotShares, uint256 mask)
+    {
+        userStake[termId][account] -= shares;
+        mask = lotMask[termId][account];
+        lotTiers = new uint256[](mask.popCount());
+        lotShares = new uint256[](lotTiers.length);
+
+        uint256 remaining = shares;
+        uint256 drawn;
+        while (remaining > 0) {
+            uint256 tier = mask.fls();
+            uint256 lot = lotStake[termId][account][tier];
+            uint256 take = lot < remaining ? lot : remaining;
+
+            lotTiers[drawn] = tier;
+            lotShares[drawn] = take;
+
+            lot -= take;
+            lotStake[termId][account][tier] = lot;
+            tierStake[termId][tier] -= take;
+            if (lot == 0) mask ^= 1 << tier;
+            remaining -= take;
+            unchecked {
+                ++drawn;
+            }
+        }
+        lotMask[termId][account] = mask;
+
+        // Trim to the lots drawn from. Shrinking a memory array's length in place is safe: the
+        // allocation past the new length is simply never read again.
+        assembly ("memory-safe") {
+            mstore(lotTiers, drawn)
+            mstore(lotShares, drawn)
+        }
+    }
+
+    /// @dev Apportion the collected redeem fee across the lots the redeem drew from, by their
+    ///      notional fee `lotShares[i] * rate / BPS`, the last lot taking the remainder so the split
+    ///      sums to `feeAmount` exactly. Weighting by the notional fee keeps every multiplication
+    ///      inside a 512-bit `mulDiv`, as the deposit replay does. Returns the sum of the lots'
+    ///      fulcrum slices, which feeds the single fulcrum spread, and separately the sum of whatever
+    ///      their exiting-tier slices could not place anywhere ({_distributeLotFee}), which accrues.
+    ///
+    ///      A `totalWeight` of zero with a non-zero `feeAmount` (every drawn lot on a zero rate, or
+    ///      dust lots whose notional fee floors to zero) is covered by the remainder branch, which
+    ///      hands the whole fee to the last lot; a redeem that drew nothing hands it to the spread.
+    function _distributeLotFees(
+        bytes32 termId,
+        address account,
+        uint256 feeAmount,
+        uint256[] memory lotTiers,
+        uint256[] memory lotShares
+    ) private returns (uint256 fulcrum, uint256 leftover) {
+        uint256 count = lotShares.length;
+        // Each lot's notional fee is read once and reused by the apportioning loop, so the rate
+        // (config and any override) is resolved once per lot rather than twice.
+        uint256[] memory weights = new uint256[](count);
+        uint256 totalWeight;
+        for (uint256 i; i < count;) {
+            weights[i] = lotShares[i].mulDiv(_redeemFeeBps(lotTiers[i]), BPS);
+            totalWeight += weights[i];
+            unchecked {
+                ++i;
+            }
+        }
+
+        uint256 assigned;
+        for (uint256 i; i < count;) {
+            uint256 lotFee;
+            if (i + 1 == count) {
+                lotFee = feeAmount - assigned;
+            } else if (totalWeight > 0) {
+                lotFee = feeAmount.mulDiv(weights[i], totalWeight);
+            }
+            assigned += lotFee;
+            (uint256 toFulcrum, uint256 unplaced) =
+                _distributeLotFee(termId, account, lotTiers[i], lotShares[i], lotFee);
+            fulcrum += toFulcrum;
+            leftover += unplaced;
+            unchecked {
+                ++i;
+            }
+        }
+        fulcrum += feeAmount - assigned;
+    }
+
+    /// @dev One lot's portion of a redeem fee: a `redeemToFulcrumTiersBps` slice is reserved for the
+    ///      fulcrum spread and the rest is paid to the lot tier's other holders, then rerouted
+    ///      ({_payExitingTierSlice}). Returns the reserved slice and, separately, whatever the
+    ///      exiting-tier slice could not place anywhere. Emits {RedeemLotRecorded}.
+    function _distributeLotFee(bytes32 termId, address account, uint256 tier, uint256 take, uint256 lotFee)
+        private
+        returns (uint256 toFulcrum, uint256 unplaced)
+    {
+        toFulcrum = lotFee.mulDiv(config.redeemToFulcrumTiersBps, BPS);
+        unplaced = _payExitingTierSlice(termId, account, tier, lotFee - toFulcrum);
+        emit RedeemLotRecorded(termId, account, tier, take, lotFee);
+    }
+
+    /// @dev Pay one lot's exiting-tier slice to the other holders of `tier`, the exiter's residual
+    ///      lot there excluded, capped at the cohort's fill of the band. What the cohort cannot take,
+    ///      because it is thin, under the floor, or absent, is rerouted through the neighbouring tiers
+    ///      ({_rerouteExitSlice}); what no tier can take is returned for the caller to accrue. It
+    ///      never enters the fulcrum pool: every tier has already taken its fill of it, so the spread
+    ///      would pay the same tiers a second time, above the schedule rate. A dust seat that happens
+    ///      to be nearest cannot divert the slice either, since it takes only its fill and the walk
+    ///      moves on.
+    ///
+    ///      `cohortStake` is exactly the other holders' stake in the tier: `tierStake` has already
+    ///      had the exiting portion removed and the exiter's residual lot is subtracted, so the
+    ///      redemption size cancels out. An exiter therefore cannot size a partial redeem to push
+    ///      their own tier under the floor and steer the fee.
+    function _payExitingTierSlice(bytes32 termId, address account, uint256 tier, uint256 slice)
+        private
+        returns (uint256 undistributed)
+    {
+        if (slice == 0) return 0;
+        (undistributed,) =
+            _creditEligibleCapped(termId, tier, slice, tierStake[termId][tier] - lotStake[termId][account][tier]);
+        if (undistributed > 0) {
+            undistributed = _rerouteExitSlice(termId, account, tier, undistributed);
+        }
+    }
+
+    /// @dev Reroute the part of an exiting-tier slice its own cohort could not take: the eligible
+    ///      tiers above `tier`, nearest first, so the holders who sat above the exiter earn it, then
+    ///      the eligible tiers below, nearest first. Each takes up to its fill of its band, net of
+    ///      the exiter's residual lot there. Emits {RedeemFeeRerouted} for every tier paid. Returns
+    ///      what no tier could take, which is the last-withdrawer case or a ladder thin everywhere.
+    function _rerouteExitSlice(bytes32 termId, address account, uint256 tier, uint256 amount)
+        private
+        returns (uint256 unpaid)
+    {
+        unpaid = amount;
+        uint256 tierCount = config.tierCount;
+        for (uint256 k = tier + 1; k < tierCount && unpaid > 0;) {
+            unpaid = _creditRerouted(termId, account, tier, k, unpaid);
+            unchecked {
+                ++k;
+            }
+        }
+        for (uint256 k = tier; k > 0 && unpaid > 0;) {
+            unchecked {
+                --k;
+            }
+            unpaid = _creditRerouted(termId, account, tier, k, unpaid);
+        }
+    }
+
+    /// @dev One step of {_rerouteExitSlice}: credit `amount` to tier `k` if it holds eligible stake
+    ///      net of the exiter, capped at its fill, and report the rerouting. Returns the unpaid part.
+    function _creditRerouted(bytes32 termId, address account, uint256 exitTier, uint256 k, uint256 amount)
+        private
+        returns (uint256 unpaid)
+    {
+        bool eligible;
+        (unpaid, eligible) =
+            _creditEligibleCapped(termId, k, amount, tierStake[termId][k] - lotStake[termId][account][k]);
+        if (eligible) emit RedeemFeeRerouted(termId, exitTier, k, amount - unpaid);
+    }
+
+    /// @dev When the fulcrum spread of a redeem could place nothing at all, because the vault sits in
+    ///      tier 0 or every prior tier is empty, the pool goes to the cohorts of the tiers this redeem
+    ///      drew from, highest first, each up to its fill of its band net of the exiter. Those holders
+    ///      are the ones still in the vault beside the exiter, so the protocol bucket is reached only
+    ///      for what they cannot take at their fill. Returns what no cohort could take.
+    function _creditLotCohorts(bytes32 termId, address account, uint256[] memory lotTiers, uint256 amount)
+        private
+        returns (uint256 unpaid)
+    {
+        unpaid = amount;
+        for (uint256 i; i < lotTiers.length && unpaid > 0;) {
+            uint256 tier = lotTiers[i];
+            (unpaid,) =
+                _creditEligibleCapped(termId, tier, unpaid, tierStake[termId][tier] - lotStake[termId][account][tier]);
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    /// @dev Credit `amount` down the prior tiers of `fromTier`, nearest first, each eligible tier
+    ///      taking up to its fill of its band. The deposit-side spike: no stake is excluded on that
+    ///      leg. Returns what no prior tier could take, which the caller accrues.
+    function _creditDownward(bytes32 termId, uint256 amount, uint256 fromTier) private returns (uint256 unpaid) {
+        unpaid = amount;
+        for (uint256 k = fromTier; k > 0 && unpaid > 0;) {
+            unchecked {
+                --k;
+            }
+            (unpaid,) = _creditEligibleCapped(termId, k, unpaid, tierStake[termId][k]);
+        }
+    }
+
+    /// @dev Book `amount` to the protocol bucket, if any.
+    function _accrueToProtocol(uint256 amount) private {
+        if (amount > 0) {
+            protocolAccrued += amount;
+            emit ProtocolAccruedIncreased(amount);
+        }
     }
 
     /// @dev Walk the tier bands that `stake` traverses starting from `startAssets`, and report the
@@ -877,75 +1133,57 @@ contract DynamicFeeFlatPriceCurve is
         }
     }
 
-    /// @dev One band of a replayed deposit. The order of these three steps is the whole mechanism:
+    /// @dev One band of a replayed deposit. The order of these steps is the whole mechanism:
     ///
     ///      1. Distribute this band's fee, sourced at `bandTier`, so it reaches only the tiers below
-    ///         it. The depositor's position sits in the denominators like anyone else's, but the
-    ///         stake being deposited here has not landed yet, so it cannot be paid out of its own fee.
-    ///      2. Settle, moving whatever step 1 just credited to the position at the tier it currently
-    ///         occupies. This must come after step 1 and before step 3: settle first and the
-    ///         depositor's slice of their own fee is stranded in the accumulator; skip it and step 3's
-    ///         re-base against the new tier discards it.
-    ///      3. Land this band's stake at `bandTier` and re-base the reward debt against the resulting
-    ///         bucket.
+    ///         it. The depositor's lots at those tiers sit in the denominators like anyone else's and
+    ///         keep what they are credited as pending, since their debts are not touched here; the
+    ///         stake being deposited has not landed yet, so it cannot be paid out of its own fee.
+    ///      2. Settle the lot at `bandTier`, if one exists, banking whatever it has earned so far.
+    ///         Step 1 never credits `bandTier` itself, so this is about earlier credit only: skip it
+    ///         and step 3's re-base discards it.
+    ///      3. Add this band's stake to the lot at `bandTier` and re-base that lot's debt.
     ///
-    ///      The average entry tier therefore ends up weighted by where the money actually landed
-    ///      rather than by the single pre-deposit tier. The new bucket is the rounded stake-weighted
-    ///      average of the previous position and the bands entered, so it can move in either
-    ///      direction: upward for a holder climbing the ladder, downward for one whose recorded
-    ///      bucket sits above the bands this deposit lands in. The redeem rate follows it, since
-    ///      that rate keys on where a holder entered.
+    ///      The lot lands where the money actually did and stays there. A holder's other lots are
+    ///      untouched: nothing averages, so a deposit never moves stake already recorded at another
+    ///      tier, up or down, and the rate a holder pays on the way out is the rate of the lot each
+    ///      share came in through.
     function _applyDepositBand(bytes32 termId, address account, uint256 bandTier, uint256 bandStake, uint256 bandFee)
         private
     {
         _payDepositFee(termId, bandFee, bandTier);
-
-        uint256 oldStake = userStake[termId][account];
-        uint256 oldTier = userTier[termId][account];
-
-        if (oldStake > 0) {
-            _settle(termId, account);
-        }
-
-        uint256 newStake = oldStake + bandStake;
-        uint256 newAvg;
-        if (oldStake == 0) {
-            newAvg = bandTier * TIER_PRECISION;
-        } else {
-            // Unrolled into per-term 512-bit-intermediate mulDivs so the weighted average cannot
-            // overflow for any stake magnitude (the naive sum-of-products form already had ~99 bits
-            // of headroom at max tier x total native supply, but this removes the question
-            // permanently). The two floors under-round the average by at most 2 wei-tier units
-            // (2e-18 of a tier) per band — far below the half-up bucket-rounding threshold.
-            newAvg = userAvgTier[termId][account].fullMulDiv(oldStake, newStake)
-                + (bandTier * TIER_PRECISION).fullMulDiv(bandStake, newStake);
-        }
-        uint256 newTier = _roundTier(newAvg);
-
-        if (newTier != oldTier) {
-            if (oldStake > 0) {
-                tierStake[termId][oldTier] -= oldStake;
-            }
-            tierStake[termId][newTier] += newStake;
-        } else {
-            tierStake[termId][newTier] += bandStake;
-        }
-
-        userStake[termId][account] = newStake;
-        userAvgTier[termId][account] = newAvg;
-        userTier[termId][account] = newTier;
-        rewardDebt[termId][account] = newStake.fullMulDiv(accFeePerShare[termId][newTier], ACC_PRECISION);
-
         emit DepositBandRecorded(termId, account, bandTier, bandStake, bandFee);
+        // The band walk never yields an empty band, but a set mask bit over a zero lot would break
+        // the mask invariant, so the landing is gated on stake rather than on that guarantee.
+        if (bandStake == 0) return;
+
+        uint256 lot = lotStake[termId][account][bandTier];
+        if (lot > 0) {
+            uint256 earned = _settleLot(termId, account, bandTier);
+            if (earned > 0) {
+                settledEarnings[account] += earned;
+            }
+        } else {
+            lotMask[termId][account] |= 1 << bandTier;
+        }
+
+        uint256 newLot = lot + bandStake;
+        lotStake[termId][account][bandTier] = newLot;
+        lotRewardDebt[termId][account][bandTier] = newLot.fullMulDiv(accFeePerShare[termId][bandTier], ACC_PRECISION);
+        tierStake[termId][bandTier] += bandStake;
+        userStake[termId][account] += bandStake;
     }
 
     /// @dev Distribute one band's deposit fee `feeAmount` across the tiers below `tier`. A
-    ///      `depositToPriorTierBps` slice is paid as a single lump to the nearest eligible prior tier
-    ///      — the spike that rewards the immediately preceding cohort — and the remainder spreads
-    ///      across the prior tiers by the sliding-fulcrum kernel ({_payFulcrumTiers}). Every recipient
-    ///      denominator must clear `config.minEligibleTierStake` to qualify. When no prior tier
-    ///      qualifies the spike folds into the fulcrum pool, which routes it to the nearest eligible
-    ///      tier or, failing that, the protocol bucket, so the fee is never forfeited or
+    ///      `depositToPriorTierBps` slice is a lump aimed at the nearest eligible prior tier — the
+    ///      spike that rewards the immediately preceding cohort — and the remainder spreads across
+    ///      the prior tiers by the sliding-fulcrum kernel ({_payFulcrumTiers}). Every recipient must
+    ///      clear the eligibility floor. The lump walks down the prior tiers, nearest first, each
+    ///      taking up to its fill of its band ({_creditDownward}), so a thin tier keeps its fill and
+    ///      the next tier down takes the rest; what no prior tier can take accrues to the protocol
+    ///      bucket rather than entering the fulcrum pool, which would pay the same tiers a second
+    ///      time. The spread weights each tier by its occupancy and returns what it cannot place,
+    ///      which on this leg has no other home and accrues as well. The fee is never forfeited or
     ///      double-counted. `depositToPriorTierBps == 0` (the default) reduces to a pure fulcrum
     ///      distribution.
     ///
@@ -957,36 +1195,75 @@ contract DynamicFeeFlatPriceCurve is
         if (feeAmount == 0) return;
 
         uint256 toPriorTier = feeAmount.mulDiv(config.depositToPriorTierBps, BPS);
-        uint256 toFulcrum = feeAmount - toPriorTier;
 
-        // Prior-tier spike -> the single nearest eligible prior tier. If none qualifies, fold the
-        // slice into the fulcrum pool rather than forfeiting it.
+        // Prior-tier spike -> down the prior tiers, nearest first, each taking up to its fill. What no
+        // prior tier can take at that rate accrues: offered to the spread it would reach the same
+        // tiers a second time.
+        uint256 unpaid;
         if (toPriorTier > 0) {
-            (uint256 recipientTier, uint256 recipientStake) = _nearestEligiblePriorTier(termId, sourceTier);
-            // Sentinel, not an occupancy test: the scan above already applies the floor.
-            if (recipientStake > 0) {
-                accFeePerShare[termId][recipientTier] += toPriorTier.fullMulDiv(ACC_PRECISION, recipientStake);
-            } else {
-                toFulcrum += toPriorTier;
-            }
+            unpaid = _creditDownward(termId, toPriorTier, sourceTier);
         }
 
-        // Fulcrum slice (+ any un-spikable remainder) -> the prior tiers by the triangular kernel.
-        _payFulcrumTiers(termId, toFulcrum, sourceTier, 0, 0, config.depositFulcrumAlphaBps, config.depositKernelSpread);
+        // Fulcrum pool -> the prior tiers by the occupancy-weighted triangular kernel; on this leg
+        // whatever the spread cannot place has no other home.
+        unpaid += _payFulcrumTiers(
+            termId,
+            feeAmount - toPriorTier,
+            sourceTier,
+            address(0),
+            config.depositFulcrumAlphaBps,
+            config.depositKernelSpread
+        );
+        _accrueToProtocol(unpaid);
     }
 
-    /// @dev Whether `stake` may receive redistributed fees — the single predicate behind every
-    ///      recipient gate, so a tier can never be dropped from one and admitted to another. Callers
-    ///      pass the stake that will actually receive the fee: exclusion-adjusted on the redeem leg,
-    ///      raw `tierStake` on the deposit leg. The floor's own semantics are on
-    ///      {DynamicFeeConfig.minEligibleTierStake}.
+    /// @dev Whether `stake` may receive redistributed fees at `tier`: the recipient gate of the kernel
+    ///      spread. The single-target credits apply the identical predicate inside
+    ///      {_creditEligibleCapped}, on the tier width the cap needs anyway, so a tier can never be
+    ///      dropped from one gate and admitted to another. Callers pass the stake that will actually
+    ///      receive the fee: exclusion-adjusted on the redeem leg, raw `tierStake` on the deposit leg.
+    ///      The floor is a fraction of the tier's own width; its semantics are on
+    ///      {DynamicFeeConfig.minEligibleTierStakeBps}.
     ///
     ///      The `> 0` conjunct is not redundant with the floor. At a zero floor a bare
-    ///      `stake >= minEligibleTierStake` holds for an empty recipient set, and the exiting-tier
-    ///      branch of {recordRedeem} divides by that stake immediately, so a last-holder exit would
-    ///      revert on division by zero instead of routing to the protocol.
-    function _isEligibleStake(uint256 stake) private view returns (bool) {
-        return stake > 0 && stake >= config.minEligibleTierStake;
+    ///      `stake >= floor` holds for an empty recipient set, and the exiting-tier branch of
+    ///      {recordRedeem} divides by that stake immediately, so a last-holder exit would revert on
+    ///      division by zero instead of routing to the protocol.
+    function _isEligibleStake(uint256 tier, uint256 stake) private view returns (bool) {
+        if (stake == 0) return false;
+        uint256 floorBps = config.minEligibleTierStakeBps;
+        if (floorBps == 0) return true;
+        return stake >= _tierWidthAt(tier).mulDiv(floorBps, BPS);
+    }
+
+    /// @dev Credit `amount` to the `recipientStake` recorded at `tier` if that stake is eligible,
+    ///      capped at the schedule rate per share: a cohort holding at least the band's width takes
+    ///      the whole amount, a thinner one takes `amount * stake / width`, so per-share income at
+    ///      any tier never exceeds what a full band would pay and a dust seat cannot collect a tier's
+    ///      slice for the price of one wei. Eligibility is the same predicate as {_isEligibleStake},
+    ///      evaluated here on the one tier width the cap needs anyway, so a walk computes each
+    ///      candidate's width once. Returns the unpaid remainder, the whole `amount` when the stake is
+    ///      ineligible, and whether it was eligible; the caller walks the remainder on to its next
+    ///      candidate tier, and what a whole walk cannot place accrues rather than entering the
+    ///      fulcrum pool, which would offer it to tiers that already took their fill. Used only by the
+    ///      single-target credits (the deposit spike, an exiting-tier slice, a reroute): a lump with
+    ///      one recipient has no other tier to normalize against, so the fill is the only bound on
+    ///      it. The spread itself needs no cap, since occupancy is already inside its weights. A
+    ///      `paid` amount whose per-share increment floors to zero is still reported as placed; that
+    ///      is the same sub-wei-per-share dust noted on {protocolAccrued}.
+    function _creditEligibleCapped(bytes32 termId, uint256 tier, uint256 amount, uint256 recipientStake)
+        private
+        returns (uint256 unpaid, bool eligible)
+    {
+        if (recipientStake == 0) return (amount, false);
+        uint256 width = _tierWidthAt(tier);
+        uint256 floorBps = config.minEligibleTierStakeBps;
+        if (floorBps != 0 && recipientStake < width.mulDiv(floorBps, BPS)) return (amount, false);
+        uint256 paid = recipientStake >= width ? amount : amount.mulDiv(recipientStake, width);
+        if (paid > 0) {
+            accFeePerShare[termId][tier] += paid.fullMulDiv(ACC_PRECISION, recipientStake);
+        }
+        return (amount - paid, true);
     }
 
     /// @dev Triangular fulcrum weight for a prior tier at distance `dist` from the fulcrum: a tent
@@ -1005,167 +1282,194 @@ contract DynamicFeeFlatPriceCurve is
         return dP > dStar ? dP - dStar : dStar - dP;
     }
 
-    /// @dev Distribute `fulcrumFeePool` across the prior tiers `[0, tier)` by the triangular fulcrum kernel.
-    ///      The peak sits at `dStar = (1 - alphaBps/BPS) * span` tiers from the source (fraction of
-    ///      the span, so it slides up the ladder as the vault grows); each eligible prior tier earns
-    ///      `max(0, 1 - |d - dStar|/sigma)`, normalized over eligible tiers and split pro-rata by stake,
-    ///      with `excludeStake` removed from the recipient denominator at `excludeTier`. A tier below
-    ///      `config.minEligibleTierStake` is absent from that normalization, so its slice is absorbed by the
-    ///      tiers that already qualified in proportion to their existing weights — the earning window
-    ///      does not slide down to pull in a further tier, because the kernel returns a hard zero beyond
-    ///      `sigma`. If a tight `sigma` zeroes every eligible tier's weight, the whole pool goes to the
-    ///      eligible tier nearest the fulcrum (nearest-first tie-break) rather than leaking to the
-    ///      protocol; only when no prior tier qualifies, and any rounding remainder, accrue to
-    ///      `protocolAccrued`. The pass-1 weighting and the degenerate-award scan are extracted to keep
-    ///      this write path within the 16-slot stack ceiling. `alphaBps` and `sigma` are the kernel
-    ///      pair for the calling leg.
+    /// @dev Distribute `fulcrumFeePool` across the prior tiers `[0, tier)` by the triangular fulcrum
+    ///      kernel, weighted by occupancy. The peak sits at `dStar = (1 - alphaBps/BPS) * span` tiers
+    ///      from the source (a fraction of the span, so it slides up the ladder as the vault grows).
+    ///      Each eligible prior tier carries the effective weight
+    ///
+    ///          e_t = max(0, 1 - |d - dStar| / sigma) * stake_t / width_t
+    ///
+    ///      the kernel weight times the tier's fill ratio, with the fill left uncapped, and takes the
+    ///      slice `pool * e_t / D`. Dividing that slice by the tier's stake gives its per-share income,
+    ///      `pool * w_t / (width_t * D)`: the kernel weight per unit of width times one rate common to
+    ///      every tier in the spread. Occupancy never enters the per-share figure. A tier holding a
+    ///      tenth of its band earns a tenth of the slice a full one would, at the same rate per share;
+    ///      a tier holding twice its band earns twice, at the same rate per share, so a refilled band
+    ///      is not diluted relative to its neighbours; a dust seat earns dust. `excludeAccount`'s lot
+    ///      is removed from every stake read. A tier under the eligibility floor is absent from the
+    ///      normalization, and the window does not slide down to pull in a further tier, because the
+    ///      kernel returns a hard zero beyond `sigma`.
+    ///
+    ///      The normalizer `D` is `max(Σe, Σw)`, where `Σw` is the plain kernel sum over every prior
+    ///      tier, the figure a ladder holding exactly its widths would normalize over. When the prior
+    ///      ladder holds at least that much, `D = Σe`: the pool is spread whole, nothing is left over,
+    ///      and the common rate is at or below the schedule. When it holds less, `D = Σw`: every tier
+    ///      is paid exactly the schedule rate for the stake it has, and the part of the pool that no
+    ///      stake is there to earn accrues to `protocolAccrued`. The ceiling is what stops a lone thin
+    ///      tier, left as the only eligible recipient by a drawdown or by design, from taking a whole
+    ///      pool for the price of one seat; without it the relative rule alone would hand it
+    ///      everything. Over-full tiers therefore absorb what thinner tiers leave, up to the schedule
+    ///      rate, and only the shortfall beyond that reaches the protocol.
+    ///
+    ///      If the window misses every eligible tier (a tight `sigma`, or the near tiers emptied by a
+    ///      drawdown), the spread falls back to the same rule with every kernel weight set to one, so
+    ///      the pool is split across all eligible prior tiers by fill alone, with `Σw = span`. The
+    ///      fallback keys on the window, not on the effective sum: weights are carried at
+    ///      `WEIGHT_PRECISION`, so an eligible tier inside the window keeps a non-zero weight down to
+    ///      a fill of one part in `TIER_PRECISION`, and a tier whose fill is below even that earns
+    ///      nothing rather than pulling tiers outside the window into the split. Integer-division
+    ///      dust of an uncapped spread goes to the last tier credited. Returns what could not be
+    ///      placed, the whole pool when no prior tier is eligible at all; the caller decides where
+    ///      that goes, since the two legs differ (the deposit leg has no other home for it, the
+    ///      redeem leg still has the exiting cohorts). The weighting passes and the credit pass are
+    ///      extracted to keep this write path within the 16-slot stack ceiling. `alphaBps` and
+    ///      `sigma` are the kernel pair for the calling leg.
     function _payFulcrumTiers(
         bytes32 termId,
         uint256 fulcrumFeePool,
         uint256 sourceTier,
-        uint256 excludeTier,
-        uint256 excludeStake,
+        address excludeAccount,
         uint256 alphaBps,
         uint256 sigma
-    ) private {
-        if (fulcrumFeePool == 0) return;
+    ) private returns (uint256 unpaid) {
+        if (fulcrumFeePool == 0) return 0;
 
-        // No prior tiers (first-tier deposit): nothing to reward, route to the protocol bucket.
+        // No prior tiers (the vault sits in tier 0): nothing below to reward.
         uint256 span = sourceTier;
-        if (span == 0) {
-            protocolAccrued += fulcrumFeePool;
-            emit ProtocolAccruedIncreased(fulcrumFeePool);
-            return;
-        }
+        if (span == 0) return fulcrumFeePool;
 
         // `weights`/`stakes` are indexed by `d - 1` (d = 1 is the nearest prior tier `sourceTier - 1`;
-        // d = span is the farthest, tier 0). `weights[i] > 0` implies the tier is eligible: once
-        // `config.minEligibleTierStake` is live, occupancy alone is not sufficient.
-        uint256 dStar = ((BPS - alphaBps) * span).mulDiv(TIER_PRECISION, BPS);
+        // d = span is the farthest, tier 0). `stakes[i] > 0` implies the tier is eligible: once the
+        // floor is live, occupancy alone is not sufficient. The fulcrum sits at
+        // `dStar = (1 - alpha/BPS) * span` tiers from the source.
         uint256[] memory weights = new uint256[](span);
         uint256[] memory stakes = new uint256[](span);
-        uint256 sumWeights = _weighPriorTiers(termId, span, dStar, sigma, excludeTier, excludeStake, weights, stakes);
+        (uint256 sumWeights, uint256 sumRef) = _weighPriorTiers(
+            termId, span, ((BPS - alphaBps) * span).mulDiv(TIER_PRECISION, BPS), sigma, excludeAccount, weights, stakes
+        );
 
-        // Degenerate: the window missed every eligible tier, or there is none. Award to the eligible
-        // tier nearest the fulcrum, else to the protocol, rather than forfeiting the pool.
-        if (sumWeights == 0) {
-            _awardNearestOrProtocol(termId, fulcrumFeePool, span, dStar, stakes);
-            return;
-        }
-
-        // Credit each eligible tier; any rounding remainder accrues to the protocol bucket.
-        uint256 unassigned = fulcrumFeePool - _creditByWeight(termId, fulcrumFeePool, span, sumWeights, weights, stakes);
-        if (unassigned > 0) {
-            protocolAccrued += unassigned;
-            emit ProtocolAccruedIncreased(unassigned);
-        }
+        uint256 paid = sumWeights == 0
+            ? 0
+            : _creditByWeight(
+                termId,
+                fulcrumFeePool,
+                span,
+                sumWeights >= sumRef ? sumWeights : sumRef,
+                sumWeights >= sumRef,
+                weights,
+                stakes
+            );
+        unpaid = fulcrumFeePool - paid;
     }
 
-    /// @dev Pass 2 of {_payFulcrumTiers}: credit each eligible prior tier its normalized, stake-pro-rata
-    ///      slice of `fulcrumFeePool` and return the total assigned (the shortfall vs `fulcrumFeePool` is rounding
-    /// dust).
+    /// @dev Credit pass of {_payFulcrumTiers}: each tier with a non-zero effective weight takes
+    ///      `pool * e_t / denominator`, booked to its accumulator per unit of stake. `exact` says the
+    ///      denominator is the effective sum itself, so the pool is meant to be spread whole: the
+    ///      integer-division dust then goes to the last tier credited and the return equals the pool.
+    ///      Otherwise the denominator is the schedule's normalizer, the credits are each tier's
+    ///      schedule-rate share, and the shortfall returned is a genuine remainder for the caller to
+    ///      book. `weights[i] > 0` implies `stakes[i] > 0`, so the per-share division cannot hit zero.
     function _creditByWeight(
         bytes32 termId,
         uint256 fulcrumFeePool,
         uint256 span,
-        uint256 sumWeights,
+        uint256 denominator,
+        bool exact,
         uint256[] memory weights,
         uint256[] memory stakes
-    ) private returns (uint256 assigned) {
+    ) private returns (uint256 paid) {
+        uint256 lastTier;
+        uint256 lastStake;
         for (uint256 d = 1; d <= span;) {
-            uint256 w = weights[d - 1];
-            if (w > 0) {
-                uint256 slice = fulcrumFeePool.mulDiv(w, sumWeights);
+            uint256 e = weights[d - 1];
+            if (e > 0) {
+                uint256 slice = fulcrumFeePool.fullMulDiv(e, denominator);
                 if (slice > 0) {
                     accFeePerShare[termId][span - d] += slice.fullMulDiv(ACC_PRECISION, stakes[d - 1]);
-                    assigned += slice;
+                    paid += slice;
                 }
+                lastTier = span - d;
+                lastStake = stakes[d - 1];
             }
             unchecked {
                 ++d;
             }
         }
+        if (exact && paid < fulcrumFeePool) {
+            accFeePerShare[termId][lastTier] += (fulcrumFeePool - paid).fullMulDiv(ACC_PRECISION, lastStake);
+            paid = fulcrumFeePool;
+        }
     }
 
-    /// @dev Pass 1 of {_payFulcrumTiers}: fill `weights` and `stakes` (both length `span`, indexed by
-    ///      `d - 1`) for every prior tier and return the summed weights over eligible tiers.
+    /// @dev Weighting pass of {_payFulcrumTiers}: fill `stakes` (net of `excludeAccount`'s lot, zeroed
+    ///      for ineligible tiers) and `weights` (the effective weight `w_t * stake_t / width_t`, in
+    ///      `WEIGHT_PRECISION`) for every prior tier, both length `span` and indexed by `d - 1`.
+    ///      Returns the summed effective weight and the plain kernel sum over every prior tier
+    ///      regardless of occupancy in the same units, which is the normalizer a ladder holding
+    ///      exactly its widths would have. If no eligible tier fell inside the window, both are
+    ///      replaced by the fill-only fallback ({_weighByFill}) before returning; a window that holds
+    ///      an eligible tier is never replaced, even when every effective weight in it is zero. The
+    ///      deposit leg passes `address(0)`, which holds no lots, so nothing is excluded on that path.
+    ///      Zeroing an ineligible tier's entry here, rather than re-testing at each read site, is what
+    ///      makes "`stakes[i] > 0` implies eligible" a structural invariant of the array; both
+    ///      {_creditByWeight} and {_weighByFill} depend on it and neither re-checks. A kernel weight
+    ///      of zero (outside the window) leaves the effective weight zero as well, so the fill-only
+    ///      fallback can tell "eligible but outside the window" from "ineligible" by the stake entry
+    ///      alone.
     function _weighPriorTiers(
         bytes32 termId,
         uint256 span,
         uint256 dStar,
         uint256 sigma,
-        uint256 excludeTier,
-        uint256 excludeStake,
+        address excludeAccount,
         uint256[] memory weights,
         uint256[] memory stakes
-    ) private view returns (uint256 sumWeights) {
+    ) private view returns (uint256 sumWeights, uint256 sumRef) {
+        bool inWindow;
         for (uint256 d = 1; d <= span;) {
-            uint256 recipientTier = span - d; // == sourceTier - d
-            uint256 recipientStake = tierStake[termId][recipientTier];
-            if (recipientTier == excludeTier) {
-                recipientStake -= excludeStake;
-            }
-            // Zeroing an ineligible tier's entry here, rather than re-testing at each read site, is
-            // what makes "`stakes[i] > 0` implies eligible" a structural invariant of this array. Both
-            // readers ({_creditByWeight} and {_awardNearestOrProtocol}) depend on it and neither
-            // re-checks. Gating only `sumWeights` instead would exclude a sub-floor tier from the
-            // proportional spread and then hand it the entire pool through the degenerate fallback,
-            // which scans this same array.
-            if (!_isEligibleStake(recipientStake)) {
+            // The recipient tier is `span - d` (== sourceTier - d).
+            uint256 w = _triangularWeight(_fulcrumDistance(d, dStar), sigma) * TIER_PRECISION;
+            sumRef += w;
+            uint256 recipientStake = tierStake[termId][span - d] - lotStake[termId][excludeAccount][span - d];
+            if (!_isEligibleStake(span - d, recipientStake)) {
                 recipientStake = 0;
             }
             stakes[d - 1] = recipientStake;
-            if (recipientStake > 0) {
-                uint256 w = _triangularWeight(_fulcrumDistance(d, dStar), sigma);
-                weights[d - 1] = w;
-                sumWeights += w;
+            if (recipientStake > 0 && w > 0) {
+                inWindow = true;
+                weights[d - 1] = w.fullMulDiv(recipientStake, _tierWidthAt(span - d));
+                sumWeights += weights[d - 1];
             }
             unchecked {
                 ++d;
             }
+        }
+        if (!inWindow) {
+            sumWeights = _weighByFill(span, weights, stakes);
+            sumRef = span * WEIGHT_PRECISION;
         }
     }
 
-    /// @dev Degenerate branch of {_payFulcrumTiers}: award the whole `fulcrumFeePool` to the eligible tier nearest
-    ///      the fulcrum, reusing the `stakes` computed in pass 1. Falls through to the protocol bucket
-    ///      only when no prior tier qualifies.
-    ///      Tie-break: two tiers are exactly equidistant from the fulcrum whenever `dStar` lands on a
-    ///      half-integer (`span = 3, alpha = 0.5` puts it at 1.5, so `d = 1` and `d = 2` are both 0.5
-    ///      away). The scan runs `d = 1..span`, nearest prior tier first, and keeps the incumbent on
-    ///      equality through a strict `<`, so a tie resolves to the tier nearest the source on both
-    ///      legs.
-    ///      The two `> 0` tests below are sentinels rather than occupancy tests: {_weighPriorTiers}
-    ///      zeroes the entry of any tier failing {_isEligibleStake}, so a non-zero entry here is
-    ///      eligible by construction and this function needs no floor logic of its own.
-    function _awardNearestOrProtocol(
-        bytes32 termId,
-        uint256 fulcrumFeePool,
-        uint256 span,
-        uint256 dStar,
-        uint256[] memory stakes
-    ) private {
-        uint256 bestTier;
-        uint256 bestStake;
-        uint256 bestDist = type(uint256).max;
+    /// @dev Fallback weighting of {_payFulcrumTiers} for a window that admits no eligible tier: the
+    ///      same rule with every kernel weight set to one, so `weights` becomes each eligible prior
+    ///      tier's fill ratio `stake_t / width_t` in `WEIGHT_PRECISION` and the pool splits by fill
+    ///      alone across the whole prior ladder. Reuses the `stakes` pass-1 computed, so eligibility is
+    ///      not re-tested. Returns the summed fill; zero only when no prior tier is eligible at all.
+    function _weighByFill(uint256 span, uint256[] memory weights, uint256[] memory stakes)
+        private
+        view
+        returns (uint256 sumWeights)
+    {
         for (uint256 d = 1; d <= span;) {
             uint256 recipientStake = stakes[d - 1];
             if (recipientStake > 0) {
-                uint256 dist = _fulcrumDistance(d, dStar);
-                if (dist < bestDist) {
-                    bestDist = dist;
-                    bestTier = span - d;
-                    bestStake = recipientStake;
-                }
+                uint256 e = WEIGHT_PRECISION.fullMulDiv(recipientStake, _tierWidthAt(span - d));
+                weights[d - 1] = e;
+                sumWeights += e;
             }
             unchecked {
                 ++d;
             }
-        }
-        if (bestStake > 0) {
-            accFeePerShare[termId][bestTier] += fulcrumFeePool.fullMulDiv(ACC_PRECISION, bestStake);
-        } else {
-            protocolAccrued += fulcrumFeePool;
-            emit ProtocolAccruedIncreased(fulcrumFeePool);
         }
     }
 
@@ -1210,56 +1514,6 @@ contract DynamicFeeFlatPriceCurve is
             }
         }
         return tierCount - 1;
-    }
-
-    /// @dev Nearest tier to `fromTier` holding eligible stake, searched above first (`fromTier+1`
-    ///      upward to the top), then below (`fromTier-1` down to 0). Returns `(tier, stake)`, or
-    ///      `(0, 0)` when no other tier qualifies. Searching above first routes an orphaned exit fee to
-    ///      the holders who sat above the exiter. Bounded by `tierCount` (<= MAX_TIER_COUNT). Both
-    ///      scans apply `config.minEligibleTierStake`, so a sub-floor tier cannot intercept the whole
-    ///      slice merely by being nearest. Unlike the deposit-side scan there is no exclusion to apply:
-    ///      the caller reaches this branch only once the exiting tier has been established as having no
-    ///      eligible residual cohort, and both loops skip `fromTier` structurally.
-    function _nearestEligibleTier(bytes32 termId, uint256 fromTier) private view returns (uint256 tier, uint256 stake) {
-        uint256 tierCount = config.tierCount;
-        for (uint256 k = fromTier + 1; k < tierCount;) {
-            uint256 s = tierStake[termId][k];
-            if (_isEligibleStake(s)) return (k, s);
-            unchecked {
-                ++k;
-            }
-        }
-        for (uint256 k = fromTier; k > 0;) {
-            unchecked {
-                --k;
-            }
-            uint256 s = tierStake[termId][k];
-            if (_isEligibleStake(s)) return (k, s);
-        }
-        return (0, 0);
-    }
-
-    /// @dev Nearest eligible tier strictly below `tier` (within the prior tiers `[0, tier)`), searched
-    ///      downward from `tier - 1`. Returns `(tier, stake)`, or `(0, 0)` when no prior tier holds
-    ///      eligible stake. Bounded by `tierCount`. `config.minEligibleTierStake` is applied so the
-    ///      prior-tier spike cannot be intercepted by a sub-floor tier. That gate matters even though
-    ///      the spike is dormant while `depositToPriorTierBps == 0`: without it, turning the spike on
-    ///      would hand a sub-floor tier the whole lump that the fulcrum spread had just excluded it
-    ///      from. Unlike the redeem-side scans there is no exclusion to apply — the
-    ///      deposit leg puts nobody outside the denominator, see {_payDepositFee}.
-    function _nearestEligiblePriorTier(bytes32 termId, uint256 fromTier)
-        private
-        view
-        returns (uint256 recipientTier, uint256 recipientStake)
-    {
-        for (uint256 k = fromTier; k > 0;) {
-            unchecked {
-                --k;
-            }
-            uint256 s = tierStake[termId][k];
-            if (_isEligibleStake(s)) return (k, s);
-        }
-        return (0, 0);
     }
 
     /// @dev The tier's manual override if set, else the formulaic min(cap, base + tier*growth).
@@ -1342,13 +1596,6 @@ contract DynamicFeeFlatPriceCurve is
         return fee < cap ? fee : cap;
     }
 
-    /// @dev round(avgEntryTier) (half-up), capped at the top tier.
-    function _roundTier(uint256 avgTierScaled) private view returns (uint256) {
-        uint256 rounded = (avgTierScaled + TIER_PRECISION / 2) / TIER_PRECISION;
-        uint256 maxTier = config.tierCount - 1;
-        return rounded > maxTier ? maxTier : rounded;
-    }
-
     /* =================================================== */
     /*                 INTERNAL: CONFIG                  */
     /* =================================================== */
@@ -1362,7 +1609,7 @@ contract DynamicFeeFlatPriceCurve is
             revert DynamicFeeFlatPriceCurve_InvalidConfig();
         }
         if (_config.tierWidthGrowthBps > 100 * BPS) revert DynamicFeeFlatPriceCurve_InvalidConfig();
-        // Grow-only once live: shrinking could strand occupied buckets above the schedule.
+        // Grow-only once live: shrinking could strand occupied lot tiers above the schedule.
         if (config.tierCount != 0 && _config.tierCount < config.tierCount) {
             revert DynamicFeeFlatPriceCurve_TierCountCannotShrink();
         }
@@ -1370,14 +1617,14 @@ contract DynamicFeeFlatPriceCurve is
         // spread (σ) must be non-zero (it divides the weight) and is bounded above so the triangular
         // math stays clear of overflow.
         //
-        // A spread small enough that no eligible prior tier falls inside the window collapses the
-        // spread into a single-tier award. The fee still reaches a real cohort and no wei is
-        // forfeited, but the configured schedule and the observable behaviour stop matching. No static
-        // bound prevents this: keyed on the spread alone it rejects legitimate schedules, since at
-        // alpha 0 the farthest tier sits at distance zero and carries full weight at any spread; keyed
-        // on alpha `BPS` it does not prevent the collapse, since one tier inside the window is still
-        // winner-takes-all. Whether a given pair spreads depends on live occupancy at distribution
-        // time, which `setConfig` cannot observe.
+        // A spread small enough that no eligible prior tier falls inside the window makes the spread
+        // fall back to a split by fill alone across the whole prior ladder, at the schedule ceiling.
+        // The fee still reaches real cohorts and no wei is forfeited, but the configured kernel and
+        // the observable split stop matching. No static bound prevents this: keyed on the spread
+        // alone it rejects legitimate schedules, since at alpha 0 the farthest tier sits at distance
+        // zero and carries full weight at any spread; keyed on alpha `BPS` it does not prevent the
+        // fallback, since one tier inside the window is still a one-tier kernel. Whether a given pair
+        // spreads depends on live occupancy at distribution time, which `setConfig` cannot observe.
         if (_config.depositFulcrumAlphaBps > BPS) revert DynamicFeeFlatPriceCurve_InvalidConfig();
         if (_config.depositKernelSpread == 0 || _config.depositKernelSpread > MAX_KERNEL_SPREAD) {
             revert DynamicFeeFlatPriceCurve_InvalidConfig();
@@ -1397,16 +1644,17 @@ contract DynamicFeeFlatPriceCurve is
         }
         if (_config.redeemToFulcrumTiersBps > BPS) revert DynamicFeeFlatPriceCurve_InvalidConfig();
         if (_config.depositToPriorTierBps > BPS) revert DynamicFeeFlatPriceCurve_InvalidConfig();
-        // Bounded by an immutable ceiling rather than by `BPS` like the share knobs: this one is an
-        // absolute stake amount, and the ceiling is what keeps governance from starving the fee stream.
-        if (_config.minEligibleTierStake > MAX_MIN_ELIGIBLE_TIER_STAKE) {
+        // A fraction of each tier's own width, so `BPS` (a full band) is the natural ceiling: above it
+        // no tier could ever qualify on its own width and the whole fee stream would accrue to the
+        // protocol bucket.
+        if (_config.minEligibleTierStakeBps > BPS) {
             revert DynamicFeeFlatPriceCurve_InvalidMinEligibleTierStake();
         }
 
-        // Captured before the store so a raise is monitorable on its own. {ConfigUpdated} carries only
+        // Captured before the store so a change is monitorable on its own. {ConfigUpdated} carries only
         // the ladder shape, and no config field emits its previous value; the eligibility floor is the
         // one parameter that silently changes who earns, so it gets a dedicated before/after signal.
-        uint256 previousMinEligibleTierStake = config.minEligibleTierStake;
+        uint256 previousMinEligibleTierStakeBps = config.minEligibleTierStakeBps;
 
         config = _config;
 
@@ -1426,8 +1674,8 @@ contract DynamicFeeFlatPriceCurve is
             _config.redeemFulcrumAlphaBps,
             _config.redeemKernelSpread
         );
-        if (_config.minEligibleTierStake != previousMinEligibleTierStake) {
-            emit MinEligibleTierStakeUpdated(previousMinEligibleTierStake, _config.minEligibleTierStake);
+        if (_config.minEligibleTierStakeBps != previousMinEligibleTierStakeBps) {
+            emit MinEligibleTierStakeUpdated(previousMinEligibleTierStakeBps, _config.minEligibleTierStakeBps);
         }
     }
 }

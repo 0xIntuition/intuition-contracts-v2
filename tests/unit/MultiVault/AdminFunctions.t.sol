@@ -20,6 +20,7 @@ import {
 } from "src/interfaces/IMultiVaultCore.sol";
 
 import { BaseTest } from "tests/BaseTest.t.sol";
+import { MockFeeHookCurve } from "tests/mocks/MockFeeHookCurve.sol";
 
 contract MultiVaultAdminFunctionsTest is BaseTest {
     /// @dev Define a reusable GeneralConfig struct for tests to avoid stack too deep
@@ -354,6 +355,155 @@ contract MultiVaultAdminFunctionsTest is BaseTest {
         resetPrank({ msgSender: users.charlie });
         _expectOnlyTimelock();
         protocol.multiVault.setBondingCurveConfig(bc);
+    }
+
+    function testSetBondingCurveConfig_RevertWhen_DefaultCurveHasFeeHook() public {
+        (address registry,) = protocol.multiVault.bondingCurveConfig();
+        assertTrue(dynamicFeeCurve.hasDepositFeeHook(), "fixture curve must carry a deposit hook");
+
+        BondingCurveConfig memory bc = BondingCurveConfig({ registry: registry, defaultCurveId: DYNAMIC_FEE_CURVE_ID });
+
+        resetPrank({ msgSender: users.timelock });
+        vm.expectRevert(MultiVault.MultiVault_DefaultCurveHasFeeHook.selector);
+        protocol.multiVault.setBondingCurveConfig(bc);
+    }
+
+    function testSetBondingCurveConfig_RevertWhen_DefaultCurveNotRegistered() public {
+        (address registry,) = protocol.multiVault.bondingCurveConfig();
+        uint256 unregisteredId = 99;
+        assertEq(BondingCurveRegistry(registry).curveAddresses(unregisteredId), address(0), "id must be free");
+
+        BondingCurveConfig memory bc = BondingCurveConfig({ registry: registry, defaultCurveId: unregisteredId });
+
+        resetPrank({ msgSender: users.timelock });
+        vm.expectRevert(MultiVault.MultiVault_DefaultCurveNotRegistered.selector);
+        protocol.multiVault.setBondingCurveConfig(bc);
+    }
+
+    function testSetBondingCurveConfig_RevertWhen_FreshRegistryDefaultHasFeeHook() public {
+        // The hook check must resolve the curve through the registry being installed, not the
+        // one currently stored: a fresh registry whose id 1 is a hook curve is rejected even
+        // though id 1 in the live registry is the hookless linear curve.
+        BondingCurveRegistry newRegImpl = new BondingCurveRegistry();
+        TransparentUpgradeableProxy newReg = new TransparentUpgradeableProxy(
+            address(newRegImpl),
+            users.admin,
+            abi.encodeWithSelector(BondingCurveRegistry.initialize.selector, users.admin)
+        );
+        BondingCurveRegistry newRegInstance = BondingCurveRegistry(address(newReg));
+
+        resetPrank(users.admin);
+        newRegInstance.addBondingCurve(address(dynamicFeeCurve));
+
+        BondingCurveConfig memory bc = BondingCurveConfig({ registry: address(newReg), defaultCurveId: 1 });
+
+        resetPrank({ msgSender: users.timelock });
+        vm.expectRevert(MultiVault.MultiVault_DefaultCurveHasFeeHook.selector);
+        protocol.multiVault.setBondingCurveConfig(bc);
+
+        (address regAddr, uint256 defId) = protocol.multiVault.bondingCurveConfig();
+        assertTrue(regAddr != address(newReg), "rejected registry must not be stored");
+        assertEq(defId, getDefaultCurveId(), "default curve id unchanged");
+    }
+
+    /// @dev Fresh registry whose id 1 is a {MockFeeHookCurve} with the given hook flags, so each
+    ///      flag can be tested on its own rather than through a curve that sets both.
+    function _freshRegistryWithMockDefault(bool depositHookEnabled, bool redeemHookEnabled)
+        internal
+        returns (address registry)
+    {
+        BondingCurveRegistry newRegImpl = new BondingCurveRegistry();
+        TransparentUpgradeableProxy newReg = new TransparentUpgradeableProxy(
+            address(newRegImpl),
+            users.admin,
+            abi.encodeWithSelector(BondingCurveRegistry.initialize.selector, users.admin)
+        );
+
+        MockFeeHookCurve mockImpl = new MockFeeHookCurve();
+        // The mock reuses {LinearCurve.initialize} unchanged; the parent selector is the precise spelling.
+        TransparentUpgradeableProxy mockProxy = new TransparentUpgradeableProxy(
+            address(mockImpl), users.admin, abi.encodeWithSelector(LinearCurve.initialize.selector, "Mock Hook Curve")
+        );
+        MockFeeHookCurve(address(mockProxy)).setHooks(depositHookEnabled, redeemHookEnabled);
+
+        resetPrank(users.admin);
+        BondingCurveRegistry(address(newReg)).addBondingCurve(address(mockProxy));
+        return address(newReg);
+    }
+
+    function testSetBondingCurveConfig_RevertWhen_DefaultCurveHasDepositHookOnly() public {
+        address registry = _freshRegistryWithMockDefault(true, false);
+
+        resetPrank({ msgSender: users.timelock });
+        vm.expectRevert(MultiVault.MultiVault_DefaultCurveHasFeeHook.selector);
+        protocol.multiVault.setBondingCurveConfig(BondingCurveConfig({ registry: registry, defaultCurveId: 1 }));
+    }
+
+    function testSetBondingCurveConfig_RevertWhen_DefaultCurveHasRedeemHookOnly() public {
+        address registry = _freshRegistryWithMockDefault(false, true);
+
+        resetPrank({ msgSender: users.timelock });
+        vm.expectRevert(MultiVault.MultiVault_DefaultCurveHasFeeHook.selector);
+        protocol.multiVault.setBondingCurveConfig(BondingCurveConfig({ registry: registry, defaultCurveId: 1 }));
+    }
+
+    function testSetBondingCurveConfig_AcceptsHooklessDefaultInFreshRegistry() public {
+        address registry = _freshRegistryWithMockDefault(false, false);
+
+        resetPrank({ msgSender: users.timelock });
+        protocol.multiVault.setBondingCurveConfig(BondingCurveConfig({ registry: registry, defaultCurveId: 1 }));
+
+        (address regAddr, uint256 defId) = protocol.multiVault.bondingCurveConfig();
+        assertEq(regAddr, registry, "hookless default accepted");
+        assertEq(defId, 1);
+    }
+
+    /*////////////////////////////////////////////////////////////////////
+                    initialize: same default-curve guard
+    ////////////////////////////////////////////////////////////////////*/
+
+    /// @dev Deploys an uninitialized MultiVault proxy and calls `initialize` with `bc`. The revert
+    ///      expectation, when given, is armed immediately before the `initialize` call so it cannot
+    ///      attach to the deployments above it.
+    function _initializeFreshMultiVault(BondingCurveConfig memory bc, bytes4 expectedRevert) internal {
+        MultiVault freshImpl = new MultiVault();
+        MultiVault fresh =
+            MultiVault(payable(address(new TransparentUpgradeableProxy(address(freshImpl), users.admin, ""))));
+        if (expectedRevert != bytes4(0)) {
+            vm.expectRevert(abi.encodeWithSelector(expectedRevert));
+        }
+        fresh.initialize(
+            _getDefaultGeneralConfig(),
+            _getDefaultAtomConfig(),
+            _getDefaultTripleConfig(),
+            _getDefaultWalletConfig(address(0)),
+            _getDefaultVaultFees(),
+            bc
+        );
+    }
+
+    function testInitialize_RevertWhen_DefaultCurveHasFeeHook() public {
+        (address registry,) = protocol.multiVault.bondingCurveConfig();
+
+        _initializeFreshMultiVault(
+            BondingCurveConfig({ registry: registry, defaultCurveId: DYNAMIC_FEE_CURVE_ID }),
+            MultiVault.MultiVault_DefaultCurveHasFeeHook.selector
+        );
+    }
+
+    function testInitialize_RevertWhen_DefaultCurveNotRegistered() public {
+        (address registry,) = protocol.multiVault.bondingCurveConfig();
+
+        _initializeFreshMultiVault(
+            BondingCurveConfig({ registry: registry, defaultCurveId: 99 }),
+            MultiVault.MultiVault_DefaultCurveNotRegistered.selector
+        );
+    }
+
+    function testInitialize_AcceptsHooklessDefault() public {
+        (address registry,) = protocol.multiVault.bondingCurveConfig();
+
+        _initializeFreshMultiVault(BondingCurveConfig({ registry: registry, defaultCurveId: 1 }), bytes4(0));
     }
 
     /*////////////////////////////////////////////////////////////////////

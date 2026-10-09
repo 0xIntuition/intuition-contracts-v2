@@ -42,8 +42,10 @@ struct DynamicFeeConfig {
     /// @dev Triangular spread for the deposit leg, in `TIER_PRECISION` (1e18) units of tiers. A tier at
     ///      distance `d` earns `max(0, 1 - |d - dStar| / sigma)`, an earning window roughly `2 * sigma`
     ///      tiers wide with a hard zero beyond it. Must be non-zero. At `4e18` with alpha `BPS` the three
-    ///      nearest tiers earn 50 / 33.3 / 16.7 when all three are eligible; an empty or sub-floor tier
-    ///      drops out of the normalization and changes the split.
+    ///      nearest tiers earn 50 / 33.3 / 16.7 of the pool when all three hold their widths. An empty
+    ///      or sub-floor tier keeps its place in the normalization, so the others' shares do not
+    ///      change: its share accrues unless an over-full tier's extra stake absorbs it at the same
+    ///      rate per share.
     uint256 depositKernelSpread;
     /// @dev Sliding-fulcrum position for the redeem leg, in bps `[0, BPS]`. Same kernel, applied to the
     ///      fulcrum slice of each redeem fee.
@@ -57,31 +59,49 @@ struct DynamicFeeConfig {
     /// @dev Cap on the per-tier redeem fee, in bps.
     uint256 redeemCapBps;
     /// @dev Fraction (bps, `0..BPS`) of each redeem fee routed to the prior tiers through the
-    ///      triangular kernel. The remainder goes to the exiting tier's other holders, so `0` routes
-    ///      the whole redeem fee there. If that cohort is empty the remainder reroutes to the
-    ///      nearest eligible tier; if it holds stake but less than `minEligibleTierStake` the
-    ///      remainder accrues to the protocol bucket. Entitlement carries no dwell requirement.
+    ///      triangular kernel. The remainder goes to the other holders of the tier each redeemed lot
+    ///      sits at, so `0` routes the whole redeem fee there, capped at the cohort's fill of its band.
+    ///      What that cohort cannot take, because it is thin, under the eligibility floor or absent,
+    ///      walks to the eligible tiers above it nearest first, then below, each taking up to its
+    ///      fill; what no tier can take accrues to the protocol bucket rather than entering the
+    ///      kernel pool, which would pay the same tiers a second time. If the kernel spread itself
+    ///      can place nothing (the vault sits in tier 0, or every prior tier is empty), the kernel
+    ///      share goes to the cohorts of the redeemed lots' tiers, capped, and only then to the
+    ///      protocol bucket. Entitlement carries no dwell requirement.
     uint256 redeemToFulcrumTiersBps;
     /// @dev Fraction (bps, `0..BPS`) of each deposit fee paid as a single lump to the nearest eligible
     ///      prior tier, on top of the kernel spread. The remaining `BPS - depositToPriorTierBps` is
-    ///      spread by the kernel. The search runs downward from the source tier and applies
-    ///      `minEligibleTierStake`; no stake is excluded on the deposit path. If no prior tier
-    ///      qualifies, the lump rejoins the kernel pool and ultimately the protocol bucket, so it is
-    ///      never forfeited. `0` gives a pure kernel spread and is the default.
+    ///      spread by the kernel. The search runs downward from the source tier and applies the
+    ///      eligibility floor; no stake is excluded on the deposit path. The lump is capped at the
+    ///      tier's fill of its band, and what it cannot absorb walks on to the next prior tier down,
+    ///      each taking up to its fill; what no prior tier can take accrues to the protocol bucket
+    ///      rather than entering the kernel pool. A thin tier therefore keeps its fill of the lump
+    ///      and never a second helping of it through the spread. `0` gives a pure kernel spread and
+    ///      is the default.
     ///      This field and `redeemToFulcrumTiersBps` each name the allocation being opted into
     ///      rather than a common side of the split, so on both legs `0` is the default and a larger
     ///      value means more of what the name points at.
     uint256 depositToPriorTierBps;
-    /// @dev Minimum stake a tier must hold to receive redistributed fees, denominated in shares to match
-    ///      `tierStake`. Shares and assets coincide here only because this curve holds price at 1:1.
-    ///      `0` disables the filter, reducing eligibility to a non-zero occupancy check. Bounded above
-    ///      by {DynamicFeeFlatPriceCurve.MAX_MIN_ELIGIBLE_TIER_STAKE}.
+    /// @dev Minimum stake a tier must hold to receive redistributed fees, as a fraction of that tier's
+    ///      own width in bps `[0, BPS]`. A tier of width `w` qualifies when its recipient stake is at
+    ///      least `w * minEligibleTierStakeBps / BPS`. Relative rather than absolute because widths grow
+    ///      geometrically up the ladder, so one absolute amount is a large share of the first band and a
+    ///      negligible share of the last. `0` disables the filter, reducing eligibility to a non-zero
+    ///      occupancy check; `BPS` requires a full band.
+    ///
+    ///      The floor is a coarse gate on top of the occupancy weighting the kernel spread always
+    ///      applies: each prior tier's kernel weight is multiplied by its fill, `stake / width`, and
+    ///      the common rate is capped at the schedule, so a thin tier earns its fill of what a full one
+    ///      would at the same rate per share, an over-full tier earns proportionally more at that same
+    ///      rate, and a dust seat earns dust regardless of the floor. The single-target credits (the
+    ///      deposit spike, an exiting-tier slice, a reroute) are capped at the recipient's fill for
+    ///      the same reason. The floor decides which tiers take part at all; the weighting decides how
+    ///      much each one earns.
     ///
     ///      Judged on the stake that will receive the fee: the redeem leg removes the exiter's own
     ///      residual first, the deposit leg judges a tier on its full stake. Applied at distribution
-    ///      time from the current config, with no snapshot and no migration on change. Where an excluded
-    ///      tier's slice goes differs between the two legs; see the implementation.
-    uint256 minEligibleTierStake;
+    ///      time from the current config, with no snapshot and no migration on change.
+    uint256 minEligibleTierStakeBps;
 }
 
 /// @notice Owner-set manual fee rate for a single tier, consulted before the formulaic schedule.

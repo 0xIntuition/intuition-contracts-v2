@@ -272,9 +272,15 @@ export CURVE=<the DynamicFeeFlatPriceCurve proxy>
 #     curve makes every deposit and redeem on its id revert, permanently.
 cast call $CURVE 'multiVault()(address)' -r $RPC     # must equal $MULTIVAULT
 
-# (b) Ownership transferred off the deploying EOA. The deploy script sets owner = msg.sender.
-cast call $CURVE 'owner()(address)' -r $RPC          # must be the intended governance address
+# (b) Owned by the Intuition admin Safe. The deploy script passes it to `initialize` on
+#     governed networks, so there is no transfer step; a broadcaster-owned curve means the
+#     script ran with the wrong chain branch.
+cast call $CURVE 'owner()(address)' -r $RPC          # 0xbeA18ab4c83a12be25f8AA8A10D8747A07Cdc6eb
 ```
+
+Registering the curve is the only wiring it gets. It is never the default curve: the upgraded MultiVault rejects a
+hook-bearing curve in `setBondingCurveConfig`, so an attempt would revert rather than misconfigure the vault.
+Registration adds a curve id; the default stays Linear.
 
 And (c) fork-simulate this transaction followed by a deposit on the new curve id, and confirm the deposit succeeds.
 

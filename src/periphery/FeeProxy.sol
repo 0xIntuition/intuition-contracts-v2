@@ -270,11 +270,10 @@ contract FeeProxy is
         if (affiliateFee >= grossAssets) revert FeeProxy_FeeExceedsGross(affiliateFee, grossAssets);
         uint256 forwardedAssets = grossAssets - affiliateFee;
 
-        _payAffiliate(row.feeRecipient, affiliate, msg.sender, affiliateFee);
-
         shares = IMultiVault(multiVault).deposit{ value: forwardedAssets }(receiver, termId, curveId, minShares);
 
         _recordAffiliateStats(affiliate, msg.sender, grossAssets, affiliateFee, forwardedAssets, false);
+        _payAffiliate(row.feeRecipient, affiliate, msg.sender, affiliateFee);
         _refundExcess(msg.sender, msg.value - grossAssets);
 
         emit DepositedVia(msg.sender, affiliate, termId, grossAssets, affiliateFee, forwardedAssets, shares);
@@ -299,8 +298,6 @@ contract FeeProxy is
 
         RoutingFlow memory flow = _setupRoutingFlow(affiliate, grossAssets, feeGuard, false);
 
-        _payAffiliate(flow.feeRecipient, affiliate, msg.sender, flow.affiliateFee);
-
         shares = IMultiVault(multiVault).depositBatch{ value: flow.totalForwardedAssets }(
             receiver, termIds, curveIds, flow.forwardedAssets, minShares
         );
@@ -308,6 +305,7 @@ contract FeeProxy is
         _recordAffiliateStats(
             affiliate, msg.sender, flow.totalGrossAssets, flow.affiliateFee, flow.totalForwardedAssets, false
         );
+        _payAffiliate(flow.feeRecipient, affiliate, msg.sender, flow.affiliateFee);
         _refundExcess(msg.sender, msg.value - flow.totalGrossAssets);
 
         emit DepositedBatchVia(
@@ -329,8 +327,6 @@ contract FeeProxy is
 
         RoutingFlow memory flow = _setupRoutingFlow(affiliate, grossAssets, feeGuard, true);
 
-        _payAffiliate(flow.feeRecipient, affiliate, msg.sender, flow.affiliateFee);
-
         termIds = IMultiVault(multiVault).createAtomsFor{ value: flow.totalForwardedAssets }(
             msg.sender, atomDatas, flow.forwardedAssets
         );
@@ -338,6 +334,7 @@ contract FeeProxy is
         _recordAffiliateStats(
             affiliate, msg.sender, flow.totalGrossAssets, flow.affiliateFee, flow.totalForwardedAssets, true
         );
+        _payAffiliate(flow.feeRecipient, affiliate, msg.sender, flow.affiliateFee);
         _refundExcess(msg.sender, msg.value - flow.totalGrossAssets);
 
         emit CreatedAtomsVia(
@@ -360,8 +357,6 @@ contract FeeProxy is
 
         RoutingFlow memory flow = _setupRoutingFlow(affiliate, grossAssets, feeGuard, true);
 
-        _payAffiliate(flow.feeRecipient, affiliate, msg.sender, flow.affiliateFee);
-
         termIds = IMultiVault(multiVault).createAtomsWithUris{ value: flow.totalForwardedAssets }(
             msg.sender, atomDatas, flow.forwardedAssets, uris
         );
@@ -369,6 +364,7 @@ contract FeeProxy is
         _recordAffiliateStats(
             affiliate, msg.sender, flow.totalGrossAssets, flow.affiliateFee, flow.totalForwardedAssets, true
         );
+        _payAffiliate(flow.feeRecipient, affiliate, msg.sender, flow.affiliateFee);
         _refundExcess(msg.sender, msg.value - flow.totalGrossAssets);
 
         emit CreatedAtomsVia(
@@ -395,8 +391,8 @@ contract FeeProxy is
         termIds = _executeCreateTriples(affiliate, subjectIds, predicateIds, objectIds, flow);
     }
 
-    /// @dev Final-leg helper for {createTriplesVia}: pays the affiliate, forwards
-    ///      the post-fee value to {MultiVault.createTriplesFor}, refunds any
+    /// @dev Final-leg helper for {createTriplesVia}: forwards the post-fee value
+    ///      to {MultiVault.createTriplesFor}, pays the affiliate, refunds any
     ///      excess `msg.value`, and emits {CreatedTriplesVia}. Kept private so the
     ///      five-array calldata frame stays out of the outer entry point's stack.
     function _executeCreateTriples(
@@ -406,8 +402,6 @@ contract FeeProxy is
         bytes32[] calldata objectIds,
         RoutingFlow memory flow
     ) private returns (bytes32[] memory termIds) {
-        _payAffiliate(flow.feeRecipient, affiliate, msg.sender, flow.affiliateFee);
-
         termIds = IMultiVault(multiVault).createTriplesFor{ value: flow.totalForwardedAssets }(
             msg.sender, subjectIds, predicateIds, objectIds, flow.forwardedAssets
         );
@@ -415,6 +409,7 @@ contract FeeProxy is
         _recordAffiliateStats(
             affiliate, msg.sender, flow.totalGrossAssets, flow.affiliateFee, flow.totalForwardedAssets, true
         );
+        _payAffiliate(flow.feeRecipient, affiliate, msg.sender, flow.affiliateFee);
         _refundExcess(msg.sender, msg.value - flow.totalGrossAssets);
 
         emit CreatedTriplesVia(
@@ -741,6 +736,15 @@ contract FeeProxy is
     ///      {AffiliateFeePaid} once the transfer has settled. Reverts on
     ///      transfer failure (an affiliate that wires a bricked recipient is
     ///      responsible for migrating, not the protocol).
+    ///
+    ///      Every routing entry point calls this only after its MultiVault call has
+    ///      returned. The push hands execution to an affiliate-controlled address,
+    ///      and `nonReentrant` guards this contract rather than MultiVault, so a
+    ///      recipient that ran first could deposit or redeem on MultiVault directly
+    ///      and reprice or re-gate the user's operation before it executed. Ordering
+    ///      the payment after the routed call, with the refund last, leaves no pending
+    ///      routed operation for the recipient to affect; it may still interact with
+    ///      MultiVault for its own account, as any address can.
     function _payAffiliate(address feeRecipient, address affiliate, address user, uint256 affiliateFee) internal {
         if (affiliateFee == 0) {
             emit AffiliateFeePaid(affiliate, user, 0);
