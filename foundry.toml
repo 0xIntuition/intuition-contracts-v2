@@ -20,11 +20,11 @@
     "forge-std/=lib/forge-std/",
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
     "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
-    "@openzeppelin-v4/contracts/=node_modules/@openzeppelin-v4/contracts/",
-    "@openzeppelin-v4/contracts-upgradeable/=node_modules/@openzeppelin-v4/contracts-upgradeable/",
-    "solady/=lib/solady/",
+    "@openzeppelinV4/contracts/=node_modules/@openzeppelin/contracts/",
+    "@openzeppelinV4/contracts-upgradeable/=node_modules/@openzeppelin/contracts-upgradeable/",
+    "solady/=lib/solady/src/",
     "@prb/math/=lib/prb-math/",
-    "@account-abstraction/contracts/=lib/account-abstraction/contracts/",
+    "@account-abstraction/=lib/account-abstraction/contracts/",
     "permit2/=lib/permit2/src/"
   ]
 
@@ -49,7 +49,7 @@
   bracket_spacing = true
   int_types = "long"
   line_length = 120
-  multiline_func_header = "all"
+  multiline_func_header = "attributes_first"
   number_underscore = "thousands"
   quote_style = "double"
   tab_width = 4

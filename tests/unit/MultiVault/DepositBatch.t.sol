@@ -215,7 +215,7 @@ contract DepositBatchTest is BaseTest {
         resetPrank(users.alice);
         vm.expectRevert(); // Will revert due to insufficient payment
         protocol.multiVault.depositBatch{ value: 5e18 }(users.alice, termIds, curveIds, amounts, minShares); // Less
-            // than required
+        // than required
     }
 
     function test_depositBatch_NonExistentTerm_Revert() public {
@@ -261,7 +261,7 @@ contract DepositBatchTest is BaseTest {
         resetPrank(users.alice);
         vm.expectRevert(MultiVault.MultiVault_SenderNotApproved.selector);
         protocol.multiVault.depositBatch{ value: 10e18 }(users.bob, termIds, curveIds, amounts, minShares); // Alice
-            // trying to deposit for Bob without approval
+        // trying to deposit for Bob without approval
     }
 
     function test_depositBatch_ZeroAssets_Revert() public {

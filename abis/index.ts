@@ -1,12 +1,17 @@
 export { MultiVaultAbi } from './MultiVault';
 export { MultiVaultMigrationModeAbi } from './MultiVaultMigrationMode';
+export { FeeProxyAbi } from './FeeProxy';
 export { BaseEmissionsControllerAbi } from './BaseEmissionsController';
 export { SatelliteEmissionsControllerAbi } from './SatelliteEmissionsController';
 export { TrustBondingAbi } from './TrustBonding';
 export { BondingCurveRegistryAbi } from './BondingCurveRegistry';
 export { LinearCurveAbi } from './LinearCurve';
 export { OffsetProgressiveCurveAbi } from './OffsetProgressiveCurve';
+export { DynamicFeeFlatPriceCurveAbi } from './DynamicFeeFlatPriceCurve';
 export { AtomWalletAbi } from './AtomWallet';
 export { AtomWalletFactoryAbi } from './AtomWalletFactory';
+export { AtomWardenAbi } from './AtomWarden';
 export { TrustAbi } from './Trust';
 export { TrustTokenAbi } from './TrustToken';
+export { WrappedTrustAbi } from './WrappedTrust';
+export { MultiVaultLibAbi } from './MultiVaultLib';

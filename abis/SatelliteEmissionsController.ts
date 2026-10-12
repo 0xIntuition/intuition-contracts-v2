@@ -955,6 +955,11 @@ export const SatelliteEmissionsControllerAbi = [
   },
   {
     "type": "error",
+    "name": "CoreEmissionsController_InvalidEmissionsLength",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "CoreEmissionsController_InvalidEmissionsPerEpoch",
     "inputs": []
   },
