@@ -144,7 +144,7 @@ contract CurveDepositNeutralityTest is Test {
             redeemCapBps: 1000,
             redeemToFulcrumTiersBps: 0,
             depositToPriorTierBps: 0,
-            minEligibleTierStake: 0
+            minEligibleTierStakeBps: 0
         });
     }
 
@@ -196,8 +196,8 @@ contract CurveDepositNeutralityTest is Test {
         uint256 lumpCarol = _position(carol);
         uint256 lumpAlice = _position(alice);
         uint256 lumpBob = _position(bob);
-        uint256 lumpTier = curve.userTier(T1, carol);
-        uint256 lumpAvg = curve.userAvgTier(T1, carol);
+        uint256 lumpTier = curve.userTopTier(T1, carol);
+        uint256 lumpMask = curve.lotMask(T1, carol);
         uint256 lumpProtocol = curve.protocolAccrued();
         uint256 lumpVault = curve.vaultStake(T1);
 
@@ -210,8 +210,8 @@ contract CurveDepositNeutralityTest is Test {
         assertEq(_position(carol), lumpCarol, "depositor position identical");
         assertEq(_position(alice), lumpAlice, "bystander alice identical");
         assertEq(_position(bob), lumpBob, "bystander bob identical");
-        assertEq(curve.userTier(T1, carol), lumpTier, "bucket identical");
-        assertEq(curve.userAvgTier(T1, carol), lumpAvg, "average entry tier identical");
+        assertEq(curve.userTopTier(T1, carol), lumpTier, "top lot identical");
+        assertEq(curve.lotMask(T1, carol), lumpMask, "lot set identical");
         assertEq(curve.protocolAccrued(), lumpProtocol, "protocol bucket identical");
         assertEq(curve.vaultStake(T1), lumpVault, "vault total identical");
     }
@@ -405,15 +405,10 @@ contract CurveDepositNeutralityTest is Test {
             manyWalletsPayer += _position(sybils[i]);
         }
 
-        // (1) The fee charged is identical either way — nothing about the quote depends on the payer,
-        //     and nothing extra is forfeited. Only per-share truncation can differ, because the two
-        //     arrangements credit different denominators.
-        assertApproxEqAbs(
-            curve.protocolAccrued(),
-            oneWalletProtocol,
-            MAX_TRUNCATION_DUST_WEI,
-            "protocol bucket unaffected by the wallet split"
-        );
+        // (1) The fee charged is identical either way — nothing about the quote depends on the payer.
+        //     Where it lands can differ: one wallet re-buckets its whole position at each deposit while
+        //     N wallets hold N buckets, and the per-tier cap keys on how full each bucket is, so the
+        //     protocol bucket is not arrangement-invariant. Conservation, asserted in (3), is.
 
         // (2) The payer cannot manufacture value out of the arrangement, and whatever edge survives is
         //     small MEASURED AGAINST THE DEPOSIT — which is the denominator that matters, since that is
@@ -445,6 +440,137 @@ contract CurveDepositNeutralityTest is Test {
     }
 
     /* =================================================== */
+    /*                  LOTS: EXACT INVARIANCE             */
+    /* =================================================== */
+
+    /// @dev With one lot per band the deposit leg cannot tell one wallet from N: a wallet that
+    ///      deposits in N legs holds exactly the lots N wallets would, so the depositor side earns
+    ///      the same up to accumulator dust, and the tier ledger and every bystander are identical to
+    ///      the wei. The averaged position model could only bound this to a ceiling.
+    function testFuzz_walletInvariance_depositorSideIsExact(uint256 amount, uint8 legsSeed) external {
+        _deposit(alice, 8e18);
+        _deposit(bob, 10e18);
+        amount = bound(amount, 1e18, 60e18);
+        uint256 legs = bound(legsSeed, 2, 5);
+        uint256 slice = amount / legs;
+
+        uint256 snap = vm.snapshotState();
+        for (uint256 j = 0; j < legs; ++j) {
+            _deposit(carol, j + 1 == legs ? amount - slice * (legs - 1) : slice);
+        }
+        LedgerSnapshot memory oneWallet = _snapshotLedger();
+        oneWallet.depositor = _position(carol);
+        oneWallet.depositorMask = curve.lotMask(T1, carol);
+        vm.revertToState(snap);
+
+        address[] memory sybils = new address[](legs);
+        for (uint256 j = 0; j < legs; ++j) {
+            sybils[j] = makeAddr(string.concat("exact-sybil-", vm.toString(j)));
+            _deposit(sybils[j], j + 1 == legs ? amount - slice * (legs - 1) : slice);
+        }
+        LedgerSnapshot memory manyWallets = _snapshotLedger();
+        for (uint256 j = 0; j < legs; ++j) {
+            manyWallets.depositor += _position(sybils[j]);
+            manyWallets.depositorMask |= curve.lotMask(T1, sybils[j]);
+        }
+
+        assertApproxEqAbs(
+            manyWallets.depositor, oneWallet.depositor, MAX_TRUNCATION_DUST_WEI, "the depositor side earns the same"
+        );
+        assertEq(manyWallets.depositorMask, oneWallet.depositorMask, "the wallets' lots are the one wallet's lots");
+        for (uint256 t = 0; t < oneWallet.tiers.length; ++t) {
+            assertEq(manyWallets.tiers[t], oneWallet.tiers[t], "tier ledger identical");
+        }
+        assertEq(manyWallets.alice, oneWallet.alice, "bystander alice identical");
+        assertEq(manyWallets.bob, oneWallet.bob, "bystander bob identical");
+        assertEq(manyWallets.protocol, oneWallet.protocol, "protocol bucket identical");
+    }
+
+    struct LedgerSnapshot {
+        uint256 depositor;
+        uint256 depositorMask;
+        uint256 alice;
+        uint256 bob;
+        uint256 protocol;
+        uint256[] tiers;
+    }
+
+    /// @dev The bystanders, the protocol bucket and the per-tier ledger, captured for a before/after
+    ///      comparison across two arrangements of the same deposit.
+    function _snapshotLedger() internal view returns (LedgerSnapshot memory snapshot) {
+        snapshot.alice = _position(alice);
+        snapshot.bob = _position(bob);
+        snapshot.protocol = curve.protocolAccrued();
+        uint256 tierCount = curve.getConfig().tierCount;
+        snapshot.tiers = new uint256[](tierCount);
+        for (uint256 t = 0; t < tierCount; ++t) {
+            snapshot.tiers[t] = curve.tierStake(T1, t);
+        }
+    }
+
+    /// @dev Exit-side salami: cutting a redeem into chunks buys nothing. The quote walks the same
+    ///      lots in the same order however the total is cut, so the fee is the lump fee up to one wei
+    ///      of round-up per piece, the exiter ends in the same lots with the same stake, and earns
+    ///      nothing from any chunk.
+    function testFuzz_redeemSplitIsNotCheaperThanLump(uint256 amount, uint8 chunksSeed) external {
+        _deposit(alice, 8e18);
+        (, uint256 bobStake) = _deposit(bob, 30e18); // lots across three bands
+        _deposit(carol, 5e18);
+        amount = bound(amount, 1e15, bobStake);
+        uint256 chunks = bound(chunksSeed, 2, 6);
+        uint256 bobBefore = curve.claimable(bob, T1);
+
+        uint256 snap = vm.snapshotState();
+        uint256 lumpFee = _redeem(bob, amount);
+        uint256 lumpMask = curve.lotMask(T1, bob);
+        uint256 lumpStake = curve.userStake(T1, bob);
+        assertEq(curve.claimable(bob, T1), bobBefore, "the exiter earns nothing from the lump");
+        vm.revertToState(snap);
+
+        uint256 splitFee;
+        uint256 slice = amount / chunks;
+        for (uint256 j = 0; j < chunks; ++j) {
+            uint256 part = j + 1 == chunks ? amount - slice * (chunks - 1) : slice;
+            if (part == 0) continue;
+            splitFee += _redeem(bob, part);
+        }
+
+        assertGe(splitFee, lumpFee, "chunking never undercuts the lump fee");
+        // Each (chunk, lot) piece rounds up once; a chunk that straddles a lot edge is two pieces.
+        assertLe(splitFee, lumpFee + chunks + curve.getConfig().tierCount, "and costs at most a wei per piece");
+        assertEq(curve.lotMask(T1, bob), lumpMask, "the same lots are left either way");
+        assertEq(curve.userStake(T1, bob), lumpStake, "the same residual stake either way");
+        assertEq(curve.claimable(bob, T1), bobBefore, "the exiter earns nothing from any chunk");
+    }
+
+    /// @dev The lot ledger's internal consistency, checked for a set of holders known to be the only
+    ///      ones in the vault: a position is the sum of its lots, the mask flags exactly the non-empty
+    ///      lots and nothing above the ladder, the top lot is the highest flagged tier, and every
+    ///      tier's occupancy is the sum of the holders' lots there.
+    function _assertLotLedger(address[] memory holders) internal view {
+        uint256 tierCount = curve.getConfig().tierCount;
+        uint256[] memory perTier = new uint256[](tierCount);
+        for (uint256 i = 0; i < holders.length; ++i) {
+            uint256 mask = curve.lotMask(T1, holders[i]);
+            uint256 summed;
+            uint256 top = curve.NO_LOT();
+            for (uint256 t = 0; t < tierCount; ++t) {
+                uint256 lot = curve.lotStake(T1, holders[i], t);
+                assertEq(lot > 0, (mask >> t) & 1 == 1, "a mask bit is set exactly when the lot is non-empty");
+                if (lot > 0) top = t;
+                summed += lot;
+                perTier[t] += lot;
+            }
+            assertEq(mask >> tierCount, 0, "no mask bit above the ladder");
+            assertEq(summed, curve.userStake(T1, holders[i]), "a position is the sum of its lots");
+            assertEq(curve.userTopTier(T1, holders[i]), top, "the top lot is the highest flagged tier");
+        }
+        for (uint256 t = 0; t < tierCount; ++t) {
+            assertEq(perTier[t], curve.tierStake(T1, t), "tier occupancy is the sum of the lots at that tier");
+        }
+    }
+
+    /* =================================================== */
     /*                   SOLE OCCUPANT                     */
     /* =================================================== */
 
@@ -456,7 +582,7 @@ contract CurveDepositNeutralityTest is Test {
         // still begins with a tier-0 band, and a tier-0 band has no prior tier to pay by construction.
         _deposit(alice, 12e18);
         assertEq(curve.tierOf(curve.vaultStake(T1)), 1, "the vault must be out of tier 0");
-        assertEq(curve.userTier(T1, alice), 0, "alice holds the tier below");
+        assertGt(curve.lotStake(T1, alice, 0), 0, "alice holds the tier below");
 
         uint256 protocolBefore = curve.protocolAccrued();
         uint256 claimableBefore = curve.claimable(alice, T1);
@@ -501,7 +627,12 @@ contract CurveDepositNeutralityTest is Test {
         uint256 bobEarned = curve.claimable(bob, T1) - bobBefore;
         uint256 aliceEarned = curve.claimable(alice, T1) - aliceBefore;
         assertGt(aliceEarned, 0, "the prior tier is paid");
-        assertApproxEqAbs(bobEarned + aliceEarned, fee, MAX_TRUNCATION_DUST_WEI, "the whole fee reaches tier 0");
+        // Tier 0 is paid its fill of the fee: it holds less than its width, so the cap scales the
+        // slice by `tierStake / width` and the remainder is undistributable with no other prior tier.
+        uint256 tierZeroFill = (fee * curve.tierStake(T1, 0)) / curve.tierWidthAt(0);
+        assertApproxEqAbs(
+            bobEarned + aliceEarned, tierZeroFill, MAX_TRUNCATION_DUST_WEI, "tier 0 receives its fill of the fee"
+        );
         // bob's share is his pro-rata ownership of tier 0 at distribution time, never more.
         assertLt(bobEarned, fee, "bob cannot receive his own whole fee while another holder shares his tier");
     }
@@ -651,8 +782,8 @@ contract CurveDepositNeutralityTest is Test {
         (, uint256 bobStake) = _deposit(bob, 12e18); // bob books bucket 1
         _deposit(carol, 2e18); // carol stays inside tier 1, sharing bob's bucket
 
-        assertEq(curve.userTier(T1, bob), 1, "bob must sit in tier 1");
-        assertEq(curve.userTier(T1, carol), 1, "carol must share bob's tier for the slice to land");
+        assertEq(curve.userTopTier(T1, bob), 1, "bob must sit in tier 1");
+        assertEq(curve.userTopTier(T1, carol), 1, "carol must share bob's tier for the slice to land");
 
         uint256 bobBefore = curve.claimable(bob, T1);
         uint256 carolBefore = curve.claimable(carol, T1);
@@ -663,13 +794,17 @@ contract CurveDepositNeutralityTest is Test {
         assertGt(exitFee, 0, "and it must actually charge a fee");
 
         assertEq(curve.claimable(bob, T1), bobBefore, "the exiter earns nothing from their own exit fee");
-        assertApproxEqAbs(
-            curve.claimable(carol, T1) - carolBefore,
-            exitFee,
-            MAX_TRUNCATION_DUST_WEI,
-            "the residual cohort receives the whole slice"
+        // The cohort is paid at the schedule rate per share: carol's 2 TRUST fill a sixth of the band,
+        // so she keeps at most a sixth of the slice; the rest rejoins the pool and, with no full prior
+        // tier below, part of it is undistributable.
+        uint256 carolEarned = curve.claimable(carol, T1) - carolBefore;
+        assertGt(carolEarned, 0, "the residual cohort is paid");
+        assertLe(
+            carolEarned,
+            (exitFee * curve.userStake(T1, carol)) / curve.tierWidthAt(1) + MAX_TRUNCATION_DUST_WEI,
+            "and never above its fill of the slice"
         );
-        assertEq(curve.protocolAccrued(), protocolBefore, "nothing is orphaned while a cohort exists");
+        assertGe(curve.protocolAccrued(), protocolBefore, "the protocol bucket only ever grows");
     }
 
     /// @dev The solvency half of the same property, fuzzed over sizes so the bucket arrangement
@@ -772,10 +907,12 @@ contract CurveDepositNeutralityTest is Test {
                 "the exiting account receives nothing at all from its own exit fee"
             );
 
-            // The actor is BOTH addresses, so the round-trip P&L must count both.
+            // The actor is BOTH addresses, so the round-trip P&L must count both. The rerouted slice
+            // is capped at the second address's fill of its band, so the pair no longer round-trips
+            // for free: what the cap withholds flows to the full tier below or to the protocol.
             uint256 recovered =
                 (shares - exitFee) + (curve.claimable(actorA, T1) + curve.claimable(actorB, T1) - pairEarnedBefore);
-            assertApproxEqAbs(recovered, washGross, MAX_TRUNCATION_DUST_WEI, "a two-address actor round-trips for free");
+            assertLt(recovered, washGross, "a two-address actor cannot round-trip for free under the cap");
         }
 
         assertGt(feesPaid, 0, "the actor really did pay both fees");
@@ -810,7 +947,7 @@ contract CurveDepositNeutralityTest is Test {
         uint16 depositFulcrumAlphaBps;
         uint64 depositKernelSpread;
         uint16 depositToPriorTierBps;
-        uint96 minEligibleTierStake;
+        uint96 minEligibleTierStakeBps;
     }
 
     /// @dev Bound a {LadderSeed} into a config `_setConfig` accepts. Every range here is the contract's
@@ -841,7 +978,7 @@ contract CurveDepositNeutralityTest is Test {
         config.depositFulcrumAlphaBps = bound(seed.depositFulcrumAlphaBps, 0, BPS);
         config.depositKernelSpread = bound(seed.depositKernelSpread, 1e18 + 1, 8e18);
         config.depositToPriorTierBps = bound(seed.depositToPriorTierBps, 0, BPS);
-        config.minEligibleTierStake = bound(seed.minEligibleTierStake, 0, 1000e18);
+        config.minEligibleTierStakeBps = bound(seed.minEligibleTierStakeBps, 0, 10_000);
     }
 
     /// @dev Truncation dust scales with the ledger, not with a constant: {_creditByWeight} drops up to
@@ -934,8 +1071,8 @@ contract CurveDepositNeutralityTest is Test {
         uint256 snap = vm.snapshotState();
         _deposit(carol, amount);
         uint256 lumpCarol = _position(carol);
-        uint256 lumpTier = curve.userTier(T1, carol);
-        uint256 lumpAvg = curve.userAvgTier(T1, carol);
+        uint256 lumpTier = curve.userTopTier(T1, carol);
+        uint256 lumpMask = curve.lotMask(T1, carol);
         uint256 lumpProtocol = curve.protocolAccrued();
         uint256 lumpVault = curve.vaultStake(T1);
 
@@ -943,8 +1080,8 @@ contract CurveDepositNeutralityTest is Test {
         _depositBandByBand(carol, amount);
 
         assertEq(_position(carol), lumpCarol, "depositor position identical at any schedule");
-        assertEq(curve.userTier(T1, carol), lumpTier, "bucket identical at any schedule");
-        assertEq(curve.userAvgTier(T1, carol), lumpAvg, "average entry tier identical at any schedule");
+        assertEq(curve.userTopTier(T1, carol), lumpTier, "top lot identical at any schedule");
+        assertEq(curve.lotMask(T1, carol), lumpMask, "lot set identical at any schedule");
         assertEq(curve.protocolAccrued(), lumpProtocol, "protocol bucket identical at any schedule");
         assertEq(curve.vaultStake(T1), lumpVault, "vault total identical at any schedule");
     }
@@ -1097,12 +1234,10 @@ contract CurveDepositNeutralityTest is Test {
             manyWalletsPayer += _position(sybils[i]);
         }
 
-        assertApproxEqAbs(
-            curve.protocolAccrued(),
-            oneWalletProtocol,
-            MAX_TRUNCATION_DUST_WEI,
-            "protocol bucket unaffected by a skewed wallet split"
-        );
+        // The protocol bucket is no longer arrangement-invariant: one wallet re-buckets its whole
+        // position at each deposit while N wallets hold N buckets, and the per-tier cap keys on how
+        // full each bucket is. What must hold is that the payer cannot gain from the arrangement and
+        // that value is only moved, never created — both asserted below.
         assertLe(
             manyWalletsPayer,
             oneWalletPayer + _edgeCeiling(amount, MAX_WALLET_EDGE_BPS),
@@ -1204,16 +1339,16 @@ contract CurveDepositNeutralityTest is Test {
         uint256 snap = vm.snapshotState();
         _deposit(carol, amount);
         uint256 lumpCarol = _position(carol);
-        uint256 lumpTier = curve.userTier(T1, carol);
-        uint256 lumpAvg = curve.userAvgTier(T1, carol);
+        uint256 lumpTier = curve.userTopTier(T1, carol);
+        uint256 lumpMask = curve.lotMask(T1, carol);
         uint256 lumpProtocol = curve.protocolAccrued();
 
         vm.revertToState(snap);
         _depositBandByBand(carol, amount);
 
         assertEq(_position(carol), lumpCarol, "depositor position identical from any edge");
-        assertEq(curve.userTier(T1, carol), lumpTier, "bucket identical from any edge");
-        assertEq(curve.userAvgTier(T1, carol), lumpAvg, "average entry tier identical from any edge");
+        assertEq(curve.userTopTier(T1, carol), lumpTier, "top lot identical from any edge");
+        assertEq(curve.lotMask(T1, carol), lumpMask, "lot set identical from any edge");
         assertEq(curve.protocolAccrued(), lumpProtocol, "protocol bucket identical from any edge");
     }
 
@@ -1369,7 +1504,8 @@ contract CurveDepositNeutralityTest is Test {
             for (uint256 t = 0; t < curve.getConfig().tierCount; ++t) {
                 bucketed += curve.tierStake(T1, t);
             }
-            assertEq(bucketed, curve.vaultStake(T1), "every unit of stake sits in exactly one bucket at every step");
+            assertEq(bucketed, curve.vaultStake(T1), "every unit of stake sits in exactly one tier at every step");
+            _assertLotLedger(holders);
         }
 
         _custodyIsAttributable(holders);
@@ -1379,7 +1515,7 @@ contract CurveDepositNeutralityTest is Test {
     /*            ELIGIBILITY FLOOR TURNED ON              */
     /* =================================================== */
 
-    /// @dev `minEligibleTierStake` ships at 0 (disabled), so every other neutrality test in this file
+    /// @dev `minEligibleTierStakeBps` ships at 0 (disabled), so every other neutrality test in this file
     ///      runs the floor-off path. The floor changes the DEPOSIT leg's recipient set — a sub-floor
     ///      tier leaves the kernel normalization and its share is absorbed by the tiers that already
     ///      qualified — which is a genuinely different distribution branch, and the interface NatSpec
@@ -1391,7 +1527,7 @@ contract CurveDepositNeutralityTest is Test {
     ///      replay and the sequence disagree about who qualifies.
     function testFuzz_floorEnabled_bandAlignedSplitEqualsLump(uint256 floor, uint256 amount) external {
         DynamicFeeConfig memory config = _defaultConfig();
-        config.minEligibleTierStake = bound(floor, 1, 1000e18);
+        config.minEligibleTierStakeBps = bound(floor, 1, 10_000);
         curve = _deploy(config);
 
         _deposit(alice, 8e18);
@@ -1415,7 +1551,7 @@ contract CurveDepositNeutralityTest is Test {
     }
 
     /// @dev The floor is the one recipient gate a sybil could hope to move, so state precisely what it
-    ///      keys on: `minEligibleTierStake` is tested against `tierStake` — the TIER's total — never
+    ///      keys on: `minEligibleTierStakeBps` is tested against `tierStake` — the TIER's total — never
     ///      against an individual position. A wallet holding dust therefore earns perfectly well while
     ///      sharing a tier that clears the floor, which is by design and is not the property at issue.
     ///
@@ -1426,10 +1562,10 @@ contract CurveDepositNeutralityTest is Test {
     ///      it is divided. The second half is the sybil-relevant one — if the floor were per-position,
     ///      the first arrangement would qualify and the second would not.
     function test_floorEnabled_splittingWithinATierCannotBuyOrLoseEligibility() external {
-        // Tier 0 holds exactly one band's width (10 TRUST), so a floor below that admits the cohort and
-        // a floor above it excludes the cohort — in both cases independently of how it is split.
-        (uint256 oneWalletOver, uint256 protocolOver) = _tierZeroCohortEarnings(5e18, 1);
-        (uint256 tenWalletsOver, uint256 protocolOverSplit) = _tierZeroCohortEarnings(5e18, 10);
+        // A full tier 0 clears a half-width floor and a tier 0 filled to 40% does not — in both cases
+        // independently of how the cohort is split.
+        (uint256 oneWalletOver, uint256 protocolOver) = _tierZeroCohortEarnings(5000, 1, 10_000);
+        (uint256 tenWalletsOver, uint256 protocolOverSplit) = _tierZeroCohortEarnings(5000, 10, 10_000);
 
         assertGt(oneWalletOver, 0, "a cohort above the floor must actually earn, or the test proves nothing");
         assertApproxEqAbs(
@@ -1439,8 +1575,8 @@ contract CurveDepositNeutralityTest is Test {
             protocolOverSplit, protocolOver, MAX_TRUNCATION_DUST_WEI, "and the protocol bucket does not move either"
         );
 
-        (uint256 oneWalletUnder, uint256 protocolUnder) = _tierZeroCohortEarnings(15e18, 1);
-        (uint256 tenWalletsUnder, uint256 protocolUnderSplit) = _tierZeroCohortEarnings(15e18, 10);
+        (uint256 oneWalletUnder, uint256 protocolUnder) = _tierZeroCohortEarnings(5000, 1, 4000);
+        (uint256 tenWalletsUnder, uint256 protocolUnderSplit) = _tierZeroCohortEarnings(5000, 10, 4000);
 
         assertEq(oneWalletUnder, 0, "a cohort below the floor earns nothing");
         assertEq(tenWalletsUnder, 0, "and cannot buy its way in by splitting into ten positions");
@@ -1448,31 +1584,42 @@ contract CurveDepositNeutralityTest is Test {
         assertEq(protocolUnderSplit, protocolUnder, "identically, whichever arrangement paid it");
     }
 
-    /// @dev Stand up a fresh vault at `floor`, fill tier 0 to exactly its band width split across
-    ///      `wallets` holders, then release one deposit fee from inside tier 1 — whose only prior tier is
-    ///      tier 0. Reports what the tier-0 cohort earned in aggregate and what the protocol took.
-    ///      Placement uses zero-fee records so the cohort total is exact rather than quote-dependent,
-    ///      which is what makes the two arrangements comparable at all.
-    function _tierZeroCohortEarnings(uint256 floor, uint256 wallets)
+    /// @dev Stand up a fresh vault at `floorBps`, fill tier 0 to exactly its band width split across
+    ///      `wallets` holders, seat a topper in tier 1 so the vault stays above tier 0, then thin the
+    ///      cohort down to `fillBps` of the band and release one deposit fee from above — tier 0 being a
+    ///      prior tier either way. Reports what the tier-0 cohort earned in aggregate and what the
+    ///      protocol took. Placement and thinning use zero-fee records so the cohort total is exact
+    ///      rather than quote-dependent, which is what makes the two arrangements comparable at all.
+    function _tierZeroCohortEarnings(uint256 floorBps, uint256 wallets, uint256 fillBps)
         internal
         returns (uint256 cohortEarned, uint256 protocolEarned)
     {
         DynamicFeeConfig memory config = _defaultConfig();
-        config.minEligibleTierStake = floor;
+        config.minEligibleTierStakeBps = floorBps;
         curve = _deploy(config);
 
         uint256 edge0 = curve.tierUpperEdge(0);
         uint256 slice = edge0 / wallets;
         address[] memory cohort = new address[](wallets);
+        uint256[] memory seated = new uint256[](wallets);
         for (uint256 i = 0; i < wallets; ++i) {
             cohort[i] = makeAddr(string.concat("cohort", vm.toString(wallets), "-", vm.toString(i)));
-            curve.recordDeposit{ value: 0 }(T1, cohort[i], i + 1 == wallets ? edge0 - slice * (wallets - 1) : slice);
+            seated[i] = i + 1 == wallets ? edge0 - slice * (wallets - 1) : slice;
+            curve.recordDeposit{ value: 0 }(T1, cohort[i], seated[i]);
         }
         assertEq(curve.tierStake(T1, 0), edge0, "tier 0 must hold exactly one band regardless of the split");
-        assertEq(curve.tierOf(curve.vaultStake(T1)), 1, "the vault must sit in tier 1 so tier 0 is the prior tier");
+
+        // A topper holds the vault above tier 0 while the cohort is thinned.
+        curve.recordDeposit{ value: 0 }(T1, makeAddr("tier-one-topper"), 12e18); // bucket 1; vault -> 22e18
+        if (fillBps < 10_000) {
+            for (uint256 i = 0; i < wallets; ++i) {
+                curve.recordRedeem{ value: 0 }(T1, cohort[i], seated[i] - (seated[i] * fillBps) / 10_000);
+            }
+        }
+        assertGt(curve.tierOf(curve.vaultStake(T1)), 0, "the vault must sit above tier 0 so tier 0 is a prior tier");
 
         uint256 protocolBefore = curve.protocolAccrued();
-        (uint256 fee,) = _deposit(carol, 2e18); // contained inside tier 1: exactly one band, one fee
+        (uint256 fee,) = _deposit(carol, 2e18); // stays inside the vault's current band: one band, one fee
         assertGt(fee, 0, "the probe deposit must actually charge a fee");
 
         for (uint256 i = 0; i < wallets; ++i) {
@@ -1491,16 +1638,16 @@ contract CurveDepositNeutralityTest is Test {
     ///      REACHABLE by governance and is documented rather than prevented.
     ///
     ///      With σ ≤ one tier and `depositFulcrumAlphaBps = BPS` (the shipped default, fulcrum on the source
-    ///      tier), every prior tier sits a full tier or more away, `_triangularWeight` returns a hard
-    ///      zero for all of them, `sumWeights` is zero, and the whole pool falls through
-    ///      `_awardNearestOrProtocol` as a single lump. Winner-takes-all silently replaces the
-    ///      configured spread: no revert, no distinguishing event, and the observable behaviour stops
-    ///      matching the schedule on file.
+    ///      tier), every prior tier sits a full tier or more away, the triangular kernel returns a hard
+    ///      zero for all of them, and the spread falls back to fill-only weighting: every eligible
+    ///      prior tier earns in proportion to how full it is, the kernel shape gone. No revert, no
+    ///      distinguishing event, and the observable behaviour stops matching the schedule on file.
     ///
-    ///      This pins BOTH halves so the edge cannot be rediscovered later as a surprise: collapsed at
-    ///      σ = one tier, genuinely spread at the shipped σ = 4 tiers with everything else held equal.
-    ///      Nothing is forfeited either way — the point is the distribution SHAPE, not a loss.
-    function test_subTierKernelSpread_collapsesTheSpreadIntoASingleTierLump() external {
+    ///      This pins BOTH halves so the edge cannot be rediscovered later as a surprise: fill-only
+    ///      (three full tiers paid equally) at σ = one tier, kernel-shaped at the shipped σ = 4 tiers
+    ///      with everything else held equal. Nothing is forfeited either way — the point is the
+    ///      distribution SHAPE, not a loss.
+    function test_subTierKernelSpread_fallsBackToFillOnlyWeighting() external {
         address[] memory seated = new address[](3);
         seated[0] = makeAddr("tier0");
         seated[1] = makeAddr("tier1");
@@ -1523,11 +1670,11 @@ contract CurveDepositNeutralityTest is Test {
             if (spreadEarnings[i] > 0) ++spreadPaid;
         }
 
-        assertEq(collapsedPaid, 1, "a sub-tier sigma pays exactly one tier - the spread has collapsed");
+        assertEq(collapsedPaid, 3, "a sub-tier sigma pays every eligible prior tier by fill alone");
+        assertApproxEqAbs(lumpEarnings[0], lumpEarnings[2], 1e4, "three full tiers earn equal fill-only shares");
+        assertApproxEqAbs(lumpEarnings[1], lumpEarnings[2], 1e4, "the kernel shape is gone");
         assertGt(spreadPaid, 1, "the shipped sigma genuinely spreads across several tiers");
-        // Nearest-first tie-break: the collapsed lump lands on the tier closest to the source, which at
-        // `depositFulcrumAlphaBps = BPS` (dStar = 0) is the highest prior tier.
-        assertGt(lumpEarnings[2], 0, "the whole pool lands on the prior tier nearest the source");
+        assertGt(spreadEarnings[2], spreadEarnings[0], "and with the kernel live the nearer tier earns more");
     }
 
     /// @dev Stand up a fresh vault under `config`, seat one holder in each of tiers 0/1/2 with the vault
@@ -1543,7 +1690,7 @@ contract CurveDepositNeutralityTest is Test {
         curve.recordDeposit{ value: 0 }(T1, seated[1], curve.tierUpperEdge(1) - curve.tierUpperEdge(0));
         curve.recordDeposit{ value: 0 }(T1, seated[2], curve.tierUpperEdge(2) - curve.tierUpperEdge(1));
         for (uint256 i = 0; i < 3; ++i) {
-            assertEq(curve.userTier(T1, seated[i]), i, "each seat must occupy its own tier");
+            assertEq(curve.userTopTier(T1, seated[i]), i, "each seat must occupy its own tier");
         }
         assertEq(curve.tierOf(curve.vaultStake(T1)), 3, "the vault must sit one tier above the top seat");
 

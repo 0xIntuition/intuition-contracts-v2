@@ -4,7 +4,7 @@
 
 Batched deposit; each leg runs the same `_processDeposit` body as the single-term path.
 
-Reached functions: 53. Solid arrows are calls inside one contract; dashed arrows leave it (either a `delegatecall` into the linked library, which still executes in the caller's storage context, or a genuine external call).
+Reached functions: 54. Solid arrows are calls inside one contract; dashed arrows leave it (either a `delegatecall` into the linked library, which still executes in the caller's storage context, or a genuine external call).
 
 ## Graph
 
@@ -66,6 +66,7 @@ flowchart LR
     MultiVaultLib__s["_s"]
     MultiVaultLib__setVaultTotals["_setVaultTotals"]
     MultiVaultLib__shouldChargeAtomDepositFraction["_shouldChargeAtomDepositFraction"]
+    MultiVaultLib__shouldChargeAtomDepositFractionFor["_shouldChargeAtomDepositFractionFor"]
     MultiVaultLib__shouldChargeFees["_shouldChargeFees"]
     MultiVaultLib__updateVaultOnCreation["_updateVaultOnCreation"]
     MultiVaultLib__updateVaultOnDeposit["_updateVaultOnDeposit"]
@@ -139,7 +140,7 @@ flowchart LR
   MultiVaultLib__isNewVault --> MultiVaultLib__s
   MultiVaultLib__recordCurveDeposit -.-> IBaseCurve_recordDeposit
   MultiVaultLib__shouldChargeAtomDepositFraction --> MultiVaultLib__s
-  MultiVaultLib__shouldChargeAtomDepositFraction --> MultiVaultLib__shouldChargeFees
+  MultiVaultLib__shouldChargeAtomDepositFraction --> MultiVaultLib__shouldChargeAtomDepositFractionFor
   MultiVaultLib__shouldChargeFees --> MultiVaultLib__s
   MultiVaultLib__updateVaultOnCreation --> MultiVaultLib__minAssetsForCurve
   MultiVaultLib__updateVaultOnCreation --> MultiVaultLib__mint
@@ -184,6 +185,7 @@ flowchart LR
   MultiVaultLib__minAssetsForCurve -.-> IBondingCurveRegistry_previewMint
   MultiVaultLib__minAssetsForCurve --> MultiVaultLib__s
   MultiVaultLib__mint --> MultiVaultLib__s
+  MultiVaultLib__shouldChargeAtomDepositFractionFor --> MultiVaultLib__shouldChargeFees
   MultiVaultLib__depositFeeHookCurve -.-> IBaseCurve_hasDepositFeeHook
   MultiVaultLib__depositFeeHookCurve -.-> IBondingCurveRegistry_curveAddresses
   MultiVaultLib__depositFeeHookCurve --> MultiVaultLib__s
@@ -259,7 +261,7 @@ MultiVault.depositBatch
           MultiVaultLib._s
           MultiVaultLib._shouldChargeAtomDepositFraction
             MultiVaultLib._s
-            MultiVaultLib._shouldChargeFees  (expanded above)
+            MultiVaultLib._shouldChargeAtomDepositFractionFor  (depth limit)
           MultiVaultLib._shouldChargeFees  (expanded above)
       MultiVaultLib._feeOnRaw  (expanded above)
       MultiVaultLib._getVaultType

@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { UpgradeTargetConfig } from './safe-upgrade-lib';
 
 const rootPath = (...segments: string[]): string =>
-	path.resolve(import.meta.dir, '..', '..', ...segments);
+	path.resolve(import.meta.dir, '..', '..', '..', '..', ...segments);
 
 export const upgradeTargetRegistry: Record<string, UpgradeTargetConfig> = {
 	'base-base-emissions-controller': {

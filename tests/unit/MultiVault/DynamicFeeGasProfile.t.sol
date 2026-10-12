@@ -14,10 +14,15 @@ import { BaseTest } from "tests/BaseTest.t.sol";
 contract DynamicFeeGasProfileTest is BaseTest {
     uint256 internal constant DEFAULT_CURVE_ID = 1;
 
-    /// @dev Loose ceilings: steady-state ops and the dynamic-fee overhead on top of them.
+    /// @dev Loose ceilings: steady-state ops and the dynamic-fee overhead on top of them. Settling a
+    ///      term is O(lots), and a lot's debt slot is written from zero the first time the lot is
+    ///      settled after earning, which is the 20k-gas write that dominates a first claim. The claim
+    ///      fixture's positions straddle the tier-0 edge, hold two lots per term, and have never been
+    ///      settled, so the per-term ceiling is sized for two such writes; a later settle of the same
+    ///      lots costs a few thousand gas per lot.
     uint256 internal constant MAX_DEPOSIT_OVERHEAD = 200_000;
     uint256 internal constant MAX_REDEEM_OVERHEAD = 200_000;
-    uint256 internal constant MAX_CLAIM_PER_TERM = 30_000;
+    uint256 internal constant MAX_CLAIM_PER_TERM = 50_000;
 
     /// @dev A deposit that sweeps the WHOLE ladder is a different cost class from a steady-state one
     ///      and gets its own ceiling rather than loosening the one above. The hook replays the deposit
@@ -136,7 +141,7 @@ contract DynamicFeeGasProfileTest is BaseTest {
         console2.log("full-ladder deposit gas (default):  ", gasDefault);
         console2.log("full-ladder deposit gas (dynamic):  ", gasDynamic);
         console2.log("full-ladder dynamic-fee overhead:   ", gasDynamic - gasDefault);
-        console2.log("bands crossed (depositor userTier): ", dynamicFeeCurve.userTier(atomId, users.alice));
+        console2.log("bands crossed (depositor userTier): ", dynamicFeeCurve.userTopTier(atomId, users.alice));
 
         assertLt(gasDynamic - gasDefault, MAX_FULL_LADDER_DEPOSIT_OVERHEAD, "full-ladder deposit overhead ceiling");
     }

@@ -40,7 +40,8 @@ contract DeployCoreUpgradeImplementations is SetupScript {
     address internal constant SATELLITE_EC_PROXY = 0x73B8819f9b157BE42172E3866fB0Ba0d5fA0A5c6;
     address internal constant SATELLITE_EC_PROXY_ADMIN = 0xdF60D18E86F3454309aD7734055843F7ee5f30a3;
     address internal constant UPGRADES_TIMELOCK = 0x321e5d4b20158648dFd1f360A79CAFc97190bAd1;
-    string internal constant OPERATIONS_ARTIFACT_PATH = "/script/upgrades/out/v1.0.2-intuition-1155-operations.json";
+    string internal constant OPERATIONS_ARTIFACT_PATH =
+        "/script/intuition/v1.0.2/safe-txs/out/v1.0.2-intuition-1155-operations.json";
 
     TrustBonding public trustBondingImplementation;
     OffsetProgressiveCurve public offsetProgressiveCurveImplementation;

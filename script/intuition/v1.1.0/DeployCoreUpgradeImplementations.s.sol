@@ -660,20 +660,20 @@ contract DeployCoreUpgradeImplementations is Script {
         if (chainId == NETWORK_INTUITION_SEPOLIA) {
             // Intuition Testnet (chain 13579).
             return Addresses({
-                multiVaultProxy: 0xeBc49d356B7f64D888130D85CC6D17114a6843ec,
-                multiVaultProxyAdmin: 0x06996b285C0763fD0459dB31e8FAF2D8d498c1a8,
-                trustBondingProxy: 0xfa1bF01055239C674845aAEe5A5416f98f801BE3,
-                trustBondingProxyAdmin: 0xaC09e8a5A3e6E5AA1A8ee2238136a2eA4F9B2304,
-                atomWardenProxy: 0x1f2622D57D09B5E21738a8e0acE24ed9d4a2E32F,
-                atomWardenProxyAdmin: 0x5FA28AA0E9fc58cEBE3E1Fe4F2264F32111888fb,
-                atomWalletBeacon: 0x8497Eb80fB9742265AeFE711856b2ecACABF1Cb0,
-                bondingCurveRegistryProxy: 0xbFE8068d5C5117c57d37464e33c937bC08317F88,
-                linearCurveProxy: 0x9f272DAEfa66e031081430Ec138FD34190d6f671,
-                linearCurveProxyAdmin: 0x99b42bF374644F82bE85cd5c74D28f8269409f19,
-                offsetProgressiveCurveProxy: 0xd50CB061b1CE0560108fc3D58685d4eDb7594f20,
-                offsetProgressiveCurveProxyAdmin: 0x4EB7e35C74A532E90095c8792268321875E671F9,
-                upgradesTimelock: 0x81c66D5dD09F1dEF8493E5A5B459e2E9028a4430,
-                parametersTimelock: 0xA87E4EEd6C71966E938b45c0e2127344DC597D12
+                multiVaultProxy: 0xF76d6976DeBFbB012ebc53e925BC4AEFCaA7C6c6,
+                multiVaultProxyAdmin: 0x8D4e6d81dF3d1bc5F67A7c52d73Ac2a8fA799861,
+                trustBondingProxy: 0x9E79446fE4B1683eF1678654554535a9c90B1C3D,
+                trustBondingProxyAdmin: 0x94C1506F0C50b960c435ad3E77f1B84be356cA04,
+                atomWardenProxy: 0xf3f875E0d390C9bA8Aa21881E983baDe91866A38,
+                atomWardenProxyAdmin: 0xb2aEdA82040F7A42a550092b656739221aC00E19,
+                atomWalletBeacon: 0x16deCCF5484bE9FFb5c8a2d800E0fdf27b876012,
+                bondingCurveRegistryProxy: 0xb3bfd62d259E07d623844fC7bDB7D54F74Ff9052,
+                linearCurveProxy: 0x7499bFa918DBc73Ace4A05D6194a5Cd343AE32Dd,
+                linearCurveProxyAdmin: 0x2dA7d4Cb31a2e3329BaCe291b8D5b8F38d595553,
+                offsetProgressiveCurveProxy: 0x96bb9020ba4D027E42C29eCB3CEcc2471E505E6C,
+                offsetProgressiveCurveProxyAdmin: 0x76c92E3A7A83dD893BF4056D2d37258e8d7BD05b,
+                upgradesTimelock: 0xc7721c865ba0bDf760073594922434Edc0C2d200,
+                parametersTimelock: 0x50B874C22e4D54db9ACeE181bF2D5a0663D2D70A
             });
         }
 

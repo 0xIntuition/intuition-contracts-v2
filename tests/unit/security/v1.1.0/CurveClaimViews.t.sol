@@ -42,8 +42,10 @@ contract CurveClaimViewsTest is BaseTest {
         makeDeposit(users.alice, users.alice, first, DYN, 40e18, 0);
         makeDeposit(users.alice, users.alice, second, DYN, 40e18, 0);
 
-        // Re-depositing into `first` settles bob's pending there into the account-wide banked balance.
-        makeDeposit(users.bob, users.bob, first, DYN, 1e18, 0);
+        // A small redeem from `first` settles every lot bob holds there into the account-wide banked
+        // balance. A deposit would not: it settles only the lot in the band it lands in, and bob's
+        // earning lot sits lower.
+        redeemShares(users.bob, users.bob, first, DYN, 1e17, 0);
     }
 
     /// @dev The composition rule: banked once, pending per term. This must equal `claimableAcross`,

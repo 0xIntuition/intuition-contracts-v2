@@ -1474,7 +1474,15 @@ declare const MultiVaultAbi: readonly [{
     readonly type: "function";
     readonly name: "previewTripleCreate";
     readonly inputs: readonly [{
-        readonly name: "termId";
+        readonly name: "subjectId";
+        readonly type: "bytes32";
+        readonly internalType: "bytes32";
+    }, {
+        readonly name: "predicateId";
+        readonly type: "bytes32";
+        readonly internalType: "bytes32";
+    }, {
+        readonly name: "objectId";
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }, {
@@ -2724,7 +2732,15 @@ declare const MultiVaultAbi: readonly [{
     readonly inputs: readonly [];
 }, {
     readonly type: "error";
+    readonly name: "MultiVault_DefaultCurveHasFeeHook";
+    readonly inputs: readonly [];
+}, {
+    readonly type: "error";
     readonly name: "MultiVault_DefaultCurveMustBeInitializedViaCreatePaths";
+    readonly inputs: readonly [];
+}, {
+    readonly type: "error";
+    readonly name: "MultiVault_DefaultCurveNotRegistered";
     readonly inputs: readonly [];
 }, {
     readonly type: "error";
@@ -4431,7 +4447,15 @@ declare const MultiVaultMigrationModeAbi: readonly [{
     readonly type: "function";
     readonly name: "previewTripleCreate";
     readonly inputs: readonly [{
-        readonly name: "termId";
+        readonly name: "subjectId";
+        readonly type: "bytes32";
+        readonly internalType: "bytes32";
+    }, {
+        readonly name: "predicateId";
+        readonly type: "bytes32";
+        readonly internalType: "bytes32";
+    }, {
+        readonly name: "objectId";
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }, {
@@ -5691,7 +5715,15 @@ declare const MultiVaultMigrationModeAbi: readonly [{
     readonly inputs: readonly [];
 }, {
     readonly type: "error";
+    readonly name: "MultiVault_DefaultCurveHasFeeHook";
+    readonly inputs: readonly [];
+}, {
+    readonly type: "error";
     readonly name: "MultiVault_DefaultCurveMustBeInitializedViaCreatePaths";
+    readonly inputs: readonly [];
+}, {
+    readonly type: "error";
+    readonly name: "MultiVault_DefaultCurveNotRegistered";
     readonly inputs: readonly [];
 }, {
     readonly type: "error";
@@ -11892,16 +11924,6 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
     readonly stateMutability: "view";
 }, {
     readonly type: "function";
-    readonly name: "MAX_MIN_ELIGIBLE_TIER_STAKE";
-    readonly inputs: readonly [];
-    readonly outputs: readonly [{
-        readonly name: "";
-        readonly type: "uint256";
-        readonly internalType: "uint256";
-    }];
-    readonly stateMutability: "view";
-}, {
-    readonly type: "function";
     readonly name: "MAX_REDEEM_CAP_BPS";
     readonly inputs: readonly [];
     readonly outputs: readonly [{
@@ -11923,6 +11945,16 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
 }, {
     readonly type: "function";
     readonly name: "MAX_TIER_COUNT";
+    readonly inputs: readonly [];
+    readonly outputs: readonly [{
+        readonly name: "";
+        readonly type: "uint256";
+        readonly internalType: "uint256";
+    }];
+    readonly stateMutability: "view";
+}, {
+    readonly type: "function";
+    readonly name: "NO_LOT";
     readonly inputs: readonly [];
     readonly outputs: readonly [{
         readonly name: "";
@@ -12193,7 +12225,7 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "minEligibleTierStake";
+            readonly name: "minEligibleTierStakeBps";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }];
@@ -12299,7 +12331,7 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "minEligibleTierStake";
+            readonly name: "minEligibleTierStakeBps";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }];
@@ -12316,6 +12348,68 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
     }];
     readonly outputs: readonly [];
     readonly stateMutability: "nonpayable";
+}, {
+    readonly type: "function";
+    readonly name: "lotMask";
+    readonly inputs: readonly [{
+        readonly name: "termId";
+        readonly type: "bytes32";
+        readonly internalType: "bytes32";
+    }, {
+        readonly name: "account";
+        readonly type: "address";
+        readonly internalType: "address";
+    }];
+    readonly outputs: readonly [{
+        readonly name: "mask";
+        readonly type: "uint256";
+        readonly internalType: "uint256";
+    }];
+    readonly stateMutability: "view";
+}, {
+    readonly type: "function";
+    readonly name: "lotRewardDebt";
+    readonly inputs: readonly [{
+        readonly name: "termId";
+        readonly type: "bytes32";
+        readonly internalType: "bytes32";
+    }, {
+        readonly name: "account";
+        readonly type: "address";
+        readonly internalType: "address";
+    }, {
+        readonly name: "tier";
+        readonly type: "uint256";
+        readonly internalType: "uint256";
+    }];
+    readonly outputs: readonly [{
+        readonly name: "debt";
+        readonly type: "uint256";
+        readonly internalType: "uint256";
+    }];
+    readonly stateMutability: "view";
+}, {
+    readonly type: "function";
+    readonly name: "lotStake";
+    readonly inputs: readonly [{
+        readonly name: "termId";
+        readonly type: "bytes32";
+        readonly internalType: "bytes32";
+    }, {
+        readonly name: "account";
+        readonly type: "address";
+        readonly internalType: "address";
+    }, {
+        readonly name: "tier";
+        readonly type: "uint256";
+        readonly internalType: "uint256";
+    }];
+    readonly outputs: readonly [{
+        readonly name: "stake";
+        readonly type: "uint256";
+        readonly internalType: "uint256";
+    }];
+    readonly stateMutability: "view";
 }, {
     readonly type: "function";
     readonly name: "maxAssets";
@@ -12616,24 +12710,6 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
     readonly stateMutability: "nonpayable";
 }, {
     readonly type: "function";
-    readonly name: "rewardDebt";
-    readonly inputs: readonly [{
-        readonly name: "termId";
-        readonly type: "bytes32";
-        readonly internalType: "bytes32";
-    }, {
-        readonly name: "account";
-        readonly type: "address";
-        readonly internalType: "address";
-    }];
-    readonly outputs: readonly [{
-        readonly name: "debt";
-        readonly type: "uint256";
-        readonly internalType: "uint256";
-    }];
-    readonly stateMutability: "view";
-}, {
-    readonly type: "function";
     readonly name: "setConfig";
     readonly inputs: readonly [{
         readonly name: "_config";
@@ -12700,7 +12776,7 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
             readonly type: "uint256";
             readonly internalType: "uint256";
         }, {
-            readonly name: "minEligibleTierStake";
+            readonly name: "minEligibleTierStakeBps";
             readonly type: "uint256";
             readonly internalType: "uint256";
         }];
@@ -12833,7 +12909,7 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
     readonly stateMutability: "nonpayable";
 }, {
     readonly type: "function";
-    readonly name: "userAvgTier";
+    readonly name: "userLots";
     readonly inputs: readonly [{
         readonly name: "termId";
         readonly type: "bytes32";
@@ -12844,9 +12920,13 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
         readonly internalType: "address";
     }];
     readonly outputs: readonly [{
-        readonly name: "avgTierScaled";
-        readonly type: "uint256";
-        readonly internalType: "uint256";
+        readonly name: "tiers";
+        readonly type: "uint256[]";
+        readonly internalType: "uint256[]";
+    }, {
+        readonly name: "stakes";
+        readonly type: "uint256[]";
+        readonly internalType: "uint256[]";
     }];
     readonly stateMutability: "view";
 }, {
@@ -12869,7 +12949,7 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
     readonly stateMutability: "view";
 }, {
     readonly type: "function";
-    readonly name: "userTier";
+    readonly name: "userTopTier";
     readonly inputs: readonly [{
         readonly name: "termId";
         readonly type: "bytes32";
@@ -12880,7 +12960,7 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
         readonly internalType: "address";
     }];
     readonly outputs: readonly [{
-        readonly name: "tier";
+        readonly name: "";
         readonly type: "uint256";
         readonly internalType: "uint256";
     }];
@@ -13023,12 +13103,7 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
         readonly indexed: false;
         readonly internalType: "uint256";
     }, {
-        readonly name: "accountTier";
-        readonly type: "uint256";
-        readonly indexed: false;
-        readonly internalType: "uint256";
-    }, {
-        readonly name: "accountAvgTier";
+        readonly name: "topTier";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
@@ -13048,12 +13123,12 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
     readonly type: "event";
     readonly name: "MinEligibleTierStakeUpdated";
     readonly inputs: readonly [{
-        readonly name: "previousMinEligibleTierStake";
+        readonly name: "previousMinEligibleTierStakeBps";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
     }, {
-        readonly name: "newMinEligibleTierStake";
+        readonly name: "newMinEligibleTierStakeBps";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
@@ -13141,6 +13216,36 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
     readonly anonymous: false;
 }, {
     readonly type: "event";
+    readonly name: "RedeemLotRecorded";
+    readonly inputs: readonly [{
+        readonly name: "termId";
+        readonly type: "bytes32";
+        readonly indexed: true;
+        readonly internalType: "bytes32";
+    }, {
+        readonly name: "account";
+        readonly type: "address";
+        readonly indexed: true;
+        readonly internalType: "address";
+    }, {
+        readonly name: "lotTier";
+        readonly type: "uint256";
+        readonly indexed: false;
+        readonly internalType: "uint256";
+    }, {
+        readonly name: "lotShares";
+        readonly type: "uint256";
+        readonly indexed: false;
+        readonly internalType: "uint256";
+    }, {
+        readonly name: "lotFee";
+        readonly type: "uint256";
+        readonly indexed: false;
+        readonly internalType: "uint256";
+    }];
+    readonly anonymous: false;
+}, {
+    readonly type: "event";
     readonly name: "RedeemRecorded";
     readonly inputs: readonly [{
         readonly name: "termId";
@@ -13163,7 +13268,7 @@ declare const DynamicFeeFlatPriceCurveAbi: readonly [{
         readonly indexed: false;
         readonly internalType: "uint256";
     }, {
-        readonly name: "exitTier";
+        readonly name: "topTier";
         readonly type: "uint256";
         readonly indexed: false;
         readonly internalType: "uint256";
@@ -16186,7 +16291,15 @@ declare const MultiVaultLibAbi: readonly [{
     readonly type: "function";
     readonly name: "calculateTripleCreate";
     readonly inputs: readonly [{
-        readonly name: "termId";
+        readonly name: "subjectId";
+        readonly type: "bytes32";
+        readonly internalType: "bytes32";
+    }, {
+        readonly name: "predicateId";
+        readonly type: "bytes32";
+        readonly internalType: "bytes32";
+    }, {
+        readonly name: "objectId";
         readonly type: "bytes32";
         readonly internalType: "bytes32";
     }, {

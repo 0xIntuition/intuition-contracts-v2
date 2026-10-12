@@ -183,7 +183,7 @@ contract MultiVaultHelpersTest is BaseTest {
         uint256 assets = tripleCost + 7 ether;
 
         (uint256 shares, uint256 assetsAfterFixed, uint256 assetsAfterFees) =
-            protocol.multiVault.previewTripleCreate(preTripleId, assets);
+            protocol.multiVault.previewTripleCreate(subjectId, predicateId, objectId, assets);
 
         assertEq(assetsAfterFixed, assets - tripleCost);
 
@@ -192,6 +192,76 @@ contract MultiVaultHelpersTest is BaseTest {
 
         uint256 sharesFromView = protocol.multiVault.convertToShares(preTripleId, curveId, assetsAfterFees);
         assertEq(shares, sharesFromView);
+    }
+
+    /// @dev Creates three atoms with `atomDeposit` each, quotes the triple on their ids before it
+    ///      exists, then creates it with the same `assets` and reports what was actually minted.
+    function _previewThenCreateTriple(string memory salt, uint256 atomDeposit, uint256 assets)
+        internal
+        returns (uint256 previewShares, uint256 previewFeeBase, uint256 previewAfterFees, uint256 mintedShares)
+    {
+        bytes[] memory atomData = new bytes[](3);
+        atomData[0] = abi.encodePacked(salt, "-subject");
+        atomData[1] = abi.encodePacked(salt, "-predicate");
+        atomData[2] = abi.encodePacked(salt, "-object");
+        vm.deal(users.alice, atomDeposit * 3 + assets);
+        bytes32[] memory atomIds = createAtomsWithUniformCost(atomData, atomDeposit, users.alice);
+
+        (previewShares, previewFeeBase, previewAfterFees) =
+            protocol.multiVault.previewTripleCreate(atomIds[0], atomIds[1], atomIds[2], assets);
+
+        bytes32[] memory subjectIds = new bytes32[](1);
+        bytes32[] memory predicateIds = new bytes32[](1);
+        bytes32[] memory objectIds = new bytes32[](1);
+        uint256[] memory assetsArray = new uint256[](1);
+        subjectIds[0] = atomIds[0];
+        predicateIds[0] = atomIds[1];
+        objectIds[0] = atomIds[2];
+        assetsArray[0] = assets;
+
+        resetPrank({ msgSender: users.alice });
+        bytes32[] memory tripleIds =
+            protocol.multiVault.createTriples{ value: assets }(subjectIds, predicateIds, objectIds, assetsArray);
+        mintedShares = protocol.multiVault.getShares(users.alice, tripleIds[0], getDefaultCurveId());
+    }
+
+    function test_previewTripleCreate_matchesCreation_whenAtomsClearFeeThreshold() public {
+        uint256 assets = protocol.multiVault.getTripleCost() + 7 ether;
+        // Atom default vaults well above `feeThreshold`, so the atom-deposit fraction is charged.
+        (uint256 previewShares, uint256 previewFeeBase, uint256 previewAfterFees, uint256 mintedShares) =
+            _previewThenCreateTriple("charged", getAtomCreationCost() + 5 ether, assets);
+
+        assertEq(mintedShares, previewShares, "quote must equal the shares creation mints");
+        assertEq(previewShares, previewAfterFees, "creation mints 1:1 on a fresh vault");
+        assertGt(
+            previewFeeBase - previewAfterFees,
+            protocol.multiVault.protocolFeeAmount(previewFeeBase),
+            "quote includes the atom-deposit fraction on top of the protocol fee"
+        );
+    }
+
+    function test_previewTripleCreate_matchesCreation_whenAtomsBelowFeeThreshold() public {
+        uint256 assets = protocol.multiVault.getTripleCost() + 7 ether;
+        // Atoms created at bare cost hold almost no shares, so the fraction is not charged.
+        (uint256 previewShares, uint256 previewFeeBase, uint256 previewAfterFees, uint256 mintedShares) =
+            _previewThenCreateTriple("uncharged", getAtomCreationCost(), assets);
+
+        assertEq(mintedShares, previewShares, "quote must equal the shares creation mints");
+        assertEq(previewShares, previewAfterFees, "creation mints 1:1 on a fresh vault");
+        assertEq(
+            previewFeeBase - previewAfterFees,
+            protocol.multiVault.protocolFeeAmount(previewFeeBase),
+            "only the protocol fee applies below the threshold"
+        );
+    }
+
+    function test_previewTripleCreate_chargedQuoteIsLowerThanUnchargedQuote() public {
+        uint256 assets = protocol.multiVault.getTripleCost() + 7 ether;
+        (,, uint256 chargedAfterFees,) =
+            _previewThenCreateTriple("diff-charged", getAtomCreationCost() + 5 ether, assets);
+        (,, uint256 unchargedAfterFees,) = _previewThenCreateTriple("diff-uncharged", getAtomCreationCost(), assets);
+
+        assertLt(chargedAfterFees, unchargedAfterFees, "the fraction must show up in the quote");
     }
 
     /*////////////////////////////////////////////////////////////////////

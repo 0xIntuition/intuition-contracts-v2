@@ -155,9 +155,10 @@ interface IBaseCurve {
     ///         `bondingCurveConfig.defaultCurveId` without resolving or dispatching this hook, so a
     ///         hook-bearing curve would receive no ledger entry for a created position and the
     ///         holder's first redemption would underflow inside the curve with no recovery path.
-    ///         A hook-bearing curve therefore must not be set as `defaultCurveId`. The deployed
-    ///         configuration keeps `defaultCurveId == 1` (`LinearCurve`, hookless, 1:1); hook curves
-    ///         are reachable only through `deposit` / `redeem` on an explicit non-default `curveId`.
+    ///         A hook-bearing curve therefore must not be set as `defaultCurveId`, and MultiVault
+    ///         rejects one on both `initialize` and `setBondingCurveConfig`. The deployed configuration keeps
+    ///         `defaultCurveId == 1` (`LinearCurve`, hookless, 1:1); hook curves are reachable only
+    ///         through `deposit` / `redeem` on an explicit non-default `curveId`.
     /// @param termId The term (atom or triple) deposited into
     /// @param account The account the shares were minted to
     /// @param shares The number of shares minted to `account`

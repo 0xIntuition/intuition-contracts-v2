@@ -158,7 +158,7 @@ const normalizeBytes32 = (value: string): string =>
 
 const printHelp = (): void => {
 	console.log(`Usage:
-bun script/upgrades/generate-safe-upgrade-transaction.ts \\
+bun script/intuition/v1.0.2/safe-txs/generate-safe-upgrade-transaction.ts \\
   --receipt <path> \\
   --upgrade-id <id> \\
   --action <schedule|execute|direct> \\

@@ -230,7 +230,7 @@ This project is licensed under BUSL-1.1
 Generates the **encoded calldata** for the `reinitialize()` function for the TRUST token upgrade.
 
 ```bash
-npx tsx script/upgrades/generate-trust-v2-upgrade-calldata.ts <ADMIN_ADDRESS> <BASE_EMISSIONS_CONTROLLER_ADDRESS>
+npx tsx script/base/upgrades/generate-trust-v2-upgrade-calldata.ts <ADMIN_ADDRESS> <BASE_EMISSIONS_CONTROLLER_ADDRESS>
 ```
 
 ### Trust Proxy V2 Upgrade
@@ -238,7 +238,7 @@ npx tsx script/upgrades/generate-trust-v2-upgrade-calldata.ts <ADMIN_ADDRESS> <B
 Generates the **encoded calldata** for the Trust `ProxyAdmin.upgradeAndCall()` execution.
 
 ```bash
-npx tsx script/upgrades/generate-trust-proxy-upgrade-and-call-calldata.ts "0x6cd905dF2Ed214b22e0d48FF17CD4200C1C6d8A3" <IMPLEMENTATION_ADDRESS> <REINITIALIZE_CALLDATA_OR_0x>
+npx tsx script/base/upgrades/generate-trust-proxy-upgrade-and-call-calldata.ts "0x6cd905dF2Ed214b22e0d48FF17CD4200C1C6d8A3" <IMPLEMENTATION_ADDRESS> <REINITIALIZE_CALLDATA_OR_0x>
 ```
 
 ---
@@ -249,13 +249,13 @@ Prepares the **`TimelockController` schedule parameters** for updating the minim
 contract.
 
 ```bash
-npx tsx script/upgrades/generate-timelock-update-delay-calldata.ts <RPC_URL> <NEW_DELAY_IN_SECONDS>
+npx tsx script/base/upgrades/generate-timelock-update-delay-calldata.ts <RPC_URL> <NEW_DELAY_IN_SECONDS>
 ```
 
 Example:
 
 ```bash
-npx tsx script/upgrades/generate-timelock-update-delay-calldata.ts "https://mainnet.base.org" 259200
+npx tsx script/base/upgrades/generate-timelock-update-delay-calldata.ts "https://mainnet.base.org" 259200
 ```
 
 ### Timelock Upgrade and Call
@@ -263,13 +263,13 @@ npx tsx script/upgrades/generate-timelock-update-delay-calldata.ts "https://main
 Builds the **`TimelockController` schedule parameters** for a `ProxyAdmin.upgradeAndCall()` execution.
 
 ```bash
-npx tsx script/upgrades/generate-timelock-upgrade-and-call-calldata.ts <RPC_URL> <PROXY_ADDRESS> <IMPLEMENTATION_ADDRESS> <REINITIALIZE_CALLDATA_OR_0x>
+npx tsx script/base/upgrades/generate-timelock-upgrade-and-call-calldata.ts <RPC_URL> <PROXY_ADDRESS> <IMPLEMENTATION_ADDRESS> <REINITIALIZE_CALLDATA_OR_0x>
 ```
 
 Example:
 
 ```bash
-npx tsx script/upgrades/generate-timelock-upgrade-and-call-calldata.ts "https://mainnet.base.org" "0x000000000000000000000000000000000000dEaD" "0x000000000000000000000000000000000000dEaD" "0x"
+npx tsx script/base/upgrades/generate-timelock-upgrade-and-call-calldata.ts "https://mainnet.base.org" "0x000000000000000000000000000000000000dEaD" "0x000000000000000000000000000000000000dEaD" "0x"
 ```
 
 # Deployed Contracts
@@ -312,24 +312,24 @@ npx tsx script/upgrades/generate-timelock-upgrade-and-call-calldata.ts "https://
 | Contract Name               | Address                                    | ProxyAdmin                                 |
 | --------------------------- | ------------------------------------------ | ------------------------------------------ |
 | TestTrust                   | 0xA54b4E6e356b963Ee00d1C947f478d9194a1a210 | /                                          |
-| Upgrades TimelockController | 0x9099BC9fd63B01F94528B60CEEB336C679eb6d52 | /                                          |
-| BaseEmissionsController     | 0xC14773Aae24aA60CB8F261995405C28f6D742DCf | 0x0b954b1CbAAf8972845BC5D31a8B748f0F8849fc |
+| Upgrades TimelockController | 0xE16E8e10664d399D36D2220fFA763e9367980507 | /                                          |
+| BaseEmissionsController     | 0x6B96fB3867b666A7957fa589866627ea902ec2C6 | 0x369e4C2ED9BF272CbA61Ac75ab26E8309672e344 |
 
 ### Intuition Testnet
 
 | Contract Name                 | Address                                    | ProxyAdmin                                 |
 | ----------------------------- | ------------------------------------------ | ------------------------------------------ |
 | WrappedTrust                  | 0xDE80b6EE63f7D809427CA350e30093F436A0fe35 | /                                          |
-| Upgrades TimelockController   | 0x59B7EaB1cFA47F8E61606aDf79a6b7B5bBF1aF26 | /                                          |
-| Parameters TimelockController | 0xcCB113bfFf493d80F32Fb799Dca23686a04302A7 | /                                          |
-| MultiVault                    | 0x2Ece8D4dEdcB9918A398528f3fa4688b1d2CAB91 | 0x840d79645824C43227573305BBFCd162504BBB6e |
-| AtomWalletFactory             | 0xa4e96c6dB8Dd3314c64bF9d0E845A4905a8705d4 | 0x83e13aD14714236b5d9eca851FE6561Cfc9220c9 |
-| AtomWalletBeacon              | 0x4B0aC884843576dBA0B0fda925f202aB8b546E33 | /                                          |
-| AtomWarden                    | 0x040B7760EFDEd7e933CFf419224b57DFB9Eb4488 | 0xabBf8147d33e76251383A81c81189077C505B51A |
-| SatelliteEmissionsController  | 0xD3be4d1E56866b98f30Ae6C326F14EF9c6ffBBDF | 0x5ec513714f57f7b984875719Bd8Ef00d05487524 |
-| TrustBonding                  | 0x75dD32b522c89566265eA32ecb50b4Fc4d00ADc7 | 0x214D3833114e25262bb8e4E9B5A99F062bFb93D4 |
-| BondingCurveRegistry          | 0x2AFC4949Dd3664219AA2c20133771658E93892A1 | 0x0C5AeAba37b1E92064f0af684D65476d24F52a9A |
-| LinearCurve                   | 0x6df5eecd9B14E31C98A027b8634876E4805F71B0 | 0x34D65193EE2e1449FE6CB8eca1EE046FcC21669e |
-| OffsetProgressiveCurve        | 0xE65EcaAF5964aC0d94459A66A59A8B9eBCE42CbB | 0x6A65336598d4783d0673DD238418248909C71F26 |
+| Upgrades TimelockController   | 0xc7721c865ba0bDf760073594922434Edc0C2d200 | /                                          |
+| Parameters TimelockController | 0x50B874C22e4D54db9ACeE181bF2D5a0663D2D70A | /                                          |
+| MultiVault                    | 0xF76d6976DeBFbB012ebc53e925BC4AEFCaA7C6c6 | 0x8D4e6d81dF3d1bc5F67A7c52d73Ac2a8fA799861 |
+| AtomWalletFactory             | 0x900cff1007055c850FB48695a3CB121290d6f17b | 0x1916673334Ed719902Cfcfd4d2Df1Dbe7dcf0455 |
+| AtomWalletBeacon              | 0x16deCCF5484bE9FFb5c8a2d800E0fdf27b876012 | /                                          |
+| AtomWarden                    | 0xf3f875E0d390C9bA8Aa21881E983baDe91866A38 | 0xb2aEdA82040F7A42a550092b656739221aC00E19 |
+| SatelliteEmissionsController  | 0x2f4ef00b05f5AA9976154125Cc46D47CAB75B1b7 | 0x36Cf9Ad9C957864bc65855B4D3bbA663c0b74fD8 |
+| TrustBonding                  | 0x9E79446fE4B1683eF1678654554535a9c90B1C3D | 0x94C1506F0C50b960c435ad3E77f1B84be356cA04 |
+| BondingCurveRegistry          | 0xb3bfd62d259E07d623844fC7bDB7D54F74Ff9052 | 0xFC34EaAa7c44Ea6E7B3191250deC4976a777498A |
+| LinearCurve                   | 0x7499bFa918DBc73Ace4A05D6194a5Cd343AE32Dd | 0x2dA7d4Cb31a2e3329BaCe291b8D5b8F38d595553 |
+| OffsetProgressiveCurve        | 0x96bb9020ba4D027E42C29eCB3CEcc2471E505E6C | 0x76c92E3A7A83dD893BF4056D2d37258e8d7BD05b |
 | Multicall3                    | 0xcA11bde05977b3631167028862bE2a173976CA11 | /                                          |
 | EntryPoint                    | 0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108 | /                                          |

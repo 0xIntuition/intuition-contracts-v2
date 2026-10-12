@@ -541,7 +541,11 @@ export const resolveOutputPath = (
 		return path.resolve(cwd, outPath);
 	}
 
-	return path.resolve(cwd, 'script/upgrades/out', `${chainId}-${upgradeId}-${action}.json`);
+	return path.resolve(
+		cwd,
+		'script/intuition/v1.0.2/safe-txs/out',
+		`${chainId}-${upgradeId}-${action}.json`
+	);
 };
 
 export const writeSafeBatchFile = (outPath: string, batchFile: SafeBatchFile): void => {

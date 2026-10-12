@@ -45,9 +45,10 @@ contract DynamicFeeSymbolicTest is Test {
             redeemBaseBps: 200,
             redeemGrowthBps: 50,
             redeemCapBps: WITHDRAWAL_CAP_BPS,
-            redeemToFulcrumTiersBps: 0,
-            depositToPriorTierBps: 0,
-            minEligibleTierStake: 0
+            // The launch routing, so the proofs hold on the configuration that ships.
+            redeemToFulcrumTiersBps: 7500,
+            depositToPriorTierBps: 1000,
+            minEligibleTierStakeBps: 0
         });
 
         curve = new DynamicFeeCurveHarness(config, address(this));

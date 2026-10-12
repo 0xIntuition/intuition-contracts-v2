@@ -45,6 +45,8 @@ flowchart LR
   MetaERC20Dispatcher --> IMetaERC20HubOrSpoke
   MetaERC20Dispatcher --> IMetalayerRouter
   MultiVault --> IAtomWallet
+  MultiVault --> IBaseCurve
+  MultiVault --> IBondingCurveRegistry
   MultiVault --> MultiVaultLib
   MultiVaultLib --> IAtomWalletFactory
   MultiVaultLib --> IBaseCurve
