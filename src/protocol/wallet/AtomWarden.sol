@@ -86,10 +86,9 @@ contract AtomWarden is IAtomWarden, Initializable, AccessControlUpgradeable, EIP
     uint256 public signerCount;
 
     /// @notice Maximum allowed `validAfter - block.timestamp` on a `ClaimAuthorization`,
-    ///         in seconds. A value of `0` disables delayed activation entirely (`validAfter`
-    ///         must equal the current block timestamp). `type(uint48).max` effectively
-    ///         disables the cap. Evaluated at claim time against the *current* block
-    ///         timestamp, so admin tightening immediately retires too-long auths.
+    ///         in seconds. A claim already requires `validAfter <= block.timestamp`, so this
+    ///         cap never changes whether a claim succeeds; it only selects the revert for an
+    ///         auth that is not yet active. The usable window is bounded by `maxValidUntil`.
     /// @dev Appended after `signerCount` for storage-layout compatibility. Packed into the
     ///      same 32-byte slot as `maxValidUntil` thanks to the `uint48` width.
     uint48 public maxValidAfter;
@@ -159,7 +158,7 @@ contract AtomWarden is IAtomWarden, Initializable, AccessControlUpgradeable, EIP
      *        `> signerCount` check that guards the public setter does not apply at bootstrap
      *        because `signerCount` is 0 by construction here.
      * @param _maxValidAfter Max allowed `validAfter - block.timestamp` on a claim auth (seconds).
-     *        See `maxValidAfter` for semantics. `0` disables delayed activation entirely.
+     *        See `maxValidAfter` for semantics.
      * @param _maxValidUntil Max allowed `validUntil - block.timestamp` on a claim auth (seconds).
      *        See `maxValidUntil` for semantics. `0` makes every signed claim instantly expired.
      * @param _maxClaimsPerWindow Max `claimWithAuthorization` claims per cap window.

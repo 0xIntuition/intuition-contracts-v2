@@ -124,8 +124,8 @@ interface IAtomWarden {
     function setSignatureThreshold(uint256 newThreshold) external;
 
     /// @notice Sets the maximum allowed `validAfter - block.timestamp` for a
-    ///         `ClaimAuthorization`. `0` forbids delayed activation entirely;
-    ///         `type(uint48).max` disables the cap. Admin-only.
+    ///         `ClaimAuthorization`. A claim already requires `validAfter <= block.timestamp`,
+    ///         so this only selects the revert for an auth that is not yet active. Admin-only.
     function setMaxValidAfter(uint48 newValue) external;
 
     /// @notice Sets the maximum allowed `validUntil - block.timestamp` for a

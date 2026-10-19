@@ -69,9 +69,9 @@ contract FeeProxyDeploy is SetupScript {
     /// @dev Default protocol-level caps applied if the per-network env var is
     ///      unset. Chosen as conservative starting points; admin can re-tune
     ///      post-deploy via `setMaxFeeBps` / `setMaxFixedFee` / `setRegistrationFee`.
-    uint256 public constant DEFAULT_MAX_FEE_BPS = 1000; // 10%
-    uint256 public constant DEFAULT_MAX_FIXED_FEE = 1 ether; // 1 TRUST
-    uint256 public constant DEFAULT_REGISTRATION_FEE = 10 ether; // 10 TRUST
+    uint256 public constant DEFAULT_MAX_FEE_BPS = 2000; // 20%
+    uint256 public constant DEFAULT_MAX_FIXED_FEE = 50 ether; // 50 TRUST
+    uint256 public constant DEFAULT_REGISTRATION_FEE = 100 ether; // 100 TRUST
 
     /* =================================================== */
     /*                      DEPLOYED                       */
