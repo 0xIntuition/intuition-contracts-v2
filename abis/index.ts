@@ -15,3 +15,5 @@ export { TrustAbi } from './Trust';
 export { TrustTokenAbi } from './TrustToken';
 export { WrappedTrustAbi } from './WrappedTrust';
 export { MultiVaultLibAbi } from './MultiVaultLib';
+export { TimelockControllerAbi } from './TimelockController';
+export { IBaseCurveAbi } from './IBaseCurve';

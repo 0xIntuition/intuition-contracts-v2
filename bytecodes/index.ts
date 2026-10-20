@@ -1,5 +1,5 @@
-export { MultiVaultBytecode, MultiVaultLinkReferences } from './MultiVault';
-export { MultiVaultMigrationModeBytecode, MultiVaultMigrationModeLinkReferences } from './MultiVaultMigrationMode';
+export { MultiVaultBytecode, MultiVaultLinkReferences, MultiVaultLinkReferencePositions } from './MultiVault';
+export { MultiVaultMigrationModeBytecode, MultiVaultMigrationModeLinkReferences, MultiVaultMigrationModeLinkReferencePositions } from './MultiVaultMigrationMode';
 export { FeeProxyBytecode } from './FeeProxy';
 export { BaseEmissionsControllerBytecode } from './BaseEmissionsController';
 export { SatelliteEmissionsControllerBytecode } from './SatelliteEmissionsController';
@@ -15,3 +15,4 @@ export { TrustBytecode } from './Trust';
 export { TrustTokenBytecode } from './TrustToken';
 export { WrappedTrustBytecode } from './WrappedTrust';
 export { MultiVaultLibBytecode } from './MultiVaultLib';
+export { TimelockControllerBytecode } from './TimelockController';

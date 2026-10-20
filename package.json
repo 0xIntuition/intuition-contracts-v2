@@ -1,7 +1,7 @@
 {
   "name": "@0xintuition/contracts-v2",
   "description": "Intuition Protocol V2 smart contracts, ABIs, and bytecode",
-  "version": "1.1.0-alpha.0",
+  "version": "1.1.0-alpha.1",
   "license": "BUSL-1.1",
   "author": {
     "name": "0xIntuition",
@@ -49,11 +49,13 @@
       }
     },
     "./src/*": "./src/*",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./artifact-manifest.json": "./artifact-manifest.json"
   },
   "files": [
     "src",
-    "dist"
+    "dist",
+    "artifact-manifest.json"
   ],
   "sideEffects": false,
   "publishConfig": {
@@ -61,13 +63,13 @@
     "tag": "alpha"
   },
   "dependencies": {
-    "@account-abstraction/contracts": "^0.8.0",
-    "@openzeppelin-v4/contracts": "npm:@openzeppelin/contracts@^4.9.6",
-    "@openzeppelin-v4/contracts-upgradeable": "npm:@openzeppelin/contracts-upgradeable@^4.9.6",
+    "@account-abstraction/contracts": "0.8.0",
+    "@openzeppelin-v4/contracts": "npm:@openzeppelin/contracts@4.9.6",
+    "@openzeppelin-v4/contracts-upgradeable": "npm:@openzeppelin/contracts-upgradeable@4.9.6",
     "@openzeppelin/contracts": "5.4.0",
     "@openzeppelin/contracts-upgradeable": "5.4.0",
-    "@prb/math": "^4.1.0",
-    "solady": "^0.1.26"
+    "@prb/math": "4.1.0",
+    "solady": "0.1.26"
   },
   "devDependencies": {
     "@types/node": "^24.7.0",
@@ -92,7 +94,6 @@
     "build:ts": "tsup",
     "extract": "tsx extract-abis.ts && tsx extract-bytecodes.ts",
     "build:package": "bun run build && bun run extract && bun run build:ts",
-    "prepublishOnly": "bun run build:package",
     "release:alpha": "npm publish --tag alpha",
     "fmt": "forge fmt",
     "fmt:check": "forge fmt --check",
@@ -106,6 +107,10 @@
     "coverage": "forge coverage --no-match-coverage '(script|tests|src/legacy)'",
     "test:coverage": "forge coverage",
     "test:coverage:report": "forge coverage --no-match-coverage '(script|tests|src/legacy)' --report lcov && genhtml lcov.info --branch-coverage --output-dir coverage --ignore-errors inconsistent",
-    "fetch:roles:summary": "npx tsx script/utils/fetch-roles-summary.ts"
+    "fetch:roles:summary": "npx tsx script/utils/fetch-roles-summary.ts",
+    "prepack": "bun run release:check",
+    "test:package": "bun test scripts/package.test.ts",
+    "test:packed": "node scripts/test-packed.mjs",
+    "release:check": "bun run build:package && tsc --noEmit && bun run test:package && bun run test:packed"
   }
 }

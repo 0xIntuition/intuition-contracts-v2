@@ -31,7 +31,11 @@ const vault = getContract({ address, abi: MultiVaultAbi, client });
 link references:
 
 ```ts
-import { MultiVaultBytecode, MultiVaultLibBytecode, MultiVaultLinkReferences } from "@0xintuition/contracts-v2/bytecodes";
+import {
+  MultiVaultBytecode,
+  MultiVaultLibBytecode,
+  MultiVaultLinkReferences,
+} from "@0xintuition/contracts-v2/bytecodes";
 
 const libAddress = await deploy({ bytecode: MultiVaultLibBytecode }); // deploy the library first
 const placeholder = MultiVaultLinkReferences["src/libraries/MultiVaultLib.sol:MultiVaultLib"];
@@ -51,25 +55,32 @@ import { MultiVault } from "@0xintuition/contracts-v2/src/protocol/MultiVault.so
 import { IMultiVault } from "@0xintuition/contracts-v2/src/interfaces/IMultiVault.sol";
 ```
 
-Every import path in the sources matches the npm layout of its dependency, so:
-
-**Hardhat** resolves everything through `node_modules` with no extra configuration.
-
-**Foundry** users need remappings pointing each prefix into `node_modules` (e.g. in `remappings.txt`):
+The Solidity sources retain repository import aliases. Foundry consumers must remap those aliases as well as
+dependencies (the `src/` alias below is scoped to this package so it does not replace your application's own sources):
 
 ```text
 @0xintuition/contracts-v2/=node_modules/@0xintuition/contracts-v2/
+node_modules/@0xintuition/contracts-v2/:src/=node_modules/@0xintuition/contracts-v2/src/
 @openzeppelin/contracts/=node_modules/@openzeppelin/contracts/
 @openzeppelin/contracts-upgradeable/=node_modules/@openzeppelin/contracts-upgradeable/
+@openzeppelin-v4/contracts/=node_modules/@openzeppelin-v4/contracts/
 @openzeppelin-v4/contracts-upgradeable/=node_modules/@openzeppelin-v4/contracts-upgradeable/
-solady/=node_modules/solady/
+solady/=node_modules/solady/src/
 @prb/math/=node_modules/@prb/math/
-@account-abstraction/contracts/=node_modules/@account-abstraction/contracts/
+@account-abstraction/=node_modules/@account-abstraction/contracts/
 ```
 
-(The `@openzeppelin-v4` remapping is only needed if you compile the legacy `Trust`/`TrustToken` contracts.)
+Hardhat consumers need an equivalent import-alias configuration; these sources do not resolve unmodified with Hardhat's
+default resolver. JavaScript ABI/bytecode imports do not require Solidity configuration.
 
 The contracts are compiled with Solidity `0.8.29`, optimizer enabled at 10,000 runs, EVM version `cancun`.
+
+## Alpha releases
+
+See [the alpha release checklist](docs/npm-alpha-release.md) for the exact versions, verification commands, router
+artifact ownership, and SDK handoff. `npm pack` and `npm publish` run the release checks before producing a tarball. The
+exported `artifact-manifest.json` records compiler settings, source hashes, ABI/bytecode hashes, and library link
+positions; it describes the build and is not a signature or deployment attestation.
 
 ## What's Inside
 
