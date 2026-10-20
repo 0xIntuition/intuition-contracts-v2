@@ -315,6 +315,7 @@ npx tsx script/base/upgrades/generate-timelock-upgrade-and-call-calldata.ts "htt
 | Multicall3                    | 0xcA11bde05977b3631167028862bE2a173976CA11 | /                                          |
 | EntryPoint                    | 0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108 | /                                          |
 | SafeSingletonFactory          | 0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7 | /                                          |
+| FeeProxy                      | 0x45B65BB9FFC4BC51C9e3a56902d9183dcff51B55 | 0x21f3bdd70eDa50E7d04F0b42cf2CD2dbf9F7FCBa |
 
 ## Testnet
 
@@ -344,3 +345,4 @@ npx tsx script/base/upgrades/generate-timelock-upgrade-and-call-calldata.ts "htt
 | OffsetProgressiveCurve        | 0x96bb9020ba4D027E42C29eCB3CEcc2471E505E6C | 0x76c92E3A7A83dD893BF4056D2d37258e8d7BD05b |
 | Multicall3                    | 0xcA11bde05977b3631167028862bE2a173976CA11 | /                                          |
 | EntryPoint                    | 0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108 | /                                          |
+| FeeProxy                      | 0x847801465DcB17811089107c0051c49E0135F6B8 | 0x98c84714656B4284ab313954d40c4F7E86a938b2 |
