@@ -15,6 +15,7 @@
   test = "tests"
   libs = ["node_modules", "lib"]
   extra_output = ["storageLayout", "metadata"]
+  fs_permissions = [{ access = "read", path = "./script/intuition/v1.1.0/safe-txs" }]
   ignored_error_codes = [2072]
   remappings = [
     "forge-std/=lib/forge-std/",

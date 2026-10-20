@@ -1,0 +1,21 @@
+{
+	"version": "1.0",
+	"chainId": "1155",
+	"meta": {
+		"name": "v1.1.0 [03] MultiVault.reinitialize",
+		"description": "HOLD until step 02 has executed and been verified. Signed by the Admin Safe DIRECTLY (it holds DEFAULT_ADMIN_ROLE) — not through the timelock.\n\nBootstraps MultiVault.timelock to the Parameters TimelockController 0x71b0F1ABebC2DaA0b7B5C3f9b72FAa1cd9F35FEA and grants PAUSER_ROLE to generalConfig.admin.\n\nThis is a SEPARATE transaction rather than calldata embedded in the step 01/02 upgradeAndCall, and must stay that way: embedded reinit calldata executes via delegatecall with msg.sender == ProxyAdmin, which holds neither role, and reverts.\n\nREQUIRED — the upgrade is not complete without this.\n\nDEPENDS ON: step 02.",
+		"txBuilderVersion": "1.17.1",
+		"createdFromSafeAddress": "0xbeA18ab4c83a12be25f8AA8A10D8747A07Cdc6eb",
+		"createdFromOwnerAddress": "",
+		"checksum": "0x99928354a37359d4c65d115104c28445d69cd7f470076c4edf037a639b5db0a0"
+	},
+	"transactions": [
+		{
+			"to": "0x6E35cF57A41fA15eA0EaE9C33e751b01A784Fe7e",
+			"value": "0",
+			"data": "0xf7e7d1fd00000000000000000000000071b0f1abebc2daa0b7b5c3f9b72faa1cd9f35fea",
+			"contractMethod": null,
+			"contractInputsValues": null
+		}
+	]
+}

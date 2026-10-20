@@ -98,16 +98,16 @@ import { ethers } from "ethers";
 const PLACEHOLDER = "0xPLACEHOLDER";
 
 const DEPLOYED_IMPLEMENTATIONS = {
-  multiVault: PLACEHOLDER,
-  trustBonding: PLACEHOLDER,
-  atomWarden: PLACEHOLDER,
-  atomWallet: PLACEHOLDER,
-  linearCurve: PLACEHOLDER,
-  offsetProgressiveCurve: PLACEHOLDER,
+  multiVault: "0x07BF05d767414B36AC9259E41DB06f1f3A1D7b5f",
+  trustBonding: "0xf43A386d6c470f3e257Fa2E2ed2A46f7abeA635A",
+  atomWarden: "0xDcc38557B1DEE342e71e8ABD5C53b4B897C50A2f",
+  atomWallet: "0x0A33b2FdB41afd6344434759f34E5ce75285EB30",
+  linearCurve: "0x513C1DF0C05420789d14EfA3321a36B627365780",
+  offsetProgressiveCurve: "0x4335582985700E17B639Ea52F2908DBD871FA85c",
 };
 
 /** Recorded for verification only; not referenced by any transaction. */
-const MULTIVAULT_LIB = PLACEHOLDER;
+const MULTIVAULT_LIB = "0x7dB2C5040Da4A496dD592346D9aB455e264EC13B";
 
 /*
   The DynamicFeeFlatPriceCurve proxy, deployed separately by
