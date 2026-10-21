@@ -230,6 +230,14 @@ Use `/help` in Claude Code to see them, then run:
 
 Generated reports are written to `audits/automated-reports/`.
 
+## Audits
+
+- [Diligence: v1.1.0 core upgrade (October 2026)](audits/Diligence-Audit-Report-3.pdf)
+- [Code4rena (April 2026)](audits/CodeArena-audit-report-April-2026.pdf)
+- [Diligence: MultiVault (September 2025)](audits/Diligence-Audit-Report-2.pdf)
+- [Diligence: TRUST token, bonding and emissions (September 2025)](audits/Diligence-Audit-Report-1.pdf)
+- [Internal adversarial reviews of v1.1.0](audits/internal-audits/v1.1.0)
+
 ## License
 
 This project is licensed under BUSL-1.1
