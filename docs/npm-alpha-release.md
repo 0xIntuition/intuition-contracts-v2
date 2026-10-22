@@ -22,7 +22,7 @@ separately; the base revisions above are not claims that uncommitted packaging c
 
 ## Verify and publish
 
-From each repository, using Foundry 1.5.1, Solidity 0.8.29, Node 22+ and Bun 1.3.11:
+From each repository, using Foundry 1.8.6, Solidity 0.8.29, Node 22+ and Bun 1.3.11:
 
 ```sh
 git submodule update --init --recursive
