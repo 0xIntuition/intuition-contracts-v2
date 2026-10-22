@@ -6,6 +6,9 @@
   evm_version = "cancun"
   fuzz = { runs = 10_000 }
   gas_reports = ["*"]
+  # Foundry 1.8 runs each top-level test call as its own transaction by default
+  # (isolate mode). The gas ceilings and snapshots were measured without it.
+  isolate = false
   optimizer = true
   optimizer_runs = 10_000
   out = "out"

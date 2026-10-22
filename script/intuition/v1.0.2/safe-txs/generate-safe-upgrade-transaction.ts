@@ -29,14 +29,14 @@ interface CliOptions {
 	upgradeId: string;
 }
 
-const EXPECTED_FOUNDRY_VERSION = '1.5.1';
+const EXPECTED_FOUNDRY_VERSION = '1.8.6';
 
 const assertFoundryVersion = (): void => {
 	const version = execSync('forge --version', { encoding: 'utf8' }).trim();
 	if (!version.includes(EXPECTED_FOUNDRY_VERSION)) {
 		throw new Error(
 			`Foundry version mismatch. Expected ${EXPECTED_FOUNDRY_VERSION} but got: ${version}. ` +
-				`Install with: foundryup -v ${EXPECTED_FOUNDRY_VERSION}`
+				`Install with: foundryup -i ${EXPECTED_FOUNDRY_VERSION}`
 		);
 	}
 };
