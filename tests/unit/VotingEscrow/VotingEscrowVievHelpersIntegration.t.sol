@@ -45,11 +45,7 @@ contract VotingEscrowViewHelpersIntegrationTest is Test {
     // Helpers
     // ------------------------------------------------------------
 
-    function _createLock(
-        address user,
-        uint256 amount,
-        uint256 lockDuration
-    )
+    function _createLock(address user, uint256 amount, uint256 lockDuration)
         internal
         returns (uint256 lockStart, uint256 lockEnd)
     {

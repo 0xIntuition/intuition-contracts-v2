@@ -521,7 +521,12 @@ contract TrustBondingUserApyTest is TrustBondingBase {
 
     /**
      * @notice Test getUserApy formula verification
-     * @dev Manually calculates expected APY and compares
+     * @dev Manually calculates expected APY using the same inline
+     *      `* YEAR / epochLength` shape as the contract, and asserts
+     *      bit-for-bit equality. The previous formulation that used the
+     *      truncating `epochsPerYear()` helper here was masking a ~0.27%
+     *      systematic underreporting in the contract (now fixed); the
+     *      manual calculation is updated to mirror the corrected math.
      */
     function test_getUserApy_formulaVerification() external {
         uint256 lockAmount = LARGE_DEPOSIT_AMOUNT;
@@ -529,14 +534,19 @@ contract TrustBondingUserApyTest is TrustBondingBase {
 
         (uint256 currentApy, uint256 maxApy) = protocol.trustBonding.getUserApy(users.alice);
 
-        // Manually calculate expected APY
+        // Manually calculate expected APY using the same operator order as the contract:
+        //   userRewardsPerYear = userRewards * YEAR / epochLength
+        //   currentApy         = userRewardsPerYear * personalUtilization / lockAmount
+        //   maxApy             = userRewardsPerYear * BASIS_POINTS_DIVISOR / lockAmount
         uint256 currentEpoch = protocol.trustBonding.currentEpoch();
         uint256 userRewards = protocol.trustBonding.userEligibleRewardsForEpoch(users.alice, currentEpoch);
-        uint256 epochsPerYear = protocol.trustBonding.epochsPerYear();
         uint256 personalUtilization = protocol.trustBonding.getPersonalUtilizationRatio(users.alice, currentEpoch);
+        uint256 epochLength = protocol.trustBonding.epochLength();
+        uint256 yearSeconds = 365 days;
 
-        uint256 expectedCurrentApy = (userRewards * epochsPerYear * personalUtilization) / lockAmount;
-        uint256 expectedMaxApy = (userRewards * epochsPerYear * BASIS_POINTS_DIVISOR) / lockAmount;
+        uint256 userRewardsPerYear = userRewards * yearSeconds / epochLength;
+        uint256 expectedCurrentApy = (userRewardsPerYear * personalUtilization) / lockAmount;
+        uint256 expectedMaxApy = (userRewardsPerYear * BASIS_POINTS_DIVISOR) / lockAmount;
 
         assertEq(currentApy, expectedCurrentApy, "Current APY should match manual calculation");
         assertEq(maxApy, expectedMaxApy, "Max APY should match manual calculation");

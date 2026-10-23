@@ -2,7 +2,7 @@
 pragma solidity 0.8.29;
 
 import { Test } from "forge-std/src/Test.sol";
-import { FixedPointMathLib } from "solady/src/utils/FixedPointMathLib.sol";
+import { FixedPointMathLib } from "solady/utils/FixedPointMathLib.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
 import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
@@ -256,10 +256,7 @@ contract LinearCurveTest is Test {
     }
 
     // Fuzz negative: convertToAssets must revert when shares > totalShares
-    function testFuzz_convertToAssets_reverts_whenSharesExceedTotalShares(
-        uint256 totalShares,
-        uint256 totalAssets
-    )
+    function testFuzz_convertToAssets_reverts_whenSharesExceedTotalShares(uint256 totalShares, uint256 totalAssets)
         public
     {
         totalShares = bound(totalShares, 0, type(uint128).max);
@@ -312,5 +309,32 @@ contract LinearCurveTest is Test {
         uint256 max = type(uint256).max;
         vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_SharesOverflowMax.selector));
         curve.convertToShares(1, max - 1, max);
+    }
+
+    /* =================================================== */
+    /*               FEE HOOK SAFE DEFAULTS                */
+    /* =================================================== */
+
+    function test_feeHooks_defaultGettersSignalNoHooks() public view {
+        assertFalse(curve.hasDepositFeeHook(), "no deposit fee hook by default");
+        assertFalse(curve.hasRedeemFeeHook(), "no redeem fee hook by default");
+    }
+
+    function test_feeHooks_quotesRevertByDefault() public {
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_FeeHooksNotSupported.selector));
+        curve.quoteDepositFee(bytes32("term"), 1e18);
+
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_FeeHooksNotSupported.selector));
+        curve.quoteRedeemFee(bytes32("term"), address(this), 1e18);
+    }
+
+    function test_feeHooks_recordsRevertByDefault() public {
+        vm.deal(address(this), 2e18);
+
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_FeeHooksNotSupported.selector));
+        curve.recordDeposit{ value: 1e18 }(bytes32("term"), address(this), 1e18);
+
+        vm.expectRevert(abi.encodeWithSelector(IBaseCurve.BaseCurve_FeeHooksNotSupported.selector));
+        curve.recordRedeem{ value: 1e18 }(bytes32("term"), address(this), 1e18);
     }
 }

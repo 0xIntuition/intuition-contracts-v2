@@ -9,6 +9,24 @@ import { ITrust } from "src/interfaces/ITrust.sol";
 import { Trust } from "src/Trust.sol";
 import { BaseTest } from "tests/BaseTest.t.sol";
 
+/// @dev Exposes Trust's internal ERC20 primitives so their own zero-address guards can be tested
+///      directly: `transfer`/`approve`/`burn` always call these with `_msgSender()`, which can
+///      never be `address(0)` for a real transaction, so the guards are unreachable via the public
+///      API and only reachable through a subclass calling the `internal` functions directly.
+contract TrustHarness is Trust {
+    function transferForTest(address from, address to, uint256 amount) external {
+        _transfer(from, to, amount);
+    }
+
+    function burnForTest(address account, uint256 amount) external {
+        _burn(account, amount);
+    }
+
+    function approveForTest(address owner_, address spender, uint256 amount) external {
+        _approve(owner_, spender, amount);
+    }
+}
+
 contract TrustTest is BaseTest {
     /* =================================================== */
     /*                        ROLE                         */
@@ -68,6 +86,65 @@ contract TrustTest is BaseTest {
         protocol.trust.grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
 
         assertTrue(protocol.trust.hasRole(DEFAULT_ADMIN_ROLE, newAdmin), "newAdmin should have DEFAULT_ADMIN_ROLE");
+    }
+
+    function test_AccessControl_GetRoleAdmin_DefaultsToDefaultAdminRole() public view {
+        // DEFAULT_ADMIN_ROLE is its own admin (OZ default), and freshly-declared roles admin to it too.
+        assertEq(protocol.trust.getRoleAdmin(DEFAULT_ADMIN_ROLE), DEFAULT_ADMIN_ROLE);
+        assertEq(protocol.trust.getRoleAdmin(keccak256("SOME_UNUSED_ROLE")), DEFAULT_ADMIN_ROLE);
+    }
+
+    function test_AccessControl_RevokeRole_Success() public {
+        address grantee = makeAddr("grantee");
+
+        resetPrank(admin);
+        protocol.trust.grantRole(DEFAULT_ADMIN_ROLE, grantee);
+        assertTrue(protocol.trust.hasRole(DEFAULT_ADMIN_ROLE, grantee));
+
+        protocol.trust.revokeRole(DEFAULT_ADMIN_ROLE, grantee);
+        assertFalse(protocol.trust.hasRole(DEFAULT_ADMIN_ROLE, grantee));
+    }
+
+    function test_AccessControl_RevokeRole_Revert_NotAdmin() public {
+        resetPrank(user);
+        vm.expectRevert(_missingRoleRevert(user, DEFAULT_ADMIN_ROLE));
+        protocol.trust.revokeRole(DEFAULT_ADMIN_ROLE, admin);
+    }
+
+    function test_AccessControl_RevokeRole_NoOpWhenNotHeld() public {
+        address neverGranted = makeAddr("neverGranted");
+        assertFalse(protocol.trust.hasRole(DEFAULT_ADMIN_ROLE, neverGranted));
+
+        // Revoking a role the account never had is a silent no-op (matches _revokeRole's own hasRole guard).
+        resetPrank(admin);
+        protocol.trust.revokeRole(DEFAULT_ADMIN_ROLE, neverGranted);
+        assertFalse(protocol.trust.hasRole(DEFAULT_ADMIN_ROLE, neverGranted));
+    }
+
+    function test_AccessControl_RenounceRole_Success() public {
+        address grantee = makeAddr("grantee");
+
+        resetPrank(admin);
+        protocol.trust.grantRole(DEFAULT_ADMIN_ROLE, grantee);
+
+        resetPrank(grantee);
+        protocol.trust.renounceRole(DEFAULT_ADMIN_ROLE, grantee);
+
+        assertFalse(protocol.trust.hasRole(DEFAULT_ADMIN_ROLE, grantee));
+    }
+
+    function test_AccessControl_RenounceRole_Revert_NotSelf() public {
+        resetPrank(user);
+        vm.expectRevert(bytes("AccessControl: can only renounce roles for self"));
+        protocol.trust.renounceRole(DEFAULT_ADMIN_ROLE, admin);
+    }
+
+    function test_AccessControl_SupportsInterface() public view {
+        // type(IAccessControlUpgradeable).interfaceId
+        assertTrue(protocol.trust.supportsInterface(0x7965db0b));
+        // type(IERC165Upgradeable).interfaceId, reached via the AccessControl override's `super` call
+        assertTrue(protocol.trust.supportsInterface(0x01ffc9a7));
+        assertFalse(protocol.trust.supportsInterface(0xdeadbeef));
     }
 
     /* =================================================== */
@@ -174,6 +251,169 @@ contract TrustTest is BaseTest {
         resetPrank(user);
         vm.expectRevert(abi.encodeWithSignature("Error(string)", "ERC20: burn amount exceeds balance"));
         protocol.trust.burn(userBalance + 1);
+    }
+
+    /* =================================================== */
+    /*                    ERC20 TRANSFER                    */
+    /* =================================================== */
+
+    function test_Transfer_Success() public {
+        address recipient = makeAddr("recipient");
+        resetPrank(users.controller);
+        protocol.trust.mint(user, 1000e18);
+
+        uint256 userBalBefore = protocol.trust.balanceOf(user);
+
+        resetPrank(user);
+        vm.expectEmit(true, true, false, true);
+        emit Transfer(user, recipient, 400e18);
+        protocol.trust.transfer(recipient, 400e18);
+
+        assertEq(protocol.trust.balanceOf(user), userBalBefore - 400e18);
+        assertEq(protocol.trust.balanceOf(recipient), 400e18);
+    }
+
+    function test_Transfer_Revert_ToZeroAddress() public {
+        resetPrank(users.controller);
+        protocol.trust.mint(user, 1e18);
+
+        resetPrank(user);
+        vm.expectRevert(bytes("ERC20: transfer to the zero address"));
+        protocol.trust.transfer(address(0), 1e18);
+    }
+
+    function test_Transfer_Revert_InsufficientBalance() public {
+        uint256 userBalance = protocol.trust.balanceOf(user);
+
+        resetPrank(user);
+        vm.expectRevert(bytes("ERC20: transfer amount exceeds balance"));
+        protocol.trust.transfer(makeAddr("recipient"), userBalance + 1);
+    }
+
+    /* =================================================== */
+    /*                ERC20 APPROVE / ALLOWANCE             */
+    /* =================================================== */
+
+    function test_Approve_And_Allowance_Success() public {
+        address spender = makeAddr("spender");
+
+        resetPrank(user);
+        protocol.trust.approve(spender, 500e18);
+
+        assertEq(protocol.trust.allowance(user, spender), 500e18);
+    }
+
+    function test_Approve_Revert_ToZeroAddress() public {
+        resetPrank(user);
+        vm.expectRevert(bytes("ERC20: approve to the zero address"));
+        protocol.trust.approve(address(0), 1e18);
+    }
+
+    function test_IncreaseAllowance_Success() public {
+        address spender = makeAddr("spender");
+
+        resetPrank(user);
+        protocol.trust.approve(spender, 100e18);
+        protocol.trust.increaseAllowance(spender, 50e18);
+
+        assertEq(protocol.trust.allowance(user, spender), 150e18);
+    }
+
+    function test_DecreaseAllowance_Success() public {
+        address spender = makeAddr("spender");
+
+        resetPrank(user);
+        protocol.trust.approve(spender, 100e18);
+        protocol.trust.decreaseAllowance(spender, 40e18);
+
+        assertEq(protocol.trust.allowance(user, spender), 60e18);
+    }
+
+    function test_DecreaseAllowance_Revert_BelowZero() public {
+        address spender = makeAddr("spender");
+
+        resetPrank(user);
+        protocol.trust.approve(spender, 10e18);
+
+        vm.expectRevert(bytes("ERC20: decreased allowance below zero"));
+        protocol.trust.decreaseAllowance(spender, 11e18);
+    }
+
+    /* =================================================== */
+    /*                    ERC20 TRANSFERFROM                */
+    /* =================================================== */
+
+    function test_TransferFrom_Success() public {
+        address spender = makeAddr("spender");
+        address recipient = makeAddr("recipient");
+
+        resetPrank(users.controller);
+        protocol.trust.mint(user, 1000e18);
+
+        resetPrank(user);
+        protocol.trust.approve(spender, 300e18);
+
+        resetPrank(spender);
+        protocol.trust.transferFrom(user, recipient, 300e18);
+
+        assertEq(protocol.trust.balanceOf(recipient), 300e18);
+        assertEq(protocol.trust.allowance(user, spender), 0);
+    }
+
+    function test_TransferFrom_Revert_InsufficientAllowance() public {
+        address spender = makeAddr("spender");
+        address recipient = makeAddr("recipient");
+
+        resetPrank(users.controller);
+        protocol.trust.mint(user, 1000e18);
+
+        resetPrank(user);
+        protocol.trust.approve(spender, 100e18);
+
+        resetPrank(spender);
+        vm.expectRevert(bytes("ERC20: insufficient allowance"));
+        protocol.trust.transferFrom(user, recipient, 101e18);
+    }
+
+    function test_TransferFrom_MaxAllowance_DoesNotDecrement() public {
+        address spender = makeAddr("spender");
+        address recipient = makeAddr("recipient");
+
+        resetPrank(users.controller);
+        protocol.trust.mint(user, 1000e18);
+
+        resetPrank(user);
+        protocol.trust.approve(spender, type(uint256).max);
+
+        resetPrank(spender);
+        protocol.trust.transferFrom(user, recipient, 300e18);
+
+        assertEq(protocol.trust.allowance(user, spender), type(uint256).max);
+    }
+
+    /* =================================================== */
+    /*        INTERNAL ERC20 ZERO-ADDRESS GUARDS            */
+    /* =================================================== */
+
+    function test_InternalTransfer_Revert_FromZeroAddress() public {
+        TrustHarness harness = new TrustHarness();
+
+        vm.expectRevert(bytes("ERC20: transfer from the zero address"));
+        harness.transferForTest(address(0), user, 1e18);
+    }
+
+    function test_InternalBurn_Revert_FromZeroAddress() public {
+        TrustHarness harness = new TrustHarness();
+
+        vm.expectRevert(bytes("ERC20: burn from the zero address"));
+        harness.burnForTest(address(0), 1e18);
+    }
+
+    function test_InternalApprove_Revert_OwnerZeroAddress() public {
+        TrustHarness harness = new TrustHarness();
+
+        vm.expectRevert(bytes("ERC20: approve from the zero address"));
+        harness.approveForTest(address(0), user, 1e18);
     }
 
     /* =================================================== */
