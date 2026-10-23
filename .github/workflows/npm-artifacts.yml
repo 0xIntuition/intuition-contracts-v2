@@ -14,9 +14,10 @@ jobs:
           submodules: recursive
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
-          # Resolve the newest 22.x from the Node manifest instead of whatever
-          # patch the runner's toolcache happens to hold.
+          # .nvmrc holds the Node major for CI and nvm users alike; check-latest
+          # resolves its newest patch from the Node manifest instead of whatever
+          # the runner's toolcache happens to hold.
+          node-version-file: ".nvmrc"
           check-latest: true
       - uses: oven-sh/setup-bun@v2
         with:
