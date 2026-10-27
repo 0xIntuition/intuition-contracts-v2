@@ -227,6 +227,24 @@ contract MultiVaultCoreTest is BaseTest {
         protocol.multiVault.getVaultType(unknown);
     }
 
+    function testCore_getInverseTripleId_PositiveAndCounter() public {
+        (bytes32 tripleId,) = createTripleWithAtoms(
+            "INV_S",
+            "INV_P",
+            "INV_O",
+            protocol.multiVault.getAtomCost(),
+            protocol.multiVault.getTripleCost(),
+            users.alice
+        );
+        bytes32 counterId = protocol.multiVault.getCounterIdFromTripleId(tripleId);
+
+        // Positive -> counter (else branch: not a counter triple, so derive it)
+        assertEq(protocol.multiVault.getInverseTripleId(tripleId), counterId, "positive -> counter");
+
+        // Counter -> positive (if branch: is a counter triple, so read the stored mapping)
+        assertEq(protocol.multiVault.getInverseTripleId(counterId), tripleId, "counter -> positive");
+    }
+
     function testCore_CounterIdMapping_RoundTrip() public {
         // Create a triple and verify both mapping directions and non-existent path
         (bytes32 tripleId, bytes32[] memory atomIds) = createTripleWithAtoms(

@@ -6,6 +6,9 @@
   evm_version = "cancun"
   fuzz = { runs = 10_000 }
   gas_reports = ["*"]
+  # Foundry 1.8 runs each top-level test call as its own transaction by default
+  # (isolate mode). The gas ceilings and snapshots were measured without it.
+  isolate = false
   optimizer = true
   optimizer_runs = 10_000
   out = "out"
@@ -15,16 +18,17 @@
   test = "tests"
   libs = ["node_modules", "lib"]
   extra_output = ["storageLayout", "metadata"]
+  fs_permissions = [{ access = "read", path = "./script/intuition/v1.1.0/safe-txs" }]
   ignored_error_codes = [2072]
   remappings = [
     "forge-std/=lib/forge-std/",
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
     "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
-    "@openzeppelin-v4/contracts/=node_modules/@openzeppelin-v4/contracts/",
-    "@openzeppelin-v4/contracts-upgradeable/=node_modules/@openzeppelin-v4/contracts-upgradeable/",
-    "solady/=lib/solady/",
+    "@openzeppelinV4/contracts/=node_modules/@openzeppelin/contracts/",
+    "@openzeppelinV4/contracts-upgradeable/=node_modules/@openzeppelin/contracts-upgradeable/",
+    "solady/=lib/solady/src/",
     "@prb/math/=lib/prb-math/",
-    "@account-abstraction/contracts/=lib/account-abstraction/contracts/",
+    "@account-abstraction/=lib/account-abstraction/contracts/",
     "permit2/=lib/permit2/src/"
   ]
 
@@ -49,7 +53,7 @@
   bracket_spacing = true
   int_types = "long"
   line_length = 120
-  multiline_func_header = "all"
+  multiline_func_header = "attributes_first"
   number_underscore = "thousands"
   quote_style = "double"
   tab_width = 4

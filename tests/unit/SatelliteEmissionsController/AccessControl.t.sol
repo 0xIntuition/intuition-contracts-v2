@@ -4,6 +4,7 @@ pragma solidity 0.8.29;
 import { console, Vm } from "forge-std/src/Test.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 import { TrustBondingBase } from "tests/unit/TrustBonding/TrustBondingBase.t.sol";
+import { ICoreEmissionsController } from "src/interfaces/ICoreEmissionsController.sol";
 import { ISatelliteEmissionsController } from "src/interfaces/ISatelliteEmissionsController.sol";
 import { SatelliteEmissionsController } from "src/protocol/emissions/SatelliteEmissionsController.sol";
 import { MetaERC20Dispatcher } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
@@ -56,6 +57,18 @@ contract AccessControlTest is TrustBondingBase {
         );
 
         satelliteEmissionsController.initialize(users.admin, address(0), metaERC20DispatchInit, coreEmissionsInit);
+    }
+
+    function test_initialize_revertsWhenEmissionsLengthIsZero() external {
+        SatelliteEmissionsController satelliteEmissionsController = _deploySatelliteEmissionsController();
+        coreEmissionsInit.emissionsLength = 0;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(ICoreEmissionsController.CoreEmissionsController_InvalidEmissionsLength.selector)
+        );
+        satelliteEmissionsController.initialize(
+            users.admin, baseEmissionsController, metaERC20DispatchInit, coreEmissionsInit
+        );
     }
 
     /*//////////////////////////////////////////////////////////////

@@ -3,12 +3,12 @@ pragma solidity 0.8.29;
 
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
-import { ICoreEmissionsController } from "../../interfaces/ICoreEmissionsController.sol";
-import { IMultiVault } from "../../interfaces/IMultiVault.sol";
-import { ITrustBonding, UserInfo } from "../../interfaces/ITrustBonding.sol";
-import { ISatelliteEmissionsController } from "../../interfaces/ISatelliteEmissionsController.sol";
+import { ICoreEmissionsController } from "src/interfaces/ICoreEmissionsController.sol";
+import { IMultiVault } from "src/interfaces/IMultiVault.sol";
+import { ITrustBonding, UserInfo } from "src/interfaces/ITrustBonding.sol";
+import { ISatelliteEmissionsController } from "src/interfaces/ISatelliteEmissionsController.sol";
 
-import { VotingEscrow, LockedBalance } from "../../external/curve/VotingEscrow.sol";
+import { VotingEscrow, LockedBalance } from "src/external/curve/VotingEscrow.sol";
 
 /**
  * @title  TrustBonding
@@ -27,13 +27,12 @@ import { VotingEscrow, LockedBalance } from "../../external/curve/VotingEscrow.s
  *           of the total TRUST supply has been locked.
  *         - Rewards for epoch `n` become claimable in epoch `n+1` and are forfeited if not claimed
  *           before the next epoch ends (i.e. only the previous epoch's rewards are claimable).
- *         - This version of the TrustBonding contract introduces the utilization-based rewards model,
- *           where the emitted rewards are based on the system utilizationRatio from the MultiVault
- *           contract, whereas the user's rewards are based on their own (personal) utilizationRatio.
- *         - utilizationRatio is defined as percentage of how much did the personal or system utilization
- *           change from epoch to epoch when compared to the target utilization, which represents the
- *           amount of TRUST tokens that were claimed as rewards in the previous epoch (on both the
- *           personal and the system level).
+ *         - Rewards follow a utilization-based model: emitted rewards scale with the system
+ *           utilizationRatio from the MultiVault contract, and a user's rewards scale with their own
+ *           (personal) utilizationRatio.
+ *         - utilizationRatio is the epoch-over-epoch change in personal or system utilization,
+ *           measured against the target utilization — the TRUST claimed as rewards in the previous
+ *           epoch, on the personal and system level respectively.
  *
  * @dev    Extended from the Solidity implementation of the Curve Finance's `VotingEscrow`
  *         contract (originally written in Vyper), as used by the Stargate Finance protocol:
@@ -64,6 +63,15 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Mapping of epochs to the total claimed rewards for that epoch among all users
+    /// @dev Also serves as the target the next epoch's system utilization ratio is measured against —
+    ///      the rewards actually claimed for the prior epoch, not those earned or eligible.
+    ///      Claiming is optional; declining to claim leaves this counter lower and can only shift the following
+    ///      ratio within its hard `[systemUtilizationLowerBound, BASIS_POINTS_DIVISOR]` bounds. Emissions are
+    ///      minted on a fixed, pre-scheduled per-epoch schedule: the utilization ratios only split that fixed
+    ///      budget between released and reclaimed amounts. They never change the amount minted and never touch
+    ///      principal, and the unclaimed remainder is a residual the protocol reclaims — not an allocation owed
+    ///      to any user. A higher ratio therefore redistributes a bounded, already-fixed pot; it cannot mint
+    ///      new tokens or extract another party's funds.
     mapping(uint256 epoch => uint256 totalClaimedRewards) public totalClaimedRewardsForEpoch;
 
     /// @notice Mapping of users to their respective claimed rewards for a specific epoch
@@ -125,10 +133,7 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         address _satelliteEmissionsController,
         uint256 _systemUtilizationLowerBound,
         uint256 _personalUtilizationLowerBound
-    )
-        external
-        initializer
-    {
+    ) external initializer {
         if (_owner == address(0)) {
             revert TrustBonding_ZeroAddress();
         }
@@ -155,6 +160,10 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /// @inheritdoc ITrustBonding
+    /// @dev Returns `floor(YEAR / epochLength)` — integer-truncated. Useful as
+    ///      a size hint, but **not** suitable for precise APY math: prefer the
+    ///      inline `value * YEAR / epochLength` reordering at the call site,
+    ///      which is what `getSystemApy` and `getUserApy` now use.
     function epochsPerYear() public view returns (uint256) {
         return _epochsPerYear();
     }
@@ -195,6 +204,17 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /// @inheritdoc ITrustBonding
+    /// @dev Point-in-time `_totalSupply` snapshot at `_epochTimestampEnd(epoch)`.
+    ///      A point-in-time snapshot is acceptable here because the
+    ///      VotingEscrow constructor enforces `MINTIME >= EPOCH_LENGTH`
+    ///      (production: both `= 2 weeks`). Any lock created or extended
+    ///      near a boundary is structurally committed for at least one full
+    ///      epoch, so "snipe-and-exit" is impossible — a participant whose
+    ///      lock contributes to this snapshot is forced to remain a real
+    ///      participant through the following epoch. The marginal
+    ///      undecayed-weight advantage of a last-second lock vs. an honest
+    ///      epoch-long locker is bounded by the per-epoch decay ratio
+    ///      `EPOCH_LENGTH / MAXTIME` (≈ 1.9% for 14-day epochs / 2-year max).
     function totalBondedBalanceAtEpochEnd(uint256 epoch) public view returns (uint256) {
         if (epoch > currentEpoch()) {
             revert TrustBonding_InvalidEpoch();
@@ -204,6 +224,9 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /// @inheritdoc ITrustBonding
+    /// @dev Point-in-time `_balanceOf` snapshot at `_epochTimestampEnd(epoch)`.
+    ///      See `totalBondedBalanceAtEpochEnd` for the `MINTIME >= EPOCH_LENGTH`
+    ///      invariant that makes point-in-time semantics safe here.
     function userBondedBalanceAtEpochEnd(address account, uint256 epoch) public view returns (uint256) {
         if (account == address(0)) {
             revert TrustBonding_ZeroAddress();
@@ -258,6 +281,13 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /// @inheritdoc ITrustBonding
+    /// @dev Annualisation here uses the inline `userRewards * YEAR / epochLength`
+    ///      form rather than `userRewards * _epochsPerYear()`. The latter would
+    ///      truncate `YEAR / epochLength` (e.g. `26.07... -> 26` for a 14-day
+    ///      epoch) before the multiply, dragging every reported APY below
+    ///      its analytical value. The reordered form defers the integer
+    ///      division to the final step, eliminating that ~0.27% systematic
+    ///      underestimate.
     function getUserApy(address account) external view returns (uint256 currentApy, uint256 maxApy) {
         uint256 currEpoch = _currentEpoch();
         uint256 userRewards = _userEligibleRewardsForEpoch(account, currEpoch);
@@ -268,7 +298,8 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
             return (currentApy, maxApy);
         }
 
-        uint256 userRewardsPerYear = userRewards * _epochsPerYear();
+        uint256 epochLength = ICoreEmissionsController(satelliteEmissionsController).getEpochLength();
+        uint256 userRewardsPerYear = userRewards * YEAR / epochLength;
         currentApy = (userRewardsPerYear * personalUtilization) / uint256(locked);
         maxApy = (userRewardsPerYear * BASIS_POINTS_DIVISOR) / uint256(locked);
         return (currentApy, maxApy);
@@ -306,15 +337,20 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /// @inheritdoc ITrustBonding
+    /// @dev Annualisation uses the inline `* YEAR / epochLength` form rather
+    ///      than the truncating `* _epochsPerYear()` helper. See `getUserApy`
+    ///      for the rationale; same reordering applied here to keep system-
+    ///      level and user-level APY reporting precision aligned.
     function getSystemApy() external view returns (uint256 currentApy, uint256 maxApy) {
         uint256 _supply = _totalSupply(block.timestamp);
         if (_supply == 0) {
             return (0, 0);
         }
         uint256 _currEpoch = _currentEpoch();
-        uint256 emissionsPerYear = _emissionsForEpoch(_currEpoch) * _epochsPerYear();
+        uint256 epochLength = ICoreEmissionsController(satelliteEmissionsController).getEpochLength();
+        uint256 emissionsPerYear = _emissionsForEpoch(_currEpoch) * YEAR / epochLength;
         uint256 maxEmissions = ICoreEmissionsController(satelliteEmissionsController).getEmissionsAtEpoch(_currEpoch);
-        uint256 maxEmissionsPerYear = maxEmissions * _epochsPerYear();
+        uint256 maxEmissionsPerYear = maxEmissions * YEAR / epochLength;
         currentApy = (emissionsPerYear * BASIS_POINTS_DIVISOR) / _supply;
         maxApy = (maxEmissionsPerYear * BASIS_POINTS_DIVISOR) / _supply;
         return (currentApy, maxApy);
@@ -408,10 +444,60 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
     }
 
     /*//////////////////////////////////////////////////////////////
+                    PAUSABLE VOTING ESCROW OVERRIDES
+    //////////////////////////////////////////////////////////////*/
+
+    /// @inheritdoc VotingEscrow
+    /// @dev Pause gate: reverts while the contract is paused. Applies to third-party
+    ///      depositors as well, since the token transfer source is the lock holder.
+    function deposit_for(address _addr, uint256 _value) public override whenNotPaused {
+        super.deposit_for(_addr, _value);
+    }
+
+    /// @inheritdoc VotingEscrow
+    /// @dev Pause gate: reverts while the contract is paused.
+    function create_lock(uint256 _value, uint256 _unlock_time) public override whenNotPaused {
+        super.create_lock(_value, _unlock_time);
+    }
+
+    /// @inheritdoc VotingEscrow
+    /// @dev Pause gate: reverts while the contract is paused.
+    function increase_amount(uint256 _value) public override whenNotPaused {
+        super.increase_amount(_value);
+    }
+
+    /// @inheritdoc VotingEscrow
+    /// @dev Pause gate: reverts while the contract is paused.
+    function increase_unlock_time(uint256 _unlock_time) public override whenNotPaused {
+        super.increase_unlock_time(_unlock_time);
+    }
+
+    /// @inheritdoc VotingEscrow
+    /// @dev Pause gate: reverts while the contract is paused.
+    function increase_amount_and_time(uint256 _value, uint256 _unlock_time) public override whenNotPaused {
+        super.increase_amount_and_time(_value, _unlock_time);
+    }
+
+    /// @inheritdoc VotingEscrow
+    /// @dev Pause gate: reverts while the contract is paused. Although this method also
+    ///      withdraws an expired lock, its lock-creating half governs the gate; plain
+    ///      `withdraw` remains un-gated as the escape hatch, so no funds are ever trapped
+    ///      by a pause.
+    function withdraw_and_create_lock(uint256 _value, uint256 _unlock_time) public override whenNotPaused {
+        super.withdraw_and_create_lock(_value, _unlock_time);
+    }
+
+    /*//////////////////////////////////////////////////////////////
                          ACCESS-RESTRICTED FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc ITrustBonding
+    /// @dev Pausing gates `claimRewards` and the bonding entry points (`deposit_for`,
+    ///      `create_lock`, `increase_amount`, `increase_unlock_time`,
+    ///      `increase_amount_and_time`, `withdraw_and_create_lock`). `withdraw` and
+    ///      `checkpoint` remain callable while paused: a pause must never
+    ///      trap users' locked TRUST, and global bookkeeping must stay current so
+    ///      supply/voting-power accounting does not go stale across a pause window.
     function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
     }
@@ -454,6 +540,11 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
         return _epochAtTimestamp(block.timestamp);
     }
 
+    /// @dev Approximate epochs-per-year helper. Returns `floor(YEAR / epochLength)`
+    ///      so for the production 14-day epoch this truncates `26.0714...` to `26`.
+    ///      Adequate for size hints and rough integrations, but APY-precision
+    ///      paths (`getSystemApy`, `getUserApy`) bypass this and inline the
+    ///      multiply-first / divide-last formula instead.
     function _epochsPerYear() internal view returns (uint256) {
         return YEAR / ICoreEmissionsController(satelliteEmissionsController).getEpochLength();
     }
@@ -606,15 +697,17 @@ contract TrustBonding is ITrustBonding, PausableUpgradeable, VotingEscrow {
      * @param lowerBound The lower bound for the utilization ratio
      * @return The normalized utilization ratio for the given parameters
      */
-    function _getNormalizedUtilizationRatio(
-        uint256 delta,
-        uint256 target,
-        uint256 lowerBound
-    )
+    function _getNormalizedUtilizationRatio(uint256 delta, uint256 target, uint256 lowerBound)
         internal
         pure
         returns (uint256)
     {
+        // Defense-in-depth: every caller already early-returns 100% before reaching this helper when
+        // `target == 0` (the `delta >= target` branch), so this guard is unreachable today. It keeps the
+        // helper safe in isolation if a future caller is added, matching the callers' zero-target result.
+        if (target == 0) {
+            return BASIS_POINTS_DIVISOR;
+        }
         uint256 ratioRange = BASIS_POINTS_DIVISOR - lowerBound;
         uint256 utilizationRatio = lowerBound + (delta * ratioRange) / target;
         return utilizationRatio;

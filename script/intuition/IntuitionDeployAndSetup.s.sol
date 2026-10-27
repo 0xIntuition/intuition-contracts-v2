@@ -10,6 +10,7 @@ import { TimelockController } from "@openzeppelin/contracts/governance/TimelockC
 import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 
 import { Trust } from "src/Trust.sol";
+import { WrappedTrust } from "src/WrappedTrust.sol";
 import { MultiVault } from "src/protocol/MultiVault.sol";
 import { AtomWarden } from "src/protocol/wallet/AtomWarden.sol";
 import { AtomWallet } from "src/protocol/wallet/AtomWallet.sol";
@@ -66,6 +67,8 @@ contract IntuitionDeployAndSetup is SetupScript {
 
     address public MIGRATOR;
 
+    bool public IS_MIGRATION_MODE;
+
     address public BASE_EMISSIONS_CONTROLLER;
 
     address public MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION;
@@ -78,19 +81,39 @@ contract IntuitionDeployAndSetup is SetupScript {
     BondingCurveConfig internal bondingCurveConfig;
     TimelockController public upgradesTimelockController;
     TimelockController public parametersTimelockController;
+    uint256 internal atomWardenClaimWindow;
+    uint256 internal atomWardenMinFeeThreshold;
+    uint256 internal atomWardenSignatureThreshold;
+    uint48 internal atomWardenMaxValidAfter;
+    uint48 internal atomWardenMaxValidUntil;
+    uint256 internal atomWardenMaxClaimsPerWindow;
+    uint256 internal atomWardenClaimCapWindow;
 
     function setUp() public override {
         super.setUp();
 
+        IS_MIGRATION_MODE = vm.envOr("IS_MIGRATION_MODE", false);
+        atomWardenClaimWindow = vm.envOr("ATOM_WARDEN_CLAIM_WINDOW", uint256(365 days));
+        atomWardenMinFeeThreshold = vm.envOr("ATOM_WARDEN_MIN_FEE_THRESHOLD", uint256(0));
+        atomWardenSignatureThreshold = vm.envOr("ATOM_WARDEN_SIGNATURE_THRESHOLD", uint256(1));
+        // forge-lint: disable-next-line(unsafe-typecast)
+        atomWardenMaxValidAfter = uint48(vm.envOr("ATOM_WARDEN_MAX_VALID_AFTER", uint256(1 hours)));
+        // forge-lint: disable-next-line(unsafe-typecast)
+        atomWardenMaxValidUntil = uint48(vm.envOr("ATOM_WARDEN_MAX_VALID_UNTIL", uint256(1 days)));
+        // Default 0 = cap disabled; arm deliberately via env or the admin setter.
+        atomWardenMaxClaimsPerWindow = vm.envOr("ATOM_WARDEN_MAX_CLAIMS_PER_WINDOW", uint256(0));
+        atomWardenClaimCapWindow = vm.envOr("ATOM_WARDEN_CLAIM_CAP_WINDOW", uint256(1 days));
+
         if (block.chainid == NETWORK_ANVIL) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("ANVIL_BASE_EMISSIONS_CONTROLLER");
             MIGRATOR = vm.envAddress("ANVIL_MULTI_VAULT_ROLE_MIGRATOR");
-            MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION = vm.envAddress("ANVIL_MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION");
+            MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION =
+                vm.envOr("ANVIL_MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION", address(0));
         } else if (block.chainid == NETWORK_INTUITION_SEPOLIA) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("BASE_SEPOLIA_BASE_EMISSIONS_CONTROLLER");
             MIGRATOR = vm.envAddress("INTUITION_SEPOLIA_MULTI_VAULT_ROLE_MIGRATOR");
             MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION =
-                vm.envAddress("INTUITION_SEPOLIA_MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION");
+                vm.envOr("INTUITION_SEPOLIA_MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION", address(0));
         } else if (block.chainid == NETWORK_INTUITION) {
             BASE_EMISSIONS_CONTROLLER = vm.envAddress("BASE_MAINNET_BASE_EMISSIONS_CONTROLLER");
             MIGRATOR = vm.envAddress("INTUITION_MAINNET_MULTI_VAULT_ROLE_MIGRATOR");
@@ -105,9 +128,16 @@ contract IntuitionDeployAndSetup is SetupScript {
         console2.log("");
         console2.log("DEPLOYMENTS: =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+");
 
-        // Get the Trust token address and cast it to the Trust interface
+        // Get the Trust token address and cast it to the Trust interface.
+        // On Anvil, we can deploy WrappedTrust inline when no token is provided.
         if (TRUST_TOKEN == address(0)) {
-            revert("Trust token address not provided");
+            if (block.chainid != NETWORK_ANVIL) {
+                revert("Trust token address not provided");
+            }
+
+            WrappedTrust wrappedTrust = new WrappedTrust();
+            info("Wrapped Trust", address(wrappedTrust));
+            trust = Trust(address(wrappedTrust));
         } else {
             trust = Trust(TRUST_TOKEN);
         }
@@ -117,7 +147,7 @@ contract IntuitionDeployAndSetup is SetupScript {
 
         console2.log("");
         console2.log("DEPLOYMENT COMPLETE: =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+");
-        contractInfo("Trust", address(trust));
+        contractInfo("Wrapped Trust", address(trust));
         contractInfo("MultiVault", address(multiVault));
         contractInfo("AtomWalletFactory", address(atomWalletFactory));
         contractInfo("SatelliteEmissionsController", address(satelliteEmissionsController));
@@ -172,6 +202,9 @@ contract IntuitionDeployAndSetup is SetupScript {
 
         // Deploy bonding curve implementations
         LinearCurve linearCurveImpl = new LinearCurve();
+        OffsetProgressiveCurve offsetProgressiveCurveImpl = new OffsetProgressiveCurve();
+        info("LinearCurve Implementation", address(linearCurveImpl));
+        info("OffsetProgressiveCurve Implementation", address(offsetProgressiveCurveImpl));
 
         // Deploy proxies for bonding curves
         TransparentUpgradeableProxy linearCurveProxy = new TransparentUpgradeableProxy(
@@ -182,9 +215,24 @@ contract IntuitionDeployAndSetup is SetupScript {
         linearCurve = LinearCurve(address(linearCurveProxy));
         info("LinearCurve Proxy", address(linearCurve));
 
+        TransparentUpgradeableProxy offsetProgressiveCurveProxy = new TransparentUpgradeableProxy(
+            address(offsetProgressiveCurveImpl),
+            address(upgradesTimelockController),
+            abi.encodeWithSelector(
+                OffsetProgressiveCurve.initialize.selector,
+                "Offset Progressive Curve",
+                OFFSET_PROGRESSIVE_CURVE_SLOPE,
+                OFFSET_PROGRESSIVE_CURVE_OFFSET
+            )
+        );
+        offsetProgressiveCurve = OffsetProgressiveCurve(address(offsetProgressiveCurveProxy));
+        info("OffsetProgressiveCurve Proxy", address(offsetProgressiveCurve));
+
         if (block.chainid != NETWORK_INTUITION) {
             // Add curves to registry
             bondingCurveRegistry.addBondingCurve(address(linearCurve));
+            bondingCurveRegistry.addBondingCurve(address(offsetProgressiveCurve));
+            console2.log("LinearCurve and OffsetProgressiveCurve added to BondingCurveRegistry");
         }
 
         // Deploy SatelliteEmissionsController implementation and proxy
@@ -249,9 +297,8 @@ contract IntuitionDeployAndSetup is SetupScript {
             satelliteEmissionsController.setTrustBonding(address(trustBonding));
 
             // Grant CONTROLLER_ROLE to TrustBonding in SatelliteEmissionsController
-            IAccessControl(address(satelliteEmissionsController)).grantRole(
-                satelliteEmissionsController.CONTROLLER_ROLE(), address(trustBonding)
-            );
+            IAccessControl(address(satelliteEmissionsController))
+                .grantRole(satelliteEmissionsController.CONTROLLER_ROLE(), address(trustBonding));
             console2.log("CONTROLLER_ROLE in SatelliteEmissionsController granted to TrustBonding");
         }
 
@@ -268,17 +315,40 @@ contract IntuitionDeployAndSetup is SetupScript {
             bondingCurveConfig
         );
 
-        // Deploy new proxy contract for the MultiVault
-        info("MultiVaultMigrationMode Implementation", MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION);
+        TransparentUpgradeableProxy multiVaultProxy;
 
-        TransparentUpgradeableProxy multiVaultProxy = new TransparentUpgradeableProxy(
-            MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION, address(upgradesTimelockController), multiVaultInitData
-        );
+        if (block.chainid != NETWORK_INTUITION) {
+            MultiVault multiVaultImpl = new MultiVault();
+            info("MultiVault Implementation", address(multiVaultImpl));
+
+            multiVaultProxy = new TransparentUpgradeableProxy(
+                address(multiVaultImpl), address(upgradesTimelockController), multiVaultInitData
+            );
+        } else {
+            if (MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION == address(0)) {
+                revert("MultiVaultMigrationMode implementation not provided");
+            }
+            info("MultiVaultMigrationMode Implementation", MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION);
+            multiVaultProxy = new TransparentUpgradeableProxy(
+                MULTIVAULT_MIGRATION_MODE_IMPLEMENTATION, address(upgradesTimelockController), multiVaultInitData
+            );
+        }
+
         multiVault = MultiVault(address(multiVaultProxy));
 
         // Initialize AtomWalletFactory and AtomWarden with the MultiVault address
         atomWalletFactory.initialize(address(multiVault));
-        atomWarden.initialize(ADMIN, address(multiVault));
+        atomWarden.initialize(
+            ADMIN,
+            address(multiVault),
+            atomWardenClaimWindow,
+            atomWardenMinFeeThreshold,
+            atomWardenSignatureThreshold,
+            atomWardenMaxValidAfter,
+            atomWardenMaxValidUntil,
+            atomWardenMaxClaimsPerWindow,
+            atomWardenClaimCapWindow
+        );
 
         // Set the MultiVault and parameters Timelock addresses in TrustBonding only if we are not on the Intuition
         // mainnet (on mainnet, this will be done through an admin Safe)
@@ -289,7 +359,7 @@ contract IntuitionDeployAndSetup is SetupScript {
 
         // Grant the MIGRATOR_ROLE to the migrator address only if we are not on the Intuition mainnet (on mainnet,
         // this will be done through an admin Safe)
-        if (block.chainid != NETWORK_INTUITION) {
+        if (block.chainid != NETWORK_INTUITION && IS_MIGRATION_MODE) {
             IAccessControl(address(multiVault)).grantRole(MIGRATOR_ROLE, MIGRATOR);
             console2.log("MIGRATOR_ROLE granted to:", MIGRATOR);
         }
@@ -308,8 +378,7 @@ contract IntuitionDeployAndSetup is SetupScript {
         });
 
         atomConfig = AtomConfig({
-            atomCreationProtocolFee: ATOM_CREATION_PROTOCOL_FEE,
-            atomWalletDepositFee: ATOM_WALLET_DEPOSIT_FEE
+            atomCreationProtocolFee: ATOM_CREATION_PROTOCOL_FEE, atomWalletDepositFee: ATOM_WALLET_DEPOSIT_FEE
         });
 
         tripleConfig = TripleConfig({

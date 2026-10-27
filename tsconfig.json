@@ -9,5 +9,5 @@
     "isolatedModules": true,
     "noEmit": true
   },
-  "include": ["index.ts", "abis", "bytecodes", "extract-abis.ts", "extract-bytecodes.ts"]
+  "include": ["index.ts", "abis", "bytecodes", "extract-abis.ts", "extract-bytecodes.ts", "scripts/*.ts"]
 }

@@ -7,7 +7,9 @@ import { ITrustBonding } from "src/interfaces/ITrustBonding.sol";
 import { TrustBonding } from "src/protocol/emissions/TrustBonding.sol";
 import { WrappedTrust } from "src/WrappedTrust.sol";
 import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
-import { ITransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import {
+    ITransparentUpgradeableProxy
+} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 interface IVotingEscrowView {
     // Global checkpoints
@@ -16,10 +18,7 @@ interface IVotingEscrowView {
 
     // Per-user checkpoints
     function user_point_epoch(address addr) external view returns (uint256);
-    function user_point_history(
-        address addr,
-        uint256 idx
-    )
+    function user_point_history(address addr, uint256 idx)
         external
         view
         returns (int128 bias, int128 slope, uint256 ts, uint256 blk);
@@ -357,9 +356,8 @@ contract TrustBondingUpgradeRegressionTest is Test {
         TrustBonding newImpl = new TrustBonding();
 
         vm.startPrank(TIMELOCK);
-        ProxyAdmin(PROXY_ADMIN).upgradeAndCall(
-            ITransparentUpgradeableProxy(payable(TRUST_BONDING_PROXY)), address(newImpl), bytes("")
-        );
+        ProxyAdmin(PROXY_ADMIN)
+            .upgradeAndCall(ITransparentUpgradeableProxy(payable(TRUST_BONDING_PROXY)), address(newImpl), bytes(""));
         vm.stopPrank();
 
         // TrustBonding proxy implements both the ITrustBonding surface

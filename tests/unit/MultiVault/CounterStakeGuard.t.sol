@@ -82,6 +82,72 @@ contract CounterStakeGuardTest is BaseTest {
         assertGt(sharesNeg, 0, "cross-curve counter deposit should mint shares");
     }
 
+    /// @notice Reverse of {test_CrossCurveDepositsAllowed}: Alice deposits the counter side first on
+    ///         a non-default curve (this is the path the v1.1.0 fix unlocks), which symmetrically
+    ///         seeds the positive-side same-curve vault with min-shares. Bob then deposits the
+    ///         positive side on that curve — he has no counter shares on this curve, so the
+    ///         counter-stake guard does not block him, and he must receive minted shares.
+    function test_CrossCurveDepositsAllowed_CounterFirst() public {
+        (address registryAddr, uint256 defaultCurveId) = protocol.multiVault.bondingCurveConfig();
+        IBondingCurveRegistry reg = IBondingCurveRegistry(registryAddr);
+
+        uint256 otherCurveId;
+        uint256 count = reg.count();
+        for (uint256 i = 1; i <= count; i++) {
+            if (i != defaultCurveId && reg.curveAddresses(i) != address(0)) {
+                otherCurveId = i;
+                break;
+            }
+        }
+        vm.assume(otherCurveId != 0);
+
+        uint256 minDeposit = protocol.multiVault.getGeneralConfig().minDeposit;
+        uint256 minShare2x = protocol.multiVault.getGeneralConfig().minShare * 2;
+        uint256 assets = (minDeposit > minShare2x + 1 ? minDeposit : minShare2x + 1) + 1 ether;
+
+        // 1) Alice initializes the non-default curve on the COUNTER side — previously reverted.
+        vm.deal(users.alice, assets);
+        uint256 sharesNeg = makeDeposit(users.alice, users.alice, counterTripleId, otherCurveId, assets, 0);
+        assertGt(sharesNeg, 0, "counter-first deposit should mint shares on other curve");
+
+        // 2) Bob can deposit on the POSITIVE side of the same curve (no counter-stake on this curve).
+        vm.deal(users.bob, assets);
+        uint256 sharesPos = makeDeposit(users.bob, users.bob, tripleId, otherCurveId, assets, 0);
+        assertGt(sharesPos, 0, "positive deposit after counter-first bootstrap should mint shares");
+    }
+
+    /// @notice After a counter-first symmetric bootstrap on a non-default curve, the counter-stake
+    ///         guard must still block the same-receiver from also taking the opposite side on that
+    ///         curve. Pins the surviving invariant.
+    function test_DepositOppositeSideSameCurve_RevertsHasCounterStake_NonDefault() public {
+        (address registryAddr, uint256 defaultCurveId) = protocol.multiVault.bondingCurveConfig();
+        IBondingCurveRegistry reg = IBondingCurveRegistry(registryAddr);
+
+        uint256 otherCurveId;
+        uint256 count = reg.count();
+        for (uint256 i = 1; i <= count; i++) {
+            if (i != defaultCurveId && reg.curveAddresses(i) != address(0)) {
+                otherCurveId = i;
+                break;
+            }
+        }
+        vm.assume(otherCurveId != 0);
+
+        uint256 minDeposit = protocol.multiVault.getGeneralConfig().minDeposit;
+        uint256 minShare2x = protocol.multiVault.getGeneralConfig().minShare * 2;
+        uint256 assets = (minDeposit > minShare2x + 1 ? minDeposit : minShare2x + 1) + 1 ether;
+
+        // Alice takes the counter side on a non-default curve.
+        vm.deal(users.alice, assets);
+        uint256 sharesNeg = makeDeposit(users.alice, users.alice, counterTripleId, otherCurveId, assets, 0);
+        assertGt(sharesNeg, 0, "counter-first deposit should mint shares");
+
+        // Alice trying to also take the positive side on the same curve must revert.
+        vm.deal(users.alice, assets);
+        vm.expectRevert(MultiVault.MultiVault_HasCounterStake.selector);
+        makeDeposit(users.alice, users.alice, tripleId, otherCurveId, assets, 0);
+    }
+
     function test_DepositBatchBothSidesSameCurve_RevertsHasCounterStake() public {
         uint256 defaultCurveId = getDefaultCurveId();
 
