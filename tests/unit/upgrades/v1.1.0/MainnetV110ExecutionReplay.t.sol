@@ -50,8 +50,9 @@ contract RefundRejectingWallet {
 ///         Safe TX-Builder batches and sent from the Admin Safe unmodified:
 ///         `02` (Upgrades Timelock `executeBatch`), `03` (`MultiVault.reinitialize`) and `04`
 ///         (`AtomWarden.reinitialize`).
-/// @dev    `setUp` forks the latest block (or `FORK_BLOCK`), snapshots protocol state, opens a position under
-///         the live pre-upgrade code, warps to the operation's ready time and executes the three batches.
+/// @dev    `setUp` forks the last block before execution (or `FORK_BLOCK`), snapshots protocol state,
+///         opens a position under the live pre-upgrade code, warps to the operation's ready time and executes
+///         the three batches.
 ///         Every `test_` function then checks one post-upgrade property against that shared state.
 ///         The DynamicFeeFlatPriceCurve and the AtomWarden / AtomWallet claim flows are out of scope.
 /// @custom:upgrade v1.1.0
@@ -89,6 +90,9 @@ contract MainnetV110ExecutionReplayTest is Test {
     /// @dev The operation scheduled by batch `01`, and the timestamp at which it becomes executable.
     bytes32 internal constant UPGRADE_OPERATION_ID = 0x14ef8b48864623ccdcc4b12a4ef2b6e3878dc1e0da2db96889c9cb8b3f5a5044;
     uint256 internal constant UPGRADE_READY_AT = 1_793_116_567;
+
+    /// @dev The last block before batch `02` executed on chain; the operation is still pending here.
+    uint256 internal constant PRE_EXECUTION_BLOCK = 10_007_922;
 
     /// @dev `bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1)`.
     bytes32 internal constant EIP1967_IMPLEMENTATION_SLOT =
@@ -226,12 +230,7 @@ contract MainnetV110ExecutionReplayTest is Test {
     ImplementationSet internal preUpgradeImplementations;
 
     function setUp() external {
-        uint256 forkBlockOverride = vm.envOr("FORK_BLOCK", uint256(0));
-        if (forkBlockOverride == 0) {
-            vm.createSelectFork("intuition");
-        } else {
-            vm.createSelectFork("intuition", forkBlockOverride);
-        }
+        vm.createSelectFork("intuition", vm.envOr("FORK_BLOCK", PRE_EXECUTION_BLOCK));
         forkBlockNumber = vm.getBlockNumber();
         forkTimestamp = vm.getBlockTimestamp();
 
