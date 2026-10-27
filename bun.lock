@@ -10,7 +10,7 @@
         "@openzeppelin-v4/contracts-upgradeable": "npm:@openzeppelin/contracts-upgradeable@4.9.6",
         "@openzeppelin/contracts": "5.4.0",
         "@openzeppelin/contracts-upgradeable": "5.4.0",
-        "@prb/math": "4.1.0",
+        "@prb/math": "4.1.1",
         "solady": "0.1.26",
       },
       "devDependencies": {
@@ -167,7 +167,7 @@
 
     "@pnpm/npm-conf": ["@pnpm/npm-conf@2.3.1", "", { "dependencies": { "@pnpm/config.env-replace": "^1.1.0", "@pnpm/network.ca-file": "^1.0.1", "config-chain": "^1.1.11" } }, "sha512-c83qWb22rNRuB0UaVCI0uRPNRr8Z0FWnEIvT47jiHAmOIUHbBOg5XvV7pM5x+rKn9HRpjxquDbXYSXr3fAKFcw=="],
 
-    "@prb/math": ["@prb/math@4.1.0", "", {}, "sha512-ef5Xrlh3BeX4xT5/Wi810dpEPq2bYPndRxgFIaKSU1F/Op/s8af03kyom+mfU7gEpvfIZ46xu8W0duiHplbBMg=="],
+    "@prb/math": ["@prb/math@4.1.1", "", {}, "sha512-3945t7yS+4M3S2+aO+H3+N4pFLQijyhHInmp9hiMXMRq9lyAMnAfrgGodwhaccCPcSNScSh7qIJO5aCa8fPh1Q=="],
 
     "@rollup/rollup-android-arm-eabi": ["@rollup/rollup-android-arm-eabi@4.62.2", "", { "os": "android", "cpu": "arm" }, "sha512-6o7ZLZK+BeenkZCFNDXqpbjw9bD6nuWonvS/lwQJp7NoVVxm6p3qE7qQ5jGuBjiFsgvqjD8mZAU5oWxTmbOeOg=="],
 

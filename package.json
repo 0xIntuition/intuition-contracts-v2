@@ -68,7 +68,7 @@
     "@openzeppelin-v4/contracts-upgradeable": "npm:@openzeppelin/contracts-upgradeable@4.9.6",
     "@openzeppelin/contracts": "5.4.0",
     "@openzeppelin/contracts-upgradeable": "5.4.0",
-    "@prb/math": "4.1.0",
+    "@prb/math": "4.1.1",
     "solady": "0.1.26"
   },
   "devDependencies": {
