@@ -230,9 +230,8 @@ contract WithdrawUnclaimedEmissionsTest is TrustBondingBase {
 
         // First bridge the emissions
         resetPrank(users.admin);
-        protocol.satelliteEmissionsController.grantRole(
-            protocol.satelliteEmissionsController.OPERATOR_ROLE(), users.admin
-        );
+        protocol.satelliteEmissionsController
+            .grantRole(protocol.satelliteEmissionsController.OPERATOR_ROLE(), users.admin);
         protocol.satelliteEmissionsController.bridgeUnclaimedEmissions{ value: 0.025 ether }(2);
 
         // Now try to withdraw the same epoch

@@ -1437,11 +1437,7 @@ contract VotingEscrowTest is Test {
         assertEq(uint256(int256(lockedAmount)), initialAmount + depositAmount);
     }
 
-    function testFuzz_multiple_users_total_supply(
-        uint256 aliceAmount,
-        uint256 bobAmount,
-        uint256 charlieAmount
-    )
+    function testFuzz_multiple_users_total_supply(uint256 aliceAmount, uint256 bobAmount, uint256 charlieAmount)
         external
     {
         aliceAmount = bound(aliceAmount, 1e18, INITIAL_BALANCE / 3);

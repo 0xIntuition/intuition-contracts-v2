@@ -7,6 +7,9 @@ lib
 node_modules
 out
 
+# generated output — written by `bun run viz:call-flows`; formatting it here would fight the generator
+docs/call-flows/generated
+
 # files
 *.env
 *.log

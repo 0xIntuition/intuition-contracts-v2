@@ -3,6 +3,7 @@ pragma solidity 0.8.29;
 
 import { CoreEmissionsControllerBase } from "tests/unit/CoreEmissionsController/CoreEmissionsControllerBase.t.sol";
 import { console2 } from "forge-std/src/console2.sol";
+import { ICoreEmissionsController } from "src/interfaces/ICoreEmissionsController.sol";
 
 contract CoreEmissionsControllerTest is CoreEmissionsControllerBase {
     /* =================================================== */
@@ -16,6 +17,19 @@ contract CoreEmissionsControllerTest is CoreEmissionsControllerBase {
     /* =================================================== */
     /*                   BASIC GETTER TESTS               */
     /* =================================================== */
+
+    function test_initialize_revertsWhenEmissionsLengthIsZero() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(ICoreEmissionsController.CoreEmissionsController_InvalidEmissionsLength.selector)
+        );
+        _initializeControllerWithParams(
+            DEFAULT_START_TIMESTAMP,
+            0,
+            DEFAULT_EMISSIONS_PER_EPOCH,
+            DEFAULT_REDUCTION_CLIFF,
+            DEFAULT_REDUCTION_BASIS_POINTS
+        );
+    }
 
     function test_getStartTimestamp_Success() public {
         _initializeController();
@@ -512,6 +526,26 @@ contract CoreEmissionsControllerTest is CoreEmissionsControllerBase {
 
         vm.expectRevert();
         controller.validateCliff(1000);
+    }
+
+    function test_init_RevertsOnZeroEmissionsPerEpoch() public {
+        vm.expectRevert();
+        controller.initCoreEmissionsController(
+            DEFAULT_START_TIMESTAMP, DEFAULT_EPOCH_LENGTH, 0, DEFAULT_REDUCTION_CLIFF, DEFAULT_REDUCTION_BASIS_POINTS
+        );
+    }
+
+    function test_init_RevertsOnStartTimestampBeforeNow() public {
+        vm.warp(DEFAULT_START_TIMESTAMP + 100);
+
+        vm.expectRevert();
+        controller.initCoreEmissionsController(
+            block.timestamp - 1,
+            DEFAULT_EPOCH_LENGTH,
+            DEFAULT_EMISSIONS_PER_EPOCH,
+            DEFAULT_REDUCTION_CLIFF,
+            DEFAULT_REDUCTION_BASIS_POINTS
+        );
     }
 
     /* =================================================== */

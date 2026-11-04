@@ -6,12 +6,12 @@ import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import { Address } from "@openzeppelin/contracts/utils/Address.sol";
 
-import { IBaseEmissionsController } from "../../interfaces/IBaseEmissionsController.sol";
-import { ITrust } from "../../interfaces/ITrust.sol";
-import { MetaERC20DispatchInit } from "../../interfaces/IMetaLayer.sol";
-import { CoreEmissionsControllerInit } from "../../interfaces/ICoreEmissionsController.sol";
-import { CoreEmissionsController } from "./CoreEmissionsController.sol";
-import { FinalityState, MetaERC20Dispatcher } from "./MetaERC20Dispatcher.sol";
+import { IBaseEmissionsController } from "src/interfaces/IBaseEmissionsController.sol";
+import { ITrust } from "src/interfaces/ITrust.sol";
+import { MetaERC20DispatchInit } from "src/interfaces/IMetaLayer.sol";
+import { CoreEmissionsControllerInit } from "src/interfaces/ICoreEmissionsController.sol";
+import { CoreEmissionsController } from "src/protocol/emissions/CoreEmissionsController.sol";
+import { FinalityState, MetaERC20Dispatcher } from "src/protocol/emissions/MetaERC20Dispatcher.sol";
 
 /**
  * @title  BaseEmissionsController
@@ -66,10 +66,7 @@ contract BaseEmissionsController is
         address token,
         MetaERC20DispatchInit memory metaERC20DispatchInit,
         CoreEmissionsControllerInit memory checkpointInit
-    )
-        external
-        initializer
-    {
+    ) external initializer {
         if (admin == address(0) || controller == address(0) || token == address(0)) {
             revert BaseEmissionsController_InvalidAddress();
         }
@@ -139,6 +136,9 @@ contract BaseEmissionsController is
     /* =================================================== */
 
     /// @inheritdoc IBaseEmissionsController
+    /// @dev Non-payable. The bridge gas is drawn from this contract's own balance, not from
+    ///      `msg.value` — the controller is kept funded for exactly this. Use the `payable` `mintAndBridge`
+    ///      overload to supply gas per call instead.
     function mintAndBridgeCurrentEpoch() external nonReentrant onlyRole(CONTROLLER_ROLE) {
         uint256 currentEpoch = _currentEpoch();
         uint256 gasLimit = _quoteGasPayment(_recipientDomain, GAS_CONSTANT + _messageGasCost);
@@ -226,6 +226,12 @@ contract BaseEmissionsController is
 
         // Mint new TRUST using the calculated epoch emissions
         ITrust(_TRUST_TOKEN).mint(address(this), amount);
+        // The `approve` return value is unchecked. TRUST is a first-party, standards-compliant
+        // ERC-20 that returns true and permits non-zero -> non-zero allowance updates, so neither the
+        // silent-failure nor the USDT-style approve-race concern applies. The approval is also granted and
+        // fully consumed inside this single call: `_bridgeTokensViaERC20` below pulls exactly `amount`, and
+        // any failure to do so reverts the whole transaction, so no residual allowance can survive the call.
+        // This path is additionally CONTROLLER_ROLE-gated and runs at most once per epoch.
         IERC20(_TRUST_TOKEN).approve(_metaERC20SpokeOrHub, amount);
 
         // Bridge new emissions to the Satellite Emissions Controller

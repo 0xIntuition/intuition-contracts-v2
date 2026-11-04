@@ -10,6 +10,15 @@ import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCur
 import { ProgressiveCurve } from "src/protocol/curves/ProgressiveCurve.sol";
 import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
 
+/// @dev Minimal stand-in for a curve that (unlike every real curve, which rejects an empty name
+///      at its own `initialize`) reports an empty name — used purely to exercise the registry's
+///      own defensive `EmptyCurveName` guard.
+contract EmptyNameCurveMock {
+    function name() external pure returns (string memory) {
+        return "";
+    }
+}
+
 contract BondingCurveRegistryTest is Test {
     BondingCurveRegistry public registry;
     LinearCurve public linearCurve;
@@ -88,6 +97,14 @@ contract BondingCurveRegistryTest is Test {
         vm.prank(admin);
         vm.expectRevert(abi.encodeWithSelector(BondingCurveRegistry.BondingCurveRegistry_CurveAlreadyExists.selector));
         registry.addBondingCurve(address(linearCurve));
+    }
+
+    function test_addBondingCurve_revertsOnEmptyCurveName() public {
+        EmptyNameCurveMock emptyNameCurve = new EmptyNameCurveMock();
+
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(BondingCurveRegistry.BondingCurveRegistry_EmptyCurveName.selector));
+        registry.addBondingCurve(address(emptyNameCurve));
     }
 
     function test_addBondingCurve_revertsOnNonUniqueNames() public {
@@ -285,6 +302,15 @@ contract BondingCurveRegistryTest is Test {
 
         assertTrue(registry.isCurveIdValid(1));
         assertFalse(registry.isCurveIdValid(2));
+    }
+
+    function test_isCurveIdValid_falseForZeroId() public {
+        vm.prank(admin);
+        registry.addBondingCurve(address(linearCurve));
+
+        // id == 0 is reserved to safeguard against uninitialized values; exercises the `id > 0`
+        // side of `_isCurveIdValid` that the id-1/id-2 cases above never take.
+        assertFalse(registry.isCurveIdValid(0));
     }
 
     function testFuzz_addMultipleCurves(uint256 slope1, uint256 slope2) public {

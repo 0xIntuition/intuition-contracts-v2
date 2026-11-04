@@ -1,0 +1,5 @@
+source: github.com/human-pages-ai/ai-skills
+path: audit-contract/
+pinned-commit: 0df19ab08b90cd0ff4ee20f8896c5d6954325a97
+installed-for: Intuition intuition-contracts-v2 v1.1.0 pre-audit multi-agent round
+review-gate: read SKILL.md + references/agent-playbooks.md end-to-end; read-only orchestration skill; benign shell only (which/slither/semgrep/forge/cat); WebSearch/WebFetch denied for zero-egress run.

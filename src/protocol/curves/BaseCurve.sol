@@ -3,7 +3,7 @@ pragma solidity 0.8.29;
 
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
-import { IBaseCurve } from "../../interfaces/IBaseCurve.sol";
+import { IBaseCurve } from "src/interfaces/IBaseCurve.sol";
 
 /**
  * @title  BaseCurve
@@ -21,6 +21,8 @@ abstract contract BaseCurve is IBaseCurve, Initializable {
     /* =================================================== */
 
     /// @notice The name of the curve
+    /// @dev This base declares exactly one state variable, so inheriting curves own
+    ///      every slot from 1 onward and no storage gap is required today.
     string public name;
 
     /* =================================================== */
@@ -66,11 +68,7 @@ abstract contract BaseCurve is IBaseCurve, Initializable {
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @return shares The number of shares that would be minted
-    function previewDeposit(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function previewDeposit(uint256 assets, uint256 totalAssets, uint256 totalShares)
         external
         view
         virtual
@@ -82,11 +80,7 @@ abstract contract BaseCurve is IBaseCurve, Initializable {
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @return assets The number of assets that would be required to mint the shares
-    function previewMint(
-        uint256 shares,
-        uint256 totalShares,
-        uint256 totalAssets
-    )
+    function previewMint(uint256 shares, uint256 totalShares, uint256 totalAssets)
         external
         view
         virtual
@@ -98,11 +92,7 @@ abstract contract BaseCurve is IBaseCurve, Initializable {
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @return shares The number of shares that would need to be redeemed
-    function previewWithdraw(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function previewWithdraw(uint256 assets, uint256 totalAssets, uint256 totalShares)
         external
         view
         virtual
@@ -114,11 +104,7 @@ abstract contract BaseCurve is IBaseCurve, Initializable {
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @return assets The number of assets that would be returned
-    function previewRedeem(
-        uint256 shares,
-        uint256 totalShares,
-        uint256 totalAssets
-    )
+    function previewRedeem(uint256 shares, uint256 totalShares, uint256 totalAssets)
         external
         view
         virtual
@@ -130,11 +116,7 @@ abstract contract BaseCurve is IBaseCurve, Initializable {
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @return shares The number of shares equivalent to the given assets
-    function convertToShares(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function convertToShares(uint256 assets, uint256 totalAssets, uint256 totalShares)
         external
         view
         virtual
@@ -146,11 +128,7 @@ abstract contract BaseCurve is IBaseCurve, Initializable {
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @return assets The number of assets equivalent to the given shares
-    function convertToAssets(
-        uint256 shares,
-        uint256 totalShares,
-        uint256 totalAssets
-    )
+    function convertToAssets(uint256 shares, uint256 totalShares, uint256 totalAssets)
         external
         view
         virtual
@@ -160,14 +138,46 @@ abstract contract BaseCurve is IBaseCurve, Initializable {
     /// @param totalShares Total quantity of shares already awarded by the curve
     /// @param totalAssets Total quantity of assets already staked into the curve
     /// @return sharePrice The current price of a share, scaled by 1e18
-    function currentPrice(
-        uint256 totalShares,
-        uint256 totalAssets
-    )
-        external
-        view
-        virtual
-        returns (uint256 sharePrice);
+    function currentPrice(uint256 totalShares, uint256 totalAssets) external view virtual returns (uint256 sharePrice);
+
+    /* =================================================== */
+    /*                     FEE HOOKS                       */
+    /* =================================================== */
+
+    // Safe defaults: a curve without fee hooks signals `false` on both getters, and its quote /
+    // record surface reverts. The MultiVault gates every quote and record call on the getters, so
+    // for a hookless curve none of the four functions below is ever reached from the vault —
+    // behavior is identical to a curve with no hook surface at all. A hook curve overrides all six.
+
+    /// @inheritdoc IBaseCurve
+    function hasDepositFeeHook() external view virtual returns (bool) {
+        return false;
+    }
+
+    /// @inheritdoc IBaseCurve
+    function hasRedeemFeeHook() external view virtual returns (bool) {
+        return false;
+    }
+
+    /// @inheritdoc IBaseCurve
+    function quoteDepositFee(bytes32, uint256) external view virtual returns (uint256) {
+        revert BaseCurve_FeeHooksNotSupported();
+    }
+
+    /// @inheritdoc IBaseCurve
+    function quoteRedeemFee(bytes32, address, uint256) external view virtual returns (uint256) {
+        revert BaseCurve_FeeHooksNotSupported();
+    }
+
+    /// @inheritdoc IBaseCurve
+    function recordDeposit(bytes32, address, uint256) external payable virtual {
+        revert BaseCurve_FeeHooksNotSupported();
+    }
+
+    /// @inheritdoc IBaseCurve
+    function recordRedeem(bytes32, address, uint256) external payable virtual {
+        revert BaseCurve_FeeHooksNotSupported();
+    }
 
     /* =================================================== */
     /*                  INTERNAL FUNCTIONS                 */
@@ -205,12 +215,7 @@ abstract contract BaseCurve is IBaseCurve, Initializable {
     }
 
     /// @dev Internal helper used to ensure that totalAssets and totalShares do not exceed curve limits
-    function _checkCurveDomains(
-        uint256 totalAssets,
-        uint256 totalShares,
-        uint256 maxAssetsCap,
-        uint256 maxSharesCap
-    )
+    function _checkCurveDomains(uint256 totalAssets, uint256 totalShares, uint256 maxAssetsCap, uint256 maxSharesCap)
         internal
         pure
     {

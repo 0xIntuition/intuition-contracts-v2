@@ -1,0 +1,21 @@
+{
+	"version": "1.0",
+	"chainId": "1155",
+	"meta": {
+		"name": "v1.1.0 [04] AtomWarden.reinitialize",
+		"description": "HOLD until step 02 has executed and been verified. Signed by the Admin Safe DIRECTLY — AtomWarden.reinitialize is gated on msg.sender == MultiVault.generalConfig().admin, which is this Safe.\n\nSeeds the claim parameters: claimWindow 31536000s (365 days), minFeeThreshold 0, signatureThreshold 1, maxValidAfter 3600s (1 hour), maxValidUntil 86400s (1 day), maxClaimsPerWindow 100, claimCapWindow 86400s (1 day).\n\nNOTE maxClaimsPerWindow = 100: the per-window claim cap ships ARMED. The deploy script defaults this to 0, which disables the cap entirely. The cap is one of the new v1.1.0 safety features and is deliberately launched active; the admin can retune it through the regular setter without an upgrade.\n\nAFTER THIS, signerCount == 0 and signed claims REVERT until step 05 grants SIGNER_ROLE. That is safe-by-default and intentional, but it means the upgrade is not operationally finished here.\n\nREQUIRED — the upgrade is not complete without this.\n\nDEPENDS ON: step 02. NEXT: step 05.",
+		"txBuilderVersion": "1.17.1",
+		"createdFromSafeAddress": "0xbeA18ab4c83a12be25f8AA8A10D8747A07Cdc6eb",
+		"createdFromOwnerAddress": "",
+		"checksum": "0x46ff5fe9f5a2c3471b247ab52c8bb0ef92c09088341ea1e7fb13ce0f6ecb1c32"
+	},
+	"transactions": [
+		{
+			"to": "0x98C9BCecf318d0D1409Bf81Ea3551b629fAEC165",
+			"value": "0",
+			"data": "0x17b2d4f50000000000000000000000000000000000000000000000000000000001e13380000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000e10000000000000000000000000000000000000000000000000000000000001518000000000000000000000000000000000000000000000000000000000000000640000000000000000000000000000000000000000000000000000000000015180",
+			"contractMethod": null,
+			"contractInputsValues": null
+		}
+	]
+}

@@ -38,10 +38,7 @@ contract MetaERC20HubOrSpokeMock {
         uint256 _amount,
         uint256 _gasLimit,
         FinalityState _finalityState
-    )
-        external
-        payable
-    {
+    ) external payable {
         return;
     }
 }

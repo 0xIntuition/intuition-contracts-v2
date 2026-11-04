@@ -19,8 +19,19 @@ import { LinearCurve } from "src/protocol/curves/LinearCurve.sol";
 import { OffsetProgressiveCurve } from "src/protocol/curves/OffsetProgressiveCurve.sol";
 
 abstract contract SetupScript is Script {
+    struct TimelockOperationArtifact {
+        string label;
+        address target;
+        uint256 value;
+        bytes data;
+        bytes32 predecessor;
+        bytes32 salt;
+        uint256 delay;
+    }
+
     /// @dev The address of the transaction broadcaster.
     address internal broadcaster;
+    bool internal useFoundryAccount;
 
     /* =================================================== */
     /*                   Config Constants                  */
@@ -33,9 +44,11 @@ abstract contract SetupScript is Script {
 
     uint256 internal constant ONE_DAY = 86_400;
     uint256 internal constant TWO_WEEKS = ONE_DAY * 14;
+    uint256 internal constant ZERO_VALUE = 0;
 
     /// @dev Needed for the deterministic deployments.
     bytes32 internal constant ZERO_SALT = bytes32(0);
+    bytes32 internal constant ZERO_PREDECESSOR = bytes32(0);
 
     /* =================================================== */
     /*                   Smart Contracts                   */
@@ -128,7 +141,11 @@ abstract contract SetupScript is Script {
     uint256 internal OFFSET_PROGRESSIVE_CURVE_OFFSET = 3e19;
 
     constructor() {
-        if (block.chainid == NETWORK_BASE) {
+        useFoundryAccount = vm.envOr("USE_FOUNDRY_ACCOUNT", false);
+
+        if (useFoundryAccount) {
+            broadcaster = vm.envOr("FOUNDRY_ACCOUNT_ADDRESS", address(0));
+        } else if (block.chainid == NETWORK_BASE) {
             uint256 deployerKey = vm.envUint("DEPLOYER_MAINNET");
             broadcaster = vm.rememberKey(deployerKey);
         } else if (block.chainid == NETWORK_INTUITION) {
@@ -149,8 +166,16 @@ abstract contract SetupScript is Script {
     }
 
     modifier broadcast() {
-        vm.startBroadcast(broadcaster);
-        console2.log("Broadcasting from:", broadcaster);
+        if (useFoundryAccount) {
+            vm.startBroadcast();
+            console2.log("Broadcasting from Foundry CLI account");
+            if (broadcaster != address(0)) {
+                console2.log("Expected account:", broadcaster);
+            }
+        } else {
+            vm.startBroadcast(broadcaster);
+            console2.log("Broadcasting from:", broadcaster);
+        }
         _;
         vm.stopBroadcast();
     }
@@ -161,7 +186,7 @@ abstract contract SetupScript is Script {
         info("Broadcasting:", broadcaster);
 
         if (block.chainid == NETWORK_BASE_SEPOLIA) {
-            PROTOCOL_START_TIMESTAMP = 1_761_787_000;
+            PROTOCOL_START_TIMESTAMP = vm.envOr("TESTNET_PROTOCOL_START_TIMESTAMP", uint256(1_772_492_400));
             TRUST_TOKEN = 0xA54b4E6e356b963Ee00d1C947f478d9194a1a210;
             ADMIN = vm.envAddress("BASE_SEPOLIA_ADMIN_ADDRESS");
             PROTOCOL_MULTISIG = vm.envOr("BASE_SEPOLIA_PROTOCOL_MULTISIG", ADMIN);
@@ -177,7 +202,7 @@ abstract contract SetupScript is Script {
             EMISSIONS_REDUCTION_CLIFF = 26;
             EMISSIONS_PER_EPOCH = TRUST_TOKEN_ONE_YEAR_EMISSIONS / EMISSIONS_REDUCTION_CLIFF;
         } else if (block.chainid == NETWORK_INTUITION_SEPOLIA) {
-            PROTOCOL_START_TIMESTAMP = 1_761_787_000;
+            PROTOCOL_START_TIMESTAMP = vm.envOr("TESTNET_PROTOCOL_START_TIMESTAMP", uint256(1_772_492_400));
             TRUST_TOKEN = 0xDE80b6EE63f7D809427CA350e30093F436A0fe35; // Wrapped Trust
             ADMIN = vm.envAddress("INTUITION_SEPOLIA_ADMIN_ADDRESS");
             PROTOCOL_MULTISIG = vm.envOr("INTUITION_SEPOLIA_PROTOCOL_MULTISIG", ADMIN);
@@ -417,5 +442,104 @@ abstract contract SetupScript is Script {
             )
         );
         console2.log("}");
+    }
+
+    function _writeTimelockOperationsArtifact(
+        string memory relativePath,
+        address timelock,
+        TimelockOperationArtifact[] memory operations
+    ) internal {
+        string memory fullPath = string.concat(vm.projectRoot(), relativePath);
+        string memory output = string.concat(
+            "{\n",
+            '  "chainId": "',
+            vm.toString(block.chainid),
+            '",\n',
+            '  "timelock": "',
+            vm.toString(timelock),
+            '",\n',
+            '  "minDelay": "',
+            vm.toString(TimelockController(payable(timelock)).getMinDelay()),
+            '",\n',
+            '  "defaults": {\n',
+            '    "predecessor": "',
+            vm.toString(ZERO_PREDECESSOR),
+            '",\n',
+            '    "salt": "',
+            vm.toString(ZERO_SALT),
+            '",\n',
+            '    "value": "',
+            vm.toString(ZERO_VALUE),
+            '"\n',
+            "  },\n",
+            '  "operations": [\n'
+        );
+
+        for (uint256 i = 0; i < operations.length; ++i) {
+            output = string.concat(output, _timelockOperationJson(operations[i]));
+
+            if (i + 1 < operations.length) {
+                output = string.concat(output, ",\n");
+            } else {
+                output = string.concat(output, "\n");
+            }
+        }
+
+        output = string.concat(output, "  ]\n", "}\n");
+        vm.writeFile(fullPath, output);
+
+        console2.log("");
+        console2.log("Timelock operation artifact written to:");
+        console2.log(fullPath);
+    }
+
+    function _timelockOperationJson(TimelockOperationArtifact memory operation) internal pure returns (string memory) {
+        return string.concat(
+            "    {\n",
+            '      "label": "',
+            operation.label,
+            '",\n',
+            '      "target": "',
+            vm.toString(operation.target),
+            '",\n',
+            '      "value": "',
+            vm.toString(operation.value),
+            '",\n',
+            '      "data": "',
+            vm.toString(operation.data),
+            '",\n',
+            '      "predecessor": "',
+            vm.toString(operation.predecessor),
+            '",\n',
+            '      "salt": "',
+            vm.toString(operation.salt),
+            '",\n',
+            '      "delay": "',
+            vm.toString(operation.delay),
+            '",\n',
+            '      "scheduleSignature": "schedule(address,uint256,bytes,bytes32,bytes32,uint256)",\n',
+            '      "scheduleCalldata": "',
+            vm.toString(_scheduleCalldata(operation)),
+            '",\n',
+            '      "executeSignature": "execute(address,uint256,bytes,bytes32,bytes32)",\n',
+            '      "executeCalldata": "',
+            vm.toString(_executeCalldata(operation)),
+            '"\n',
+            "    }"
+        );
+    }
+
+    function _scheduleCalldata(TimelockOperationArtifact memory operation) internal pure returns (bytes memory) {
+        return abi.encodeCall(
+            TimelockController.schedule,
+            (operation.target, operation.value, operation.data, operation.predecessor, operation.salt, operation.delay)
+        );
+    }
+
+    function _executeCalldata(TimelockOperationArtifact memory operation) internal pure returns (bytes memory) {
+        return abi.encodeCall(
+            TimelockController.execute,
+            (operation.target, operation.value, operation.data, operation.predecessor, operation.salt)
+        );
     }
 }

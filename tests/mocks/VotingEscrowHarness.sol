@@ -11,6 +11,10 @@ contract VotingEscrowHarness is VotingEscrow {
 
     // --------- Exposed internal helpers ---------
 
+    function exposed_checkpoint(address addr, LockedBalance memory oldLocked, LockedBalance memory newLocked) external {
+        _checkpoint(addr, oldLocked, newLocked);
+    }
+
     function exposed_find_timestamp_epoch(uint256 ts, uint256 maxEpoch) external view returns (uint256) {
         return _find_timestamp_epoch(ts, maxEpoch);
     }

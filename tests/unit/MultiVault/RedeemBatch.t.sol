@@ -26,10 +26,7 @@ contract RedeemBatchTest is BaseTest {
                             HELPER FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    function _setupAtomsWithDeposits(
-        uint256 count,
-        uint256 depositAmount
-    )
+    function _setupAtomsWithDeposits(uint256 count, uint256 depositAmount)
         internal
         returns (bytes32[] memory atomIds, uint256[] memory shares)
     {
@@ -304,9 +301,9 @@ contract RedeemBatchTest is BaseTest {
         uint256[] memory minAssets = createUniformArray(1e4, 1);
 
         resetPrank(users.alice);
-        vm.expectRevert(MultiVault.MultiVault_SenderNotApproved.selector);
+        vm.expectRevert(MultiVault.MultiVault_RedeemerNotApproved.selector);
         protocol.multiVault.redeemBatch(users.bob, atomIds, curveIds, sharesToRedeem, minAssets); // Alice trying to
-            // redeem for Bob without approval
+        // redeem for Bob without approval
     }
 
     /*//////////////////////////////////////////////////////////////

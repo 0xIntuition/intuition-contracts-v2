@@ -5,13 +5,13 @@
     "": {
       "name": "@prb/foundry-template",
       "dependencies": {
-        "@account-abstraction/contracts": "^0.8.0",
-        "@openzeppelin-v4/contracts": "npm:@openzeppelin/contracts@^4.9.6",
-        "@openzeppelin-v4/contracts-upgradeable": "npm:@openzeppelin/contracts-upgradeable@^4.9.6",
+        "@account-abstraction/contracts": "0.8.0",
+        "@openzeppelin-v4/contracts": "npm:@openzeppelin/contracts@4.9.6",
+        "@openzeppelin-v4/contracts-upgradeable": "npm:@openzeppelin/contracts-upgradeable@4.9.6",
         "@openzeppelin/contracts": "5.4.0",
         "@openzeppelin/contracts-upgradeable": "5.4.0",
-        "@prb/math": "^4.1.0",
-        "solady": "^0.1.26",
+        "@prb/math": "4.1.1",
+        "solady": "0.1.26",
       },
       "devDependencies": {
         "@types/node": "^24.7.0",
@@ -167,7 +167,7 @@
 
     "@pnpm/npm-conf": ["@pnpm/npm-conf@2.3.1", "", { "dependencies": { "@pnpm/config.env-replace": "^1.1.0", "@pnpm/network.ca-file": "^1.0.1", "config-chain": "^1.1.11" } }, "sha512-c83qWb22rNRuB0UaVCI0uRPNRr8Z0FWnEIvT47jiHAmOIUHbBOg5XvV7pM5x+rKn9HRpjxquDbXYSXr3fAKFcw=="],
 
-    "@prb/math": ["@prb/math@4.1.2", "", {}, "sha512-CBSg0SyOYfs4X+GD16klIYE39sqDs1skPmGP5SVKJPVfthmooAriaSkWC8NqBrkIi129XDnxm7f1cBXnu55FyQ=="],
+    "@prb/math": ["@prb/math@4.1.1", "", {}, "sha512-3945t7yS+4M3S2+aO+H3+N4pFLQijyhHInmp9hiMXMRq9lyAMnAfrgGodwhaccCPcSNScSh7qIJO5aCa8fPh1Q=="],
 
     "@rollup/rollup-android-arm-eabi": ["@rollup/rollup-android-arm-eabi@4.62.2", "", { "os": "android", "cpu": "arm" }, "sha512-6o7ZLZK+BeenkZCFNDXqpbjw9bD6nuWonvS/lwQJp7NoVVxm6p3qE7qQ5jGuBjiFsgvqjD8mZAU5oWxTmbOeOg=="],
 

@@ -329,9 +329,7 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         uint256 unlock_time,
         LockedBalance memory locked_balance,
         DepositType deposit_type
-    )
-        internal
-    {
+    ) internal {
         LockedBalance memory _locked = locked_balance;
         uint256 supply_before = supply;
 
@@ -366,10 +364,20 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
 
     /// @notice Deposit `_value` tokens for `_addr` and add to the lock
     /// @dev Anyone (even a smart contract) can deposit for someone else, but
-    ///      cannot extend their locktime and deposit for a brand new user
+    ///      cannot extend their locktime and deposit for a brand new user.
+    ///
+    ///      Token transfer source is the **lock holder** (`_addr`), not
+    ///      `msg.sender`. This matches the inherited Curve / Stargate
+    ///      VotingEscrow semantics and is preserved deliberately to stay
+    ///      reference-compatible with the upstream contracts. Lock holders
+    ///      that grant an ERC-20 allowance to this contract should size it
+    ///      tightly (or use `permit`-style flows) rather than relying on
+    ///      `type(uint256).max` approvals — a third party can call
+    ///      `deposit_for` against an unsuspecting holder and force-extend
+    ///      their position up to the allowance limit.
     /// @param _addr User's wallet address
     /// @param _value Amount to add to user's lock
-    function deposit_for(address _addr, uint256 _value) external nonReentrant notUnlocked {
+    function deposit_for(address _addr, uint256 _value) public virtual nonReentrant notUnlocked {
         LockedBalance memory _locked = locked[_addr];
 
         require(_value > 0); // dev: need non-zero value
@@ -397,13 +405,19 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     /// @notice External function for _create_lock
     /// @param _value Amount to deposit
     /// @param _unlock_time Epoch time when tokens unlock, rounded down to whole weeks
-    function create_lock(uint256 _value, uint256 _unlock_time) external nonReentrant onlyUserOrWhitelist notUnlocked {
+    function create_lock(uint256 _value, uint256 _unlock_time)
+        public
+        virtual
+        nonReentrant
+        onlyUserOrWhitelist
+        notUnlocked
+    {
         _create_lock(_value, _unlock_time);
     }
 
     /// @notice Deposit `_value` additional tokens for `msg.sender` without modifying the unlock time
     /// @param _value Amount of tokens to deposit and add to the lock
-    function increase_amount(uint256 _value) external nonReentrant onlyUserOrWhitelist notUnlocked {
+    function increase_amount(uint256 _value) public virtual nonReentrant onlyUserOrWhitelist notUnlocked {
         _increase_amount(_value);
     }
 
@@ -419,7 +433,7 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
 
     /// @notice Extend the unlock time for `msg.sender` to `_unlock_time`
     /// @param _unlock_time New epoch time for unlocking
-    function increase_unlock_time(uint256 _unlock_time) external nonReentrant onlyUserOrWhitelist notUnlocked {
+    function increase_unlock_time(uint256 _unlock_time) public virtual nonReentrant onlyUserOrWhitelist notUnlocked {
         _increase_unlock_time(_unlock_time);
     }
 
@@ -437,11 +451,9 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
 
     /// @notice Extend the unlock time and/or for `msg.sender` to `_unlock_time`
     /// @param _unlock_time New epoch time for unlocking
-    function increase_amount_and_time(
-        uint256 _value,
-        uint256 _unlock_time
-    )
-        external
+    function increase_amount_and_time(uint256 _value, uint256 _unlock_time)
+        public
+        virtual
         nonReentrant
         onlyUserOrWhitelist
         notUnlocked
@@ -489,11 +501,9 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     /// @notice Deposit `_value` tokens for `msg.sender` and lock until `_unlock_time`
     /// @param _value Amount to deposit
     /// @param _unlock_time Epoch time when tokens unlock, rounded down to whole weeks
-    function withdraw_and_create_lock(
-        uint256 _value,
-        uint256 _unlock_time
-    )
-        external
+    function withdraw_and_create_lock(uint256 _value, uint256 _unlock_time)
+        public
+        virtual
         nonReentrant
         onlyUserOrWhitelist
         notUnlocked
@@ -735,6 +745,14 @@ contract VotingEscrow is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         return _supply_at(point, t);
     }
 
+    /// @notice Total voting power at an arbitrary timestamp `t`
+    /// @dev Only defined for `t >= point_history[0].ts`, i.e. at or after this contract was initialized.
+    ///      Querying earlier is out of domain and reverts on arithmetic underflow rather than returning 0;
+    ///      no voting power existed before the contract was live, so such a query has no meaning. This is
+    ///      inherited Curve / Stargate behaviour, kept as-is: the function is `view`, so a revert cannot
+    ///      affect state or block any caller that queries a valid timestamp.
+    /// @param t Timestamp to query, at or after contract initialization
+    /// @return Total voting power at `t`
     function totalSupplyAtT(uint256 t) external view returns (uint256) {
         return _totalSupply(t);
     }

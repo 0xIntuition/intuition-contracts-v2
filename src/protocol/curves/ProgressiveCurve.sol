@@ -3,8 +3,8 @@ pragma solidity 0.8.29;
 
 import { UD60x18, wrap, unwrap, add, sub, mul, div, sqrt, uUNIT, uMAX_UD60x18 } from "@prb/math/src/UD60x18.sol";
 
-import { BaseCurve } from "./BaseCurve.sol";
-import { ProgressiveCurveMathLib as PCMath } from "../../libraries/ProgressiveCurveMathLib.sol";
+import { BaseCurve } from "src/protocol/curves/BaseCurve.sol";
+import { ProgressiveCurveMathLib as PCMath } from "src/libraries/ProgressiveCurveMathLib.sol";
 
 /**
  * @title  ProgressiveCurve
@@ -27,7 +27,13 @@ contract ProgressiveCurve is BaseCurve {
     /// @dev The maximum shares are sqrt(uint256.max / 1e18) to prevent overflow in calculations
     uint256 public MAX_SHARES;
 
-    /// @dev The maximum assets are derived from the maximum shares and slope to prevent overflow in calculations
+    /// @dev The maximum assets are derived from the maximum shares and slope to prevent overflow in calculations.
+    ///      This is a **theoretical domain bound**, not a reachability guarantee:
+    ///      the `previewMint` path rounds up (`squareUp` + `mulUp`) while
+    ///      `MAX_ASSETS` is computed round-down for safety at small share counts,
+    ///      so the exact `(MAX_SHARES, MAX_ASSETS)` pair is not jointly reachable.
+    ///      Under any realistic TRUST supply this is academic; integrators must
+    ///      not treat `MAX_ASSETS` as a guaranteed-reachable ceiling.
     uint256 public MAX_ASSETS;
 
     /* =================================================== */
@@ -79,16 +85,17 @@ contract ProgressiveCurve is BaseCurve {
     }
 
     /// @inheritdoc BaseCurve
+    /// @dev Returns the theoretical mathematical domain bound on assets for
+    ///      this curve. See `MAX_ASSETS` storage docs — the value is not a
+    ///      reachability guarantee, and a mint at the exact `(maxShares,
+    ///      maxAssets)` boundary may revert due to rounding-direction
+    ///      asymmetry between `initialize` and `previewMint`.
     function maxAssets() external view override returns (uint256) {
         return MAX_ASSETS;
     }
 
     /// @inheritdoc BaseCurve
-    function previewDeposit(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function previewDeposit(uint256 assets, uint256 totalAssets, uint256 totalShares)
         external
         view
         override
@@ -98,11 +105,7 @@ contract ProgressiveCurve is BaseCurve {
     }
 
     /// @inheritdoc BaseCurve
-    function previewRedeem(
-        uint256 shares,
-        uint256 totalShares,
-        uint256 totalAssets
-    )
+    function previewRedeem(uint256 shares, uint256 totalShares, uint256 totalAssets)
         external
         view
         override
@@ -112,11 +115,7 @@ contract ProgressiveCurve is BaseCurve {
     }
 
     /// @inheritdoc BaseCurve
-    function previewMint(
-        uint256 shares,
-        uint256 totalShares,
-        uint256 totalAssets
-    )
+    function previewMint(uint256 shares, uint256 totalShares, uint256 totalAssets)
         external
         view
         override
@@ -136,11 +135,7 @@ contract ProgressiveCurve is BaseCurve {
     }
 
     /// @inheritdoc BaseCurve
-    function previewWithdraw(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function previewWithdraw(uint256 assets, uint256 totalAssets, uint256 totalShares)
         external
         view
         override
@@ -158,11 +153,7 @@ contract ProgressiveCurve is BaseCurve {
     }
 
     /// @inheritdoc BaseCurve
-    function convertToShares(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function convertToShares(uint256 assets, uint256 totalAssets, uint256 totalShares)
         external
         view
         override
@@ -172,11 +163,7 @@ contract ProgressiveCurve is BaseCurve {
     }
 
     /// @inheritdoc BaseCurve
-    function convertToAssets(
-        uint256 shares,
-        uint256 totalShares,
-        uint256 totalAssets
-    )
+    function convertToAssets(uint256 shares, uint256 totalShares, uint256 totalAssets)
         external
         view
         override
@@ -186,10 +173,7 @@ contract ProgressiveCurve is BaseCurve {
     }
 
     /// @inheritdoc BaseCurve
-    function currentPrice(
-        uint256 totalShares,
-        uint256 totalAssets
-    )
+    function currentPrice(uint256 totalShares, uint256 totalAssets)
         external
         view
         override
@@ -204,11 +188,7 @@ contract ProgressiveCurve is BaseCurve {
     /* =================================================== */
 
     /// @dev Internal function to convert assets to shares
-    function _convertToShares(
-        uint256 assets,
-        uint256 totalAssets,
-        uint256 totalShares
-    )
+    function _convertToShares(uint256 assets, uint256 totalAssets, uint256 totalShares)
         internal
         view
         returns (uint256 shares)
@@ -225,11 +205,7 @@ contract ProgressiveCurve is BaseCurve {
     }
 
     /// @dev Internal function to convert shares to assets
-    function _convertToAssets(
-        uint256 shares,
-        uint256 totalShares,
-        uint256 totalAssets
-    )
+    function _convertToAssets(uint256 shares, uint256 totalShares, uint256 totalAssets)
         internal
         view
         returns (uint256 assets)
